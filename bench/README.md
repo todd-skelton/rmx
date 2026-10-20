@@ -62,6 +62,32 @@ Load metrics are medians over 10 fresh page loads; operations are medians over 1
 
 Both counters hydrated and incremented (5 to 6) with no page errors in either run.
 
+### Re-run After the Parity Work (2026-10-20)
+
+One run on the same machine and Chromium, same method (`results/browser-2026-10-20.json`;
+`results/browser.json` keeps the 2026-10-19 run). The rmx runtime now carries frames,
+Navigation API soft navigation and the rest of the parity work, so its
+client bundle about doubled. Single runs vary by 30% or more.
+
+| Metric | Remix 3 | rmx |
+| --- | --- | --- |
+| Client assets (gzip) | 42.5 KB in 41 files | 124.8 KB in 3 files (262.4 KiB raw `.wasm`) |
+| Hydrated at | 256 ms | 108 ms |
+| DOMContentLoaded | 243.6 ms | 76.6 ms |
+| JS heap after run | 7.2 MB | 4.4 MB (excludes WASM memory) |
+
+| Operation | Remix 3 commit / frame ms | rmx commit / frame ms |
+| --- | --- | --- |
+| create 1k rows | 28.7 / 118.5 | 39.4 / 131.0 |
+| replace 1k rows | 39.3 / 136.4 | 52.4 / 150.6 |
+| update every 10th row | 12.9 / 75.2 | 7.0 / 65.2 |
+| select row | 13.6 / 19.7 | 3.3 / 13.3 |
+| swap rows | 13.6 / 34.8 | 7.5 / 25.4 |
+| remove row | 12.7 / 41.0 | 7.6 / 37.4 |
+| create 10k rows | 1129.0 / 1162.2 | 1132.3 / 1150.7 |
+| append 1k rows | 36.5 / 171.6 | 29.3 / 106.9 |
+| clear 1k rows | 11.0 / 13.5 | 8.4 / 11.0 |
+
 ## Server, Linux Containers (Docker Desktop, WSL2)
 
 Requests per second, 15 s at 50 connections. Docker run 3 (`results/docker-server.json`).
@@ -133,8 +159,9 @@ In-process timings from `remix-app/diagnose.tsx`, ms per call, NODE_ENV=producti
    not pinned to physical cores, so CPU pinning is only approximate.
 3. The browser bench runs on the Windows host only; containers do not change client results.
 4. The JS heap number excludes WASM linear memory, so it understates rmx's client memory.
-5. This compares a proof of concept against a released framework. rmx skips features that cost
-   Remix time: frames, streaming, import maps, asset fingerprinting, and the module graph.
+5. This compares a proof of concept against a released framework. The benchmark pages use no
+   frames, and rmx has no import maps, asset fingerprinting or module graph, which cost Remix
+   time on every request with a client entry.
 6. Remix runs TypeScript through `remix/node-tsx`, which transpiles on first load; startup
    numbers (3 to 11 s for Remix, 0.5 to 4 s for rmx in these runs) include that. Docker startup
    also includes starting the container and the probe container, so it reads higher than Windows.
