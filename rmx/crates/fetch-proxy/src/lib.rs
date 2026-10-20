@@ -26,8 +26,6 @@
 //! `Content-Encoding` is kept unless [`FetchProxyOptions::fetch_decodes_content`] says the
 //! fetch function decoded it.
 
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use http::header::{self, HeaderName, HeaderValue};
@@ -40,25 +38,9 @@ use rmx_url::Url;
 /// `Proxy-Connection`).
 const HOP_BY_HOP: [&str; 9] = ["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade"];
 
-/// A boxed, sendable future.
-pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+/// What performs the forwarded request (Remix's `fetch` option); the request URI is absolute.
+pub use rmx_fetch::{BoxFuture, Fetch};
 
-/// What performs the forwarded request (Remix's `fetch` option). Implemented for async
-/// functions and closures from [`Request`] to `Result<Response, BoxError>`; the request URI is
-/// absolute.
-pub trait Fetch: Send + Sync + 'static {
-    fn fetch(&self, request: Request) -> BoxFuture<Result<Response, BoxError>>;
-}
-
-impl<F, Fut> Fetch for F
-where
-    F: Fn(Request) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Result<Response, BoxError>> + Send + 'static,
-{
-    fn fetch(&self, request: Request) -> BoxFuture<Result<Response, BoxError>> {
-        Box::pin(self(request))
-    }
-}
 
 /// Options for [`FetchProxy`] (Remix's `FetchProxyOptions`).
 #[derive(Clone, Debug)]

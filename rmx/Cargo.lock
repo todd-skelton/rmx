@@ -1170,6 +1170,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-auth"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-cookie",
+ "rmx-crypto",
+ "rmx-fetch",
+ "rmx-middleware",
+ "rmx-router",
+ "rmx-session",
+ "rmx-url",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rmx-cookie"
 version = "0.1.0"
 dependencies = [

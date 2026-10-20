@@ -20,6 +20,7 @@ members = [
     "crates/html-template",
     "crates/headers",
     "crates/fetch-proxy",
+    "crates/auth",
     "crates/component",
     "crates/macros",
     "crates/ui",
@@ -66,6 +67,7 @@ rmx-multipart-parser = { path = "crates/multipart-parser" }
 rmx-html-template = { path = "crates/html-template" }
 rmx-headers = { path = "crates/headers" }
 rmx-fetch-proxy = { path = "crates/fetch-proxy" }
+rmx-auth = { path = "crates/auth" }
 rmx-cookie = { path = "crates/cookie" }
 rmx-ui = { path = "crates/ui" }
 bytes = "1"

@@ -1,0 +1,20 @@
+[package]
+name = "rmx-auth"
+description = "OAuth 2 and OpenID Connect login for rmx (remix/auth): PKCE flows plus GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and generic OIDC providers"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-crypto.workspace = true
+rmx-fetch.workspace = true
+rmx-router.workspace = true
+rmx-session.workspace = true
+rmx-url.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+rmx-cookie.workspace = true
+rmx-middleware.workspace = true

@@ -28,6 +28,26 @@ pub type Request = http::Request<Body>;
 pub type Response = http::Response<Body>;
 /// A boxed, thread-safe error.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+/// A boxed, sendable future.
+pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
+/// Something that performs HTTP requests, like the web's `fetch()`. Implemented for async
+/// functions and closures from [`Request`] to `Result<Response, BoxError>`. Libraries that
+/// call out over HTTP (`rmx-fetch-proxy`, `rmx-auth`) take one, so the app chooses the client
+/// (`rmx_serve::fetch` for `http://`, or any HTTPS client) and tests can answer in memory.
+pub trait Fetch: Send + Sync + 'static {
+    fn fetch(&self, request: Request) -> BoxFuture<Result<Response, BoxError>>;
+}
+
+impl<F, Fut> Fetch for F
+where
+    F: Fn(Request) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<Response, BoxError>> + Send + 'static,
+{
+    fn fetch(&self, request: Request) -> BoxFuture<Result<Response, BoxError>> {
+        Box::pin(self(request))
+    }
+}
 
 /// A request or response body: empty, buffered, or a stream of chunks.
 pub struct Body {
