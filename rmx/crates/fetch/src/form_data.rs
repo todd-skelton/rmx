@@ -4,13 +4,28 @@ use bytes::Bytes;
 
 use crate::{Body, BoxError, SearchParams};
 
-/// An uploaded file.
+/// A file, like the web's `File`: an uploaded file, or one read back from storage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct File {
     /// The client-supplied file name. Untrusted: never use it as a filesystem path.
     pub name: String,
     pub content_type: String,
     pub bytes: Bytes,
+    /// `lastModified`: milliseconds since the Unix epoch.
+    pub last_modified: u64,
+}
+
+impl File {
+    /// A file modified now.
+    pub fn new(name: impl Into<String>, content_type: impl Into<String>, bytes: impl Into<Bytes>) -> File {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        File { name: name.into(), content_type: content_type.into(), bytes: bytes.into(), last_modified: now }
+    }
+
+    /// `size` in bytes.
+    pub fn size(&self) -> usize {
+        self.bytes.len()
+    }
 }
 
 /// One form value.
@@ -241,7 +256,7 @@ fn parse_multipart(body: &[u8], boundary: &str, limits: FormLimits) -> Result<Fo
                 if filename.is_empty() && content.is_empty() {
                     continue;
                 }
-                form.append_file(name, File { name: filename, content_type, bytes: Bytes::copy_from_slice(content) });
+                form.append_file(name, File::new(filename, content_type, Bytes::copy_from_slice(content)));
             }
             None => form.append(name, String::from_utf8_lossy(content).into_owned()),
         }

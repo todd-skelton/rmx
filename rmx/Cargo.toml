@@ -14,6 +14,7 @@ members = [
     "crates/assets",
     "crates/crypto",
     "crates/session",
+    "crates/file-storage",
     "crates/headers",
     "crates/component",
     "crates/macros",
@@ -29,6 +30,7 @@ members = [
     "examples/ui",
     "examples/social-auth",
     "examples/i18n",
+    "examples/bookstore",
 ]
 
 [workspace.package]
@@ -51,6 +53,7 @@ rmx-spa = { path = "crates/spa" }
 rmx-assets = { path = "crates/assets" }
 rmx-crypto = { path = "crates/crypto" }
 rmx-session = { path = "crates/session" }
+rmx-file-storage = { path = "crates/file-storage" }
 rmx-headers = { path = "crates/headers" }
 rmx-cookie = { path = "crates/cookie" }
 bytes = "1"

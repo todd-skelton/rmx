@@ -243,6 +243,61 @@ pub fn complete_auth(ctx: &Context) -> Session {
 }
 
 // ---------------------------------------------------------------------------------------
+// Credentials (remix/auth's createCredentialsAuthProvider and verifyCredentials)
+// ---------------------------------------------------------------------------------------
+
+/// Direct form-based login: `parse` reads the submitted credentials from the request and
+/// `verify` checks them, yielding who logged in or `None` when they are rejected.
+///
+/// ```
+/// use rmx_middleware::auth::{credentials_provider, verify_credentials};
+/// use rmx_middleware::form_data::FormDataExt;
+///
+/// let password = credentials_provider(
+///     |ctx| (ctx.form_data().get("email").unwrap_or_default().trim().to_lowercase(), ctx.form_data().get("password").unwrap_or_default().to_string()),
+///     |(email, password): (String, String)| async move { (email == "a@b.c" && password == "secret").then_some(1_u64) },
+/// );
+/// assert_eq!(password.name(), "password");
+/// // In a handler: let Some(user_id) = verify_credentials(&password, &ctx).await else { .. };
+/// ```
+pub struct CredentialsProvider<P, V> {
+    name: String,
+    parse: P,
+    verify: V,
+}
+
+pub fn credentials_provider<In, Out, P, V, Fut>(parse: P, verify: V) -> CredentialsProvider<P, V>
+where
+    P: Fn(&Context) -> In,
+    V: Fn(In) -> Fut,
+    Fut: Future<Output = Option<Out>>,
+{
+    CredentialsProvider { name: "password".into(), parse, verify }
+}
+
+impl<P, V> CredentialsProvider<P, V> {
+    /// Rename the provider (default `"password"`).
+    pub fn named(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// Parse and verify the submitted credentials; `None` when they are rejected.
+pub fn verify_credentials<In, Out, P, V, Fut>(provider: &CredentialsProvider<P, V>, ctx: &Context) -> Fut
+where
+    P: Fn(&Context) -> In,
+    V: Fn(In) -> Fut,
+    Fut: Future<Output = Option<Out>>,
+{
+    (provider.verify)((provider.parse)(ctx))
+}
+
+// ---------------------------------------------------------------------------------------
 // Built-in schemes
 // ---------------------------------------------------------------------------------------
 

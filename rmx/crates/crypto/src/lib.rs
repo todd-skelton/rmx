@@ -8,7 +8,7 @@ mod random;
 mod sha256;
 
 pub use base64::{base64_decode, base64_encode, base64url_decode, base64url_encode};
-pub use random::{random_bytes, random_hex, random_uuid};
+pub use random::{fill_random, random_bytes, random_hex, random_uuid};
 pub use sha256::{hmac_sha256, pbkdf2_sha256, sha256, Sha256};
 
 /// Lowercase hex.

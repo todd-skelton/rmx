@@ -87,6 +87,40 @@ pub async fn sleep(ms: u32) {
     let _ = ms;
 }
 
+/// `fetch(url, { method, body: formData, signal })` with the given fields as a
+/// `multipart/form-data` body, resolving to the response status. Fails on a network error
+/// or when `signal` aborts. On the server it fails at once.
+///
+/// ```ignore
+/// let status = rmx::browser::fetch_form("POST", "/api/cart/toggle", &[("bookId".into(), "1".into())], Some(&signal)).await?;
+/// ```
+pub async fn fetch_form(method: &str, url: &str, fields: &[(String, String)], signal: Option<&crate::Signal>) -> Result<u16, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        let err = |e: wasm_bindgen::JsValue| e.as_string().or_else(|| js_sys::JSON::stringify(&e).ok().map(String::from)).unwrap_or_else(|| "fetch failed".into());
+        let body = web_sys::FormData::new().map_err(err)?;
+        for (name, value) in fields {
+            body.append_with_str(name, value).map_err(err)?;
+        }
+        let init = web_sys::RequestInit::new();
+        init.set_method(method);
+        init.set_body(&body);
+        if let Some(signal) = signal {
+            init.set_signal(Some(&signal.inner));
+        }
+        let window = web_sys::window().ok_or("no window")?;
+        let response = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str_and_init(url, &init)).await.map_err(err)?;
+        let response: web_sys::Response = response.dyn_into().map_err(err)?;
+        Ok(response.status())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (method, url, fields, signal);
+        Err("fetch_form runs in the browser".into())
+    }
+}
+
 /// `new Date().toLocaleTimeString()` in the browser; the UTC time on the server.
 pub fn local_time_string() -> String {
     #[cfg(target_arch = "wasm32")]

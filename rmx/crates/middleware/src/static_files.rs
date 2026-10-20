@@ -3,10 +3,10 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use http::{header, HeaderMap, HeaderValue, Method, StatusCode};
-use rmx_fetch::{Body, Response};
+use rmx_fetch::{Body, File, Response};
 use rmx_headers::{format_http_date, parse_http_date, unix_seconds, ContentRange, IfMatch, IfNoneMatch, IfRange, Range};
 use rmx_router::{Context, Middleware, Next};
 
@@ -94,13 +94,39 @@ fn safe_join(root: &Path, rel: &str) -> Option<PathBuf> {
 /// offered for non-compressible types unless [`StaticOptions::accept_ranges`] says otherwise.
 pub fn file_response(path: &Path, req_headers: &HeaderMap, head: bool, options: &StaticOptions) -> std::io::Result<Response> {
     let meta = std::fs::metadata(path)?;
-    let size = meta.len();
-    let modified = options.last_modified.then(|| meta.modified().ok()).flatten();
+    let modified = meta.modified().ok();
+    let content_type = rmx_mime::from_path(&path.to_string_lossy());
+    let read = |start: u64, end: u64| -> std::io::Result<Body> {
+        let bytes = std::fs::read(path)?;
+        Ok(Body::from(bytes[start as usize..=end as usize].to_vec()))
+    };
+    respond_with_file(meta.len(), modified, content_type, read, req_headers, head, options)
+}
+
+/// [`file_response`] for a [`File`] held in memory, such as one from file storage
+/// (`createFileResponse(file, request)`). The type comes from the file, or its name when
+/// it has none.
+pub fn file_response_for(file: &File, req_headers: &HeaderMap, head: bool, options: &StaticOptions) -> Response {
+    let modified = UNIX_EPOCH.checked_add(std::time::Duration::from_millis(file.last_modified));
+    let content_type = if file.content_type.is_empty() { rmx_mime::from_path(&file.name) } else { file.content_type.as_str() };
+    let read = |start: u64, end: u64| Ok(Body::from(file.bytes.slice(start as usize..=end as usize)));
+    respond_with_file(file.size() as u64, modified, content_type, read, req_headers, head, options).expect("reading memory cannot fail")
+}
+
+fn respond_with_file(
+    size: u64,
+    file_modified: Option<SystemTime>,
+    content_type: &str,
+    read_range: impl Fn(u64, u64) -> std::io::Result<Body>,
+    req_headers: &HeaderMap,
+    head: bool,
+    options: &StaticOptions,
+) -> std::io::Result<Response> {
+    let modified = options.last_modified.then_some(file_modified).flatten();
     let etag = options.etag.then(|| {
-        let ms = meta.modified().ok().and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
+        let ms = file_modified.and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
         format!("W/\"{size}-{ms}\"")
     });
-    let content_type = rmx_mime::from_path(&path.to_string_lossy());
     let accept_ranges = options.accept_ranges.unwrap_or_else(|| !rmx_mime::is_compressible(content_type));
     let get = |name: header::HeaderName| req_headers.get(name).and_then(|v| v.to_str().ok());
 
@@ -154,8 +180,7 @@ pub fn file_response(path: &Path, req_headers: &HeaderMap, head: bool, options: 
         if head || size == 0 {
             return Ok(Body::empty());
         }
-        let bytes = std::fs::read(path)?;
-        Ok(Body::from(bytes[start as usize..=end as usize].to_vec()))
+        read_range(start, end)
     };
     if accept_ranges && !head && req_headers.contains_key(header::RANGE) {
         let range = Range::parse(get(header::RANGE));
@@ -248,5 +273,25 @@ mod tests {
         assert_eq!(get(&router, "/logo.png", &[("if-modified-since", &modified)]).status(), 304);
         assert_eq!(get(&router, "/logo.png", &[("if-none-match", &etag), ("if-modified-since", "Thu, 01 Jan 1970 00:00:00 GMT")]).status(), 304, "If-None-Match wins");
         assert_eq!(get(&router, "/logo.png", &[("if-none-match", "\"x\""), ("if-modified-since", &modified)]).status(), 200);
+    }
+
+    #[test]
+    fn responds_with_files_from_memory() {
+        let file = File { name: "cover.png".into(), content_type: String::new(), bytes: b"0123456789".to_vec().into(), last_modified: 1_700_000_000_000 };
+        let opts = StaticOptions { cache_control: Some("public, max-age=31536000".into()), ..Default::default() };
+        let res = file_response_for(&file, &HeaderMap::new(), false, &opts);
+        let h = res.headers();
+        assert_eq!(h["content-type"], "image/png");
+        assert_eq!(h["etag"], "W/\"10-1700000000000\"");
+        assert_eq!(h["last-modified"], "Tue, 14 Nov 2023 22:13:20 GMT");
+        assert_eq!(h["cache-control"], "public, max-age=31536000");
+        let mut range = HeaderMap::new();
+        range.insert(header::RANGE, HeaderValue::from_static("bytes=2-4"));
+        let partial = file_response_for(&file, &range, false, &opts);
+        assert_eq!(partial.status(), 206);
+        assert_eq!(block_on(partial.into_body().text()).unwrap(), "234");
+        let mut cached = HeaderMap::new();
+        cached.insert(header::IF_NONE_MATCH, HeaderValue::from_static("W/\"10-1700000000000\""));
+        assert_eq!(file_response_for(&file, &cached, false, &opts).status(), 304);
     }
 }
