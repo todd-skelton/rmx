@@ -127,8 +127,12 @@ crates:
    Event handlers are listeners on the host element, as in Remix (no document-level
    delegation), so `stopPropagation` and capture order match the DOM; `on_capture(..)`
    registers a capture-phase handler.
-   The browser runtime is checked by ports of Remix's `vdom.*`, mixin and stylesheet test suites
-   (`crates/component/tests/browser_*.rs`, 307 tests).
+   `link(href)` / `link_with(href, NavigateOptions { history, reset_scroll, reset_focus, .. })`
+   follow Remix's link mixin: `data-rmx-*` attributes on `<a>`/`<area>`, and on other
+   elements link semantics, Enter to navigate, swallowed keyboard clicks, new-tab clicks,
+   and no navigation while `disabled` or `aria-disabled`.
+   The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref, css, link) and stylesheet test suites
+   (`crates/component/tests/browser_*.rs`, 325 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

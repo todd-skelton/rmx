@@ -529,6 +529,20 @@ impl Event {
         }
     }
 
+    /// A boolean property of the element the handler is attached to (`currentTarget`),
+    /// such as `disabled`; `false` when it is missing or not a boolean.
+    pub fn current_prop_bool(&self, name: &str) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.current.as_ref().and_then(|c| js_sys::Reflect::get(c, &name.into()).ok()).and_then(|v| v.as_bool()).unwrap_or(false)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = name;
+            false
+        }
+    }
+
     /// Set an attribute on the element the handler is attached to (`currentTarget`).
     pub fn set_current_attr(&self, name: &str, value: &str) {
         #[cfg(target_arch = "wasm32")]

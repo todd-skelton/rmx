@@ -24,6 +24,7 @@ use wasm_bindgen::JsCast;
 use super::frames::{self, Submission};
 use super::js::{call, get, object};
 use super::{warn, window};
+use crate::navigation::{History, Reset};
 
 pub use crate::navigation::NavigateOptions;
 
@@ -89,16 +90,14 @@ pub async fn navigate_async(href: &str, options: NavigateOptions) {
 fn start_navigation(href: &str, options: NavigateOptions) -> Option<JsValue> {
     let Some(nav) = navigation() else {
         let location = window().location();
-        let _ = if options.replace { location.replace(href) } else { location.assign(href) };
+        let _ = if options.history == Some(History::Replace) { location.replace(href) } else { location.assign(href) };
         return None;
     };
     let src = options.src.as_deref().unwrap_or(href);
-    let reset_scroll = options.reset_scroll != Some(false);
-    let reset_focus = options.reset_focus != Some(false);
-    let opts = object(&[
-        ("state", state(options.target.as_deref(), src, reset_scroll, reset_focus)),
-        ("history", JsValue::from_str(if options.replace { "replace" } else { "push" })),
-    ]);
+    let reset_scroll = options.reset_scroll != Some(Reset::Manual);
+    let reset_focus = options.reset_focus != Some(Reset::Manual);
+    let history = options.history.map_or(JsValue::UNDEFINED, |h| JsValue::from_str(h.as_str()));
+    let opts = object(&[("state", state(options.target.as_deref(), src, reset_scroll, reset_focus)), ("history", history)]);
     call(&nav, "navigate", &[&JsValue::from_str(href), &opts]).ok()
 }
 

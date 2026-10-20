@@ -4,7 +4,7 @@
 
 use std::cell::Cell;
 
-use rmx::{css, navigate, on, rsx, Component, Frame, FrameEvent, Handle, Mixin, NavigateOptions, Node, ReloadOptions, TypedEventTarget};
+use rmx::{css, navigate, on, rsx, Component, Frame, FrameEvent, Handle, History, Mixin, NavigateOptions, Node, ReloadOptions, Reset, TypedEventTarget};
 use serde::{Deserialize, Serialize};
 
 use crate::{lead_style, muted_style, panel_style, section_heading_style};
@@ -110,7 +110,7 @@ impl Component for StoreScrollReproduction {
             let select_size = on("click", h.on(|_, _| {
                 navigate(
                     "/scroll-restoration/detail?size=small",
-                    NavigateOptions { replace: true, reset_scroll: Some(false), ..Default::default() },
+                    NavigateOptions { history: Some(History::Replace), reset_scroll: Some(Reset::Manual), ..Default::default() },
                 );
             }));
             rsx! {

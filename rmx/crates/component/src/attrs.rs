@@ -100,6 +100,32 @@ mod tests {
         assert_eq!(err.downcast_ref::<&str>(), Some(&"Invalid outerHTML prop: outerHTML is not supported on host elements"));
     }
 
+    // Ports of Remix's `attributes.test.ts` (`isAllowedHostPropName`).
+    #[test]
+    fn blocks_event_prop_names_in_every_ascii_letter_case() {
+        for name in ["onclick", "onClick", "OnClick", "oNclick", "ONCLICK", "on"] {
+            assert!(!is_allowed_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn keeps_event_names_inside_ordinary_attribute_names() {
+        for name in ["data-onclick", "aria-controls", "nonce", "className"] {
+            assert!(is_allowed_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn blocks_delimiters_and_reserved_prop_names() {
+        for name in ["", "__proto__", "outerHTML"] {
+            assert!(!is_allowed_name(name), "{name:?}");
+        }
+        for c in ['\u{0}', '\t', '\n', '\u{c}', '\r', ' ', '"', '\'', '/', '>', '='] {
+            let name = format!("data{c}value");
+            assert!(!is_allowed_name(&name), "{name:?}");
+        }
+    }
+
     #[test]
     fn filters_unsafe_attribute_names() {
         for ok in ["href", "data-on", "aria-label", "xlink:href", "class"] {
