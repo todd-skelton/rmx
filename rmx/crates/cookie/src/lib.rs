@@ -30,8 +30,8 @@ pub struct Cookie {
     path: Option<String>,
     domain: Option<String>,
     max_age: Option<i64>,
-    http_only: bool,
-    secure: bool,
+    http_only: Option<bool>,
+    secure: Option<bool>,
     same_site: Option<SameSite>,
     secrets: Vec<String>,
 }
@@ -43,8 +43,8 @@ impl Cookie {
             path: None,
             domain: None,
             max_age: None,
-            http_only: false,
-            secure: false,
+            http_only: None,
+            secure: None,
             same_site: None,
             secrets: Vec::new(),
         }
@@ -71,12 +71,12 @@ impl Cookie {
     }
 
     pub fn http_only(mut self, on: bool) -> Cookie {
-        self.http_only = on;
+        self.http_only = Some(on);
         self
     }
 
     pub fn secure(mut self, on: bool) -> Cookie {
-        self.secure = on;
+        self.secure = Some(on);
         self
     }
 
@@ -96,11 +96,13 @@ impl Cookie {
         !self.secrets.is_empty()
     }
 
-    pub fn is_http_only(&self) -> bool {
+    /// `HttpOnly` as configured; `None` when never set, so middleware can pick a default.
+    pub fn get_http_only(&self) -> Option<bool> {
         self.http_only
     }
 
-    pub fn is_secure(&self) -> bool {
+    /// `Secure` as configured; `None` when never set.
+    pub fn get_secure(&self) -> Option<bool> {
         self.secure
     }
 
@@ -128,7 +130,7 @@ impl Cookie {
 
     /// A `Set-Cookie` header value with `HttpOnly` and `Secure` overridden.
     pub fn serialize_with(&self, value: &str, http_only: bool, secure: bool) -> String {
-        Cookie { http_only, secure, ..self.clone() }.serialize(value)
+        Cookie { http_only: Some(http_only), secure: Some(secure), ..self.clone() }.serialize(value)
     }
 
     /// A `Set-Cookie` header value that deletes the cookie.
@@ -151,10 +153,10 @@ impl Cookie {
         if let Some(m) = max_age {
             let _ = write!(out, "; Max-Age={m}");
         }
-        if self.http_only {
+        if self.http_only == Some(true) {
             out.push_str("; HttpOnly");
         }
-        if self.secure {
+        if self.secure == Some(true) {
             out.push_str("; Secure");
         }
         match self.same_site {

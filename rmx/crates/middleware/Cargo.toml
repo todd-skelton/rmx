@@ -1,6 +1,6 @@
 [package]
 name = "rmx-middleware"
-description = "Middleware for rmx-router: static files, logger, form data, method override, compression"
+description = "Middleware for rmx-router: static files, logger, form data, method override, compression, sessions, CSRF, auth, cross-origin protection and CORS"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -12,11 +12,20 @@ rmx-mime.workspace = true
 rmx-router.workspace = true
 rmx-url.workspace = true
 flate2 = { version = "1", optional = true }
+rmx-cookie = { workspace = true, optional = true }
+rmx-crypto = { workspace = true, optional = true }
+rmx-session = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [features]
-default = ["static", "logger", "form-data", "method-override", "compression"]
+default = ["static", "logger", "form-data", "method-override", "compression", "session", "csrf", "auth", "cop", "cors"]
 static = []
 logger = []
 form-data = []
 method-override = ["form-data"]
 compression = ["dep:flate2"]
+session = ["dep:rmx-session", "dep:rmx-cookie", "dep:serde_json"]
+csrf = ["session", "form-data", "dep:rmx-crypto"]
+auth = ["session"]
+cop = []
+cors = []

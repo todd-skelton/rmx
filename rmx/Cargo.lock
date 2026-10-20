@@ -591,10 +591,14 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "http",
+ "rmx-cookie",
+ "rmx-crypto",
  "rmx-fetch",
  "rmx-mime",
  "rmx-router",
+ "rmx-session",
  "rmx-url",
+ "serde_json",
 ]
 
 [[package]]
@@ -638,6 +642,17 @@ dependencies = [
  "hyper-util",
  "rmx-fetch",
  "rmx-router",
+ "tokio",
+]
+
+[[package]]
+name = "rmx-session"
+version = "0.1.0"
+dependencies = [
+ "rmx-crypto",
+ "rmx-fetch",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

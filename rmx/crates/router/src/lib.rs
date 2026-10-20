@@ -74,6 +74,7 @@ impl<T> MaybeSync for T {}
 /// Everything a handler or middleware gets for one request.
 pub struct Context {
     request: Request,
+    original_method: Method,
     url: Url,
     params: Params,
     router: Router,
@@ -83,7 +84,8 @@ impl Context {
     fn new(request: Request, router: Router) -> Context {
         let (parts, body) = request.into_parts();
         let url = request_url(&parts);
-        Context { request: Request::from_parts(parts, body), url, params: Params::default(), router }
+        let original_method = parts.method.clone();
+        Context { request: Request::from_parts(parts, body), original_method, url, params: Params::default(), router }
     }
 
     pub fn request(&self) -> &Request {
@@ -110,6 +112,11 @@ impl Context {
     /// Change the method used for routing (see method-override middleware).
     pub fn set_method(&mut self, method: Method) {
         *self.request.method_mut() = method;
+    }
+
+    /// The method the client sent, before any [`Context::set_method`] override.
+    pub fn original_method(&self) -> &Method {
+        &self.original_method
     }
 
     pub fn headers(&self) -> &http::HeaderMap {
