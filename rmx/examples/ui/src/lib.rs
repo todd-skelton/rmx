@@ -45,6 +45,14 @@ pub const DEMOS: &[Demo] = &[
         center: false,
     },
     Demo {
+        slug: "component/runtime/readme",
+        title: "README Examples",
+        description: "A gallery of small examples that mirror the package README snippets.",
+        section: "Component runtime",
+        module: "Runtime",
+        center: false,
+    },
+    Demo {
         slug: "component/runtime/mixin-lifecycle",
         title: "Mixin Lifecycle",
         description: "Stateful mixins: setup, update without the owner, insert, remove and persisted removal.",
@@ -76,6 +84,7 @@ pub fn start() {
             rmx::entry::<keyed_list::KeyedList>(),
             rmx::entry::<controlled::ControlledValues>(),
             rmx::entry::<lifecycle::MixinLifecycle>(),
+            rmx::entry::<readme::ReadmeExamples>(),
             rmx::entry::<draggable::DraggableDemo>(),
         ],
         ..Default::default()

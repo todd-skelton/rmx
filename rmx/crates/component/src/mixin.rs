@@ -17,7 +17,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::node::{AttrValue, Element, ElementExtra, EventHandler, IntoAttr, StyleRule};
+use crate::host_mixin::{HostMixin, MixinHandle};
+use crate::node::{AttrValue, Element, EventHandler, IntoAttr, StyleRule};
+use crate::signal::Signal;
 
 /// A host-element transformation applied by `mix={...}`.
 #[derive(Clone)]
@@ -27,16 +29,46 @@ pub struct Mixin(MixinKind);
 enum MixinKind {
     Style(Rc<StyleRule>),
     Event(&'static str, EventHandler),
-    Ref(NodeRef),
     Attrs(Vec<(&'static str, AttrValue)>),
     Custom(Rc<dyn Fn(&mut Element)>),
     Many(Vec<Mixin>),
     Stateful(Rc<dyn crate::host_mixin::ErasedMixin>),
 }
 
-/// A callback that receives the host element once it is in the document.
+/// A callback that receives the host element once it is in the document, and a signal
+/// that aborts when the element is removed.
 #[derive(Clone)]
-pub struct NodeRef(#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))] pub(crate) Rc<dyn Fn(&NodeHandle)>);
+pub struct NodeRef(#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))] pub(crate) Rc<RefCallback>);
+
+type RefCallback = dyn Fn(&NodeHandle, &Signal);
+
+/// `ref` as a browser-only stateful mixin: the callback runs once per insertion, not on
+/// every render, and its signal aborts on removal.
+struct RefMixin {
+    callback: NodeRef,
+}
+
+impl HostMixin for RefMixin {
+    type Args = NodeRef;
+    const SSR: bool = false;
+
+    fn setup(h: &MixinHandle<Self>, _: &'static str) -> Self {
+        h.on_insert(|this, h, event| {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let signal = Signal::from_raw(h.signal());
+                (this.callback.0)(&event.node, &signal);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            let _ = (this, h, event);
+        });
+        RefMixin { callback: NodeRef(Rc::new(|_, _| {})) }
+    }
+
+    fn render(&mut self, callback: &NodeRef, _: &mut Element, _: &MixinHandle<Self>) {
+        self.callback = callback.clone();
+    }
+}
 
 /// The DOM element a [`node_ref`] callback receives. On the server it is never created.
 #[derive(Clone)]
@@ -73,6 +105,17 @@ impl NodeHandle {
     pub fn focus(&self) {
         #[cfg(target_arch = "wasm32")]
         self.call("focus");
+    }
+
+    /// `scrollIntoView({ behavior: 'smooth', block: 'start' })`
+    pub fn scroll_into_view(&self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let options = web_sys::ScrollIntoViewOptions::new();
+            options.set_behavior(web_sys::ScrollBehavior::Smooth);
+            options.set_block(web_sys::ScrollLogicalPosition::Start);
+            self.el.scroll_into_view_with_scroll_into_view_options(&options);
+        }
     }
 
     /// Select the text of an input or textarea.
@@ -119,7 +162,6 @@ impl Mixin {
                 el.extra.get_or_insert_with(Default::default).styles.push(rule);
             }
             MixinKind::Event(name, handler) => el.events.push((name, handler)),
-            MixinKind::Ref(r) => el.extra.get_or_insert_with(Box::<ElementExtra>::default).refs.push(r),
             MixinKind::Attrs(defaults) => {
                 for (name, value) in defaults {
                     if !el.attrs.iter().any(|(n, _)| *n == name) {
@@ -240,9 +282,10 @@ pub fn on(event: &'static str, handler: EventHandler) -> Mixin {
     Mixin(MixinKind::Event(event, handler))
 }
 
-/// Run `f` with the DOM element after it is inserted (browser only).
-pub fn node_ref(f: impl Fn(&NodeHandle) + 'static) -> Mixin {
-    Mixin(MixinKind::Ref(NodeRef(Rc::new(f))))
+/// Run `f` with the DOM element after it is inserted (Remix's `ref`, browser only). The
+/// signal aborts when the element is removed: clean up observers and listeners with it.
+pub fn node_ref(f: impl Fn(&NodeHandle, &Signal) + 'static) -> Mixin {
+    crate::host_mixin::mixin::<RefMixin>(NodeRef(Rc::new(f)))
 }
 
 /// Attribute defaults, used only where the element does not set the attribute itself.

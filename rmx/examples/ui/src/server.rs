@@ -63,6 +63,7 @@ fn demo_node(slug: &str) -> Node {
         "component/runtime/keyed-list" => rsx! { <keyed_list::KeyedList/> },
         "component/runtime/controlled-uncontrolled-values" => rsx! { <controlled::ControlledValues/> },
         "component/runtime/mixin-lifecycle" => rsx! { <lifecycle::MixinLifecycle/> },
+        "component/runtime/readme" => rsx! { <readme::ReadmeExamples/> },
         "cases/draggable" => rsx! { <draggable::DraggableDemo/> },
         _ => Node::Empty,
     }

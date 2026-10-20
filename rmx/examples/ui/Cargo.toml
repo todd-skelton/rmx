@@ -17,7 +17,14 @@ serde.workspace = true
 wasm-bindgen.workspace = true
 js-sys.workspace = true
 web-sys = { workspace = true, features = [
+    "AbortSignal",
+    "AddEventListenerOptions",
     "CssStyleDeclaration",
+    "Document",
+    "DomRectReadOnly",
+    "KeyboardEvent",
+    "ResizeObserver",
+    "ResizeObserverEntry",
     "CustomEvent",
     "CustomEventInit",
     "Element",

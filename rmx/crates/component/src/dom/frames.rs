@@ -106,7 +106,7 @@ impl FrameState {
     /// Call `handler` for `event` until `signal` aborts.
     pub(crate) fn add_listener(&self, event: &str, handler: crate::node::EventHandler, signal: &web_sys::AbortSignal) {
         let callback = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
-            (handler.0)(&crate::node::Event { raw, current: None });
+            (handler.0)(&crate::node::Event { raw, current: None, listener: None });
         })
         .into_js_value();
         let options = web_sys::AddEventListenerOptions::new();

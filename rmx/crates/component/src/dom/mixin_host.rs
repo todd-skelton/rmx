@@ -9,7 +9,7 @@ use std::rc::{Rc, Weak};
 
 use wasm_bindgen::JsCast;
 
-use super::vdom::{apply_extra, attach_events, has_inner_html, hydrate_attrs, patch_props, queue_task, schedule_host_update, set_attr, Listener};
+use super::vdom::{apply_extra, attach_events, has_inner_html, hydrate_attrs, patch_props, queue_commit, schedule_host_update, set_attr, Listener};
 use super::Scope;
 use crate::host_mixin::{take_mixins, AnySlot, BeforeRemoveEvent, InsertEvent, Lifecycle, LifecycleEvent, SlotContext};
 use crate::mixin::NodeHandle;
@@ -149,7 +149,7 @@ impl MixinHost {
 
         if !inserted.is_empty() {
             let me = self.me.clone();
-            queue_task(Box::new(move || {
+            queue_commit(Box::new(move || {
                 let Some(host) = me.upgrade() else { return };
                 if !host.alive.get() {
                     return;

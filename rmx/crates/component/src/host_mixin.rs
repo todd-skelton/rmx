@@ -292,6 +292,14 @@ impl<M: HostMixin> MixinHandle<M> {
         }
     }
 
+    /// Schedule an update and resolve once it has been applied. Resolves at once on the
+    /// server.
+    pub async fn updated(&self) {
+        self.update();
+        #[cfg(target_arch = "wasm32")]
+        crate::dom::after_flush().await;
+    }
+
     /// Whether the slot is still bound to a mounted host.
     pub fn is_connected(&self) -> bool {
         #[cfg(target_arch = "wasm32")]

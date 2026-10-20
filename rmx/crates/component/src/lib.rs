@@ -20,6 +20,7 @@ mod mixin;
 mod navigation;
 mod node;
 mod node_json;
+mod signal;
 
 pub mod browser;
 pub mod ssr;
@@ -40,6 +41,7 @@ pub use node::{
     StyleRule, UnsafeHtml,
 };
 pub use rmx_macros::rsx;
+pub use signal::{ListenerId, Signal, TypedEventTarget};
 pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]

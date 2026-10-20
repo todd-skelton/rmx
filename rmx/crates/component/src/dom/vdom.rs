@@ -12,7 +12,6 @@ use wasm_bindgen::{intern, JsCast};
 use super::{document, frames, styles, Scope};
 use crate::component::{Component, Handle, HandleShared, Instance};
 use crate::host_mixin::has_mixins;
-use crate::mixin::{NodeHandle, NodeRef};
 use super::mixin_host::MixinHost;
 use crate::node::{AttrValue, Element, Event, EventHandler, FrameNode, Key, Node, Str};
 
@@ -159,6 +158,8 @@ pub(crate) fn unmount_root(inst: &dyn AnyInstance) {
 thread_local! {
     static DIRTY: RefCell<Vec<Rc<dyn AnyInstance>>> = const { RefCell::new(Vec::new()) };
     static TASKS: RefCell<Vec<Box<dyn FnOnce()>>> = const { RefCell::new(Vec::new()) };
+    /// Commit-phase callbacks (mixin `insert` events), run before `TASKS`.
+    static COMMITS: RefCell<Vec<Box<dyn FnOnce()>>> = const { RefCell::new(Vec::new()) };
     /// Mixin hosts that called `update()`.
     static DIRTY_HOSTS: RefCell<Vec<Rc<MixinHost>>> = const { RefCell::new(Vec::new()) };
     static SCHEDULED: Cell<bool> = const { Cell::new(false) };
@@ -174,9 +175,25 @@ pub(crate) fn schedule_update<C: Component>(inst: Rc<Instance<C>>) {
     schedule_flush();
 }
 
+/// Queue a commit-phase callback: it runs after the pending renders, before tasks.
+pub(crate) fn queue_commit(task: Box<dyn FnOnce()>) {
+    COMMITS.with(|t| t.borrow_mut().push(task));
+    schedule_flush();
+}
+
 pub(crate) fn queue_task(task: Box<dyn FnOnce()>) {
     TASKS.with(|t| t.borrow_mut().push(task));
     schedule_flush();
+}
+
+/// Resolves after the next flush (renders, then queued tasks).
+pub(crate) async fn after_flush() {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        queue_task(Box::new(move || {
+            let _ = resolve.call0(&JsValue::UNDEFINED);
+        }));
+    });
+    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
 }
 
 pub(super) fn schedule_host_update(host: Rc<MixinHost>) {
@@ -211,6 +228,10 @@ pub fn flush() {
         for host in hosts {
             host.rerun();
         }
+    }
+    let commits = COMMITS.with(|t| std::mem::take(&mut *t.borrow_mut()));
+    for commit in commits {
+        commit();
     }
     // Tasks may queue more tasks or updates; those run in a later flush.
     let tasks = TASKS.with(|t| std::mem::take(&mut *t.borrow_mut()));
@@ -272,6 +293,22 @@ pub(crate) struct Listener {
 struct HandlerTable {
     items: Vec<Option<EventHandler>>,
     free: Vec<u32>,
+    /// Signals handed out by `Event::signal`, aborted on the next dispatch or release.
+    signals: HashMap<u32, web_sys::AbortController>,
+}
+
+/// The signal for the current run of a delegated listener.
+pub(crate) fn listener_signal(id: u32) -> web_sys::AbortSignal {
+    HANDLERS.with(|h| {
+        let mut table = h.borrow_mut();
+        table.signals.entry(id).or_insert_with(|| web_sys::AbortController::new().expect("AbortController")).signal()
+    })
+}
+
+fn abort_listener_signal(table: &mut HandlerTable, id: u32) {
+    if let Some(c) = table.signals.remove(&id) {
+        c.abort();
+    }
 }
 
 thread_local! {
@@ -310,9 +347,16 @@ fn dispatch(raw: &web_sys::Event, key: &JsValue) {
     let mut node = raw.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
     while let Some(current) = node {
         if let Some(id) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) {
-            let handler = HANDLERS.with(|h| h.borrow().items.get(id as usize).cloned().flatten());
+            let id = id as u32;
+            let handler = HANDLERS.with(|h| {
+                let mut table = h.borrow_mut();
+                if !table.signals.is_empty() {
+                    abort_listener_signal(&mut table, id);
+                }
+                table.items.get(id as usize).cloned().flatten()
+            });
             if let Some(handler) = handler {
-                (handler.0)(&Event { raw: raw.clone(), current: Some(current.clone()) });
+                (handler.0)(&Event { raw: raw.clone(), current: Some(current.clone()), listener: Some(id) });
             }
             if raw.cancel_bubble() {
                 break;
@@ -356,6 +400,9 @@ impl Listener {
             let mut table = h.borrow_mut();
             table.items[self.id as usize] = None;
             table.free.push(self.id);
+            if !table.signals.is_empty() {
+                abort_listener_signal(&mut table, self.id);
+            }
         });
         if let Some(el) = el {
             let _ = js_sys::Reflect::delete_property(el, &event_key(self.name).unchecked_into());
@@ -650,22 +697,11 @@ fn sync_select_value(el: &web_sys::Element) {
     }
 }
 
-/// Insert an element's `css()` rules and, for a newly mounted element, schedule its
-/// `node_ref` callbacks to run after the commit.
-pub(super) fn apply_extra(el: &web_sys::Element, extra: Option<Box<crate::node::ElementExtra>>, mounted: bool) {
+/// Insert an element's `css()` rules.
+pub(super) fn apply_extra(_el: &web_sys::Element, extra: Option<Box<crate::node::ElementExtra>>, _mounted: bool) {
     let Some(extra) = extra else { return };
     for rule in &extra.styles {
         styles::insert(rule);
-    }
-    if mounted && !extra.refs.is_empty() {
-        let el = el.clone();
-        let refs: Vec<NodeRef> = extra.refs;
-        queue_task(Box::new(move || {
-            let handle = NodeHandle { el };
-            for r in &refs {
-                (r.0)(&handle);
-            }
-        }));
     }
 }
 

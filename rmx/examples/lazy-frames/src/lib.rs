@@ -85,10 +85,10 @@ impl Component for LazyFrame {
             let h = h.clone();
             let margin = props.root_margin.clone().unwrap_or_else(|| DEFAULT_ROOT_MARGIN.to_string());
             let track_activity = props.pause_animations_when_inactive;
-            node_ref(move |node| {
+            node_ref(move |node, signal| {
                 #[cfg(target_arch = "wasm32")]
                 {
-                    let signal = h.signal();
+                    let signal = signal.raw().clone();
                     let load = h.clone();
                     intersection::observe(node.element(), &signal, &margin, move |entry| {
                         if !entry.is_intersecting() {
@@ -115,7 +115,7 @@ impl Component for LazyFrame {
                     }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
-                let _ = (node, &h, &margin, track_activity);
+                let _ = (node, signal, &h, &margin, track_activity);
             })
         };
         let paused = (props.pause_animations_when_inactive && !self.active)

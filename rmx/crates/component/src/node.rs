@@ -40,7 +40,6 @@ pub struct Element {
 #[derive(Clone, Default)]
 pub(crate) struct ElementExtra {
     pub(crate) styles: Vec<Rc<StyleRule>>,
-    pub(crate) refs: Vec<crate::mixin::NodeRef>,
     /// Stateful mixins, run when the element is rendered.
     pub(crate) mixins: Vec<Rc<dyn crate::host_mixin::ErasedMixin>>,
 }
@@ -317,6 +316,9 @@ pub struct Event {
     /// `currentTarget` is the document).
     #[cfg(target_arch = "wasm32")]
     pub(crate) current: Option<web_sys::Node>,
+    /// The delegated listener running, for [`Event::signal`].
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) listener: Option<u32>,
 }
 
 impl Event {
@@ -331,6 +333,16 @@ impl Event {
     pub fn current_element(&self) -> Option<web_sys::Element> {
         use wasm_bindgen::JsCast;
         self.current.clone()?.dyn_into().ok()
+    }
+
+    /// Aborts when this handler runs again or its element is removed (the `signal` Remix
+    /// passes to `on` listeners). Check it before applying the result of async work.
+    pub fn signal(&self) -> crate::Signal {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(id) = self.listener {
+            return crate::Signal::from_raw(crate::dom::listener_signal(id));
+        }
+        crate::Signal::never()
     }
 
     pub fn prevent_default(&self) {

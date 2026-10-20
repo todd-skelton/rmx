@@ -224,7 +224,7 @@ impl<C: Component> Handle<C> {
     /// an element around: `mix={h.node_ref(|this, node| this.input = Some(node.clone()))}`.
     pub fn node_ref(&self, f: impl Fn(&mut C, &crate::NodeHandle) + 'static) -> crate::Mixin {
         let inst = self.inst.clone();
-        crate::node_ref(move |node| {
+        crate::node_ref(move |node, _| {
             if let Some(inst) = inst.upgrade() {
                 if let Ok(mut state) = inst.state.try_borrow_mut() {
                     f(&mut state, node);
@@ -300,6 +300,37 @@ impl<C: Component> Handle<C> {
         wasm_bindgen_futures::spawn_local(fut);
         #[cfg(not(target_arch = "wasm32"))]
         drop(fut);
+    }
+
+    /// Schedule an update and resolve once it has been applied to the DOM (Remix's
+    /// `await handle.update()`). Resolves at once on the server.
+    pub async fn updated(&self) {
+        self.update();
+        #[cfg(target_arch = "wasm32")]
+        crate::dom::after_flush().await;
+    }
+
+    /// Call `f` with the component state each time `target` dispatches, until the
+    /// component is removed (`target.addEventListener(type, fn, { signal: handle.signal })`).
+    pub fn listen<E: 'static>(&self, target: &crate::TypedEventTarget<E>, f: impl Fn(&mut C, &Handle<C>, &E) + 'static) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let inst = self.inst.clone();
+            let id = target.add_listener(move |event| {
+                if let Some(inst) = inst.upgrade() {
+                    if !inst.live.alive.get() {
+                        return;
+                    }
+                    if let Ok(mut state) = inst.state.try_borrow_mut() {
+                        f(&mut state, &inst.handle, event);
+                    }
+                }
+            });
+            let target = target.clone();
+            crate::Signal::from_raw(self.signal()).on_abort(move || target.remove_listener(id));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = (target, f);
     }
 
     /// Provide a value to descendants (`handle.context.set`). Does not trigger an update.

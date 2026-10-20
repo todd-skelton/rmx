@@ -87,6 +87,21 @@ pub async fn sleep(ms: u32) {
     let _ = ms;
 }
 
+/// `new Date().toLocaleTimeString()` in the browser; the UTC time on the server.
+pub fn local_time_string() -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        String::from(js_sys::Date::new_0().to_locale_time_string("en-US"))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let (h, m, s) = (secs / 3600 % 24, secs / 60 % 60, secs % 60);
+        let h12 = if h % 12 == 0 { 12 } else { h % 12 };
+        format!("{h12}:{m:02}:{s:02} {}", if h < 12 { "AM" } else { "PM" })
+    }
+}
+
 /// Set `data-<name>` on the `<html>` element. No-op on the server.
 pub fn set_document_data(name: &str, value: &str) {
     #[cfg(target_arch = "wasm32")]
