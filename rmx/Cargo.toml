@@ -28,6 +28,7 @@ members = [
     "examples/assets",
     "examples/ui",
     "examples/social-auth",
+    "examples/i18n",
 ]
 
 [workspace.package]

@@ -272,6 +272,12 @@ impl<T: IntoNode> IntoNode for Vec<T> {
     }
 }
 
+impl<T: IntoNode, const N: usize> IntoNode for [T; N] {
+    fn into_node(self) -> Node {
+        Node::Fragment(self.into_iter().map(IntoNode::into_node).collect())
+    }
+}
+
 /// `children` passed to a component. Cloning is a reference-count bump, so a component can
 /// place `{&props.children}` in its output without copying the subtree.
 #[derive(Clone)]

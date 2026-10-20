@@ -1,0 +1,39 @@
+[package]
+name = "i18n-demo"
+description = "The Remix 3 i18n demo (request-scoped translation, Accept-Language negotiation, locale cookie, RTL), in rmx"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rmx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+
+# The server formats with ICU4X, the role Node's built-in Intl plays for Remix (only the
+# formatter crates it needs, not the `icu` meta crate). The browser uses its own Intl through
+# js-sys.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
+fixed_decimal = "0.7"
+icu_datetime = "2"
+icu_decimal = "2"
+icu_experimental = "0.6"
+icu_locale_core = "2"
+icu_plurals = "2"
+rmx-cookie.workspace = true
+rmx-fetch.workspace = true
+rmx-headers.workspace = true
+rmx-middleware.workspace = true
+rmx-render.workspace = true
+rmx-router.workspace = true
+rmx-serve.workspace = true
+tokio.workspace = true
