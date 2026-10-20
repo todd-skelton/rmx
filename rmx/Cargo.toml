@@ -6,6 +6,8 @@ members = [
     "crates/fetch",
     "crates/router",
     "crates/serve",
+    "crates/mime",
+    "crates/middleware",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
@@ -26,6 +28,8 @@ rmx-route-pattern = { path = "crates/route-pattern" }
 rmx-fetch = { path = "crates/fetch" }
 rmx-router = { path = "crates/router" }
 rmx-serve = { path = "crates/serve" }
+rmx-mime = { path = "crates/mime" }
+rmx-middleware = { path = "crates/middleware" }
 bytes = "1"
 http = "1"
 http-body = "1"

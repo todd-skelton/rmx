@@ -1,0 +1,22 @@
+[package]
+name = "rmx-middleware"
+description = "Middleware for rmx-router: static files, logger, form data, method override, compression"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-fetch.workspace = true
+rmx-mime.workspace = true
+rmx-router.workspace = true
+rmx-url.workspace = true
+flate2 = { version = "1", optional = true }
+
+[features]
+default = ["static", "logger", "form-data", "method-override", "compression"]
+static = []
+logger = []
+form-data = []
+method-override = ["form-data"]
+compression = ["dep:flate2"]

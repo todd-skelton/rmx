@@ -1,0 +1,8 @@
+[package]
+name = "rmx-mime"
+description = "File extension to MIME type lookup"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
