@@ -576,6 +576,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-headers"
+version = "0.1.0"
+
+[[package]]
 name = "rmx-macros"
 version = "0.1.0"
 dependencies = [
@@ -594,6 +598,7 @@ dependencies = [
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-headers",
  "rmx-mime",
  "rmx-router",
  "rmx-session",

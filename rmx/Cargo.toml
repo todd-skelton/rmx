@@ -14,6 +14,7 @@ members = [
     "crates/assets",
     "crates/crypto",
     "crates/session",
+    "crates/headers",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
@@ -49,6 +50,7 @@ rmx-spa = { path = "crates/spa" }
 rmx-assets = { path = "crates/assets" }
 rmx-crypto = { path = "crates/crypto" }
 rmx-session = { path = "crates/session" }
+rmx-headers = { path = "crates/headers" }
 rmx-cookie = { path = "crates/cookie" }
 bytes = "1"
 http = "1"

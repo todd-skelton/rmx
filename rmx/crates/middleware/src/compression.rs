@@ -13,9 +13,7 @@ use rmx_router::{Context, Middleware, Next};
 /// progressively.
 pub fn compression() -> impl Middleware {
     |ctx: Context, next: Next| async move {
-        let accepts_gzip = ctx
-            .header(header::ACCEPT_ENCODING.as_str())
-            .is_some_and(|v| v.split(',').any(|e| e.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("gzip")));
+        let accepts_gzip = rmx_headers::AcceptEncoding::parse(ctx.header(header::ACCEPT_ENCODING.as_str())).accepts("gzip");
         let res = next.run(ctx).await;
         if !accepts_gzip { return res }
         compress(res)
@@ -79,5 +77,8 @@ mod tests {
         let mut out = String::new();
         flate2::read::GzDecoder::new(&bytes[..]).read_to_string(&mut out).unwrap();
         assert!(out.starts_with("<!DOCTYPE html><p>hello</p>"));
+
+        let refused = http::Request::builder().uri("http://x/").header("accept-encoding", "br, gzip;q=0").body(Body::empty()).unwrap();
+        assert!(block_on(router.fetch(refused)).headers().get("content-encoding").is_none(), "q=0 refuses gzip");
     }
 }

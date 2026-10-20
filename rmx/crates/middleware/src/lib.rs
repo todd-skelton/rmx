@@ -55,4 +55,3 @@ pub use session::{session, SessionExt};
 #[cfg(feature = "static")]
 pub use static_files::{file_response, static_files, StaticOptions};
 
-pub(crate) mod http_date;
