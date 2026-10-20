@@ -1,7 +1,7 @@
 use rmx::{render_to_string, rsx, Children, Component, Handle, Node};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct LayoutProps {
     title: &'static str,
     children: Children,
@@ -19,7 +19,7 @@ impl Component for Layout {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct CounterProps {
     initial: i32,
     label: String,
@@ -55,14 +55,19 @@ fn renders_components_children_and_client_entries() {
             <input required/>
         </Layout>
     };
+    let html = render_to_string(&page);
+    // Marker ids are unique per render; normalize the one entry id.
+    let id_start = html.find("<!--rmx:h:").expect("entry marker") + "<!--rmx:h:".len();
+    let id = &html[id_start..html[id_start..].find("-->").unwrap() + id_start];
+    let html = html.replace(id, "ID");
     assert_eq!(
-        render_to_string(&page),
+        html,
         concat!(
             "<html><body><h1>Hi &amp; bye</h1>",
             "<ul><li>a</li><li>&lt;b&gt;</li></ul>",
-            "<!--rmx:h:0--><button>&lt;/script&gt;: 3</button><!--/rmx:h-->",
+            "<!--rmx:h:ID--><button>&lt;/script&gt;: 3</button><!--/rmx:h-->",
             "<input required>",
-            r#"<script type="application/json" id="rmx-data">[{"n":"Counter","p":{"initial":3,"label":"\u003c/script>"}}]</script>"#,
+            r#"<script type="application/json" id="rmx-data">{"h":{"ID":{"n":"Counter","p":{"initial":3,"label":"\u003c/script>"}}}}</script>"#,
             "</body></html>",
         )
     );

@@ -37,7 +37,7 @@ fn label(seed: &mut u32) -> String {
 // Document shell
 // ---------------------------------------------------------------------------------------
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DocumentProps {
     pub title: Str,
     pub children: Children,
@@ -105,7 +105,7 @@ pub fn home_page(tasks: &[Task]) -> Node {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct CounterProps {
     pub initial: i32,
 }
@@ -158,7 +158,7 @@ pub fn ssr_page(n: usize) -> Node {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RowViewProps {
     pub id: u32,
     pub label: String,

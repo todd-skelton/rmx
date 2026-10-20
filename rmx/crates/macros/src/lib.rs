@@ -3,6 +3,8 @@
 //! - Lowercase tags are elements: `<div class="x">"text" {expr}</div>`.
 //! - Capitalized tags are components: `<Counter initial=5/>` builds `CounterProps { initial: 5 }`.
 //! - `on:click={handler}` attaches an event handler, `key={id}` sets a list key.
+//! - `mix={css(..)}` or `mix={[a, b]}` applies mixins to the host element.
+//! - Component props left out of the template use `Default` values.
 //! - Text must be quoted (`"Hello"`); `{expr}` accepts anything implementing `IntoNode`.
 
 use proc_macro::TokenStream;
@@ -110,6 +112,7 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
     let mut key = quote! { ::core::option::Option::None };
     let mut attrs = Vec::new();
     let mut events = Vec::new();
+    let mut mixins: Vec<Tokens> = Vec::new();
     for attr in el.attributes() {
         let attr = match attr {
             NodeAttribute::Attribute(a) => a,
@@ -125,6 +128,12 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
             };
             let v2 = value_tokens(v);
             key = quote_spanned! {v.span()=> ::core::option::Option::Some(::rmx::Key::from(#v2)) };
+        } else if name == "mix" {
+            let Some(v) = value else {
+                return syn::Error::new(attr.span(), "rsx!: mix needs a value").to_compile_error();
+            };
+            let v2 = value_tokens(v);
+            mixins.push(quote_spanned! {v.span()=> ::rmx::IntoMixins::into_mixins(#v2) });
         } else if let Some(event) = name.strip_prefix("on:") {
             let Some(v) = value else {
                 return syn::Error::new(attr.span(), "rsx!: event needs a handler").to_compile_error();
@@ -143,13 +152,29 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
         }
     }
     let children = children(&el.children);
+    if mixins.is_empty() {
+        return quote! {
+            ::rmx::Node::element(
+                #tag,
+                #key,
+                ::std::vec![#(#attrs),*],
+                ::std::vec![#(#events),*],
+                ::std::vec![#(#children),*],
+            )
+        };
+    }
     quote! {
-        ::rmx::Node::element(
+        ::rmx::Node::element_with_mixins(
             #tag,
             #key,
             ::std::vec![#(#attrs),*],
             ::std::vec![#(#events),*],
             ::std::vec![#(#children),*],
+            {
+                let mut __mixins = ::std::vec::Vec::new();
+                #( __mixins.extend(#mixins); )*
+                __mixins
+            },
         )
     }
 }
@@ -180,10 +205,14 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
             continue;
         }
         let field = syn::Ident::new(&name.replace('-', "_"), attr.key.span());
+        // Values go through `IntoProp` so `"text"` fills a `String` prop and a value fills
+        // an `Option<_>` prop without `Some(..)`.
         let v = match value {
             None => quote! { true },
-            Some(v) if string_literal(v).is_some() => quote_spanned! {v.span()=> ::core::convert::Into::into(#v) },
-            Some(v) => value_tokens(v),
+            Some(v) => {
+                let v2 = value_tokens(v);
+                quote_spanned! {v.span()=> ::rmx::IntoProp::into_prop(#v2) }
+            }
         };
         fields.push(quote! { #field: #v });
     }
@@ -194,10 +223,18 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
             #field: ::core::convert::From::from(::rmx::Node::Fragment(::std::vec![#(#kids),*]))
         });
     }
+    // Props not given in the template take their `Default` values, so optional props
+    // work like they do in JSX. Props types therefore implement `Default`.
     let props = if fields.is_empty() {
         quote! { ::core::default::Default::default() }
     } else {
-        quote! { #props_path { #(#fields),* } }
+        quote! {
+            {
+                #[allow(clippy::needless_update)]
+                let __props = #props_path { #(#fields,)* ..::core::default::Default::default() };
+                __props
+            }
+        }
     };
     quote! { ::rmx::Node::component::<#component>(#key, #props) }
 }

@@ -4,24 +4,31 @@
 //! that state into a [`Node`] tree, and nothing re-renders until a handler calls
 //! [`Handle::update`]. There are no signals, hooks or dependency tracking.
 //!
-//! The same components render to HTML on the server ([`render_to_string`]) and, for
-//! components marked with [`client_entry!`], hydrate in the browser as WebAssembly islands.
+//! The same components render to HTML on the server ([`ssr::render`]) and, for components
+//! marked with [`client_entry!`], hydrate in the browser as WebAssembly islands. `<Frame>`
+//! streams server content into the page, and the browser runtime ([`run`]) turns links and
+//! forms into soft navigations that reconcile server HTML into the live document.
 
 mod component;
+mod frame;
+mod mixin;
 mod node;
-mod ssr;
 
 pub mod browser;
+pub mod ssr;
+
 #[cfg(target_arch = "wasm32")]
-mod dom;
+pub(crate) mod dom;
 
 pub use component::{Component, Handle};
-pub use node::{AttrValue, Children, Element, Event, EventHandler, IntoAttr, IntoNode, Key, Node, Str};
+pub use frame::{Frame, FrameHandle, FrameProps, Frames, ReloadOptions};
+pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
+pub use node::{AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str, StyleRule};
 pub use rmx_macros::rsx;
-pub use ssr::render_to_string;
+pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{entry, flush, hydrate, Entry};
+pub use dom::{entry, flush, run, Entry, RunOptions};
 
 #[doc(hidden)]
 pub mod __private {

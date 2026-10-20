@@ -20,6 +20,8 @@ pub enum Node {
     Shared(Rc<Node>),
     /// Trusted HTML written as-is by the server renderer (doctype, inline CSS).
     Raw(Str),
+    /// Server content loaded from a URL (see [`crate::Frame`]).
+    Frame(Rc<FrameNode>),
     Empty,
 }
 
@@ -30,6 +32,30 @@ pub struct Element {
     pub attrs: Vec<(&'static str, AttrValue)>,
     pub events: Vec<(&'static str, EventHandler)>,
     pub children: Vec<Node>,
+    /// Mixin side effects that cannot be expressed as attributes.
+    pub(crate) extra: Option<Box<ElementExtra>>,
+}
+
+/// Generated styles to insert and node callbacks to run after mount.
+#[derive(Clone, Default)]
+pub(crate) struct ElementExtra {
+    pub(crate) styles: Vec<Rc<StyleRule>>,
+    pub(crate) refs: Vec<crate::mixin::NodeRef>,
+}
+
+/// A `css()` rule: a generated class name and the CSS text scoped under it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct StyleRule {
+    pub class: String,
+    pub css: Str,
+}
+
+/// A `<Frame>` placeholder in the tree.
+#[derive(Clone)]
+pub struct FrameNode {
+    pub src: String,
+    pub name: Option<String>,
+    pub fallback: Option<Node>,
 }
 
 #[derive(Clone)]
@@ -47,7 +73,25 @@ impl Node {
         events: Vec<(&'static str, EventHandler)>,
         children: Vec<Node>,
     ) -> Node {
-        Node::Element(Box::new(Element { tag, key, attrs, events, children }))
+        Node::Element(Box::new(Element { tag, key, attrs, events, children, extra: None }))
+    }
+
+    /// An element with mixins applied (`mix={...}` in `rsx!`). Mixins run in order, after
+    /// the element's own attributes.
+    #[doc(hidden)]
+    pub fn element_with_mixins(
+        tag: &'static str,
+        key: Option<Key>,
+        attrs: Vec<(&'static str, AttrValue)>,
+        events: Vec<(&'static str, EventHandler)>,
+        children: Vec<Node>,
+        mixins: Vec<crate::Mixin>,
+    ) -> Node {
+        let mut el = Element { tag, key, attrs, events, children, extra: None };
+        for m in mixins {
+            m.apply(&mut el);
+        }
+        Node::Element(Box::new(el))
     }
 
     /// Trusted, unescaped HTML. Only the server renderer writes it.
@@ -253,3 +297,45 @@ impl Event {
 /// An event listener created with [`crate::Handle::on`].
 #[derive(Clone)]
 pub struct EventHandler(pub(crate) Rc<dyn Fn(&Event)>);
+
+/// Conversions applied to component prop values in `rsx!`: identity, `T` into `Option<T>`,
+/// and string literals into `String`.
+pub trait IntoProp<T> {
+    fn into_prop(self) -> T;
+}
+
+impl<T> IntoProp<T> for T {
+    fn into_prop(self) -> T {
+        self
+    }
+}
+
+impl<T> IntoProp<Option<T>> for T {
+    fn into_prop(self) -> Option<T> {
+        Some(self)
+    }
+}
+
+impl IntoProp<String> for &str {
+    fn into_prop(self) -> String {
+        self.to_string()
+    }
+}
+
+impl IntoProp<Option<String>> for &str {
+    fn into_prop(self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
+impl IntoProp<Str> for &'static str {
+    fn into_prop(self) -> Str {
+        Cow::Borrowed(self)
+    }
+}
+
+impl IntoProp<Children> for Node {
+    fn into_prop(self) -> Children {
+        Children::from(self)
+    }
+}
