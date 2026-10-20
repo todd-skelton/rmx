@@ -9,7 +9,8 @@ use rmx_middleware::form_data::{form_data, FormDataExt};
 use rmx_middleware::logger::logger;
 use rmx_middleware::static_files::{static_files, StaticOptions};
 use rmx_render::{Render, ResponseInit};
-use rmx_router::{middleware, Context, Next, Router};
+use rmx_middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
+use rmx_router::{middleware, Context, Middleware, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -22,21 +23,26 @@ pub fn main() {
 }
 
 // ---------------------------------------------------------------------------------------
-// Auth (middleware/auth.ts): a cookie, and route middleware that sends visitors to login
+// Auth (middleware/auth.ts): a cookie auth scheme, and route middleware that sends
+// visitors to login
 // ---------------------------------------------------------------------------------------
 
 static AUTH: LazyLock<Cookie> =
     LazyLock::new(|| Cookie::new("frame-navigation-auth").http_only(true).same_site(SameSite::Lax).path("/"));
 
-fn signed_in(ctx: &Context) -> bool {
-    AUTH.parse(ctx.header("cookie")).as_deref() == Some("1")
+/// The identity the auth cookie stands for.
+#[derive(Clone, Copy, Debug)]
+struct FrameAuthIdentity;
+
+fn load_auth() -> impl Middleware {
+    auth(vec![scheme(scheme_fn("auth-cookie", |ctx: &Context| {
+        let ok = AUTH.parse(ctx.header("cookie")).as_deref() == Some("1");
+        async move { ok.then_some(SchemeResult::Success(FrameAuthIdentity)) }
+    }))])
 }
 
-async fn require_auth(ctx: Context, next: Next) -> Response {
-    if !signed_in(&ctx) {
-        return response::redirect("/auth/login");
-    }
-    next.run(ctx).await
+fn require_auth() -> impl Middleware {
+    require_auth_for::<FrameAuthIdentity>().on_failure(|_, _| response::redirect("/auth/login"))
 }
 
 fn with_cookie(mut res: Response, set_cookie: &str) -> Response {
@@ -129,9 +135,10 @@ pub fn router(public: &str) -> Router {
         StaticOptions { cache_control: Some("no-store".into()), etag: false, last_modified: false, index: false, ..Default::default() },
     ));
     router.use_middleware(form_data());
+    router.use_middleware(load_auth());
 
     router.get("/auth/login", |ctx: Context| async move {
-        if signed_in(&ctx) {
+        if ctx.auth::<FrameAuthIdentity>().is_ok() {
             return response::redirect("/");
         }
         ctx.render(login_page())
@@ -139,7 +146,7 @@ pub fn router(public: &str) -> Router {
     router.post("/auth/login", |_ctx: Context| async move { with_cookie(response::redirect("/"), &AUTH.serialize("1")) });
     router.post("/auth/logout", |_ctx: Context| async move { with_cookie(response::redirect("/auth/login"), &AUTH.clear()) });
 
-    router.group(vec![middleware(require_auth)], |r| {
+    router.group(vec![middleware(require_auth())], |r| {
         r.get("/", |ctx: Context| async move {
             ctx.render(rsx! { <Layout title="Dashboard" active_nav={MainNav::Dashboard}>{dashboard()}</Layout> })
         });
