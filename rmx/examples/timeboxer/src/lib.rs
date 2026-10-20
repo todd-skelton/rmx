@@ -11,6 +11,7 @@
 //! | SQLite through `remix/data-table` | an in-memory `server::data::Db` with the same constraints |
 //! | `createAssetServer` at `/assets/*path` | `rmx_assets::AssetServer` |
 //! | client entries `ScheduleSidebar`, `NewScheduleAction`, `ScheduleGrid` | the same, compiled to wasm |
+//! | `animateEntrance`, `animateExit`, `animateLayout`, `spring` from `@remix-run/ui/animation` | the same from `rmx_ui::animation` |
 
 mod dom_util;
 pub mod grid;

@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 rmx.workspace = true
 rmx-router.workspace = true
+rmx-ui.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

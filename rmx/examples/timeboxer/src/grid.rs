@@ -5,6 +5,7 @@
 
 use rmx::browser::{self, FetchInit};
 use rmx::{css, on, rsx, Component, Handle, Mixin, Node, NodeHandle};
+use rmx_ui::animation::{animate_layout, Layout, SpringPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::dom_util::{self, Pointer, WindowListeners};
@@ -171,6 +172,7 @@ impl Component for ScheduleGrid {
                         is_horizontal_resizing={self.horizontal_resize.as_ref().is_some_and(|s| s.active_block_id == block.id)}
                         is_resizing={self.resize.as_ref().is_some_and(|s| s.block_id == block.id)}
                         is_selected={self.selected.contains(&block.id)}
+                        should_animate_layout={dragging.is_some_and(|d| !d.block_ids.contains(&block.id))}
                         grid={h.clone()}/>
                 }
             })
@@ -821,6 +823,8 @@ pub struct ScheduleBlockProps {
     pub is_horizontal_resizing: bool,
     pub is_resizing: bool,
     pub is_selected: bool,
+    /// Blocks pushed aside by a drag slide to their preview position.
+    pub should_animate_layout: bool,
     pub grid: Option<Handle<ScheduleGrid>>,
 }
 
@@ -1035,7 +1039,10 @@ impl Component for ScheduleBlock {
             }
         });
         rsx! {
-            <div data-dragging={props.is_dragging.then_some("true")} style={grid_area(block)} mix={block_grid_item_style()}>
+            <div data-dragging={props.is_dragging.then_some("true")} style={grid_area(block)} mix={[
+                block_grid_item_style(),
+                animate_layout(props.should_animate_layout.then(|| Layout::spring(SpringPreset::Snappy))),
+            ]}>
                 <div aria-label={label.clone()}
                     data-dragging={props.is_dragging.then_some("true")}
                     data-editing={editing.then_some("true")}

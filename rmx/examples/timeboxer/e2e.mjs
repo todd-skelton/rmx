@@ -91,7 +91,20 @@ const username = `e2e-${Date.now().toString(36)}`
   await page.goto('/')
   await ready(page)
 
+  // Record element.animate() calls (rmx-ui animations go through WAAPI).
+  const recordAnimations = () =>
+    page.evaluate(() => {
+      window.__animated = []
+      const animate = Element.prototype.animate
+      Element.prototype.animate = function (keyframes, options) {
+        window.__animated.push(this.tagName.toLowerCase() + ':' + JSON.stringify(keyframes[0]))
+        return animate.call(this, keyframes, options)
+      }
+    })
+  const animated = () => page.evaluate(() => window.__animated)
+
   await attempt('new schedule shows Creating, then navigates to the schedule', async () => {
+    await recordAnimations()
     await page.click('text=New schedule')
     const input = page.getByLabel('Schedule name')
     await input.waitFor()
@@ -99,6 +112,9 @@ const username = `e2e-${Date.now().toString(36)}`
     await input.fill('Week one')
     await input.press('Enter')
     await page.getByText('Creating').waitFor({ timeout: 3000 })
+    const calls = await animated()
+    // The form animates out (from its natural styles) while "Creating" scales in.
+    if (!calls.includes('form:{}') || !calls.some((c) => c.startsWith('div:') && c.includes('scale(0.5)'))) throw new Error(JSON.stringify(calls))
     await page.waitForURL(/\/schedules\/\d+$/, { timeout: 10000 })
     await page.locator('a[aria-current="page"]').getByText('Week one').waitFor()
   })
@@ -156,6 +172,7 @@ const username = `e2e-${Date.now().toString(36)}`
   await attempt('moving onto a block pushes it out of the way', async () => {
     const blocks = page.locator('[data-schedule-block="true"]')
     const wed = await blocks.nth(1).boundingBox()
+    await recordAnimations()
     const schedule = await put(async () => {
       await page.mouse.move(wed.x + wed.width / 2, wed.y + 10)
       await page.mouse.down()
@@ -165,6 +182,9 @@ const username = `e2e-${Date.now().toString(36)}`
     // Tuesday 10:15am overlaps the Tuesday block, which slides up to the nearest open slot.
     const tuesday = schedule.blocks.filter((b) => b.dayOfWeek === 1).map((b) => [b.startMinute, b.endMinute])
     if (JSON.stringify(tuesday) !== '[[555,615],[615,675]]') throw new Error(JSON.stringify(tuesday))
+    // The pushed block slides to its preview position (animate_layout).
+    const calls = await animated()
+    if (!calls.some((c) => c.startsWith('div:') && c.includes('translate3d'))) throw new Error(JSON.stringify(calls))
   })
   await attempt('double-click renames; Backspace deletes the selected block', async () => {
     const first = page.locator('[data-schedule-block="true"]').first()

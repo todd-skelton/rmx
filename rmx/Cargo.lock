@@ -1587,6 +1587,7 @@ dependencies = [
  "rmx-router",
  "rmx-serve",
  "rmx-session",
+ "rmx-ui",
  "serde",
  "serde_json",
  "tokio",

@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use rmx::browser::{self, FetchInit, FetchResponse};
 use rmx::{css, on, rsx, Component, Handle, Mixin, NavigateOptions, Node, NodeHandle};
+use rmx_ui::animation::{animate_entrance, animate_exit, Animate, SpringPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::dom_util;
@@ -386,9 +387,12 @@ impl Component for NewScheduleAction {
                 }
             }
             State::Submitting => rsx! {
-                <div aria-live="polite" key="new-schedule-loading" mix={css(&format!(
-                    "align-items: center; color: {}; display: flex; font-size: {}; font-weight: 500; gap: {}; height: 100%; justify-content: center; min-height: 0; padding-inline: {}; width: 100%;",
-                    text::SECONDARY, font_size::MD, space::SM, space::MD))}>
+                <div aria-live="polite" key="new-schedule-loading" mix={[
+                    css(&format!(
+                        "align-items: center; color: {}; display: flex; font-size: {}; font-weight: 500; gap: {}; height: 100%; justify-content: center; min-height: 0; padding-inline: {}; width: 100%;",
+                        text::SECONDARY, font_size::MD, space::SM, space::MD)),
+                    animate_entrance(Animate::spring(SpringPreset::Snappy).opacity(0.0).transform("scale(0.5)")),
+                ]}>
                     {spinner_icon(css("width: 1.25em; height: 1.25em;"))}
                     <span>"Creating"</span>
                 </div>
@@ -420,7 +424,13 @@ impl Component for NewScheduleAction {
                 let error_id = self.error.as_ref().map(|_| NAME_ERROR_ID);
                 rsx! {
                     <form aria-describedby={error_id} autocomplete="off" key="new-schedule-form"
-                        mix={[css("display: block;"), on("submit", submit), on("focusout", focus_out), on("keydown", key_down)]}>
+                        mix={[
+                            css("display: block;"),
+                            animate_exit(Animate::spring(SpringPreset::Snappy).opacity(0.0).transform("scale(0.5)")),
+                            on("submit", submit),
+                            on("focusout", focus_out),
+                            on("keydown", key_down),
+                        ]}>
                         <input aria-label="Schedule name" aria-describedby={error_id} aria-invalid={self.error.as_ref().map(|_| true)}
                             autocomplete="off" name="name" placeholder="Schedule name" required type="text" defaultValue={self.submitted_name.clone()}
                             mix={[
