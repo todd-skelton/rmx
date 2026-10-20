@@ -160,6 +160,16 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
             };
             let v2 = value_tokens(v);
             events.push(quote_spanned! {v.span()=> (#event, #v2) });
+        } else if name == "outerHTML" {
+            return syn::Error::new(attr.span(), "rsx!: outerHTML is not supported on host elements").to_compile_error();
+        } else if matches!(name.as_str(), "innerHTML" | "srcdoc" | "srcDoc") {
+            // Raw HTML only from `rmx::unsafe_html(..)` (Remix's `unsafeHTML` branding), checked by type.
+            let Some(v) = value.filter(|v| string_literal(v).is_none()) else {
+                let msg = format!("rsx!: {name} needs a value created with rmx::unsafe_html(..)");
+                return syn::Error::new(attr.span(), msg).to_compile_error();
+            };
+            let v2 = value_tokens(v);
+            attrs.push(quote_spanned! {v.span()=> (#name, ::rmx::IntoHtmlAttr::into_html_attr(#v2)) });
         } else {
             let v = match value {
                 None => quote! { ::rmx::AttrValue::Bool(true) },

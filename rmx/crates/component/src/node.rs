@@ -74,6 +74,7 @@ impl Node {
         events: Vec<(&'static str, EventHandler)>,
         children: Vec<Node>,
     ) -> Node {
+        crate::attrs::check_html_props(&attrs);
         Node::Element(Box::new(Element { tag, key, attrs, events, children, extra: None }))
     }
 
@@ -89,9 +90,12 @@ impl Node {
         mixins: Vec<crate::Mixin>,
     ) -> Node {
         let mut el = Element { tag, key, attrs, events, children, extra: None };
+        let held = crate::mixin::withhold(&mut el);
         for m in mixins {
             m.apply(&mut el);
         }
+        crate::mixin::restore(&mut el, held);
+        crate::attrs::check_html_props(&el.attrs);
         Node::Element(Box::new(el))
     }
 
@@ -168,6 +172,30 @@ pub struct UnsafeHtml(Str);
 /// Allow a string to be inserted as raw HTML: `<div innerHTML={unsafe_html(html)}/>` sets
 /// the element's content, and `<iframe srcdoc={unsafe_html(doc)}/>` its document. Plain
 /// strings are rejected for `innerHTML`, so raw HTML is always an explicit choice.
+///
+/// In `rsx!` a plain string for `innerHTML`, `srcdoc` or `srcDoc` does not compile, and
+/// neither does `outerHTML`:
+///
+/// ```compile_fail
+/// # extern crate rmx_component as rmx;
+/// let _ = rmx::rsx! { <div innerHTML="<b>raw</b>"></div> };
+/// ```
+///
+/// ```compile_fail
+/// # extern crate rmx_component as rmx;
+/// let html = String::from("<p>doc</p>");
+/// let _ = rmx::rsx! { <iframe srcdoc={html}></iframe> };
+/// ```
+///
+/// ```compile_fail
+/// # extern crate rmx_component as rmx;
+/// let _ = rmx::rsx! { <div outerHTML={rmx::unsafe_html("<p>x</p>")}></div> };
+/// ```
+///
+/// ```
+/// # extern crate rmx_component as rmx;
+/// let _ = rmx::rsx! { <iframe srcdoc={rmx::unsafe_html("<p>doc</p>")}></iframe> };
+/// ```
 pub fn unsafe_html(html: impl Into<Str>) -> UnsafeHtml {
     UnsafeHtml(html.into())
 }
@@ -175,6 +203,25 @@ pub fn unsafe_html(html: impl Into<Str>) -> UnsafeHtml {
 impl IntoAttr for UnsafeHtml {
     fn into_attr(self) -> AttrValue {
         AttrValue::Html(self.0)
+    }
+}
+
+/// Values `rsx!` accepts for `innerHTML`, `srcdoc` and `srcDoc`: only [`unsafe_html`], so a
+/// plain string there is a compile error.
+#[doc(hidden)]
+pub trait IntoHtmlAttr {
+    fn into_html_attr(self) -> AttrValue;
+}
+
+impl IntoHtmlAttr for UnsafeHtml {
+    fn into_html_attr(self) -> AttrValue {
+        AttrValue::Html(self.0)
+    }
+}
+
+impl IntoHtmlAttr for Option<UnsafeHtml> {
+    fn into_html_attr(self) -> AttrValue {
+        self.map_or(AttrValue::Absent, |h| AttrValue::Html(h.0))
     }
 }
 

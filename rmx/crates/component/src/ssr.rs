@@ -360,6 +360,7 @@ impl Ssr {
                 "defaultChecked" if has("checked") => continue,
                 "defaultValue" => "value",
                 "defaultChecked" => "checked",
+                "srcDoc" => "srcdoc",
                 other => other,
             };
             if name != "innerHTML" && !crate::attrs::is_allowed_name(name) {
@@ -367,9 +368,10 @@ impl Ssr {
             }
             match value {
                 AttrValue::Html(html) if name == "innerHTML" => inner_html = Some(html),
-                AttrValue::Str(_) | AttrValue::Bool(_) if name == "innerHTML" => {
-                    panic!("innerHTML on <{}> needs a value from rmx::unsafe_html()", el.tag)
+                AttrValue::Str(_) | AttrValue::Bool(true) if crate::attrs::is_html_prop(name) => {
+                    crate::attrs::invalid_html_prop(name)
                 }
+                AttrValue::Bool(false) if name == "innerHTML" => {}
                 AttrValue::Str(v) | AttrValue::Html(v) => {
                     out.push(' ');
                     out.push_str(name);

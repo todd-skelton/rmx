@@ -3,6 +3,8 @@
 
 use std::borrow::Cow;
 
+use crate::AttrValue;
+
 /// What a `javascript:` URL is replaced with.
 pub(crate) const BLOCKED_JAVASCRIPT_URL: &str =
     "javascript:throw new Error('rmx has blocked a javascript: URL as a security precaution.')";
@@ -15,6 +17,32 @@ pub(crate) fn is_allowed_name(name: &str) -> bool {
         && !name.bytes().any(|b| matches!(b, 0 | b'\t' | b'\n' | 0x0c | b'\r' | b' ' | b'"' | b'\'' | b'/' | b'>' | b'='))
         && name != "__proto__"
         && name != "outerHTML"
+}
+
+/// Remix's `unsafeHTML` rules for host props: `innerHTML`, `srcdoc` and `srcDoc` take only
+/// values from [`unsafe_html`](crate::unsafe_html), and `outerHTML` is never allowed. Checked
+/// when a node is built, so a bad prop never reaches the DOM.
+pub(crate) fn check_html_props(attrs: &[(&'static str, AttrValue)]) {
+    for (name, value) in attrs {
+        match *name {
+            "innerHTML" | "srcdoc" | "srcDoc" if matches!(value, AttrValue::Str(_) | AttrValue::Bool(true)) => {
+                invalid_html_prop(name)
+            }
+            "outerHTML" => panic!("Invalid outerHTML prop: outerHTML is not supported on host elements"),
+            _ => {}
+        }
+    }
+}
+
+/// Whether `name` holds raw HTML (`innerHTML`, `srcdoc`, `srcDoc`).
+pub(crate) fn is_html_prop(name: &str) -> bool {
+    matches!(name, "innerHTML" | "srcdoc" | "srcDoc")
+}
+
+#[cold]
+#[track_caller]
+pub(crate) fn invalid_html_prop(name: &str) -> ! {
+    panic!("Invalid {name} prop: expected a value created with unsafe_html()")
 }
 
 /// SVG and HTML attributes whose `false` is the string `"false"`, not an absent attribute.
@@ -58,6 +86,18 @@ mod tests {
         assert_eq!(sanitize_url("a", "href", "https://example.com"), "https://example.com");
         assert_eq!(sanitize_url("a", "title", "javascript:x"), "javascript:x");
         assert_eq!(sanitize_url("div", "data", "javascript:x"), "javascript:x");
+    }
+
+    #[test]
+    fn checks_raw_html_props() {
+        check_html_props(&[("innerHTML", AttrValue::Html("<b>x</b>".into())), ("srcdoc", AttrValue::Absent), ("title", AttrValue::Str("t".into()))]);
+        for name in ["innerHTML", "srcdoc", "srcDoc"] {
+            let err = std::panic::catch_unwind(|| check_html_props(&[(name, AttrValue::Str("<img>".into()))])).unwrap_err();
+            let msg = err.downcast_ref::<String>().unwrap();
+            assert_eq!(msg, &format!("Invalid {name} prop: expected a value created with unsafe_html()"));
+        }
+        let err = std::panic::catch_unwind(|| check_html_props(&[("outerHTML", AttrValue::Html("<p>".into()))])).unwrap_err();
+        assert_eq!(err.downcast_ref::<&str>(), Some(&"Invalid outerHTML prop: outerHTML is not supported on host elements"));
     }
 
     #[test]

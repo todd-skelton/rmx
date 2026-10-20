@@ -884,7 +884,7 @@ fn persists_element(e: &MElement) -> bool {
     e.host.as_ref().is_some_and(|h| h.listens_before_remove())
 }
 
-pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrValue) {
+pub(super) fn set_attr(el: &web_sys::Element, tag: &str, name: &'static str, value: &AttrValue) {
     if name == "innerHTML" {
         match value {
             AttrValue::Html(html) => {
@@ -932,10 +932,13 @@ pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrVa
     if name.starts_with("xlink:") || name.starts_with("xml:") {
         return set_namespaced_attr(el, name, value);
     }
+    if tag.contains('-') && set_custom_element_property(el, name, value) {
+        return;
+    }
     let name = intern(name);
     match value {
         AttrValue::Html(v) => {
-            let _ = el.set_attribute(name, &crate::attrs::sanitize_url(&el.local_name(), name, v));
+            let _ = el.set_attribute(name, &crate::attrs::sanitize_url(tag, name, v));
         }
         AttrValue::Bool(b) if crate::attrs::is_booleanish_string(name) => {
             let _ = el.set_attribute(name, if *b { "true" } else { "false" });
@@ -943,7 +946,7 @@ pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrVa
         AttrValue::Str(v) => {
             match name {
                 "href" | "src" | "action" | "formaction" | "data" => {
-                    let _ = el.set_attribute(name, &crate::attrs::sanitize_url(&el.local_name(), name, v));
+                    let _ = el.set_attribute(name, &crate::attrs::sanitize_url(tag, name, v));
                 }
                 _ => {
                     let _ = el.set_attribute(name, interned(v));
@@ -966,6 +969,28 @@ pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrVa
             }
         }
     }
+}
+
+/// Remix sets a prop the element defines (`name in element`) as a property. For built-in
+/// elements the attribute reflects the same value, so rmx only does this for custom
+/// elements, whose properties need not reflect. Returns whether the property was set.
+fn set_custom_element_property(el: &web_sys::Element, name: &'static str, value: &AttrValue) -> bool {
+    if name.contains('-') || matches!(name, "class" | "style" | "id") || crate::attrs::is_booleanish_string(name) {
+        return false;
+    }
+    let key = JsValue::from_str(name);
+    if !js_sys::Reflect::has(el, &key).unwrap_or(false) {
+        return false;
+    }
+    let v = match value {
+        AttrValue::Str(v) | AttrValue::Html(v) => JsValue::from_str(v),
+        AttrValue::Bool(b) => JsValue::from_bool(*b),
+        AttrValue::Absent => {
+            let _ = el.remove_attribute(name);
+            return true;
+        }
+    };
+    js_sys::Reflect::set(el, &key, &v).is_ok()
 }
 
 /// `xlink:href`, `xml:lang` and friends go in their XML namespaces, as Remix sets them.
@@ -1101,7 +1126,7 @@ fn create(node: Node, scope: &Scope) -> Mounted {
             } else {
                 let Element { key, attrs, events, extra, .. } = *el;
                 for (name, value) in &attrs {
-                    set_attr(&dom, name, value);
+                    set_attr(&dom, tag, name, value);
                 }
                 apply_extra(&dom, extra, true);
                 let listeners = attach_events(&dom, events);
@@ -1233,7 +1258,7 @@ fn patch_element(m: &mut MElement, mut n: Element, scope: &Scope) {
         }
         None => {
             let Element { attrs, events, extra, .. } = n;
-            patch_props(&m.el, &mut m.attrs, &mut m.listeners, attrs, events, extra);
+            patch_props(&m.el, m.tag, &mut m.attrs, &mut m.listeners, attrs, events, extra);
             has_inner_html(&m.attrs)
         }
     };
@@ -1256,6 +1281,7 @@ fn patch_element(m: &mut MElement, mut n: Element, scope: &Scope) {
 /// Patch an element's attributes, `css()` rules and event handlers.
 pub(super) fn patch_props(
     el: &web_sys::Element,
+    tag: &str,
     old_attrs: &mut Vec<(&'static str, AttrValue)>,
     listeners: &mut Vec<Listener>,
     attrs: Vec<(&'static str, AttrValue)>,
@@ -1266,12 +1292,12 @@ pub(super) fn patch_props(
         for (name, value) in &attrs {
             let unchanged = old_attrs.iter().any(|(n, v)| n == name && v == value);
             if !unchanged {
-                set_attr(el, name, value);
+                set_attr(el, tag, name, value);
             }
         }
         for (name, _) in old_attrs.iter() {
             if !attrs.iter().any(|(n, _)| n == name) {
-                set_attr(el, name, &AttrValue::Absent);
+                set_attr(el, tag, name, &AttrValue::Absent);
             }
         }
         *old_attrs = attrs;
@@ -1503,7 +1529,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
                 (key, Vec::new(), Vec::new(), Some(host), inner_html)
             } else {
                 let Element { key, attrs, events, extra, .. } = *el;
-                hydrate_attrs(&dom, &attrs);
+                hydrate_attrs(&dom, tag, &attrs);
                 apply_extra(&dom, extra, true);
                 let listeners = attach_events(&dom, events);
                 let inner_html = has_inner_html(&attrs);
@@ -1568,7 +1594,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
 
 /// Server and client attributes can differ (ids from h.id(), dynamic values): fix the
 /// ones that do.
-pub(super) fn hydrate_attrs(dom: &web_sys::Element, attrs: &[(&'static str, AttrValue)]) {
+pub(super) fn hydrate_attrs(dom: &web_sys::Element, tag: &str, attrs: &[(&'static str, AttrValue)]) {
     for (name, value) in attrs {
         if *name == "value" || *name == "checked" {
             track_controlled(dom, name, value);
@@ -1585,7 +1611,7 @@ pub(super) fn hydrate_attrs(dom: &web_sys::Element, attrs: &[(&'static str, Attr
             AttrValue::Bool(false) | AttrValue::Absent => current.is_none(),
         };
         if !matches {
-            set_attr(dom, name, value);
+            set_attr(dom, tag, name, value);
         }
     }
 }

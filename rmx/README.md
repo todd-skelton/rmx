@@ -108,8 +108,14 @@ crates:
    `document.head`, SVG namespaces carried through components (HTML again inside
    `<foreignObject>`, `xlink:`/`xml:` attributes namespaced), form `value`/`checked`/
    `selected` set as properties, and Remix's attribute safety rules on server and client
-   (`javascript:` URLs blocked, `on*` attributes dropped). The browser runtime is checked by
-   ports of Remix's `vdom.*` test suites (`crates/component/tests/browser_*.rs`).
+   (`javascript:` URLs blocked, `on*` attributes dropped). Raw HTML only through
+   `unsafe_html`: a plain string for `innerHTML`, `srcdoc` or `srcDoc`, or any
+   `outerHTML`, is a compile error in `rsx!` and a panic with Remix's message when a node
+   is built at runtime (`Node::from_json`). Mixins run without the host's children and raw
+   HTML props and cannot add them (Remix's console errors). Custom elements get props they
+   define as properties. `create_range_root` panics when its markers do not share a parent.
+   The browser runtime is checked by ports of Remix's `vdom.*` test suites
+   (`crates/component/tests/browser_*.rs`, 184 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
@@ -172,8 +178,10 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
    update loops, go to `Root::on_error`; panics and failed frame loads and navigations go
    to `App::on_error`.
 3. `style` takes a string; JSX style objects (with numbers turned into `px`) have no rsx
-   counterpart. Attribute names are written as in HTML (`stroke-linecap`, `xlink:href`),
-   not camelCase. A component that renders nothing keeps an empty text node as its place.
+   counterpart. Attribute names are written as in HTML (`class`, `stroke-linecap`,
+   `xlink:href`), not camelCase (`className`, `htmlFor`). A component that renders nothing
+   keeps an empty text node as its place. Props are attributes except form state and the
+   props a custom element defines; object-valued properties are set with `node_ref`.
 4. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.

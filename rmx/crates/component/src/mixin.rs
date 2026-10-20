@@ -203,6 +203,46 @@ impl Element {
     }
 }
 
+/// What a host keeps from its mixins: its children and raw HTML props. Remix runs mixins
+/// without them and drops any a mixin tries to add, so a mixin cannot replace content.
+pub(crate) struct Withheld {
+    children: Vec<crate::Node>,
+    raw: Vec<(&'static str, AttrValue)>,
+}
+
+/// Take the children and raw HTML props out of `el` before its mixins run.
+pub(crate) fn withhold(el: &mut Element) -> Withheld {
+    let children = std::mem::take(&mut el.children);
+    let raw = if el.attrs.iter().any(|(n, _)| crate::attrs::is_html_prop(n)) {
+        el.attrs.extract_if(.., |(n, _)| crate::attrs::is_html_prop(n)).collect()
+    } else {
+        Vec::new()
+    };
+    Withheld { children, raw }
+}
+
+/// Put back what [`withhold`] took, dropping children and raw HTML props the mixins added.
+pub(crate) fn restore(el: &mut Element, held: Withheld) {
+    if !el.children.is_empty() {
+        el.children.clear();
+        report_mixin_error("mixin elements must not receive children");
+    }
+    if el.attrs.iter().any(|(n, _)| crate::attrs::is_html_prop(n) || *n == "outerHTML") {
+        el.attrs.retain(|(n, _)| !crate::attrs::is_html_prop(n) && *n != "outerHTML");
+        report_mixin_error("mixins must not return children or raw HTML props");
+    }
+    el.children = held.children;
+    el.attrs.extend(held.raw);
+}
+
+#[cold]
+fn report_mixin_error(message: &str) {
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::error_1(&js_sys::Error::new(message));
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("rmx: {message}");
+}
+
 fn add_class(el: &mut Element, class: &str) {
     match el.attrs.iter_mut().find(|(n, _)| *n == "class") {
         Some((_, AttrValue::Str(existing))) if !existing.is_empty() => {
@@ -210,6 +250,20 @@ fn add_class(el: &mut Element, class: &str) {
         }
         Some((_, v)) => *v = AttrValue::Str(Cow::Owned(class.to_string())),
         None => el.attrs.push(("class", AttrValue::Str(Cow::Owned(class.to_string())))),
+    }
+}
+
+/// A component's `mix` prop (`mix: Vec<Mixin>` in its props) takes one mixin or an array,
+/// like a host element's `mix`, so the component can pass it on to the element it renders.
+impl crate::IntoProp<Vec<Mixin>> for Mixin {
+    fn into_prop(self) -> Vec<Mixin> {
+        vec![self]
+    }
+}
+
+impl<const N: usize> crate::IntoProp<Vec<Mixin>> for [Mixin; N] {
+    fn into_prop(self) -> Vec<Mixin> {
+        self.into()
     }
 }
 

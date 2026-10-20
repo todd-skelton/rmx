@@ -96,6 +96,7 @@ impl MixinHost {
         let ctx = SlotContext { tag: self.tag, id: self.id.clone(), host: self.me.clone() };
         let old = std::mem::take(&mut *self.slots.borrow_mut());
         let mut queue = take_mixins(&mut el);
+        let held = crate::mixin::withhold(&mut el);
         let mut slots: Vec<(TypeId, Rc<dyn AnySlot>)> = Vec::with_capacity(queue.len());
         let mut inserted = Vec::new();
         let mut i = 0;
@@ -121,20 +122,21 @@ impl MixinHost {
             }
         }
         *self.slots.borrow_mut() = slots;
+        crate::mixin::restore(&mut el, held);
 
         let Element { attrs, events, extra, .. } = el;
         let inner_html = has_inner_html(&attrs);
         match mode {
             Mode::Create => {
                 for (name, value) in &attrs {
-                    set_attr(&self.el, name, value);
+                    set_attr(&self.el, self.tag, name, value);
                 }
                 apply_extra(&self.el, extra, true);
                 *self.listeners.borrow_mut() = attach_events(&self.el, events);
                 *self.attrs.borrow_mut() = attrs;
             }
             Mode::Hydrate => {
-                hydrate_attrs(&self.el, &attrs);
+                hydrate_attrs(&self.el, self.tag, &attrs);
                 apply_extra(&self.el, extra, true);
                 *self.listeners.borrow_mut() = attach_events(&self.el, events);
                 *self.attrs.borrow_mut() = attrs;
@@ -142,7 +144,7 @@ impl MixinHost {
             Mode::Patch => {
                 let mut old_attrs = self.attrs.borrow_mut();
                 let mut listeners = self.listeners.borrow_mut();
-                patch_props(&self.el, &mut old_attrs, &mut listeners, attrs, events, extra);
+                patch_props(&self.el, self.tag, &mut old_attrs, &mut listeners, attrs, events, extra);
             }
         }
 

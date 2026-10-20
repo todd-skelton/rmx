@@ -510,6 +510,7 @@ pub(crate) fn resolve_server(mut el: Element) -> Element {
         host: Weak::new(),
     };
     let mut queue = take_mixins(&mut el);
+    let held = crate::mixin::withhold(&mut el);
     let mut i = 0;
     while i < queue.len() {
         let d = queue[i].clone();
@@ -520,6 +521,7 @@ pub(crate) fn resolve_server(mut el: Element) -> Element {
         }
         i += 1;
     }
+    crate::mixin::restore(&mut el, held);
     el
 }
 

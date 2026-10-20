@@ -40,8 +40,8 @@ pub use host_mixin::{mixin, BeforeRemoveEvent, HostMixin, InsertEvent, MixinHand
 pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use navigation::{link, link_with, navigate, navigate_async, NavigateOptions};
 pub use node::{
-    unsafe_html, AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str,
-    StyleRule, UnsafeHtml,
+    unsafe_html, AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoHtmlAttr, IntoNode, IntoProp, Key, Node,
+    Str, StyleRule, UnsafeHtml,
 };
 pub use rmx_macros::rsx;
 pub use signal::{ListenerId, Signal, TypedEventTarget};

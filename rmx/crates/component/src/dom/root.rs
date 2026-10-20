@@ -47,6 +47,10 @@ pub fn create_root(container: &web_sys::Element) -> Root {
 
 /// A root that owns the nodes between `start` and `end` (exclusive), which must be
 /// siblings. Useful for rendering into part of an element, between two comments.
+///
+/// # Panics
+///
+/// If `start` and `end` do not have the same parent node ("Boundaries must share parent").
 pub fn create_range_root(start: &web_sys::Node, end: &web_sys::Node) -> Root {
     Root::in_range(start, end, None).standalone()
 }
@@ -66,7 +70,10 @@ impl Root {
     }
 
     pub(crate) fn in_range(start: &web_sys::Node, end: &web_sys::Node, frame: Option<Rc<FrameState>>) -> Root {
-        let parent = end.parent_node().expect("range root boundaries need a parent");
+        let parent = match (start.parent_node(), end.parent_node()) {
+            (Some(a), Some(b)) if a.is_same_node(Some(&b)) => a,
+            _ => panic!("Boundaries must share parent"),
+        };
         Root(Rc::new(RootState {
             parent,
             frame,

@@ -143,6 +143,7 @@ fn element_from_json(obj: &Map<String, Value>) -> Node {
                 Value::Number(n) => AttrValue::Str(Cow::Owned(n.to_string())),
                 Value::Object(o) => match o.get("$rmxHtml").and_then(Value::as_str) {
                     Some(html) => AttrValue::Html(Cow::Owned(html.to_string())),
+                    None if crate::attrs::is_html_prop(name) => crate::attrs::invalid_html_prop(name),
                     None => continue,
                 },
                 _ => continue,
@@ -165,6 +166,7 @@ fn element_from_json(obj: &Map<String, Value>) -> Node {
         })
         .unwrap_or_default();
     let extra = (!styles.is_empty()).then(|| Box::new(ElementExtra { styles, ..Default::default() }));
+    crate::attrs::check_html_props(&attrs);
     Node::Element(Box::new(Element { tag, key, attrs, events: Vec::new(), children, extra }))
 }
 
@@ -238,9 +240,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "unsafe_html")]
+    #[should_panic(expected = "Invalid innerHTML prop: expected a value created with unsafe_html()")]
     fn inner_html_rejects_plain_strings() {
-        crate::render_to_string(&rsx! { <div innerHTML="<b>no</b>"></div> });
+        Node::from_json(&serde_json::json!({ "$rmx": true, "type": "div", "props": { "innerHTML": "<img src=x onerror=alert(1)>" } }));
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid srcdoc prop: expected a value created with unsafe_html()")]
+    fn srcdoc_rejects_json_shaped_values() {
+        Node::from_json(&serde_json::json!({ "$rmx": true, "type": "iframe", "props": { "srcdoc": { "value": "<p>HTML</p>" } } }));
     }
 
     #[test]
