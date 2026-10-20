@@ -1,0 +1,8 @@
+# Upstream Remix clone used as a reference (its own git repo)
+/reference/
+/scratch-hello/
+target/
+node_modules/
+/bench/tools/
+/bench/remix-app/prof/
+*.cpuprofile

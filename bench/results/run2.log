@@ -1,0 +1,107 @@
+== remix
+== rmx
+chromium 148.0.7778.96; medians; commit = click to DOM updated, frame = to next painted frame
+counter hydrated+clickable: remix true (Count: 5 -> Count: 6), rmx true (Count: 5 -> Count: 6)
+first label: remix "big blue house", rmx "big blue house"
+client assets: remix 41 files 112.3 KB raw / 42.5 KB gzip / 37.7 KB br; rmx 3 files 150 KB raw / 63.9 KB gzip / 55.1 KB br
+hydrated at (ms since navigation): remix 230.7, rmx 82.85; DCL remix 218.4, rmx 66.3
+op                   remix commit rmx commit | remix frame rmx frame
+create 1k                    26.9       36.1 |        114.9     122.3
+replace 1k                   37.4       45.4 |        124.4     133.5
+update every 10th            11.7        6.3 |         64.6      64.6
+select row                   10.8        5.4 |         15.6      20.5
+swap rows                    11.6        6.2 |         27.9      28.8
+remove row                   11.2        6.1 |         36.3        35
+create 10k                 1061.9      972.7 |       1090.5     979.9
+append 1k                    34.8       38.7 |        158.3     137.3
+clear 1k                     10.1        9.7 |         11.4      11.6
+page errors: remix 0, rmx 0; JS heap MB after run: remix 26.7, rmx 6 (excludes WASM linear memory)
+
+Config                  Path    Rps  P50Ms  P99Ms Bytes Success Codes    StartupMs IdleMB
+------                  ----    ---  -----  ----- ----- ------- -----    --------- ------
+remix (node, 1 process) /    147.00 334.93 451.75  5863    1.00 200=2154   3813.00 109.90
+
+
+
+Config                  Path        Rps  P50Ms  P99Ms Bytes Success Codes    StartupMs IdleMB
+------                  ----        ---  -----  ----- ----- ------- -----    --------- ------
+remix (node, 1 process) /ssr/100 274.00 181.63 249.86 16872    1.00 200=4066   3813.00 109.90
+
+
+
+Config                  Path        Rps   P50Ms   P99Ms  Bytes Success Codes   StartupMs IdleMB
+------                  ----        ---   -----   -----  ----- ------- -----   --------- ------
+remix (node, 1 process) /ssr/1000 33.00 1521.00 2184.17 131540    1.00 200=451   3813.00 109.90
+
+
+
+Config                           Path    Rps P50Ms  P99Ms Bytes Success Codes     StartupMs  IdleMB
+------                           ----    --- -----  ----- ----- ------- -----     ---------  ------
+remix (node cluster, 16 workers) /    698.00 28.99 368.92  5863    1.00 200=10440   7333.00 1657.10
+
+
+
+Config                           Path         Rps P50Ms  P99Ms Bytes Success Codes     StartupMs  IdleMB
+------                           ----         --- -----  ----- ----- ------- -----     ---------  ------
+remix (node cluster, 16 workers) /ssr/100 1189.00 25.58 170.06 16872    1.00 200=17804   7333.00 1657.10
+
+
+
+Config                           Path         Rps  P50Ms  P99Ms  Bytes Success Codes    StartupMs  IdleMB
+------                           ----         ---  -----  -----  ----- ------- -----    ---------  ------
+remix (node cluster, 16 workers) /ssr/1000 185.00 253.80 671.66 131540    1.00 200=2725   7333.00 1657.10
+
+
+
+Config         Path     Rps P50Ms P99Ms Bytes Success Codes     StartupMs IdleMB
+------         ----     --- ----- ----- ----- ------- -----     --------- ------
+rmx (1 thread) /    4866.00  9.52 24.10   810    1.00 200=73009    550.00  16.30
+
+
+
+Config         Path         Rps P50Ms P99Ms Bytes Success Codes     StartupMs IdleMB
+------         ----         --- ----- ----- ----- ------- -----     --------- ------
+rmx (1 thread) /ssr/100 1711.00 31.07 61.24 12976    1.00 200=25634    550.00  16.30
+
+
+
+Config         Path         Rps  P50Ms  P99Ms  Bytes Success Codes    StartupMs IdleMB
+------         ----         ---  -----  -----  ----- ------- -----    --------- ------
+rmx (1 thread) /ssr/1000 277.00 192.85 380.76 127644    1.00 200=4106    550.00  16.30
+
+
+
+Config           Path      Rps P50Ms P99Ms Bytes Success Codes      StartupMs IdleMB
+------           ----      --- ----- ----- ----- ------- -----      --------- ------
+rmx (16 threads) /    37385.00  1.23  3.24   810    1.00 200=561525    529.00  16.60
+
+
+
+Config           Path          Rps P50Ms P99Ms Bytes Success Codes      StartupMs IdleMB
+------           ----          --- ----- ----- ----- ------- -----      --------- ------
+rmx (16 threads) /ssr/100 16366.00  2.69 10.51 12976    1.00 200=246039    529.00  16.60
+
+
+
+Config           Path          Rps P50Ms P99Ms  Bytes Success Codes     StartupMs IdleMB
+------           ----          --- ----- -----  ----- ------- -----     --------- ------
+rmx (16 threads) /ssr/1000 2627.00 18.32 44.37 127644    1.00 200=39412    529.00  16.60
+
+
+
+Config                           Path           Rps   P50Ms   P99Ms  Bytes StartupMs  IdleMB LoadedMB
+------                           ----           ---   -----   -----  ----- ---------  ------ --------
+remix (node, 1 process)          /           147.00  334.93  451.75   5863   3813.00  109.90   304.10
+remix (node, 1 process)          /ssr/100    274.00  181.63  249.86  16872   3813.00  109.90   349.80
+remix (node, 1 process)          /ssr/1000    33.00 1521.00 2184.17 131540   3813.00  109.90   359.40
+remix (node cluster, 16 workers) /           698.00   28.99  368.92   5863   7333.00 1657.10  3522.40
+remix (node cluster, 16 workers) /ssr/100   1189.00   25.58  170.06  16872   7333.00 1657.10  4398.50
+remix (node cluster, 16 workers) /ssr/1000   185.00  253.80  671.66 131540   7333.00 1657.10  4711.90
+rmx (1 thread)                   /          4866.00    9.52   24.10    810    550.00   16.30    16.80
+rmx (1 thread)                   /ssr/100   1711.00   31.07   61.24  12976    550.00   16.30    17.10
+rmx (1 thread)                   /ssr/1000   277.00  192.85  380.76 127644    550.00   16.30    16.60
+rmx (16 threads)                 /         37385.00    1.23    3.24    810    529.00   16.60    18.80
+rmx (16 threads)                 /ssr/100  16366.00    2.69   10.51  12976    529.00   16.60    19.00
+rmx (16 threads)                 /ssr/1000  2627.00   18.32   44.37 127644    529.00   16.60    19.90
+
+

@@ -1,0 +1,17 @@
+remix (node, 1 process)            /               322 req/s  p50   141.52 ms  p99   338.65 ms  200=4782
+remix (node, 1 process)            /ssr/100        157 req/s  p50   298.02 ms  p99   714.27 ms  200=2309
+remix (node, 1 process)            /ssr/1000        28 req/s  p50  1837.55 ms  p99  5523.16 ms  200=369
+rmx (1 thread)                     /             11170 req/s  p50     4.26 ms  p99    11.26 ms  200=167539
+rmx (1 thread)                     /ssr/100       2992 req/s  p50    16.21 ms  p99    37.69 ms  200=44843
+rmx (1 thread)                     /ssr/1000       514 req/s  p50   101.31 ms  p99   140.98 ms  200=7667
+
+Config                  Path           Rps   P50Ms   P99Ms  Bytes StartupMs IdleMB LoadedMB
+------                  ----           ---   -----   -----  ----- --------- ------ --------
+remix (node, 1 process) /           322.00  141.52  338.65   5863   3671.00  73.00   284.30
+remix (node, 1 process) /ssr/100    157.00  298.02  714.27  16872   3671.00  73.00   284.40
+remix (node, 1 process) /ssr/1000    28.00 1837.55 5523.16 131540   3671.00  73.00   339.00
+rmx (1 thread)          /         11170.00    4.26   11.26    810   1654.00   0.70     2.10
+rmx (1 thread)          /ssr/100   2992.00   16.21   37.69  12976   1654.00   0.70     2.40
+rmx (1 thread)          /ssr/1000   514.00  101.31  140.98 127644   1654.00   0.70     2.70
+
+

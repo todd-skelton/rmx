@@ -1,0 +1,285 @@
+# Remix-style full stack Rust: feasibility and PoC plan
+
+Date: 2026-10-19. Version data below was pulled from the GitHub releases API this session.
+
+## 1. What "acts like Remix" means
+
+"Remix" now names two different things:
+
+1. Remix v1/v2 (merged into React Router v7): file-based nested routes, a `loader` and `action` per route,
+   `<Form>` that works without JS, automatic revalidation after mutations, per-route error boundaries,
+   `<Outlet/>` layouts, fetchers, streaming with defer. This is the "feel" most people mean.
+2. Remix 3 (current `remix-run/remix`, latest `ui@0.12.1` on 2026-10-01): React-free, a set of small
+   web-standards packages (fetch router, middleware, `component` with server render and hydration).
+   Its stated principles are "build on Web APIs", "religiously runtime" (no reliance on compilers or
+   static analysis), and few dependencies.
+
+Recommendation: copy the v2 programming model (loaders, actions, nested routes, forms) and the Remix 3
+ethos (server first, HTML and HTTP as the primitives, small composable crates). Accept one deliberate
+divergence: a Rust version is compile-time heavy by nature, which is the opposite of "religiously runtime".
+
+## 2. Feasibility verdict
+
+A PoC is very feasible. Almost every hard piece exists already:
+
+| Need | Existing Rust piece | Status (GitHub, measured today) |
+| --- | --- | --- |
+| HTTP server, middleware | axum + tower | axum 0.8.9 (2026-04) |
+| JSX-like templates | Leptos `view!`, Dioxus `rsx!` macros | Leptos 0.8.22 stable, 0.9.0-rc0 (2026-10-15) |
+| SSR + hydration + streaming | Leptos (Suspense, out-of-order streaming), Dioxus fullstack | Dioxus 0.8.0-alpha.3 (2026-10-16) |
+| Client/server RPC | `server_fn` crate (used by Leptos and Dioxus) | stable |
+| Islands (partial hydration) | Leptos `islands` feature | stable |
+| Nested routes + Outlet | leptos_router, dioxus router | stable |
+| Shared types across the wire | serde on one crate compiled twice | stable |
+
+What does not exist is the Remix layer itself: route-module conventions, `loader`/`action` per route,
+parallel loader execution, revalidation after actions, and file-based route discovery. That layer is the
+interesting project, and it is a few thousand lines, not a framework from scratch.
+
+## 3. The `.rsx` file question
+
+Rust macros run inside `.rs` files on token streams. A separate `.rsx` extension needs one of:
+
+1. `build.rs` codegen: parse `.rsx`, emit `.rs` into `OUT_DIR`, `include!` it.
+2. A proc macro `rsx_file!("routes/home.rsx")` that reads the file at compile time.
+3. Single-file components (Svelte/Vue style): a `.rsx` file with a Rust block plus a template block,
+   split by a build step.
+
+All three share the same problems:
+
+1. Diagnostics: Rust has no `#line` directive and proc macros cannot create spans pointing into arbitrary
+   files on stable. Type errors land in generated code, not in the `.rsx` line the user wrote.
+2. rust-analyzer will not understand `.rsx`: no completion, go-to-definition, or inline errors without
+   writing an LSP proxy.
+3. No syntax highlighting or formatter until you write a TextMate grammar and a formatter.
+
+Recommendation: start with an in-file macro (`view!`/`rsx!`) in `.rs` route modules, which gets full
+tooling for free. Treat `.rsx` files as a phase-4 experiment via `build.rs`, and judge it on error quality.
+A middle ground is a naming convention (`routes/projects.$id.rsx.rs`) that signals "route module" while
+staying a real Rust file.
+
+## 4. Rendering options (is WASM the best way?)
+
+| Option | How it renders | Fit for Remix feel | Main costs |
+| --- | --- | --- | --- |
+| A. SSR HTML + no client code | Server only, forms do full POST/redirect | High: this is Remix with JS disabled | No client nav, no rich widgets |
+| B. SSR + small JS runtime (hand-written or htmx 4) | Server HTML, JS swaps fragments | High | Interactive logic not in Rust |
+| C. SSR + WASM islands | Server HTML, only marked components hydrate | Highest | Two builds, island boundaries, glue JS |
+| D. SSR + full WASM hydration | Whole page hydrates, client router in WASM | Medium-high (closest to React Remix) | WASM size, hydration cost, slow builds |
+| E. LiveView (server diffs over WebSocket) | Dioxus liveview style | Low | Stateful connection, latency, not HTTP-first |
+| F. Canvas/WebGPU (Blitz, egui) | Pixels, not DOM | Very low | Accessibility, SEO, text selection, forms |
+| G. Compile rsx to JS for the client | Custom compiler | Medium | Essentially writing a new Svelte; months |
+
+Findings:
+
+1. The server should do the rendering. HTML from the server is what makes Remix feel like Remix
+   (forms that work without JS, fast first paint, plain HTTP caching).
+2. WASM is a good fit for interactivity, not for rendering the page. It cannot touch the DOM directly,
+   so every DOM operation goes through JS glue; that is fine for fine-grained signals (Leptos is fast here)
+   but full-page hydration costs bandwidth and startup time. Realistic Leptos/Dioxus apps tend to ship
+   on the order of 100-300 KB compressed WASM (estimate; measure in phase 0).
+3. Per-route code splitting for WASM exists (wasm-split based lazy loading in Leptos and Dioxus) but is
+   newer and less proven than JS bundler splitting. Treat it as a stretch goal.
+4. Best default: C (SSR + WASM islands), with A working first so progressive enhancement is real,
+   not retrofitted. D is an opt-in mode later if you want SPA-style transitions everywhere.
+
+## 5. Proposed architecture
+
+```
+app/
+  root.rs                 // document shell, <Outlet/>
+  routes/
+    _index.rs
+    projects.rs           // layout for /projects
+    projects.$id.rs       // /projects/:id
+build.rs                  // scans app/routes, generates route tree
+crates/
+  rmx-core/               // Route trait, LoaderCtx, ActionCtx, Params, errors
+  rmx-macros/             // #[loader], #[action], #[route] attribute macros
+  rmx-server/             // axum integration: match, run loaders, render, PRG
+  rmx-client/             // (phase 2+) link/form interception, revalidation
+```
+
+Route module sketch (built on Leptos for the PoC):
+
+```rust
+#[loader]
+async fn loader(ctx: LoaderCtx, p: Params<ProjectId>) -> Result<Project, AppError> {
+    db::project(ctx.db(), p.id).await
+}
+
+#[action]
+async fn action(ctx: ActionCtx, form: Form<RenameProject>) -> Result<Redirect, AppError> {
+    db::rename(ctx.db(), form.id, &form.name).await?;
+    Ok(Redirect::see_other(format!("/projects/{}", form.id)))
+}
+
+#[route]
+pub fn Page() -> impl IntoView {
+    let project = use_loader_data::<Project>();
+    view! {
+        <h1>{project.name.clone()}</h1>
+        <Form method="post">
+            <input name="name" value=project.name />
+            <button>"Rename"</button>
+        </Form>
+        <Outlet/>
+    }
+}
+```
+
+Request flow:
+
+1. GET: match URL to the route chain (root > projects > projects.$id), run all loaders concurrently
+   (`tokio::join!`/`try_join_all`), render nested components, embed loader data as JSON for hydration.
+2. POST: run the matched route's action, then 303 redirect (POST/redirect/GET). Without JS this is a
+   normal form post; with JS the client submits via fetch and revalidates.
+3. Client navigation: request `?_data=<route ids>` for only the segments that changed, update signals.
+4. Errors: each route can export an error boundary; a failed loader renders the nearest one.
+
+The key design problem is server/client code separation. Loader and action bodies pull in DB crates
+that do not compile to `wasm32`. The attribute macros must strip their bodies in the client build
+(`cfg(feature = "ssr")` vs `cfg(feature = "hydrate")`), the way `#[server]` does in Leptos. Getting this
+ergonomic is the core of the PoC.
+
+## 6. Base options (revised after phase 0)
+
+Goal clarified: the part of Remix 3 that matters most is its component model (plain local state,
+a render function, explicit `handle.update()`), not just loaders and routes. Neither big Rust
+framework works that way:
+
+1. Leptos runs a component once (like Remix 3 setup), but state lives in signals and the DOM updates
+   automatically wherever a signal is read. That is fine-grained change tracking.
+2. Dioxus re-runs the component function on every render with hooks (`use_signal`), like React.
+3. Yew struct components (`create`/`update`/`view`) are the closest existing Rust shape: state in a
+   struct, re-render after an update. They are message-enum based and SPA-oriented, so they are prior
+   art rather than a base.
+
+Recommendation: own the component runtime (section 9) on top of axum, because it is the piece you
+care about. Keep the Leptos spike as a baseline for WASM size, build times and hydration behavior.
+
+## 7. Phased plan (revised)
+
+| Phase | Goal | Done when |
+| --- | --- | --- |
+| 0. Spike | axum + Leptos SSR, one island | Done; numbers in `spike/README.md` |
+| 0b. Component-model spike | `Component` trait, `Handle::update()`, same `render()` used for SSR and a WASM island | Done; `rmx/` plus the Remix 3 comparison in `bench/` (section 10) |
+| 1. Routes + loaders (SSR only) | `build.rs` route scan, nested layouts, parallel loaders, loader data passed to route components as props | `/projects/1` renders 3 nested layouts with no WASM shipped |
+| 2. Actions + forms | `#[action]`, plain `<form>`, POST/redirect/GET, validation errors | Create/rename works with JS disabled |
+| 3. Frame navigation | Small client runtime: intercept links and forms (Navigation API), fetch server HTML, swap it in; named frames | Same app works with JS; navigation and form posts do not reload the document |
+| 4. Client entries | `#[client_entry]` components hydrate from serde-serialized props | Page ships WASM only for client entries |
+| 5. `.rsx` experiment | `build.rs` transpile of `.rsx` files | Compare error messages vs the in-file macro, decide |
+| 6. Stretch | keyed list diffing, hydration that adopts server DOM, streaming, per-island WASM splitting | Each behind a demo route |
+
+Phase 3 replaces the earlier JSON `_data` revalidation idea: Remix 3 navigates by fetching HTML for a
+frame, so the client never needs a router or loader code, and WASM stays limited to client entries.
+
+Demo app: a small project/task tracker with SQLite (sqlx), which exercises nested layouts, forms,
+validation errors, and one interactive client entry (drag-reorder or live filter).
+
+## 8. Risks
+
+1. Compile times across two targets dominate DX; measure in phase 0 and budget for `cargo-leptos watch`
+   or `dx serve --hotpatch`.
+2. Framework churn: Leptos 0.9 RC and Dioxus 0.8 alpha both shipped in the last week.
+3. Macro ergonomics for server/client stripping can produce confusing errors.
+4. `.rsx` tooling (spans, rust-analyzer) is the most likely place to stall; keep it optional.
+5. Philosophical mismatch with Remix 3's no-compiler stance; fine for a side project, worth knowing.
+6. Hydration that adopts server-rendered DOM is fiddly; start with replace-on-mount.
+
+## 9. Remix 3 component model in Rust
+
+What Remix 3 does (from `packages/component/README.md`): a component receives a handle and returns a
+render function; local state stays in ordinary variables; `handle.update()` explicitly schedules
+another render. Client entries hydrate selectively, and frames fetch HTML for navigation.
+
+A literal port fights the borrow checker. In JS the render closure and its click handlers share and
+mutate `count` freely. In Rust a handler created inside render that mutates a captured local needs
+shared mutable ownership, so `count` becomes `Rc<Cell<i32>>` and every use becomes `.get()`/`.set()`.
+That loses the plain-variables feel.
+
+Recommended shape: the runtime owns the state; render borrows it immutably and handlers get `&mut`
+when they fire. Sketch (API design, not yet compiled):
+
+```rust
+#[derive(Serialize, Deserialize)] // props cross the server/browser boundary
+pub struct CounterProps { pub initial: i32 }
+
+pub struct Counter { count: i32 }
+
+impl Component for Counter {
+    type Props = CounterProps;
+
+    // Runs once per instance, like the Remix 3 setup function.
+    fn setup(props: &CounterProps, _h: &Handle<Self>) -> Self {
+        Counter { count: props.initial }
+    }
+
+    // Runs on first render and after each h.update().
+    fn render(&self, h: &Handle<Self>) -> Node {
+        rsx! {
+            <button on:click={h.handler(|this, h| { this.count += 1; h.update(); })}>
+                "Count: " {self.count}
+            </button>
+        }
+    }
+}
+```
+
+How it runs:
+
+1. Server: `setup` then `render` once, written straight to HTML. No reactivity on the server at all.
+2. Browser: each instance lives in a slot (`Rc<RefCell<Counter>>`). An event borrows it mutably, runs
+   the handler, and `update()` queues a re-render on a microtask. The runtime diffs the new node tree
+   against the old one and patches the DOM through `web-sys`. Render and handlers never overlap, so
+   the borrows never conflict.
+3. Nothing tracks reads and nothing re-renders unless you call `update()`, which is the Remix 3
+   behavior you want.
+
+| Remix 3 | Rust shape |
+| --- | --- |
+| Locals declared in the setup function | Struct fields returned from `setup` |
+| Returned render function | `fn render(&self, h)` |
+| `handle.update()` | `h.update()` |
+| `handle.props` | `&Self::Props` given to `setup` (an optional hook for new props from a parent is an open question) |
+| `clientEntry()` | `#[client_entry]` marks a component as a WASM island |
+| Frames and Navigation API interception | Phase 3 client runtime that swaps server HTML |
+
+Open questions for phase 0b:
+
+1. Hydration. Simplest first version: the client re-renders the island and replaces the server HTML
+   (identical output, so no visible change). Adopting the existing DOM comes later.
+2. Async work (fetches, timers): likely `h.spawn(async move { ... })` with tasks dropped when the
+   component is removed, then `h.update()` from inside the task via a weak handle.
+3. Optional sugar: a `#[component] fn` macro that lifts `let mut` locals into a generated struct so the
+   code reads like the JS version. It hides the borrow rules but gives worse errors; postpone.
+4. Size: a runtime without a reactive system should come in under Leptos's 72.5 KB gzip, but that is
+   a guess until 0b measures it.
+
+## 10. Phase 0b outcome (rmx vs Remix 3)
+
+Built: `rmx/` (the component runtime, `rsx!` macro, SSR, WASM hydration with DOM adoption, keyed
+diffing, delegated events) and `bench/` (a Remix 3.0.0 app with the same pages, markup, data and
+islands, plus browser and server benchmarks). Method and full numbers: `bench/README.md`.
+
+Answers to the section 9 open questions:
+
+1. Hydration: adopting the server DOM worked from the start, so replace-on-mount was skipped.
+2. Async work: still open; `queue_task` exists, but there is no `spawn` or abort signal yet.
+3. `#[component] fn` sugar: not attempted. The struct form reads close enough to the JS version.
+4. Size (measured): the rmx client `.wasm` is 127.4 KB raw / 59.4 KB gzip with two islands
+   (counter and a 10k-row table), against 72.5 KB gzip for the one-island Leptos spike. With the JS
+   glue the page ships 63.9 KB gzip, versus 42.5 KB gzip for the same Remix 3 page.
+
+What the benchmarks say (details and caveats in `bench/README.md`):
+
+1. Server rendering is where Rust clearly wins: one rmx thread out-serves one Node process by
+   6x to 45x depending on page and environment (10x to 45x in CPU-pinned Linux containers), and
+   in containers rmx idles at about 1 MB versus about 74 MB for Node.
+2. In the browser it is mixed. rmx hydrates faster and wins small updates (select, swap, remove,
+   update every 10th row), but loses on creating 1k rows and ships more bytes. Each DOM node costs
+   several wasm-to-JS calls; batching node creation (templates plus `cloneNode`, or one call that
+   builds a subtree from an encoded buffer) is the main lever.
+
+Next phases unchanged: routes and loaders (phase 1), then frames and soft navigation (phase 3),
+which is the largest Remix 3 feature rmx does not have.

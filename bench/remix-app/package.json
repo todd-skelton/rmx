@@ -1,0 +1,12 @@
+{
+  "name": "remix-bench-app",
+  "private": true,
+  "type": "module",
+  "description": "Remix 3 counterpart of rmx/examples/bench. Same pages, markup, data and islands.",
+  "scripts": {
+    "start": "node --import remix/node-tsx server.ts"
+  },
+  "dependencies": {
+    "remix": "3.0.0"
+  }
+}

@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rmx",
+    "crates/rmx-macros",
+    "examples/bench/app",
+    "examples/bench/server",
+    "examples/bench/client",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+rmx = { path = "crates/rmx" }
+rmx-macros = { path = "crates/rmx-macros" }
+bench-app = { path = "examples/bench/app" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pinned to match the wasm-bindgen CLI used by build-client.ps1.
+wasm-bindgen = { version = "=0.2.129", features = ["enable-interning"] }
+js-sys = "0.3"
+web-sys = "0.3"
+
+# Size-optimized browser build; the server uses the normal release profile.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

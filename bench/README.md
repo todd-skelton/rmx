@@ -1,0 +1,140 @@
+# rmx vs Remix 3 benchmarks
+
+Compares `../rmx` (Rust, axum + WASM islands) with Remix 3.0.0 (`remix-app/`, Node). Both apps
+serve the same routes with the same markup, data and islands:
+
+1. `/`: a document shell, five tasks, a POST form, and a `Counter` island.
+2. `/ssr/{n}`: `n` table rows, each rendered through a nested `RowView` component, with
+   deterministic labels (same LCG on both sides).
+3. `/client`: the `RowsBench` island (a js-framework-benchmark style table).
+
+Parity check: after stripping hydration markers and self-closing slashes, the `<main>` HTML is
+byte-identical for `/`, `/ssr/100` and `/client`. Remix responses are larger because `<head>`
+carries modulepreload and import map tags.
+
+All numbers below were measured on 2026-10-19 on one laptop: i9-10885H (8 cores, 16 threads),
+64 GB RAM, Windows 11, Node 24.15.0, Rust 1.99.1, Chromium 148.0.7778.96, oha 1.16.0.
+
+## How to Run
+
+```powershell
+pwsh ../rmx/build.ps1                     # rmx release server + wasm client
+cd remix-app; npm install; cd ..
+pwsh ./run.ps1                            # Windows: browser bench + server load tests
+pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests only
+```
+
+1. `run.ps1` starts both servers on the host, runs `browser-bench.mjs` (Playwright driving
+   Chromium), then runs oha for 15 s at 50 connections after a 3 s warm-up per path.
+   Configs: Remix in 1 Node process, Remix as a Node cluster (one worker per logical core),
+   rmx on 1 thread, and rmx on all threads.
+2. `docker/run-docker.ps1` runs each server alone in a container pinned to the same CPUs
+   (`-OneCpu`, default `2`; `-ManyCpus`, default `0-7`) with an 8 GB cap. oha runs in its own
+   container on CPUs `8-15` and talks to the server over a Docker network, so Windows port
+   forwarding and bind mounts are not on the measured path.
+3. `remix-app/diagnose.tsx` times Remix's router and renderer in process, without HTTP.
+
+Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
+
+## Browser (Chromium, Windows host)
+
+Load metrics are medians over 10 fresh page loads; operations are medians over 15 iterations.
+"Commit" is click to DOM updated; "frame" adds the next paint.
+
+| Metric | Remix 3 | rmx |
+| --- | --- | --- |
+| Client assets (gzip) | 42.5 KB in 41 files | 63.9 KB in 3 files (59.4 KB is the `.wasm`) |
+| Hydrated at (run 1 / run 2) | 192.6 / 230.7 ms | 83.2 / 82.9 ms |
+| DOMContentLoaded (run 1 / run 2) | 181.9 / 218.4 ms | 64.4 / 66.3 ms |
+| JS heap after run (run 1 / run 2) | 7.4 / 26.7 MB | 2.6 / 6.0 MB (excludes WASM memory) |
+
+| Operation, commit ms (run 1 / run 2) | Remix 3 | rmx |
+| --- | --- | --- |
+| create 1k rows | 19.3 / 26.9 | 33.6 / 36.1 |
+| replace 1k rows | 28.5 / 37.4 | 47.2 / 45.4 |
+| update every 10th row | 8.4 / 11.7 | 6.3 / 6.3 |
+| select row | 10.9 / 10.8 | 5.4 / 5.4 |
+| swap rows | 11.1 / 11.6 | 6.2 / 6.2 |
+| remove row | 11.2 / 11.2 | 5.9 / 6.1 |
+| create 10k rows | 904.9 / 1061.9 | 1020.0 / 972.7 |
+| append 1k rows | 36.3 / 34.8 | 26.3 / 38.7 |
+| clear 1k rows | 9.9 / 10.1 | 6.4 / 9.7 |
+
+Both counters hydrated and incremented (5 to 6) with no page errors in either run.
+
+## Server, Linux Containers (Docker Desktop, WSL2)
+
+Requests per second, 15 s at 50 connections. Docker run 3 (`results/docker-server.json`).
+
+| Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory |
+| --- | --- | --- | --- | --- | --- |
+| Remix, 1 Node process | 1 | 164 | 118 | 19 | 74 / 306 MB |
+| rmx, 1 thread | 1 | 7,057 | 1,715 | 295 | 0.7 / 2.4 MB |
+| Remix, cluster of 8 workers | 8 | 744 | 637 | 75 | 601 / 2,225 MB |
+| rmx, 8 threads | 8 | 30,609 | 11,772 | 2,021 | 1.2 / 6.8 MB |
+
+Absolute throughput moved a lot between identical Docker runs (rmx 1 thread on `/`: 4,904,
+11,170 and 7,057 req/s across three runs; Remix 1 process: 109, 322 and 164). The ratios held
+up better:
+
+| rmx / Remix ratio | `/` | `/ssr/100` | `/ssr/1000` |
+| --- | --- | --- | --- |
+| 1 CPU, Docker runs 1 / 2 / 3 | 45x / 35x / 43x | 11x / 19x / 15x | 10x / 18x / 16x |
+| 8 CPUs, Docker runs 1 / 3 | 37x / 41x | 12x / 18x | 19x / 27x |
+| Windows, 1 process vs 1 thread | 33x | 6x | 8x |
+| Windows, 16 workers vs 16 threads | 54x | 14x | 14x |
+
+Docker run 1 pinned the 1-CPU configs to CPU 0; runs 2 and 3 used CPU 2.
+
+## Server, Windows Host
+
+Run 2 (`results/server.json`), same oha settings, servers unpinned.
+
+| Config | `/` | `/ssr/100` | `/ssr/1000` | Idle memory |
+| --- | --- | --- | --- | --- |
+| Remix, 1 Node process | 147 | 274 | 33 | 110 MB |
+| Remix, cluster of 16 workers | 698 | 1,189 | 185 | 1,657 MB |
+| rmx, 1 thread | 4,866 | 1,711 | 277 | 16 MB |
+| rmx, 16 threads | 37,385 | 16,366 | 2,627 | 17 MB |
+
+Windows memory is the working set of the server and its child processes, which includes the
+console host Windows attaches to each server (about 10 MB, estimated from the change between
+runs 1 and 2); Docker memory is `docker stats`.
+Run 1 (`results/server-run1.json`) used Remix's development asset setting (`watch: true`) and is
+superseded.
+
+## Where Remix Spends Its Time
+
+In-process timings from `remix-app/diagnose.tsx`, ms per call, NODE_ENV=production:
+
+| Call | Windows | Linux container, 1 CPU |
+| --- | --- | --- |
+| `router.fetch('/')` | 9.4 | 11.7 |
+| `router.fetch('/ssr/0')` | 1.4 | 3.2 |
+| `router.fetch('/ssr/1000')` | 35.3 | 82.5 |
+| `assets.getScriptEntry(counter.tsx)` | 7.4 | 3.2 |
+| `renderToString(<SsrPage n={1000}/>)` | 40.0 | 83.7 |
+
+1. Pages with a client entry pay for `assets.getScriptEntry` on every request: the render
+   middleware resolves the island's module graph, preloads and import map each time. A CPU
+   profile on Windows put 63% of that call in `lstat`. On Linux the call is about half as
+   expensive, which matches file-system metadata calls being cheaper there.
+2. Rendering itself is the other cost. Pinning Node to one CPU roughly doubles render time
+   (renderToString n=1000: 84 ms on CPU 0, 56 ms on CPU 3, 65 ms with all 16 CPUs available
+   in a container, 36 to 41 ms on Windows), likely because garbage collection and JIT threads
+   must share that CPU. rmx has no garbage collector or JIT, so the 1-CPU Docker rows are the strict
+   "same hardware" comparison and the Windows rows are the more forgiving one for Node.
+
+## Caveats
+
+1. Variance is large in both environments; treat single numbers as plus or minus 30% or more
+   and compare ratios.
+2. Docker Desktop's VM shares the laptop with Windows and other running containers; vCPUs are
+   not pinned to physical cores, so CPU pinning is only approximate.
+3. The browser bench runs on the Windows host only; containers do not change client results.
+4. The JS heap number excludes WASM linear memory, so it understates rmx's client memory.
+5. This compares a proof of concept against a released framework. rmx skips features that cost
+   Remix time: frames, streaming, import maps, asset fingerprinting, and the module graph.
+6. Remix runs TypeScript through `remix/node-tsx`, which transpiles on first load; startup
+   numbers (3 to 11 s for Remix, 0.5 to 4 s for rmx in these runs) include that. Docker startup
+   also includes starting the container and the probe container, so it reads higher than Windows.

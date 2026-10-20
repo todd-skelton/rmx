@@ -1,0 +1,29 @@
+remix (node, 1 process)            /               164 req/s  p50   291.23 ms  p99   489.42 ms  200=2407
+remix (node, 1 process)            /ssr/100        118 req/s  p50   381.87 ms  p99  1742.37 ms  200=1723
+remix (node, 1 process)            /ssr/1000        19 req/s  p50  1324.18 ms  p99 12576.38 ms  200=242
+rmx (1 thread)                     /              7057 req/s  p50     4.72 ms  p99     31.9 ms  200=105896
+rmx (1 thread)                     /ssr/100       1715 req/s  p50    26.93 ms  p99    59.29 ms  200=25769
+rmx (1 thread)                     /ssr/1000       295 req/s  p50    177.4 ms  p99   243.65 ms  200=4370
+remix (node cluster, 8 workers)    /               744 req/s  p50    59.17 ms  p99   187.22 ms  200=11140
+remix (node cluster, 8 workers)    /ssr/100        637 req/s  p50    71.86 ms  p99   195.15 ms  200=9530
+remix (node cluster, 8 workers)    /ssr/1000        75 req/s  p50   542.21 ms  p99  1987.25 ms  200=1078
+rmx (8 threads)                    /             30609 req/s  p50     0.57 ms  p99    18.26 ms  200=460649
+rmx (8 threads)                    /ssr/100      11772 req/s  p50     3.06 ms  p99     21.2 ms  200=176579
+rmx (8 threads)                    /ssr/1000      2021 req/s  p50    23.35 ms  p99     59.7 ms  200=30268
+
+Config                          Path           Rps   P50Ms    P99Ms  Bytes StartupMs IdleMB LoadedMB
+------                          ----           ---   -----    -----  ----- --------- ------ --------
+remix (node, 1 process)         /           164.00  291.23   489.42   5863   3208.00  73.60   265.30
+remix (node, 1 process)         /ssr/100    118.00  381.87  1742.37  16872   3208.00  73.60   272.50
+remix (node, 1 process)         /ssr/1000    19.00 1324.18 12576.38 131540   3208.00  73.60   305.50
+rmx (1 thread)                  /          7057.00    4.72    31.90    810   2427.00   0.70     2.10
+rmx (1 thread)                  /ssr/100   1715.00   26.93    59.29  12976   2427.00   0.70     2.40
+rmx (1 thread)                  /ssr/1000   295.00  177.40   243.65 127644   2427.00   0.70     2.40
+remix (node cluster, 8 workers) /           744.00   59.17   187.22   5863   5831.00 600.50  1953.80
+remix (node cluster, 8 workers) /ssr/100    637.00   71.86   195.15  16872   5831.00 600.50  2187.30
+remix (node cluster, 8 workers) /ssr/1000    75.00  542.21  1987.25 131540   5831.00 600.50  2225.20
+rmx (8 threads)                 /         30609.00    0.57    18.26    810   2895.00   1.20     3.10
+rmx (8 threads)                 /ssr/100  11772.00    3.06    21.20  12976   2895.00   1.20     4.70
+rmx (8 threads)                 /ssr/1000  2021.00   23.35    59.70 127644   2895.00   1.20     6.80
+
+
