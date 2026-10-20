@@ -26,6 +26,7 @@ members = [
     "examples/spa",
     "examples/assets",
     "examples/ui",
+    "examples/social-auth",
 ]
 
 [workspace.package]
@@ -61,6 +62,10 @@ wasm-bindgen = { version = "=0.2.129", features = ["enable-interning"] }
 js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
+
+# PBKDF2 runs 100k HMAC rounds per password check; keep it fast in debug builds and tests.
+[profile.dev.package.rmx-crypto]
+opt-level = 3
 
 # Size-optimized browser build; the server uses the normal release profile.
 [profile.wasm-release]
