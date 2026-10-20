@@ -145,3 +145,49 @@ fn request_url_uses_host_header_for_origin_form() {
     let r = http::Request::builder().uri("/where?x=1").header("host", "example.com:8080").body(Body::empty()).unwrap();
     assert_eq!(text(block_on(router.fetch(r))), "http://example.com:8080/where?x=1");
 }
+
+/// Resolves after being polled twice, so the future suspends once.
+struct YieldOnce(bool);
+
+impl std::future::Future for YieldOnce {
+    type Output = ();
+
+    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
+        if self.0 {
+            return std::task::Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        std::task::Poll::Pending
+    }
+}
+
+#[derive(Clone)]
+struct User(&'static str);
+
+fn describe_request() -> String {
+    let Some(ctx) = async_context::get_context() else { return "no context".into() };
+    format!("{} {} id={} user={}", ctx.method(), ctx.url().pathname(), ctx.param("id").unwrap_or_default(), ctx.get::<User>().map_or("-", |u| u.0))
+}
+
+#[test]
+fn async_context_follows_the_request_into_helpers() {
+    let mut router = Router::new().with(async_context::async_context()).with(|mut ctx: Context, next: Next| async move {
+        ctx.set(User("ada"));
+        next.run(ctx).await
+    });
+    router.get("/users/:id", |_: Context| async {
+        let before = describe_request();
+        YieldOnce(false).await;
+        format!("{before} | {}", describe_request())
+    });
+    assert_eq!(text(block_on(router.fetch_url("https://x/users/7"))), "GET /users/7 id=7 user=ada | GET /users/7 id=7 user=ada");
+    assert_eq!(describe_request(), "no context", "the scope ends with the request");
+}
+
+#[test]
+fn async_context_is_absent_without_the_middleware() {
+    let mut router = Router::new();
+    router.get("/", |_: Context| async { describe_request() });
+    assert_eq!(text(block_on(router.fetch_url("https://x/"))), "no context");
+}

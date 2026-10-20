@@ -32,6 +32,7 @@ use rmx_fetch::{request_url, response, Body, Request, Response};
 use rmx_route_pattern::{Matcher, Params, RoutePattern};
 use rmx_url::Url;
 
+pub mod async_context;
 pub mod routes;
 
 pub use routes::{IntoRoute, Route};
@@ -78,6 +79,8 @@ pub struct Context {
     url: Url,
     params: Params,
     router: Router,
+    /// Set by the [`async_context`] middleware; mirrors changes to this context.
+    scope: Option<async_context::Scope>,
 }
 
 impl Context {
@@ -85,7 +88,7 @@ impl Context {
         let (parts, body) = request.into_parts();
         let url = request_url(&parts);
         let original_method = parts.method.clone();
-        Context { request: Request::from_parts(parts, body), original_method, url, params: Params::default(), router }
+        Context { request: Request::from_parts(parts, body), original_method, url, params: Params::default(), router, scope: None }
     }
 
     pub fn request(&self) -> &Request {
@@ -111,6 +114,7 @@ impl Context {
 
     /// Change the method used for routing (see method-override middleware).
     pub fn set_method(&mut self, method: Method) {
+        async_context::update(&self.scope, |s| s.method = method.clone());
         *self.request.method_mut() = method;
     }
 
@@ -133,6 +137,7 @@ impl Context {
     }
 
     pub fn set_url(&mut self, url: Url) {
+        async_context::update(&self.scope, |s| s.url = url.clone());
         self.url = url;
     }
 
@@ -156,6 +161,9 @@ impl Context {
 
     /// Store a request-scoped value (one per type; use a newtype for distinct keys).
     pub fn set<T: Clone + Send + Sync + 'static>(&mut self, value: T) {
+        async_context::update(&self.scope, |s| {
+            s.values.insert(value.clone());
+        });
         self.request.extensions_mut().insert(value);
     }
 
@@ -529,6 +537,7 @@ impl Router {
         };
         let entry = found.data.clone();
         ctx.params = found.params.clone();
+        async_context::update(&ctx.scope, |s| s.params = ctx.params.clone());
         drop(matches);
         let res = Next { chain: entry.middleware.clone(), index: 0, endpoint: Arc::new(Endpoint::Handler(entry.handler.clone())) }
             .run(ctx)

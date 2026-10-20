@@ -91,10 +91,11 @@ Each Remix 3 package is a crate under `crates/` (about 19,600 lines of Rust, mea
    (`data-rmx-target`, `data-rmx-src`, `data-rmx-history`, `data-rmx-reset-scroll`,
    `data-rmx-document`), form submissions, redirects, scroll restoration on traversal, and
    app-level error events (`App::on_error`).
-2. Server: `rmx-router` (routes, middleware, nested mounts), `rmx-route-pattern`,
-   `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper), `rmx-render`,
-   `rmx-middleware` (compression, static files, form data, sessions, auth, CSRF, CORS,
-   COP, method override, logger).
+2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
+   reading the request context deeper in the call stack), `rmx-route-pattern`,
+   `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server plus an HTTP/1
+   `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression,
+   static files, form data, sessions, auth, CSRF, CORS, COP, method override, logger).
 3. Supporting crates: `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-html-template`, `rmx-headers`,
    `rmx-mime`, `rmx-spa`, `rmx-url`.

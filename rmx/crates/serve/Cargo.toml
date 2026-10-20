@@ -7,8 +7,11 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper = { version = "1", features = ["server", "client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
 rmx-fetch.workspace = true
 rmx-router.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+rmx-fetch-proxy.workspace = true

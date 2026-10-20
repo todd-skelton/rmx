@@ -1,0 +1,12 @@
+[package]
+name = "rmx-fetch-proxy"
+description = "Forward requests to another server and rewrite the response for the client (port of remix fetch-proxy)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-fetch.workspace = true
+rmx-headers.workspace = true
+rmx-url.workspace = true
