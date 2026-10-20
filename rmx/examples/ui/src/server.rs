@@ -71,6 +71,7 @@ fn demo_node(slug: &str) -> Node {
         "ui/popover" => rsx! { <popover::PopoverDemo/> },
         "ui/combobox" => rsx! { <combobox::ComboboxDemo/> },
         "ui/listbox" => rsx! { <listbox::ListboxDemo/> },
+        "ui/menu" => rsx! { <menu::MenuDemo/> },
         "ui/select" => rsx! { <select::SelectDemo/> },
         "ui/tabs" => rsx! { <tabs::TabsDemo/> },
         "ui/toggle" => rsx! { <toggle::ToggleDemo/> },

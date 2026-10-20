@@ -331,7 +331,7 @@ fn event_key(name: &'static str) -> JsValue {
         // Events that do not bubble are caught on the way down instead.
         let capture = matches!(
             name,
-            "focus" | "blur" | "mouseenter" | "mouseleave" | "load" | "error" | "scroll" | "toggle" | "beforetoggle" | "invalid"
+            "focus" | "blur" | "mouseenter" | "mouseleave" | "pointerenter" | "pointerleave" | "load" | "error" | "scroll" | "toggle" | "beforetoggle" | "invalid"
         );
         document()
             .add_event_listener_with_callback_and_bool(name, dispatch.as_ref().unchecked_ref(), capture)
@@ -343,7 +343,9 @@ fn event_key(name: &'static str) -> JsValue {
 }
 
 /// Walk from the target to the root, calling every handler registered for this event.
+/// Events that do not bubble only reach the target's handler, as with `addEventListener`.
 fn dispatch(raw: &web_sys::Event, key: &JsValue) {
+    let bubbles = raw.bubbles();
     let mut node = raw.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
     while let Some(current) = node {
         if let Some(id) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) {
@@ -361,6 +363,9 @@ fn dispatch(raw: &web_sys::Event, key: &JsValue) {
             if raw.cancel_bubble() {
                 break;
             }
+        }
+        if !bubbles {
+            break;
         }
         node = current.parent_node();
     }

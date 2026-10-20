@@ -8,6 +8,7 @@ pub mod draggable;
 pub mod keyed_list;
 pub mod lifecycle;
 pub mod listbox;
+pub mod menu;
 pub mod popover;
 pub mod readme;
 pub mod select;

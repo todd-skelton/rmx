@@ -30,6 +30,39 @@ pub(crate) fn dispatch(target: &web_sys::EventTarget, name: &str, fields: &[Fiel
     let _ = target.dispatch_event(&event);
 }
 
+/// A numeric property of a raw event (`clientX`, `button`), 0 when missing.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn num_prop(event: &web_sys::Event, key: &str) -> f64 {
+    js_sys::Reflect::get(event, &key.into()).ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
+}
+
+/// A boolean property of a raw event (`shiftKey`), false when missing.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn bool_prop(event: &web_sys::Event, key: &str) -> bool {
+    js_sys::Reflect::get(event, &key.into()).ok().and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// `event.relatedTarget` as a node.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn related_target(event: &web_sys::Event) -> Option<web_sys::Node> {
+    wasm_bindgen::JsCast::dyn_into(js_sys::Reflect::get(event, &"relatedTarget".into()).ok()?).ok()
+}
+
+/// Focus a connected element that is not already focused and scroll it into view.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn focus_node(el: Option<&web_sys::HtmlElement>) {
+    let Some(el) = el.filter(|el| el.is_connected()) else { return };
+    let active = el.owner_document().and_then(|d| d.active_element());
+    if active.as_ref() == Some(el.as_ref()) {
+        return;
+    }
+    let _ = el.focus();
+    let options = web_sys::ScrollIntoViewOptions::new();
+    options.set_block(web_sys::ScrollLogicalPosition::Nearest);
+    options.set_inline(web_sys::ScrollLogicalPosition::Nearest);
+    el.scroll_into_view_with_scroll_into_view_options(&options);
+}
+
 /// Resolve after `ms` milliseconds.
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn sleep(ms: i32) {

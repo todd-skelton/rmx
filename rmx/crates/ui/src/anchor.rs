@@ -596,7 +596,8 @@ mod dom {
     #[derive(Clone, Debug)]
     pub enum AnchorTarget {
         Element(web_sys::HtmlElement),
-        Point(AnchorPoint),
+        /// Shared so the owner can move the point; tracking follows it on the next frame.
+        Point(Rc<std::cell::Cell<AnchorPoint>>),
     }
 
     fn window() -> web_sys::Window {
@@ -622,7 +623,10 @@ mod dom {
     fn anchor_rect(target: &AnchorTarget) -> Rect {
         match target {
             AnchorTarget::Element(el) => rect_of(el),
-            AnchorTarget::Point(p) => Rect { left: p.x, top: p.y, width: p.width, height: p.height },
+            AnchorTarget::Point(p) => {
+                let p = p.get();
+                Rect { left: p.x, top: p.y, width: p.width, height: p.height }
+            }
         }
     }
 

@@ -101,6 +101,14 @@ pub const DEMOS: &[Demo] = &[
         center: true,
     },
     Demo {
+        slug: "ui/menu",
+        title: "Menu Primitives",
+        description: "Headless menu behavior with minimal local styles.",
+        section: "UI",
+        module: "Menu",
+        center: true,
+    },
+    Demo {
         slug: "ui/popover",
         title: "Popover",
         description: "Anchored popover behavior with focus restoration and outside-click dismissal.",
@@ -164,6 +172,7 @@ pub fn start() {
             rmx::entry::<combobox::ComboboxDemo>(),
             rmx::entry::<popover::PopoverDemo>(),
             rmx::entry::<listbox::ListboxDemo>(),
+            rmx::entry::<menu::MenuDemo>(),
             rmx::entry::<select::SelectDemo>(),
             rmx::entry::<tabs::TabsDemo>(),
             rmx::entry::<toggle::ToggleDemo>(),

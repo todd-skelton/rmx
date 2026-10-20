@@ -36,7 +36,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 // Index
 await page.goto(BASE + '/')
 const links = await page.$$eval('a[href^="/demo/"]', (as) => as.map((a) => a.getAttribute('href')))
-check('the index lists the demos', links.length === 15, links)
+check('the index lists the demos', links.length === 16, links)
 
 // Basic counter
 await open('component/runtime/basic')
@@ -587,6 +587,164 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   check('combobox: rmx:combobox-change bubbles from the input', eq(events, [
     ['react-router', 'React Router', true, 'INPUT'], [null, null, false, 'INPUT'], ['react', 'React', true, 'INPUT'], ['remix', 'Remix', true, 'INPUT'], [null, null, false, 'INPUT'],
   ]), events)
+}
+
+// Menu (packages/ui/src/demos/menu.demo.tsx, menu.test.tsx)
+{
+  await open('ui/menu')
+  await page.evaluate(() => {
+    window.__menu = []
+    document.addEventListener('rmx:menu-select', (e) => window.__menu.push([e.item.name, e.item.value, e.item.checked ?? null, e.target.getAttribute('role')]))
+  })
+  const mstate = (trigger) => page.evaluate((trigger) => {
+    const t = document.getElementById(trigger)
+    const list = document.getElementById(t.getAttribute('aria-controls'))
+    const a = document.activeElement
+    return {
+      expanded: t.getAttribute('aria-expanded'), open: list.closest('[popover]').matches(':popover-open'),
+      focus: a === list ? 'list' : a?.id === trigger ? 'trigger' : a?.textContent ?? null,
+      highlighted: [...list.querySelectorAll(':scope > [data-highlighted="true"]')].map((i) => i.textContent).join(),
+      selected: [...document.querySelectorAll('p')].pop().textContent,
+    }
+  }, trigger)
+  await page.click('#actions')
+  await settle()
+  const m0 = await mstate('actions')
+  await page.click('#actions')
+  await page.waitForTimeout(100)
+  const m1 = await mstate('actions')
+  check('menu: click opens with focus on the list; clicking the trigger again closes and refocuses it', m0.open && m0.expanded === 'true' && m0.focus === 'list' && !m1.open && m1.expanded === 'false' && m1.focus === 'trigger', { m0, m1 })
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  const m2 = await mstate('actions')
+  const keys = []
+  for (const key of ['ArrowDown', 'ArrowDown', 'Home', 'End', 'ArrowUp', 'ArrowUp']) {
+    await page.keyboard.press(key)
+    await settle()
+    keys.push((await mstate('actions')).focus)
+  }
+  check('menu: ArrowDown opens at the first item; navigation skips disabled items and does not wrap', m2.open && m2.focus === 'Rename' && m2.highlighted === 'Rename' && eq(keys, ['Duplicate', 'Duplicate', 'Rename', 'Duplicate', 'Rename', 'Rename']), { m2, keys })
+  await page.keyboard.type('d')
+  await settle()
+  const m3 = await mstate('actions')
+  check('menu: typeahead highlights and focuses the matching item', m3.focus === 'Duplicate' && m3.highlighted === 'Duplicate', m3)
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(20)
+  const flashing = await page.evaluate(() => document.querySelector('[data-menu-flash="true"]')?.textContent)
+  await page.waitForTimeout(250)
+  const m4 = await mstate('actions')
+  check('menu: Enter flashes the item, dispatches the selection, closes and refocuses the trigger', flashing === 'Duplicate' && !m4.open && m4.focus === 'trigger' && m4.selected === 'selected=duplicate', { flashing, m4 })
+  await page.keyboard.press('ArrowUp')
+  await settle()
+  const m5 = await mstate('actions')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(100)
+  const m6 = await mstate('actions')
+  check('menu: ArrowUp opens at the last enabled item; Escape closes and refocuses the trigger', m5.open && m5.focus === 'Duplicate' && !m6.open && m6.focus === 'trigger', { m5, m6 })
+
+  // Submenus
+  await page.focus('#view')
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  const v0 = await mstate('view')
+  await page.keyboard.press('ArrowRight')
+  await settle()
+  const z0 = await mstate('zoom')
+  await page.keyboard.press('ArrowLeft')
+  await settle()
+  const z1 = await mstate('zoom')
+  await page.waitForTimeout(400)
+  const z2 = await mstate('zoom')
+  check('menu: ArrowRight opens the submenu at its first item; ArrowLeft closes it, refocuses its trigger and it stays closed', v0.focus === 'Zoom' && z0.open && z0.expanded === 'true' && z0.focus === 'Zoom in' && !z1.open && z1.focus === 'trigger' && !z2.open, { v0, z0, z1, z2 })
+  const placement = await page.evaluate(() => {
+    const trigger = document.getElementById('zoom').getBoundingClientRect()
+    const surface = document.getElementById(document.getElementById('zoom').getAttribute('aria-controls')).closest('[popover]')
+    return surface.dataset.anchorPlacement
+  })
+  await page.click('#zoom')
+  await settle()
+  const z3 = await mstate('zoom')
+  const geometry = await page.evaluate(() => {
+    const trigger = document.getElementById('zoom').getBoundingClientRect()
+    const first = document.querySelector('#' + CSS.escape(document.getElementById('zoom').getAttribute('aria-controls')) + ' > [role="menuitem"]').getBoundingClientRect()
+    const surface = document.getElementById(document.getElementById('zoom').getAttribute('aria-controls')).closest('[popover]')
+    return { placement: surface.dataset.anchorPlacement, dy: Math.round(first.top - trigger.top), right: first.left >= trigger.right - 1 }
+  })
+  check('menu: clicking a submenu trigger opens it without moving focus, anchored right-start to its first item', z3.open && z3.focus === 'trigger' && geometry.placement === 'right-start' && geometry.dy === 0 && geometry.right, { z3, geometry, placement })
+  await page.keyboard.press('ArrowRight')
+  await settle()
+  await page.keyboard.press('End')
+  await settle()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(300)
+  const z4 = await mstate('zoom')
+  const v1 = await mstate('view')
+  check('menu: selecting a submenu item closes the whole tree and refocuses the root trigger', !z4.open && !v1.open && v1.focus === 'trigger' && v1.selected === 'selected=zoomOut:zoom-out', { z4, v1 })
+
+  // Checkbox items and pointer highlighting
+  await page.click('#view')
+  await settle()
+  const wrap = await page.$('#' + (await page.getAttribute('#view', 'aria-controls')) + ' > [role="menuitemcheckbox"]')
+  const box = await wrap.boundingBox()
+  await page.mouse.move(box.x + 10, box.y + box.height / 2)
+  await page.mouse.move(box.x + 12, box.y + box.height / 2)
+  await settle()
+  const h0 = await mstate('view')
+  await page.mouse.click(box.x + 12, box.y + box.height / 2)
+  await page.waitForTimeout(20)
+  const flashChecked = await page.evaluate(() => document.querySelector('[data-menu-flash="true"]')?.getAttribute('aria-checked'))
+  await page.waitForTimeout(250)
+  const checkedAfter = await page.evaluate(() => document.querySelector('[role="menuitemcheckbox"]').getAttribute('aria-checked'))
+  check('menu: pointer movement highlights and focuses items', h0.highlighted === 'Word wrap' && h0.focus === 'Word wrap', h0)
+  check('menu: a checkbox item flashes its committed checked state', flashChecked === 'true' && checkedAfter === 'true', { flashChecked, checkedAfter })
+
+  // Hover opens a submenu after the delay
+  await page.click('#view')
+  await settle()
+  const zb = await (await page.$('#zoom')).boundingBox()
+  await page.mouse.move(zb.x + 10, zb.y + zb.height / 2)
+  await page.mouse.move(zb.x + 14, zb.y + zb.height / 2)
+  await page.waitForTimeout(100)
+  const hv0 = await mstate('zoom')
+  await page.waitForTimeout(350)
+  const hv1 = await mstate('zoom')
+  check('menu: hovering a submenu trigger opens the submenu after the delay', !hv0.open && hv1.open && hv1.expanded === 'true', { hv0, hv1 })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(150)
+  const hv2 = await mstate('view')
+  check('menu: Escape in a submenu closes the whole tree', !hv2.open && !(await mstate('zoom')).open && hv2.focus === 'trigger', hv2)
+
+  // Context menu
+  const target = await (await page.$('#context-target')).boundingBox()
+  await page.mouse.click(target.x + 20, target.y + 10, { button: 'right' })
+  await settle()
+  const pos = () => page.evaluate(() => {
+    const surface = document.getElementById(document.getElementById('context-target').getAttribute('aria-controls')).closest('[popover]')
+    const r = surface.getBoundingClientRect()
+    return { open: surface.matches(':popover-open'), left: Math.round(r.left), top: Math.round(r.top), focus: document.activeElement?.getAttribute('role') }
+  })
+  const near = (a, b) => Math.abs(a - b) <= 1
+  const c0 = await pos()
+  await page.mouse.click(target.x + 6, target.y + 4, { button: 'right' })
+  await page.waitForTimeout(100)
+  const c1 = await pos()
+  check('menu: contextmenu opens at the pointer; a second right click repositions it', c0.open && c0.focus === 'menu' && near(c0.left, target.x + 20) && near(c0.top, target.y + 10) && c1.open && near(c1.left, target.x + 6) && near(c1.top, target.y + 4), { target, c0, c1 })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(100)
+  await page.focus('#context-target')
+  await page.keyboard.press('Shift+F10')
+  await settle()
+  const c2 = await pos()
+  check('menu: Shift+F10 opens the context menu at the target bounds', c2.open && near(c2.left, target.x) && near(c2.top, target.y + target.height), { target, c2 })
+  await page.keyboard.press('Tab')
+  await page.waitForTimeout(150)
+  const c3 = await pos()
+  check('menu: Tab closes the menu', !c3.open, c3)
+
+  const events = await page.evaluate(() => window.__menu)
+  check('menu: one bubbling rmx:menu-select per selection, from the item', eq(events, [['duplicate', null, null, 'menuitem'], ['zoomOut', 'zoom-out', null, 'menuitem'], ['wordWrap', null, true, 'menuitemcheckbox']]), events)
 }
 
 check('no page errors or failed requests', errors.length === 0, errors)
