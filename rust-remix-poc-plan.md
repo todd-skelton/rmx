@@ -300,13 +300,15 @@ Covered since phase 0b:
    context, typed event targets, host mixins with reclaim, app error events, and scroll
    handling that matches Remix (traversal restore after reconciliation shrinks the page,
    `resetScroll: false`, anchoring suppression).
-3. `rmx-ui` animation (spring, tween, entrance, exit, FLIP layout), with spring output that
-   matches Remix's `spring.ts` byte for byte.
+3. `rmx-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
+   matches Remix's `spring.ts` byte for byte), combobox, listbox, menu (submenus, hover aim,
+   context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,
+   the two `demos/ui` cases (draggable and the Web Audio drummer) and the four component
+   runtime demos, each with browser checks.
 
 Remaining gaps:
 
 1. Import maps and per-entry module loading: rmx ships one wasm bundle per app.
 2. Component-level error events: Rust does not throw, so errors are reported explicitly.
-3. `@remix-run/ui` widgets other than animation (accordion, menu, popover, select and so on).
-4. Tooling: HMR, CLI, and the `remix/test` harness.
-5. Data access (`data-table`) is intentionally left to existing Rust libraries.
+3. Tooling: HMR, CLI, and the `remix/test` harness.
+4. Data access (`data-table`) is intentionally left to existing Rust libraries.
