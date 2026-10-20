@@ -229,7 +229,7 @@ macro_rules! display_attr_and_node {
         }
     )*};
 }
-display_attr_and_node!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, f32, f64, char);
+display_attr_and_node!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, char);
 
 /// Values usable as children in `rsx!` (`{expr}` blocks).
 pub trait IntoNode {

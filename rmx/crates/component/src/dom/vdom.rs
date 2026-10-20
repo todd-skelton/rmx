@@ -407,31 +407,89 @@ fn abort_listener_signal(table: &mut HandlerTable, id: u32) {
     }
 }
 
+/// The document-level listeners for one event type.
+struct Delegated {
+    key: JsValue,
+    /// (capture, listener) pairs, also added to standalone root containers.
+    listeners: Vec<(bool, js_sys::Function)>,
+}
+
+/// A standalone root's container, which listens too so trees outside the document (a
+/// root rendered into a detached element) still get their events.
+struct WatchedContainer {
+    node: web_sys::Node,
+    added: Vec<(&'static str, bool, js_sys::Function)>,
+}
+
 thread_local! {
     static HANDLERS: RefCell<HandlerTable> = RefCell::new(HandlerTable::default());
-    static DELEGATED: RefCell<HashMap<&'static str, JsValue>> = RefCell::new(HashMap::new());
+    static DELEGATED: RefCell<HashMap<&'static str, Delegated>> = RefCell::new(HashMap::new());
+    static CONTAINERS: RefCell<Vec<WatchedContainer>> = const { RefCell::new(Vec::new()) };
+    /// Set on an event once it has been dispatched, so a container and the document do
+    /// not both run its handlers.
+    static DISPATCHED: JsValue = JsValue::from_str("__rmx_dispatched");
+}
+
+fn add_listener(target: &web_sys::EventTarget, name: &str, capture: bool, f: &js_sys::Function) {
+    let _ = target.add_event_listener_with_callback_and_bool(name, f, capture);
+}
+
+/// Listen for every delegated event type on `node` too, until [`unwatch_container`].
+pub(crate) fn watch_container(node: &web_sys::Node) {
+    if CONTAINERS.with(|c| c.borrow().iter().any(|w| w.node.is_same_node(Some(node)))) {
+        return;
+    }
+    let mut added = Vec::new();
+    DELEGATED.with(|d| {
+        for (name, delegated) in d.borrow().iter() {
+            for (capture, f) in &delegated.listeners {
+                add_listener(node, name, *capture, f);
+                added.push((*name, *capture, f.clone()));
+            }
+        }
+    });
+    CONTAINERS.with(|c| c.borrow_mut().push(WatchedContainer { node: node.clone(), added }));
+}
+
+pub(crate) fn unwatch_container(node: &web_sys::Node) {
+    CONTAINERS.with(|c| {
+        let mut list = c.borrow_mut();
+        if let Some(i) = list.iter().position(|w| w.node.is_same_node(Some(node))) {
+            let w = list.swap_remove(i);
+            for (name, capture, f) in w.added {
+                let _ = w.node.remove_event_listener_with_callback_and_bool(name, &f, capture);
+            }
+        }
+    });
 }
 
 /// The expando property name for an event, registering the document listener on first use.
 fn event_key(name: &'static str) -> JsValue {
     DELEGATED.with(|d| {
-        if let Some(key) = d.borrow().get(name) {
-            return key.clone();
+        if let Some(delegated) = d.borrow().get(name) {
+            return delegated.key.clone();
         }
         let key = JsValue::from_str(&format!("__rmx_{name}"));
+        let mut listeners = Vec::new();
         // `only_bubbles`: handle just the events whose `bubbles` matches.
-        let listen = |capture: bool, only_bubbles: Option<bool>| {
+        let mut listen = |capture: bool, only_bubbles: Option<bool>| {
             let dispatch_key = key.clone();
             // `Fn`: a handler may dispatch another event of the same type synchronously.
-            let dispatch = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
-                if only_bubbles.is_none_or(|bubbles| raw.bubbles() == bubbles) {
+            let dispatch: js_sys::Function = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
+                if only_bubbles.is_none_or(|bubbles| raw.bubbles() == bubbles) && first_dispatch(&raw) {
                     dispatch(&raw, &dispatch_key);
                 }
+            })
+            .into_js_value()
+            .unchecked_into();
+            add_listener(&document(), name, capture, &dispatch);
+            CONTAINERS.with(|c| {
+                for w in c.borrow_mut().iter_mut() {
+                    add_listener(&w.node, name, capture, &dispatch);
+                    w.added.push((name, capture, dispatch.clone()));
+                }
             });
-            document()
-                .add_event_listener_with_callback_and_bool(name, dispatch.as_ref().unchecked_ref(), capture)
-                .expect("addEventListener");
-            dispatch.forget();
+            listeners.push((capture, dispatch));
         };
         // Events that never bubble are caught on the way down. Any other type (custom
         // events included) may be dispatched without `bubbles`, so those instances are
@@ -446,8 +504,23 @@ fn event_key(name: &'static str) -> JsValue {
             listen(false, Some(true));
             listen(true, Some(false));
         }
-        d.borrow_mut().insert(name, key.clone());
+        d.borrow_mut().insert(name, Delegated { key: key.clone(), listeners });
         key
+    })
+}
+
+/// Whether this is the first delegated listener to see `raw` (only tracked while a
+/// standalone root's container listens as well as the document).
+fn first_dispatch(raw: &web_sys::Event) -> bool {
+    if CONTAINERS.with(|c| c.borrow().is_empty()) {
+        return true;
+    }
+    DISPATCHED.with(|key| {
+        if js_sys::Reflect::get(raw, key).is_ok_and(|v| v.is_truthy()) {
+            return false;
+        }
+        let _ = js_sys::Reflect::set(raw, key, &JsValue::TRUE);
+        true
     })
 }
 
@@ -817,6 +890,9 @@ pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrVa
             let _ = el.remove_attribute(name);
             if name == "checked" || name == "selected" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::FALSE);
+            } else if name == "value" && matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA") {
+                // The attribute is only the default; clear the live value too.
+                let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::from_str(""));
             }
         }
     }

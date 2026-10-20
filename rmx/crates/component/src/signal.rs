@@ -70,6 +70,14 @@ impl Signal {
     }
 }
 
+/// Wrap a browser `AbortSignal`, for example [`Handle::signal`](crate::Handle::signal).
+#[cfg(target_arch = "wasm32")]
+impl From<web_sys::AbortSignal> for Signal {
+    fn from(inner: web_sys::AbortSignal) -> Signal {
+        Signal { inner }
+    }
+}
+
 type Listener<E> = Rc<dyn Fn(&E)>;
 
 /// A typed event target (Remix's `TypedEventTarget`). Clones share one listener list, so

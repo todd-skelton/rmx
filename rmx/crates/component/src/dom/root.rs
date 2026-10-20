@@ -85,6 +85,7 @@ impl Root {
         state.errors = Some(crate::TypedEventTarget::new());
         let root = Root(Rc::new(state));
         root.attach_error_forwarding();
+        super::vdom::watch_container(&root.0.parent);
         root
     }
 
@@ -147,7 +148,10 @@ impl Root {
                 rerender(&*inst);
             }
             None => {
-                self.attach_error_forwarding();
+                if self.0.errors.is_some() {
+                    self.attach_error_forwarding();
+                    super::vdom::watch_container(&self.0.parent);
+                }
                 let scope = Scope { frame: self.0.frame.clone(), errors: self.0.errors.clone(), ..Scope::default() };
                 let inst = super::new_instance::<RootHost>(children, &scope);
                 let state = &self.0;
@@ -182,6 +186,9 @@ impl Root {
     pub fn dispose(&self) {
         if let Some(forward) = self.0.forward.borrow_mut().take() {
             let _ = self.0.parent.remove_event_listener_with_callback("error", &forward);
+        }
+        if self.0.errors.is_some() {
+            super::vdom::unwatch_container(&self.0.parent);
         }
         if let Some(inst) = self.0.inst.borrow_mut().take() {
             remove_root(&*inst);

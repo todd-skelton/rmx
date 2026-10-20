@@ -445,15 +445,31 @@ impl<C: Component> Handle<C> {
         drop(fut);
     }
 
-    /// Schedule an update and resolve once it has been applied to the DOM, with that
+    /// Schedule an update now and resolve once it has been applied to the DOM, with that
     /// render's [signal](Handle::render_signal) (Remix's `let signal = await handle.update()`).
-    /// The signal is already aborted if the component was removed. Resolves at once on the
-    /// server.
-    pub async fn updated(&self) -> crate::Signal {
+    /// Like Remix, the update is scheduled when this is called, not when the future is
+    /// first polled. The signal is already aborted if the component was removed. Resolves
+    /// at once on the server.
+    pub fn updated(&self) -> impl std::future::Future<Output = crate::Signal> + 'static {
         self.update();
         #[cfg(target_arch = "wasm32")]
-        crate::dom::after_flush().await;
-        self.render_signal()
+        {
+            use wasm_bindgen::JsCast;
+            let h = self.clone();
+            let promise = js_sys::Promise::new(&mut |resolve, _| {
+                let h = h.clone();
+                // Read the signal when the flush runs tasks, as Remix's update task does.
+                crate::dom::queue_task(Box::new(move || {
+                    let _ = resolve.call1(&wasm_bindgen::JsValue::UNDEFINED, h.render_signal().raw());
+                }));
+            });
+            async move {
+                let value = wasm_bindgen_futures::JsFuture::from(promise).await.unwrap_or_default();
+                crate::Signal::from(value.unchecked_into::<web_sys::AbortSignal>())
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        std::future::ready(crate::Signal::never())
     }
 
     /// Call `f` with the component state each time `target` dispatches, until the
