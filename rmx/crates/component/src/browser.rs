@@ -121,6 +121,78 @@ pub async fn fetch_form(method: &str, url: &str, fields: &[(String, String)], si
     }
 }
 
+/// Options for [`fetch`] (a subset of `RequestInit`).
+#[derive(Clone, Default)]
+pub struct FetchInit {
+    /// `GET` when empty.
+    pub method: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<String>,
+    pub signal: Option<crate::Signal>,
+}
+
+/// A fetched response with its body read as text.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FetchResponse {
+    pub status: u16,
+    /// The `Content-Type` header, or empty.
+    pub content_type: String,
+    pub text: String,
+}
+
+impl FetchResponse {
+    /// `response.ok`: a 2xx status.
+    pub fn ok(&self) -> bool {
+        (200..300).contains(&self.status)
+    }
+
+    /// `response.json()`
+    pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, String> {
+        serde_json::from_str(&self.text).map_err(|e| e.to_string())
+    }
+}
+
+/// `fetch(url, init)` with the body read as text. Fails on a network error or when the
+/// signal aborts. On the server it fails at once.
+///
+/// ```ignore
+/// let init = FetchInit { method: "POST".into(), headers: vec![("Content-Type".into(), "application/json".into())], body: Some(json), ..Default::default() };
+/// let res = rmx::browser::fetch("/schedules", init).await?;
+/// ```
+pub async fn fetch(url: &str, init: FetchInit) -> Result<FetchResponse, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        let err = |e: wasm_bindgen::JsValue| e.as_string().or_else(|| js_sys::JSON::stringify(&e).ok().map(String::from)).unwrap_or_else(|| "fetch failed".into());
+        let request = web_sys::RequestInit::new();
+        if !init.method.is_empty() {
+            request.set_method(&init.method);
+        }
+        let headers = web_sys::Headers::new().map_err(err)?;
+        for (name, value) in &init.headers {
+            headers.append(name, value).map_err(err)?;
+        }
+        request.set_headers(&headers);
+        if let Some(body) = &init.body {
+            request.set_body(&wasm_bindgen::JsValue::from_str(body));
+        }
+        if let Some(signal) = &init.signal {
+            request.set_signal(Some(&signal.inner));
+        }
+        let window = web_sys::window().ok_or("no window")?;
+        let response = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str_and_init(url, &request)).await.map_err(err)?;
+        let response: web_sys::Response = response.dyn_into().map_err(err)?;
+        let content_type = response.headers().get("Content-Type").ok().flatten().unwrap_or_default();
+        let text = wasm_bindgen_futures::JsFuture::from(response.text().map_err(err)?).await.map_err(err)?;
+        Ok(FetchResponse { status: response.status(), content_type, text: text.as_string().unwrap_or_default() })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (url, init);
+        Err("fetch runs in the browser".into())
+    }
+}
+
 /// `new Date().toLocaleTimeString()` in the browser; the UTC time on the server.
 pub fn local_time_string() -> String {
     #[cfg(target_arch = "wasm32")]

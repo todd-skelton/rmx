@@ -1,0 +1,34 @@
+[package]
+name = "timeboxer-demo"
+description = "The Remix 3 timeboxer demo, in rmx: CSRF, session auth with scrypt passwords, a JSON schedule API, ICS export and a drag-and-drop weekly grid"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rmx.workspace = true
+rmx-router.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+web-sys = { workspace = true, features = ["Document", "DomRect", "Element", "HtmlElement", "HtmlInputElement", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent", "FocusOptions", "Window", "CssStyleDeclaration", "NodeList", "ScrollToOptions"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
+rmx-assets.workspace = true
+rmx-cookie.workspace = true
+rmx-crypto.workspace = true
+rmx-fetch.workspace = true
+rmx-middleware.workspace = true
+rmx-render.workspace = true
+rmx-serve.workspace = true
+rmx-session.workspace = true
+tokio.workspace = true

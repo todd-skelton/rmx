@@ -31,6 +31,15 @@ pub fn navigate(href: &str, options: NavigateOptions) {
     let _ = (href, options);
 }
 
+/// [`navigate`], resolving once the new content is in the page (Remix's
+/// `await navigate(href)`). Resolves at once on the server.
+pub async fn navigate_async(href: &str, options: NavigateOptions) {
+    #[cfg(target_arch = "wasm32")]
+    crate::dom::navigation::navigate_async(href, options).await;
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (href, options);
+}
+
 /// Make any element a link (Remix's `link(href)` mixin).
 ///
 /// On `<a>` and `<area>` it sets `href` (and `data-rmx-*` for the options), so the browser

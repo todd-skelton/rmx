@@ -165,6 +165,11 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
                 None => quote! { ::rmx::AttrValue::Bool(true) },
                 Some(v) => match string_literal(v) {
                     Some(lit) => quote! { ::rmx::AttrValue::Str(::std::borrow::Cow::Borrowed(#lit)) },
+                    // `aria-*` and `data-*` write booleans as "true"/"false" (Remix's rule).
+                    None if name.starts_with("aria-") || name.starts_with("data-") => {
+                        let v2 = value_tokens(v);
+                        quote_spanned! {v.span()=> ::rmx::AttrValue::stringify_bool(::rmx::IntoAttr::into_attr(#v2)) }
+                    }
                     None => { let v2 = value_tokens(v); quote_spanned! {v.span()=> ::rmx::IntoAttr::into_attr(#v2) } }
                 },
             };

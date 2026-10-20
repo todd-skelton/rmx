@@ -73,10 +73,23 @@ fn is_runtime_state(v: &JsValue) -> bool {
 /// Navigate with the runtime: like clicking a link with the matching `data-rmx-*`
 /// attributes. Falls back to `location.assign` without the Navigation API.
 pub fn navigate(href: &str, options: NavigateOptions) {
+    let _ = start_navigation(href, options);
+}
+
+/// [`navigate`], resolving once the navigation has finished (its content is in the page)
+/// or failed. Without the Navigation API it resolves once the browser starts loading.
+pub async fn navigate_async(href: &str, options: NavigateOptions) {
+    if let Some(finished) = start_navigation(href, options).and_then(|r| get(&r, "finished").dyn_into::<js_sys::Promise>().ok()) {
+        let _ = wasm_bindgen_futures::JsFuture::from(finished).await;
+    }
+}
+
+/// Start a navigation; the Navigation API's `{ committed, finished }` result, if any.
+fn start_navigation(href: &str, options: NavigateOptions) -> Option<JsValue> {
     let Some(nav) = navigation() else {
         let location = window().location();
         let _ = if options.replace { location.replace(href) } else { location.assign(href) };
-        return;
+        return None;
     };
     let src = options.src.as_deref().unwrap_or(href);
     let reset_scroll = options.reset_scroll != Some(false);
@@ -85,7 +98,7 @@ pub fn navigate(href: &str, options: NavigateOptions) {
         ("state", state(options.target.as_deref(), src, reset_scroll, reset_focus)),
         ("history", JsValue::from_str(if options.replace { "replace" } else { "push" })),
     ]);
-    let _ = call(&nav, "navigate", &[&JsValue::from_str(href), &opts]);
+    call(&nav, "navigate", &[&JsValue::from_str(href), &opts]).ok()
 }
 
 pub(crate) fn start() {

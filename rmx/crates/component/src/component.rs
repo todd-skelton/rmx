@@ -238,11 +238,25 @@ impl<C: Component> Handle<C> {
         #[cfg(target_arch = "wasm32")]
         {
             let inst = self.inst.clone();
+            let f = Rc::new(f);
             EventHandler(Rc::new(move |event: &Event| {
-                if let Some(inst) = inst.upgrade() {
-                    let mut state = inst.state.borrow_mut();
+                let Some(inst) = inst.upgrade() else { return };
+                if let Ok(mut state) = inst.state.try_borrow_mut() {
                     f(&mut state, &inst.handle, event);
+                    return;
                 }
+                // Re-entrant: this component's own code dispatched the event synchronously
+                // (`node.focus()` fires `focus`). Run the handler once that code returns.
+                let (inst, f, event) = (Rc::downgrade(&inst), f.clone(), event.clone());
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Some(inst) = inst.upgrade() {
+                        if inst.live.alive.get() {
+                            if let Ok(mut state) = inst.state.try_borrow_mut() {
+                                f(&mut state, &inst.handle, &event);
+                            }
+                        }
+                    }
+                });
             }))
         }
         #[cfg(not(target_arch = "wasm32"))]

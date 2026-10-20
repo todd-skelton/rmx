@@ -17,9 +17,9 @@ pub struct FileUpload {
 
 type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Option<FormValue>> + Send + Sync>;
 
-/// The `formData()` middleware. Parses URL-encoded, multipart and text/plain bodies.
-/// Requests without a form body (including GET and HEAD) get an empty `FormData`.
-/// Malformed bodies and bodies over the limits get a 400.
+/// The `formData()` middleware. Parses URL-encoded and multipart bodies.
+/// Other requests (GET, HEAD, JSON and any other media type) get an empty `FormData` and
+/// keep their body for the handler. Malformed bodies and bodies over the limits get a 400.
 #[derive(Clone)]
 pub struct FormDataParser {
     limits: FormLimits,
@@ -68,6 +68,10 @@ impl Middleware for FormDataParser {
         let (limits, handler) = (self.limits, self.upload_handler.clone());
         Box::pin(async move {
             let content_type = ctx.header(header::CONTENT_TYPE.as_str()).map(str::to_string);
+            if !is_form_request(ctx.method(), content_type.as_deref()) {
+                ctx.set(FormData::new());
+                return next.run(ctx).await;
+            }
             let body = ctx.take_body();
             let form = match FormData::parse(content_type.as_deref(), body, limits).await {
                 Ok(form) => form,
@@ -111,6 +115,15 @@ impl FormDataExt for Context {
     }
 }
 
+/// Only multipart and URL-encoded bodies are forms; GET and HEAD never carry one.
+fn is_form_request(method: &http::Method, content_type: Option<&str>) -> bool {
+    if method == http::Method::GET || method == http::Method::HEAD {
+        return false;
+    }
+    let essence = content_type.unwrap_or("").split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    essence.starts_with("multipart/") || essence == "application/x-www-form-urlencoded"
+}
+
 #[cfg(test)]
 mod tests {
     use rmx_fetch::{block_on, Body, Request};
@@ -142,6 +155,19 @@ mod tests {
         let res = block_on(router.fetch(multipart()));
         let text = block_on(res.into_body().text()).unwrap();
         assert_eq!(text, r#""title=Dune&cover=%2Fuploads%2Fcover%2Fdune.png" []"#);
+    }
+
+    #[test]
+    fn json_bodies_are_left_for_the_handler() {
+        let mut router = Router::new().with(form_data());
+        router.post("/", |mut ctx: Context| async move {
+            let fields = ctx.form_data().iter().count();
+            let body = ctx.take_body().text().await.unwrap();
+            rmx_fetch::response::text(format!("{fields} {body}"))
+        });
+        let req = http::Request::post("http://x/").header("content-type", "application/json").body(Body::from("{\"a\":1}")).unwrap();
+        let text = block_on(block_on(router.fetch(req)).into_body().text()).unwrap();
+        assert_eq!(text, r#"0 {"a":1}"#);
     }
 
     #[test]

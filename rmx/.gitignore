@@ -2,3 +2,5 @@
 /examples/bench/public/pkg
 /examples/*/public/pkg
 /examples/assets/app/actions/public/pkg
+/examples/timeboxer/app/actions/public/pkg
+/examples/*/tmp

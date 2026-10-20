@@ -148,6 +148,18 @@ pub enum AttrValue {
     Html(Str),
 }
 
+impl AttrValue {
+    /// Booleans as the strings `"true"` and `"false"`: how `aria-*` and `data-*`
+    /// attributes take boolean values (`aria-invalid={true}` renders `aria-invalid="true"`).
+    #[doc(hidden)]
+    pub fn stringify_bool(self) -> AttrValue {
+        match self {
+            AttrValue::Bool(b) => AttrValue::Str(Cow::Borrowed(if b { "true" } else { "false" })),
+            other => other,
+        }
+    }
+}
+
 /// HTML that rmx inserts without escaping (Remix's `unsafeHTML`). Only pass trusted or
 /// already-sanitized content.
 #[derive(Clone, Debug, PartialEq)]
@@ -315,6 +327,7 @@ impl IntoNode for Children {
 }
 
 /// A DOM event delivered to a handler. Server builds never construct one.
+#[derive(Clone)]
 pub struct Event {
     #[cfg(target_arch = "wasm32")]
     pub(crate) raw: web_sys::Event,

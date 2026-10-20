@@ -483,6 +483,14 @@ mod tests {
     }
 
     #[test]
+    fn aria_and_data_booleans_render_as_strings() {
+        use crate::rsx;
+        let (yes, no, none): (bool, bool, Option<bool>) = (true, false, None);
+        let html = render_to_string(&rsx! { <input aria-invalid={yes} data-open={no} aria-busy={none} hidden={yes} disabled={no}/> });
+        assert_eq!(html, r#"<input aria-invalid="true" data-open="false" hidden>"#);
+    }
+
+    #[test]
     fn form_values_render_as_html_defaults() {
         use crate::rsx;
         let html = render_to_string(&rsx! {
