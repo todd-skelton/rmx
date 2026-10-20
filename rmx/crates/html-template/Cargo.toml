@@ -1,0 +1,9 @@
+[package]
+name = "rmx-html-template"
+description = "html! templates that escape interpolations into SafeHtml (remix/html-template)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+rmx-macros.workspace = true

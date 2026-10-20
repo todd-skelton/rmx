@@ -1,0 +1,28 @@
+[package]
+name = "unpkg-demo"
+description = "The Remix 3 unpkg demo (an npm package browser: tarball parsing, caching, html templates), in rmx"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bytes.workspace = true
+flate2 = "1"
+http.workspace = true
+nodejs-semver = "7"
+rmx-crypto.workspace = true
+rmx-fetch.workspace = true
+rmx-file-storage.workspace = true
+rmx-html-template.workspace = true
+rmx-mime.workspace = true
+rmx-render.workspace = true
+rmx-router.workspace = true
+rmx-serve.workspace = true
+rmx-tar-parser.workspace = true
+rmx-url.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+# The npm registry is HTTPS; Remix uses the runtime's fetch().
+ureq = "3"

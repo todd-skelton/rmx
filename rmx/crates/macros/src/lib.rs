@@ -6,6 +6,10 @@
 //! - `mix={css(..)}` or `mix={[a, b]}` applies mixins to the host element.
 //! - Component props left out of the template use `Default` values.
 //! - Text must be quoted (`"Hello"`); `{expr}` accepts anything implementing `IntoNode`.
+//!
+//! Also `html!`/`html_raw!` for `rmx-html-template`.
+
+mod html;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
@@ -13,6 +17,20 @@ use quote::{quote, quote_spanned, ToTokens};
 use rstml::node::{KeyedAttribute, Node, NodeAttribute, NodeElement, NodeName};
 use syn::spanned::Spanned;
 use syn::{Expr, ExprLit, Lit};
+
+/// Escaped HTML template: `html!("<h1>{title}</h1>")`. See `rmx_html_template`.
+#[proc_macro]
+pub fn html(input: TokenStream) -> TokenStream {
+    let template = syn::parse_macro_input!(input as html::Template);
+    html::expand(template, false).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+
+/// Like `html!` without escaping, for trusted markup.
+#[proc_macro]
+pub fn html_raw(input: TokenStream) -> TokenStream {
+    let template = syn::parse_macro_input!(input as html::Template);
+    html::expand(template, true).unwrap_or_else(syn::Error::into_compile_error).into()
+}
 
 #[proc_macro]
 pub fn rsx(input: TokenStream) -> TokenStream {
