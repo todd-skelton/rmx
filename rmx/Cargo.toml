@@ -23,6 +23,7 @@ members = [
     "examples/sse",
     "examples/spa",
     "examples/assets",
+    "examples/ui",
 ]
 
 [workspace.package]

@@ -1,0 +1,39 @@
+[package]
+name = "ui-demo"
+description = "The Remix 3 ui demo gallery (component runtime demos and mixin cases), in rmx"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rmx.workspace = true
+serde.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+web-sys = { workspace = true, features = [
+    "CssStyleDeclaration",
+    "CustomEvent",
+    "CustomEventInit",
+    "Element",
+    "Event",
+    "EventTarget",
+    "HtmlElement",
+    "MouseEvent",
+    "PointerEvent",
+    "Window",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
+rmx-fetch.workspace = true
+rmx-middleware.workspace = true
+rmx-render.workspace = true
+rmx-router.workspace = true
+rmx-serve.workspace = true
+tokio.workspace = true

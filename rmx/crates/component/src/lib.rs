@@ -15,6 +15,7 @@ extern crate self as rmx;
 
 mod component;
 mod frame;
+mod host_mixin;
 mod mixin;
 mod navigation;
 mod node;
@@ -31,6 +32,7 @@ pub use frame::{
     Frame, FrameContent, FrameEvent, FrameHandle, FrameProps, FrameRequest, FrameResponse, Frames, ReloadOptions, ResolveFrame,
     ResolveFuture,
 };
+pub use host_mixin::{mixin, BeforeRemoveEvent, HostMixin, InsertEvent, MixinHandle};
 pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use navigation::{link, link_with, navigate, NavigateOptions};
 pub use node::{

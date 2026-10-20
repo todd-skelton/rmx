@@ -249,6 +249,8 @@ pub(crate) struct Ssr {
     styles: Vec<(String, String)>,
     seen_styles: HashSet<String>,
     in_entry: bool,
+    /// The `value` of the `<select>` being written, to mark its option `selected`.
+    select_value: Option<String>,
 }
 
 impl Ssr {
@@ -325,19 +327,44 @@ impl Ssr {
     }
 
     fn element(&mut self, el: &Element) {
+        if crate::host_mixin::has_mixins(el) {
+            return self.element(&crate::host_mixin::resolve_server(el.clone()));
+        }
         if let Some(extra) = &el.extra {
             for rule in &extra.styles {
                 self.add_rule(rule);
             }
         }
+        let attr_str = |name: &str| match el.attr(name) {
+            Some(AttrValue::Str(v) | AttrValue::Html(v)) => Some(v.to_string()),
+            _ => None,
+        };
+        let has = |name: &str| el.attr(name).is_some_and(|v| !matches!(v, AttrValue::Absent));
+        // `<textarea value>` is content; `<select value>` selects an option.
+        let text_value = (el.tag == "textarea").then(|| attr_str("value").or_else(|| attr_str("defaultValue"))).flatten();
+        let select_value = (el.tag == "select").then(|| attr_str("value").or_else(|| attr_str("defaultValue"))).flatten();
+        let selected = el.tag == "option"
+            && !has("selected")
+            && self.select_value.as_ref().is_some_and(|sv| {
+                let own = attr_str("value").unwrap_or_else(|| text_of(&el.children));
+                *sv == own
+            });
         let out = &mut self.out;
         out.push('<');
         out.push_str(el.tag);
         let mut inner_html = None;
         for (name, value) in &el.attrs {
+            let name: &str = match *name {
+                "value" | "defaultValue" if el.tag == "textarea" || el.tag == "select" => continue,
+                "defaultValue" if has("value") => continue,
+                "defaultChecked" if has("checked") => continue,
+                "defaultValue" => "value",
+                "defaultChecked" => "checked",
+                other => other,
+            };
             match value {
-                AttrValue::Html(html) if *name == "innerHTML" => inner_html = Some(html),
-                AttrValue::Str(_) | AttrValue::Bool(_) if *name == "innerHTML" => {
+                AttrValue::Html(html) if name == "innerHTML" => inner_html = Some(html),
+                AttrValue::Str(_) | AttrValue::Bool(_) if name == "innerHTML" => {
                     panic!("innerHTML on <{}> needs a value from rmx::unsafe_html()", el.tag)
                 }
                 AttrValue::Str(v) | AttrValue::Html(v) => {
@@ -354,12 +381,23 @@ impl Ssr {
                 AttrValue::Bool(false) | AttrValue::Absent => {}
             }
         }
+        if selected {
+            out.push_str(" selected");
+        }
         out.push('>');
         if is_void(el.tag) {
             return;
         }
-        if let Some(html) = inner_html {
+        if let Some(text) = text_value {
+            escape_into(&mut self.out, &text, false);
+        } else if let Some(html) = inner_html {
             self.out.push_str(html);
+        } else if el.tag == "select" {
+            let outer = std::mem::replace(&mut self.select_value, select_value);
+            for child in &el.children {
+                self.write(child);
+            }
+            self.select_value = outer;
         } else if el.tag == "script" || el.tag == "style" {
             // Raw text elements: children are written unescaped.
             for child in &el.children {
@@ -377,6 +415,21 @@ impl Ssr {
         self.out.push_str(el.tag);
         self.out.push('>');
     }
+}
+
+/// The text content of a node list (an `<option>` without a `value`).
+fn text_of(children: &[Node]) -> String {
+    let mut out = String::new();
+    for child in children {
+        match child {
+            Node::Text(t) => out.push_str(t),
+            Node::Fragment(nodes) => out.push_str(&text_of(nodes)),
+            Node::Element(el) => out.push_str(&text_of(&el.children)),
+            Node::Shared(n) => out.push_str(&text_of(std::slice::from_ref(&**n))),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
 }
 
 fn is_void(tag: &str) -> bool {
@@ -427,6 +480,28 @@ mod tests {
             render_to_string(&node),
             r#"<a title="say &quot;hi&quot; &amp; &lt;go&gt;" hidden>1 &lt; 2 &amp; 3</a>"#
         );
+    }
+
+    #[test]
+    fn form_values_render_as_html_defaults() {
+        use crate::rsx;
+        let html = render_to_string(&rsx! {
+            <form>
+                <input defaultValue="a" defaultChecked={true}/>
+                <input value="b" defaultValue="ignored"/>
+                <textarea value="x < y"></textarea>
+                <select value="beta">
+                    <option value="alpha">"Alpha"</option>
+                    <option value="beta">"Beta"</option>
+                </select>
+                <select defaultValue="Two"><option>"One"</option><option>"Two"</option></select>
+            </form>
+        });
+        assert!(html.contains(r#"<input value="a" checked>"#), "{html}");
+        assert!(html.contains(r#"<input value="b">"#), "{html}");
+        assert!(html.contains("<textarea>x &lt; y</textarea>"), "{html}");
+        assert!(html.contains(r#"<select><option value="alpha">Alpha</option><option value="beta" selected>Beta</option></select>"#), "{html}");
+        assert!(html.contains("<option>One</option><option selected>Two</option>"), "{html}");
     }
 
     #[test]

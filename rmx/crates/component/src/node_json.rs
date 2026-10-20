@@ -75,6 +75,10 @@ impl Node {
 }
 
 fn element_json(el: &Element) -> Value {
+    if crate::host_mixin::has_mixins(el) {
+        // Stateful mixins cannot cross the wire: serialize what they render on the server.
+        return element_json(&crate::host_mixin::resolve_server(el.clone()));
+    }
     let mut props = Map::new();
     for (name, value) in &el.attrs {
         match value {
@@ -160,7 +164,7 @@ fn element_from_json(obj: &Map<String, Value>) -> Node {
                 .collect()
         })
         .unwrap_or_default();
-    let extra = (!styles.is_empty()).then(|| Box::new(ElementExtra { styles, refs: Vec::new() }));
+    let extra = (!styles.is_empty()).then(|| Box::new(ElementExtra { styles, ..Default::default() }));
     Node::Element(Box::new(Element { tag, key, attrs, events: Vec::new(), children, extra }))
 }
 

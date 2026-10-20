@@ -13,6 +13,7 @@ pub(crate) mod diff;
 pub(crate) mod entries;
 pub(crate) mod frames;
 pub(crate) mod navigation;
+mod mixin_host;
 mod root;
 pub(crate) mod styles;
 mod vdom;
@@ -23,6 +24,7 @@ use std::rc::{Rc, Weak};
 pub use entries::{entry, Entry};
 pub use root::{create_range_root, create_root, Root};
 pub use vdom::flush;
+pub(crate) use mixin_host::MixinHost;
 pub(crate) use vdom::{new_instance, queue_task, rerender, schedule_update, AnyInstance, Live};
 
 /// Where a component sits: its parent instance (for context), its frame, and its depth

@@ -31,6 +31,7 @@ enum MixinKind {
     Attrs(Vec<(&'static str, AttrValue)>),
     Custom(Rc<dyn Fn(&mut Element)>),
     Many(Vec<Mixin>),
+    Stateful(Rc<dyn crate::host_mixin::ErasedMixin>),
 }
 
 /// A callback that receives the host element once it is in the document.
@@ -57,6 +58,16 @@ impl NodeHandle {
         if let Ok(f) = js_sys::Reflect::get(&self.el, &method.into()).and_then(|f| f.dyn_into::<js_sys::Function>()) {
             let _ = f.call0(&self.el);
         }
+    }
+
+    /// The lowercase tag name (`"button"`); empty on the server.
+    pub fn tag_name(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.el.tag_name().to_ascii_lowercase()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        String::new()
     }
 
     pub fn focus(&self) {
@@ -97,6 +108,10 @@ impl Mixin {
         Mixin(MixinKind::Custom(Rc::new(f)))
     }
 
+    pub(crate) fn stateful(descriptor: Rc<dyn crate::host_mixin::ErasedMixin>) -> Mixin {
+        Mixin(MixinKind::Stateful(descriptor))
+    }
+
     pub(crate) fn apply(self, el: &mut Element) {
         match self.0 {
             MixinKind::Style(rule) => {
@@ -114,6 +129,7 @@ impl Mixin {
             }
             MixinKind::Custom(f) => f(el),
             MixinKind::Many(list) => list.into_iter().for_each(|m| m.apply(el)),
+            MixinKind::Stateful(d) => el.extra.get_or_insert_with(Default::default).mixins.push(d),
         }
     }
 }

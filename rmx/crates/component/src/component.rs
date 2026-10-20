@@ -107,6 +107,15 @@ thread_local! {
     static SSR_FRAME: RefCell<(String, String)> = const { RefCell::new((String::new(), String::new())) };
 }
 
+/// Server rendering: the nearest context value of type `want`.
+pub(crate) fn server_context(want: TypeId) -> Option<Rc<dyn Any>> {
+    SSR_CONTEXT.with(|stack| {
+        stack.borrow().iter().rev().find_map(|shared| {
+            shared.contexts.borrow().iter().find(|(t, _)| *t == want).map(|(_, v)| v.clone())
+        })
+    })
+}
+
 fn next_id() -> u32 {
     NEXT_ID.with(|n| {
         let id = n.get();
@@ -307,12 +316,7 @@ impl<C: Component> Handle<C> {
         if self.shared.scope.parent.is_some() {
             return crate::dom::find_context(self.shared.scope.parent.clone(), want).and_then(|v| v.downcast::<T>().ok());
         }
-        SSR_CONTEXT.with(|stack| {
-            stack.borrow().iter().rev().find_map(|shared| {
-                shared.contexts.borrow().iter().find(|(t, _)| *t == want).map(|(_, v)| v.clone())
-            })
-        })
-        .and_then(|v| v.downcast::<T>().ok())
+        server_context(want).and_then(|v| v.downcast::<T>().ok())
     }
 
     /// Run `f` when `frame` emits `event`, for as long as this component is mounted

@@ -41,6 +41,8 @@ pub struct Element {
 pub(crate) struct ElementExtra {
     pub(crate) styles: Vec<Rc<StyleRule>>,
     pub(crate) refs: Vec<crate::mixin::NodeRef>,
+    /// Stateful mixins, run when the element is rendered.
+    pub(crate) mixins: Vec<Rc<dyn crate::host_mixin::ErasedMixin>>,
 }
 
 /// A `css()` rule: a generated class name and the CSS text scoped under it.
