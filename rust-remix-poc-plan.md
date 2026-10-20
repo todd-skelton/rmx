@@ -305,6 +305,19 @@ Covered since phase 0b:
    context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,
    the two `demos/ui` cases (draggable and the Web Audio drummer) and the four component
    runtime demos, each with browser checks.
+4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
+   406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
+   directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,
+   symlink containment), `rmx-multipart-parser` (the streaming state machine with Remix's
+   limits) and form data with Remix's defaults and upload handlers, and `rmx-auth` (OAuth 2
+   and OpenID Connect with PKCE: GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and
+   generic OIDC). The social-auth demo now logs in through Google, GitHub and X when their
+   client credentials are set.
+5. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
+   component model at the root and every other crate as a module (`rmx::router`,
+   `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
+   the component runtime, `ui`, `router`, `fetch`, `spa` and the platform-neutral crates.
+   All examples depend on `rmx` alone.
 
 Remaining gaps:
 
