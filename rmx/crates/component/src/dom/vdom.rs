@@ -886,7 +886,7 @@ fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
             if m.src != f.src {
                 m.src = f.src.clone();
                 m.state.set_src(&f.src);
-                frames::spawn_reload(m.state.clone());
+                frames::spawn_reload(m.state.clone(), f.fallback.is_none());
             }
         }
         (_, new) => {

@@ -14,6 +14,7 @@
 //! - `data-rmx-history="replace" | "push"` chooses how the history entry is added.
 //! - `data-rmx-document` opts out: the browser does a full document navigation.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use js_sys::Reflect;
@@ -145,7 +146,17 @@ fn on_navigate(event: JsValue) {
     let info = get(&event, "info");
     if get(&info, "type").as_string().as_deref() == Some("rmx-redirect") {
         // The content for this URL is already in the page; just commit the URL.
-        intercept(&event, Closure::once_into_js(|| JsValue::UNDEFINED), false);
+        let reset_scroll = get(&info, "resetScroll").as_bool().unwrap_or(true);
+        let nav_type = get(&event, "navigationType").as_string().unwrap_or_default();
+        let dest = get(&get(&event, "destination"), "url").as_string().unwrap_or_default();
+        let styles = ScrollStyles::install(&event, &nav_type, &dest, reset_scroll);
+        let handler = Closure::once_into_js(move || {
+            if let (Some(styles), Some(nav)) = (styles, navigation()) {
+                styles.bind(&nav);
+            }
+            JsValue::UNDEFINED
+        });
+        intercept(&event, handler, false);
         return;
     }
     let can_intercept = get(&event, "canIntercept").as_bool().unwrap_or(false);
@@ -191,7 +202,12 @@ fn on_navigate(event: JsValue) {
 
     let traverse = nav_type == "traverse";
     let (reset_scroll, reset_focus) = if traverse { (true, true) } else { (plan.reset_scroll, plan.reset_focus) };
+    let styles = ScrollStyles::install(&event, &nav_type, &dest, reset_scroll);
+    let handler_styles = styles.clone();
     let handler = Closure::once_into_js(move || -> JsValue {
+        if let Some(styles) = handler_styles {
+            styles.bind(&nav);
+        }
         wasm_bindgen_futures::future_to_promise(async move {
             if !traverse {
                 let _ = call(&nav, "updateCurrentEntry", &[&object(&[("state", entry_state)])]);
@@ -205,7 +221,7 @@ fn on_navigate(event: JsValue) {
                     let opts = object(&[
                         ("state", state(None, &redirected, reset_scroll, reset_focus)),
                         ("history", JsValue::from_str("replace")),
-                        ("info", object(&[("type", JsValue::from_str("rmx-redirect"))])),
+                        ("info", object(&[("type", JsValue::from_str("rmx-redirect")), ("resetScroll", JsValue::from_bool(reset_scroll))])),
                     ]);
                     let _ = call(&nav, "navigate", &[&JsValue::from_str(&redirected), &opts]);
                 }
@@ -233,7 +249,114 @@ fn on_navigate(event: JsValue) {
         opts.push(("precommitHandler", precommit));
     }
     if let Err(e) = call(&event, "intercept", &[&object(&opts)]) {
+        if let Some(styles) = styles {
+            styles.remove();
+        }
         warn(&format!("rmx: could not intercept navigation: {}", frames::js_error(&e)));
+    }
+}
+
+/// Temporary styles that keep reconciliation from fighting the browser's scroll handling
+/// (Remix `installNavigationScrollStyleWorkarounds`).
+///
+/// - Traversals: reconciling a shorter page, or scroll anchoring, can move the scroll
+///   position before the Navigation API restores it, and Chromium then treats that as a
+///   user scroll and skips restoration. Keep the starting scroll range and turn anchoring
+///   off until the navigation finishes.
+/// - Chromium push/replace without a hash: anchoring can keep an offset after the reset to
+///   the top, so turn it off through the first paint after the navigation.
+#[derive(Clone)]
+struct ScrollStyles {
+    sheet: JsValue,
+    removed: Rc<Cell<bool>>,
+    after_paint: bool,
+}
+
+impl ScrollStyles {
+    fn css(nav_type: &str, dest: &str, reset_scroll: bool) -> Option<(String, bool)> {
+        if !reset_scroll {
+            return None;
+        }
+        if nav_type == "traverse" {
+            let root = window().document()?.document_element()?;
+            let min_height = root.scroll_height() + root.client_height();
+            let css = format!(
+                "html {{ min-height: {min_height}px !important; overflow-anchor: none !important; }} body {{ overflow-anchor: none !important; }}"
+            );
+            return Some((css, false));
+        }
+        if nav_type != "push" && nav_type != "replace" {
+            return None;
+        }
+        if web_sys::Url::new(dest).is_ok_and(|u| !u.hash().is_empty()) {
+            return None;
+        }
+        let agent = get(&get(&window().into(), "navigator"), "userAgent").as_string().unwrap_or_default();
+        if !(agent.contains("Chrome") || agent.contains("Chromium")) {
+            return None;
+        }
+        Some(("html, body { overflow-anchor: none !important; }".into(), true))
+    }
+
+    fn install(event: &JsValue, nav_type: &str, dest: &str, reset_scroll: bool) -> Option<Self> {
+        let (css, after_paint) = Self::css(nav_type, dest, reset_scroll)?;
+        let constructor = get(&window().into(), "CSSStyleSheet").dyn_into::<js_sys::Function>().ok()?;
+        let sheet = Reflect::construct(&constructor, &js_sys::Array::new()).ok()?;
+        call(&sheet, "replaceSync", &[&JsValue::from_str(&css)]).ok()?;
+        let document: JsValue = window().document()?.into();
+        let sheets = get(&document, "adoptedStyleSheets").dyn_into::<js_sys::Array>().ok()?;
+        let next = sheets.slice(0, sheets.length());
+        next.push(&sheet);
+        Reflect::set(&document, &JsValue::from_str("adoptedStyleSheets"), &next).ok()?;
+
+        let styles = ScrollStyles { sheet, removed: Rc::new(Cell::new(false)), after_paint };
+        let signal = get(event, "signal");
+        if get(&signal, "aborted").as_bool() == Some(true) {
+            styles.remove();
+            return None;
+        }
+        let on_abort = styles.clone();
+        let on_abort = Closure::once_into_js(move || on_abort.remove());
+        let once = object(&[("once", JsValue::TRUE)]);
+        let _ = call(&signal, "addEventListener", &[&JsValue::from_str("abort"), &on_abort, &once]);
+        Some(styles)
+    }
+
+    fn remove(&self) {
+        if self.removed.replace(true) {
+            return;
+        }
+        let Some(document) = window().document() else { return };
+        let document: JsValue = document.into();
+        let Ok(sheets) = get(&document, "adoptedStyleSheets").dyn_into::<js_sys::Array>() else { return };
+        let kept = sheets.filter(&mut |sheet, _, _| sheet != self.sheet);
+        let _ = Reflect::set(&document, &JsValue::from_str("adoptedStyleSheets"), &kept);
+    }
+
+    /// Remove the styles once the navigation's transition settles. Called from the
+    /// intercept handler, when `navigation.transition` exists.
+    fn bind(self, nav: &JsValue) {
+        let transition = get(nav, "transition");
+        let finished = get(&transition, "finished");
+        if !finished.is_object() {
+            self.remove();
+            return;
+        }
+        let failed = self.clone();
+        let on_finished = Closure::once_into_js(move |_: JsValue| {
+            if !self.after_paint {
+                return self.remove();
+            }
+            // The first callback runs before the first paint after the navigation; the
+            // second removes the styles before the following frame.
+            let outer = Closure::once_into_js(move |_: JsValue| {
+                let inner = Closure::once_into_js(move |_: JsValue| self.remove());
+                let _ = window().request_animation_frame(inner.unchecked_ref());
+            });
+            let _ = window().request_animation_frame(outer.unchecked_ref());
+        });
+        let on_failed = Closure::once_into_js(move |_: JsValue| failed.remove());
+        let _ = call(&finished, "then", &[&on_finished, &on_failed]);
     }
 }
 

@@ -6,6 +6,8 @@
 use rmx::{css, on, rsx, Children, Component, Frame, FrameEvent, Handle, Mixin, Node, NodeHandle};
 use serde::{Deserialize, Serialize};
 
+pub mod scroll_reload;
+
 // ---------------------------------------------------------------------------------------
 // Styles (ui/public/styles.ts)
 // ---------------------------------------------------------------------------------------
@@ -410,6 +412,15 @@ pub fn start() {
             rmx::entry::<ReloadTopFrame>(),
             rmx::entry::<StateSearchPage>(),
             rmx::entry::<ClientMountedPageExample>(),
+            rmx::entry::<scroll_reload::ScrollRestorationList>(),
+            rmx::entry::<scroll_reload::StoreScrollReproduction>(),
+            rmx::entry::<scroll_reload::NewsletterSignup>(),
+            rmx::entry::<scroll_reload::ScrollAnchoringList>(),
+            rmx::entry::<scroll_reload::ScrollAnchoringReproduction>(),
+            rmx::entry::<scroll_reload::ScrollAnchoringDetail>(),
+            rmx::entry::<scroll_reload::RootReloadControls>(),
+            rmx::entry::<scroll_reload::PersistentRootReloadEntry>(),
+            rmx::entry::<scroll_reload::RemovableRootReloadEntry>(),
         ],
         ..Default::default()
     });

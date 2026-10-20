@@ -37,6 +37,19 @@ pub(crate) struct FrameState {
     events: web_sys::EventTarget,
     /// Renders node content from a custom resolver (or `replace`) into the region.
     root: RefCell<Option<Root>>,
+    /// Loads of blocking frames created while applying this frame's current load.
+    tracker: RefCell<Option<Tracker>>,
+}
+
+/// Loads a frame load waits for before it finishes (Remix's reconciliation tracker): a
+/// `<Frame>` without a fallback that a client render creates, or points at a new `src`,
+/// while new content is applied. A navigation then finishes (and the browser restores or
+/// resets scroll) only once that content is in the page.
+type Tracker = Rc<RefCell<Vec<js_sys::Promise>>>;
+
+thread_local! {
+    /// Trackers of the frame loads whose content is being applied right now (innermost last).
+    static APPLYING: RefCell<Vec<Tracker>> = const { RefCell::new(Vec::new()) };
 }
 
 thread_local! {
@@ -100,6 +113,7 @@ impl FrameState {
             pending: Cell::new(false),
             events: web_sys::EventTarget::new().expect("EventTarget"),
             root: RefCell::new(None),
+            tracker: RefCell::new(None),
         }
     }
 
@@ -166,7 +180,25 @@ impl FrameState {
         }
         let signal = controller.signal();
         self.emit("reloadStart");
-        let result = self.fetch_and_apply(submission, &signal).await;
+        let tracker = Tracker::default();
+        *self.tracker.borrow_mut() = Some(tracker.clone());
+        let mut result = self.fetch_and_apply(submission, &signal).await;
+        if result.is_ok() {
+            // Blocking frames the new content created; their own loads wait for theirs.
+            loop {
+                let loads = std::mem::take(&mut *tracker.borrow_mut());
+                if loads.is_empty() || signal.aborted() {
+                    break;
+                }
+                if let Err(e) = JsFuture::from(js_sys::Promise::all(&loads.into_iter().collect::<js_sys::Array>())).await {
+                    result = Err(e);
+                    break;
+                }
+            }
+        }
+        if self.tracker.borrow().as_ref().is_some_and(|t| Rc::ptr_eq(t, &tracker)) {
+            self.tracker.replace(None);
+        }
         if signal.aborted() {
             // Superseded by a newer load of this frame (or the frame went away).
             return Ok(None);
@@ -230,7 +262,7 @@ impl FrameState {
                 false
             }
             _ => {
-                self.apply_html(html);
+                self.tracked(|| self.apply_html(html));
                 true
             }
         };
@@ -307,8 +339,8 @@ impl FrameState {
             self.set_src(url);
         }
         match response.content {
-            FrameContent::Html(html) => self.apply_html(&html),
-            FrameContent::Node(node) => self.apply_node(node),
+            FrameContent::Html(html) => self.tracked(|| self.apply_html(&html)),
+            FrameContent::Node(node) => self.tracked(|| self.apply_node(node)),
         }
         Ok(response.url)
     }
@@ -329,6 +361,16 @@ impl FrameState {
             }
         };
         root.render(node);
+    }
+
+    /// Apply content for the current load, rendering what it changed right away so the
+    /// blocking frames it creates join the load's tracker.
+    fn tracked(&self, apply: impl FnOnce()) {
+        let Some(tracker) = self.tracker.borrow().clone() else { return apply() };
+        APPLYING.with(|a| a.borrow_mut().push(tracker));
+        apply();
+        super::flush();
+        APPLYING.with(|a| a.borrow_mut().pop());
     }
 
     /// Stop rendering node content (HTML content is taking over the region).
@@ -788,15 +830,27 @@ pub(crate) fn create_client_frame(
         let _ = fragment.append_child(&template.content());
     }
     let _ = fragment.append_child(&end);
+    let blocking = fallback_html.is_empty();
     let frame = register(FrameState::new(src.to_string(), name, Some((start, end))));
-    spawn_reload(frame.clone());
+    spawn_reload(frame.clone(), blocking);
     frame
 }
 
-pub(crate) fn spawn_reload(frame: Rc<FrameState>) {
+/// Load a frame in the background. A blocking frame (no fallback) created or retargeted
+/// while a frame load applies its content joins that load's tracker.
+pub(crate) fn spawn_reload(frame: Rc<FrameState>, blocking: bool) {
+    let tracker = blocking.then(|| APPLYING.with(|a| a.borrow().last().cloned())).flatten();
+    let mut done: Option<js_sys::Function> = None;
+    if let Some(tracker) = &tracker {
+        let promise = js_sys::Promise::new(&mut |resolve, _| done = Some(resolve));
+        tracker.borrow_mut().push(promise);
+    }
     wasm_bindgen_futures::spawn_local(async move {
         if let Err(e) = frame.load(Submission::default()).await {
             crate::report_error(js_error(&e));
+        }
+        if let Some(done) = done {
+            let _ = done.call0(&JsValue::UNDEFINED);
         }
     });
 }

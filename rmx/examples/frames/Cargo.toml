@@ -15,8 +15,10 @@ serde.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["AbortSignal", "AddEventListenerOptions", "EventTarget"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
 rmx-fetch.workspace = true
 rmx-middleware.workspace = true
 rmx-render.workspace = true

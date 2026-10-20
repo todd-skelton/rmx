@@ -483,6 +483,30 @@ impl Event {
         }
     }
 
+    /// Set an attribute on the element the handler is attached to (`currentTarget`).
+    pub fn set_current_attr(&self, name: &str, value: &str) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(el) = self.current_element() {
+            let _ = el.set_attribute(name, value);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = (name, value);
+    }
+
+    /// An attribute of the button that submitted the form (`SubmitEvent.submitter`).
+    pub fn submitter_attr(&self, name: &str) -> Option<String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            js_sys::Reflect::get(&self.raw, &"submitter".into()).ok()?.dyn_into::<web_sys::Element>().ok()?.get_attribute(name)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = name;
+            None
+        }
+    }
+
     /// Submit the form the event target belongs to, as if its submit button was pressed
     /// (`form.requestSubmit()`), so the navigation runtime handles it.
     pub fn request_submit(&self) {

@@ -118,6 +118,142 @@ const text = (page) => page.evaluate(() => document.body.innerText)
   await page.close()
 }
 
+async function until(page, fn, arg, timeout = 6000) {
+  try {
+    await page.waitForFunction(fn, arg, { timeout })
+    return true
+  } catch {
+    return false
+  }
+}
+
+const near = ({ expected, tolerance }) => Math.abs(window.scrollY - expected) < tolerance
+const settled = () => window.navigation.transition === null
+const hydration = (page, sel, n) => page.locator(sel).getByRole('button', { name: `Hydration check: ${n}`, exact: true })
+
+// Scroll restoration: traversal restores scroll after reconciliation shrinks the document
+// (scroll-restoration.test.e2e.ts, first case).
+{
+  const page = await open('/scroll-restoration')
+  const repro = '#store-scroll-reproduction'
+  await hydration(page, repro, 0).click()
+  await hydration(page, repro, 1).waitFor()
+  await page.locator('#scroll-restoration-list-end').scrollIntoViewIfNeeded()
+  const listY = await page.evaluate(() => window.scrollY)
+  await page.getByRole('link', { name: 'Open the shorter detail page' }).click()
+  await page.getByRole('heading', { name: 'Short detail view' }).waitFor()
+  check('scroll-restoration: hydration state kept on detail', await hydration(page, repro, 1).isVisible())
+  await page.evaluate(() => window.scrollTo(0, 500))
+  const detailY = await page.evaluate(() => window.scrollY)
+  check('scroll-restoration: detail page scrolls', detailY > 100, detailY)
+  await page.goBack()
+  await page.getByText('List row 48', { exact: true }).waitFor()
+  const restored = await until(page, near, { expected: listY, tolerance: 50 })
+  check('scroll-restoration: Back restores list scroll', restored, { listY, now: await page.evaluate(() => window.scrollY) })
+  check('scroll-restoration: hydration count still 1 after Back', await hydration(page, repro, 1).isVisible())
+  check('scroll-restoration: no console errors', page.errors.length === 0, page.errors)
+  await page.close()
+}
+
+// Scroll restoration: forward traversal after replace with resetScroll=false (second case).
+{
+  const page = await open('/scroll-restoration')
+  const repro = '#store-scroll-reproduction'
+  await hydration(page, repro, 0).click()
+  await hydration(page, repro, 1).waitFor()
+  await page.locator('#scroll-restoration-list-end').scrollIntoViewIfNeeded()
+  const listY = await page.evaluate(() => window.scrollY)
+  check('scroll-restoration fwd: list scrolls far', listY > 1000, listY)
+  await page.getByRole('link', { name: 'Open the shorter detail page' }).click()
+  await page.getByRole('heading', { name: 'Short detail view' }).waitFor()
+  await until(page, settled)
+  await page.evaluate(() => window.scrollTo(0, 150))
+  const detailY = await page.evaluate(() => window.scrollY)
+  await page.getByRole('button', { name: 'Select size without resetting scroll' }).click()
+  await page.waitForURL((url) => url.searchParams.get('size') === 'small')
+  await until(page, settled)
+  const after = await page.evaluate(() => ({ y: window.scrollY, reset: window.navigation.currentEntry?.getState()?.resetScroll }))
+  check('scroll-restoration fwd: replace keeps scroll and stores manual reset', after.y === detailY && after.reset === 'manual', { detailY, after })
+  await page.goBack()
+  await page.getByText('List row 48', { exact: true }).waitFor()
+  check('scroll-restoration fwd: Back restores list', await until(page, near, { expected: listY, tolerance: 50 }), { listY, now: await page.evaluate(() => window.scrollY) })
+  await page.goForward()
+  await page.getByRole('heading', { name: 'Short detail view' }).waitFor()
+  const fwd = await until(page, (a) => window.navigation.transition === null && Math.abs(window.scrollY - a.expected) < a.tolerance, { expected: detailY, tolerance: 50 })
+  check('scroll-restoration fwd: Forward restores detail scroll', fwd, { detailY, now: await page.evaluate(() => window.scrollY) })
+  check('scroll-restoration fwd: hydration count still 1', await hydration(page, repro, 1).isVisible())
+  await page.close()
+}
+
+// Newsletter form: push and replace submissions keep scroll and show the status.
+{
+  const page = await open('/scroll-restoration')
+  for (const mode of ['push', 'replace']) {
+    const lengthBefore = await page.evaluate(() => window.navigation.entries().length)
+    await page.locator('#newsletter-email').scrollIntoViewIfNeeded()
+    const y = await page.evaluate(() => window.scrollY)
+    await page.fill('#newsletter-email', 'todd@example.com')
+    await page.getByRole('button', { name: `Subscribe with ${mode}` }).click()
+    const shown = await until(page, (m) => document.querySelector('[role=status]')?.innerText.includes(m), mode)
+    await until(page, settled)
+    const state = await page.evaluate(() => ({ y: window.scrollY, len: window.navigation.entries().length, search: location.search }))
+    const expectedLen = mode === 'push' ? lengthBefore + 1 : lengthBefore
+    check(`newsletter ${mode}: status shown, scroll kept, history ${mode}`, shown && Math.abs(state.y - y) < 50 && state.len === expectedLen && state.search === `?newsletter=${mode}`, { y, state, lengthBefore })
+  }
+  check('newsletter: no console errors', page.errors.length === 0, page.errors)
+  await page.close()
+}
+
+// Scroll anchoring: Back restores scroll after an earlier client entry is removed.
+{
+  const page = await open('/scroll-anchoring')
+  const repro = '#scroll-anchoring-reproduction'
+  await hydration(page, repro, 0).click()
+  await hydration(page, repro, 1).waitFor()
+  await page.locator('#scroll-anchoring-list-end').scrollIntoViewIfNeeded()
+  const listY = await page.evaluate(() => window.scrollY)
+  await page.getByRole('link', { name: 'Open the anchoring detail page' }).click()
+  await page.getByRole('heading', { name: 'Scroll anchoring detail' }).waitFor()
+  check('scroll-anchoring: hydration state kept on detail', await hydration(page, repro, 1).isVisible())
+  await page.evaluate(() => window.scrollTo(0, 500))
+  const detailY = await page.evaluate(() => window.scrollY)
+  check('scroll-anchoring: detail page scrolls', detailY > 100, detailY)
+  await page.goBack()
+  await page.getByText('Anchoring row 48', { exact: true }).waitFor()
+  check('scroll-anchoring: Back restores list scroll', await until(page, near, { expected: listY, tolerance: 50 }), { listY, now: await page.evaluate(() => window.scrollY) })
+  check('scroll-anchoring: hydration count still 1', await hydration(page, repro, 1).isVisible())
+  await page.close()
+}
+
+// Root reload: persistent entries keep setup and state with fresh props; removed entries dispose once.
+{
+  const page = await open('/root-reload-client-entries')
+  await until(page, () => document.querySelector('#persistent-entry .setup-id')?.innerText !== 'hydrating')
+  const read = () => page.evaluate(() => {
+    const q = (s) => document.querySelector(s)?.innerText
+    return { setup: q('#persistent-entry .setup-id'), count: q('#persistent-entry .local-count'), props: q('#persistent-entry .entry-server-props'), controls: q('#root-reload-controls .server-props'), removable: !!document.querySelector('#removable-entry'), disposed: q('.dispose-events'), state: q('.removable-state') }
+  })
+  await page.locator('#persistent-entry button.increment').click()
+  await page.locator('#persistent-entry button.increment').click()
+  const s0 = await read()
+  await page.click('#reload-with')
+  const pending = await until(page, () => document.querySelector('#reload-with')?.innerText.startsWith('Reloading with'), null, 900)
+  await until(page, (v) => document.querySelector('#persistent-entry .entry-server-props')?.innerText !== v, s0.props, 6000)
+  await until(page, () => document.querySelector('#reload-with')?.innerText === 'Reload with removable entry')
+  const s1 = await read()
+  check('root-reload: pending label while reloading', pending)
+  check('root-reload: persistent entry keeps setup and count with new props', s1.setup === s0.setup && s1.count === '2' && s1.props !== s0.props && s1.controls === s1.props, { s0, s1 })
+  await page.click('#reload-without')
+  await until(page, () => !document.querySelector('#removable-entry'), null, 6000)
+  await until(page, () => document.querySelector('.dispose-events')?.innerText === '1', null, 3000)
+  const s2 = await read()
+  const replacement = await page.locator('#removed-entry-replacement').count()
+  check('root-reload: reload without entry disposes it once', !s2.removable && s2.disposed === '1' && s2.state === 'absent' && replacement === 1, { s2, replacement })
+  check('root-reload: persistent entry survives removal reload', s2.setup === s0.setup && s2.count === '2', s2)
+  check('root-reload: no console errors', page.errors.length === 0, page.errors)
+  await page.close()
+}
+
 await browser.close()
 console.log(failures ? `${failures} failed` : 'all passed')
 process.exit(failures ? 1 : 0)

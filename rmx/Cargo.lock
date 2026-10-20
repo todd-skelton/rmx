@@ -310,6 +310,7 @@ dependencies = [
 name = "frames-demo"
 version = "0.1.0"
 dependencies = [
+ "http",
  "rmx",
  "rmx-fetch",
  "rmx-middleware",
@@ -319,6 +320,7 @@ dependencies = [
  "serde",
  "tokio",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

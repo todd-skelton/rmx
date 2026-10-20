@@ -1,8 +1,12 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use frames_demo::scroll_reload::*;
 use frames_demo::*;
+use http::StatusCode;
 use rmx::{css, rsx, Frame, Node};
+use rmx_fetch::response;
 use rmx_middleware::compression::compression;
+use rmx_middleware::form_data::{form_data, FormDataExt};
 use rmx_middleware::logger::logger;
 use rmx_middleware::static_files::{static_files, StaticOptions};
 use rmx_render::Render;
@@ -25,6 +29,7 @@ pub fn router(public: &str) -> Router {
         router.use_middleware(logger());
     }
     router.use_middleware(compression());
+    router.use_middleware(form_data());
     router.use_middleware(static_files(
         public,
         StaticOptions { cache_control: Some("no-store".into()), etag: false, last_modified: false, index: false, ..Default::default() },
@@ -38,6 +43,29 @@ pub fn router(public: &str) -> Router {
         ctx.render(state_search_page(query))
     });
     router.get("/client-mounted", |ctx: Context| async move { ctx.render(client_mounted_page()) });
+    router.get("/root-reload-client-entries", |ctx: Context| async move {
+        delay(1000).await;
+        let include_removed = ctx.url().search_params().get("removed") != Some("0");
+        ctx.render(root_reload_page(include_removed, clock()))
+    });
+    router.get("/scroll-anchoring", |ctx: Context| async move { ctx.render(scroll_anchoring_page()) });
+    router.get("/scroll-anchoring/detail", |ctx: Context| async move { ctx.render(scroll_anchoring_detail_page()) });
+    router.get("/scroll-restoration", |ctx: Context| async move {
+        let history = newsletter_history(ctx.url().search_params().get("newsletter"));
+        ctx.render(scroll_restoration_page(history))
+    });
+    router.get("/scroll-restoration/detail", |ctx: Context| async move { ctx.render(scroll_restoration_detail_page()) });
+    router.post("/scroll-restoration/newsletter", |ctx: Context| async move {
+        let form = ctx.form_data();
+        let email = form.get("email").unwrap_or_default();
+        let history = newsletter_history(form.get("history"));
+        match history {
+            Some(history) if !email.trim().is_empty() => {
+                response::redirect_with(&format!("/scroll-restoration?newsletter={history}"), StatusCode::SEE_OTHER)
+            }
+            _ => response::status(StatusCode::BAD_REQUEST, "Enter an email address and choose a navigation type."),
+        }
+    });
 
     router.mount("/frames", |r| {
         r.get("/sidebar", |ctx: Context| async move {
@@ -142,6 +170,18 @@ pub fn router(public: &str) -> Router {
             delay(500).await;
             ctx.render(reload_scope_frame("Blocking frame server time"))
         });
+        r.get("/root-reload-entry-frame", |ctx: Context| async move {
+            delay(700).await;
+            ctx.render(rsx! {
+                <div class="entry-frame" mix={fragment_style()}>
+                    <div mix={fragment_label_style()}>"Frame inside preserved client entry"</div>
+                    <div mix={clock_value_style()}>{clock()}</div>
+                    <div mix={css("margin-top: 8px;")}><Counter initial_count={10} label="Nested frame"/></div>
+                </div>
+            })
+        });
+        r.get("/scroll-anchoring-items", |ctx: Context| async move { ctx.render(rsx! { <ScrollAnchoringList loaded_at={clock()}/> }) });
+        r.get("/scroll-restoration-items", |ctx: Context| async move { ctx.render(rsx! { <ScrollRestorationList loaded_at={clock()}/> }) });
         r.get("/state-search-results", |ctx: Context| async move {
             delay(300).await;
             let query = ctx.url().search_params().get("query").unwrap_or_default().trim().to_string();
@@ -185,6 +225,9 @@ fn home_page() -> Node {
     let links: Vec<(&str, &str)> = vec![
         ("/time", "Server time demo"),
         ("/reload-scope", "Frame vs top reload demo"),
+        ("/root-reload-client-entries", "Root reload client entries"),
+        ("/scroll-restoration", "Navigation scroll behavior"),
+        ("/scroll-anchoring", "Scroll anchoring restoration"),
         ("/state-search", "Dynamic src search demo"),
         ("/client-mounted", "Client-mounted nested frame demo"),
     ];
@@ -300,6 +343,110 @@ fn client_mounted_page() -> Node {
             <h1 mix={page_heading_style()}>"Client-mounted nested non-blocking frame"</h1>
             <p mix={lead_style()}>"Mount the outer frame, then watch the nested frame fallback render before its server content streams in."</p>
             <ClientMountedPageExample/>
+        </Document>
+    }
+}
+
+fn newsletter_history(value: Option<&str>) -> Option<String> {
+    value.filter(|v| *v == "push" || *v == "replace").map(str::to_string)
+}
+
+fn list_end(id: &'static str, heading: &'static str, intro: Option<Node>, link_id: Option<&'static str>, href: &'static str, label: &'static str) -> Node {
+    rsx! {
+        <section id={id} mix={css("border: 1px solid rgba(255,255,255,0.16); border-radius: 12px; padding: 20px; margin-top: 20px; background: rgba(129,140,248,0.12);")}>
+            <h2 mix={css("margin-top: 0; font-size: 20px;")}>{heading}</h2>
+            {intro}
+            <a id={link_id} href={href} mix={css("color: #ffffff; font-weight: 700; text-decoration: underline;")}>{label}</a>
+        </section>
+    }
+}
+
+// actions/scroll-restoration.tsx
+fn scroll_restoration_page(newsletter_history: Option<String>) -> Node {
+    let intro = rsx! {
+        <p mix={[lead_style(), css("line-height: 1.6;")]}>
+            "Note " <code>"window.scrollY"</code> ", open the detail page, and return with the browser Back button."
+        </p>
+    };
+    rsx! {
+        <Document title="Navigation scroll behavior" max_width="860px">
+            <a href="/" mix={link_style()}>"\u{2190} Back to demos"</a>
+            <h1 mix={page_heading_style()}>"Navigation scroll behavior"</h1>
+            <p mix={[lead_style(), css("line-height: 1.6;")]}>
+                "This mirrors the store issue: a top-level client entry switches between a short detail and a tall collection rendered by a blocking frame."
+            </p>
+            <StoreScrollReproduction variant="list"/>
+            {list_end("scroll-restoration-list-end", "End of the list", Some(intro), Some("scroll-restoration-detail-link"), "/scroll-restoration/detail", "Open the shorter detail page \u{2192}")}
+            <NewsletterSignup history={newsletter_history}/>
+        </Document>
+    }
+}
+
+fn scroll_restoration_detail_page() -> Node {
+    rsx! {
+        <Document title="Navigation scroll behavior" max_width="860px">
+            <a href="/" mix={link_style()}>"\u{2190} Back to demos"</a>
+            <h1 mix={page_heading_style()}>"Navigation scroll behavior"</h1>
+            <p mix={[lead_style(), css("line-height: 1.6;")]}>
+                "This mirrors the store issue: a top-level client entry switches between a short detail and a tall collection rendered by a blocking frame."
+            </p>
+            <StoreScrollReproduction variant="detail"/>
+        </Document>
+    }
+}
+
+// actions/scroll-anchoring.tsx
+fn scroll_anchoring_page() -> Node {
+    rsx! {
+        <Document title="Scroll anchoring restoration" max_width="860px">
+            <a href="/" mix={link_style()}>"\u{2190} Back to demos"</a>
+            <h1 mix={page_heading_style()}>"Scroll anchoring restoration"</h1>
+            <p mix={[lead_style(), css("line-height: 1.6;")]}>
+                "This isolates the case where reconciliation inserts content before a preserved client entry and browser scroll anchoring interferes with traversal restoration."
+            </p>
+            <ScrollAnchoringReproduction variant="list"/>
+            {list_end("scroll-anchoring-list-end", "End of the anchoring list", None, None, "/scroll-anchoring/detail", "Open the anchoring detail page \u{2192}")}
+        </Document>
+    }
+}
+
+fn scroll_anchoring_detail_page() -> Node {
+    rsx! {
+        <Document title="Scroll anchoring restoration" max_width="860px">
+            <a href="/" mix={link_style()}>"\u{2190} Back to demos"</a>
+            <h1 mix={page_heading_style()}>"Scroll anchoring restoration"</h1>
+            <p mix={[lead_style(), css("line-height: 1.6;")]}>"The detail-only client entry below precedes the preserved collection entry."</p>
+            <ScrollAnchoringDetail/>
+            <ScrollAnchoringReproduction variant="detail"/>
+        </Document>
+    }
+}
+
+// actions/root-reload-client-entries.tsx
+fn root_reload_page(include_removed: bool, server_version: String) -> Node {
+    let removable = if include_removed {
+        rsx! { <RemovableRootReloadEntry server_version={server_version.clone()}/> }
+    } else {
+        rsx! {
+            <section mix={css("border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 16px; background: rgba(255,255,255,0.03);")}>
+                <h2 mix={section_heading_style()}>"Removed entry slot"</h2>
+                <p id="removed-entry-replacement" mix={[muted_style(), css("margin-bottom: 0;")]}>"The removable client entry is absent from this server response."</p>
+            </section>
+        }
+    };
+    rsx! {
+        <Document title="Root reload client entries" max_width="860px">
+            {back_link()}
+            <h1 mix={page_heading_style()}>"Root reload client entries"</h1>
+            <p mix={lead_style()}>
+                "Use the buttons below to reload the root document frame with new server props, either keeping all client entries or removing one entry from the next HTML payload."
+            </p>
+            <RootReloadControls include_removed={include_removed} server_version={server_version.clone()}
+                with_removed_href="/root-reload-client-entries?removed=1" without_removed_href="/root-reload-client-entries?removed=0"/>
+            <div mix={css("display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 20px;")}>
+                <PersistentRootReloadEntry server_version={server_version}/>
+                {removable}
+            </div>
         </Document>
     }
 }
