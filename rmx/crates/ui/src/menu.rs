@@ -377,10 +377,10 @@ impl MenuState {
         }
     }
 
-    /// Whether the render the menu just scheduled happened with the menu still mounted.
+    /// Render, then whether that render's signal is still live (Remix's
+    /// `let signal = await handle.update(); if (signal.aborted) return`).
     async fn flushed(&self) -> bool {
-        self.handle.updated().await;
-        self.handle.is_connected()
+        !self.handle.updated().await.aborted()
     }
 
     fn close_children_sync(&self, animation: CloseAnimation) -> bool {

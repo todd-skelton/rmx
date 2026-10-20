@@ -77,6 +77,9 @@ pub(crate) struct HandleShared {
     pub(crate) scope: crate::dom::Scope,
     #[cfg(target_arch = "wasm32")]
     pub(crate) controller: RefCell<Option<web_sys::AbortController>>,
+    /// Aborted when the component renders again or is removed (the render signal).
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) render_controller: RefCell<Option<web_sys::AbortController>>,
     pub(crate) removed: Cell<bool>,
 }
 
@@ -86,6 +89,15 @@ impl HandleShared {
     pub(crate) fn dispose(&self) {
         self.removed.set(true);
         if let Some(c) = self.controller.borrow().as_ref() {
+            c.abort();
+        }
+        self.abort_render_signal();
+    }
+
+    /// A new render is starting: the previous render's signal is done.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn abort_render_signal(&self) {
+        if let Some(c) = self.render_controller.borrow_mut().take() {
             c.abort();
         }
     }
@@ -147,6 +159,8 @@ impl<C: Component> Handle<C> {
                 scope: crate::dom::Scope::default(),
                 #[cfg(target_arch = "wasm32")]
                 controller: RefCell::new(None),
+                #[cfg(target_arch = "wasm32")]
+                render_controller: RefCell::new(None),
                 removed: Cell::new(false),
             }),
         }
@@ -161,6 +175,7 @@ impl<C: Component> Handle<C> {
                 contexts: ContextList::default(),
                 scope: scope.clone(),
                 controller: RefCell::new(None),
+                render_controller: RefCell::new(None),
                 removed: Cell::new(false),
             }),
         }
@@ -213,6 +228,25 @@ impl<C: Component> Handle<C> {
             controller.abort();
         }
         controller.signal()
+    }
+
+    /// A signal for the current render, aborted when the component renders again or is
+    /// removed: the signal Remix passes to `queueTask` tasks and resolves `handle.update()`
+    /// with. Read it in a queued task or after [`Handle::updated`] to drop work that a newer
+    /// render made stale. On the server it never aborts.
+    pub fn render_signal(&self) -> crate::Signal {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let controller = web_sys::AbortController::new().expect("AbortController");
+            if self.shared.removed.get() {
+                controller.abort();
+                return crate::Signal::from_raw(controller.signal());
+            }
+            let mut slot = self.shared.render_controller.borrow_mut();
+            crate::Signal::from_raw(slot.get_or_insert(controller).signal())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::Signal::never()
     }
 
     /// An event handler that gets mutable access to the component state.
@@ -286,7 +320,9 @@ impl<C: Component> Handle<C> {
     }
 
     /// Run `f` after the next commit to the DOM (Remix's `handle.queueTask`). Calling it
-    /// from `setup` runs it after the first render or hydration. Dropped on the server.
+    /// from `setup` runs it after the first render or hydration. Remix passes the task a
+    /// signal; read [`Handle::render_signal`] inside `f` for the same check. Dropped on the
+    /// server.
     pub fn queue_task(&self, f: impl FnOnce(&mut C, &Handle<C>) + 'static) {
         #[cfg(target_arch = "wasm32")]
         {
@@ -316,12 +352,15 @@ impl<C: Component> Handle<C> {
         drop(fut);
     }
 
-    /// Schedule an update and resolve once it has been applied to the DOM (Remix's
-    /// `await handle.update()`). Resolves at once on the server.
-    pub async fn updated(&self) {
+    /// Schedule an update and resolve once it has been applied to the DOM, with that
+    /// render's [signal](Handle::render_signal) (Remix's `let signal = await handle.update()`).
+    /// The signal is already aborted if the component was removed. Resolves at once on the
+    /// server.
+    pub async fn updated(&self) -> crate::Signal {
         self.update();
         #[cfg(target_arch = "wasm32")]
         crate::dom::after_flush().await;
+        self.render_signal()
     }
 
     /// Call `f` with the component state each time `target` dispatches, until the

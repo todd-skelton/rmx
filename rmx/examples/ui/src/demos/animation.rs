@@ -329,25 +329,28 @@ pub struct Reordering {
     order: Vec<&'static str>,
 }
 
+impl Reordering {
+    /// Shuffle after a second unless a newer render or removal aborted `signal`, then chain
+    /// on the signal of the render the shuffle caused.
+    fn schedule_next_shuffle(h: Handle<Self>, signal: rmx::Signal) {
+        h.clone().spawn(async move {
+            rmx::browser::sleep(1000).await;
+            if signal.aborted() || h.with(|this, _| shuffle(&mut this.order)).is_none() {
+                return;
+            }
+            let next = h.updated().await;
+            if !next.aborted() {
+                Reordering::schedule_next_shuffle(h, next);
+            }
+        });
+    }
+}
+
 impl Component for Reordering {
     type Props = ();
     fn setup(_: &(), h: &Handle<Self>) -> Self {
-        h.queue_task(|_, h| {
-            let h2 = h.clone();
-            h.spawn(async move {
-                loop {
-                    rmx::browser::sleep(1000).await;
-                    // Stops once the component is gone (Remix aborts its timer with the signal).
-                    let shuffled = h2.with(|this, h| {
-                        shuffle(&mut this.order);
-                        h.update();
-                    });
-                    if shuffled.is_none() {
-                        break;
-                    }
-                }
-            });
-        });
+        // handle.queueTask(scheduleNextShuffle): the task runs with the render signal.
+        h.queue_task(|_, h| Reordering::schedule_next_shuffle(h.clone(), h.render_signal()));
         Reordering { order: vec!["#ff0088", "#dd00ee", "#9911ff", "#0d63f8"] }
     }
     fn render(&self, _: &(), _: &Handle<Self>) -> Node {

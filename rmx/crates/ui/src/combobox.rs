@@ -342,32 +342,32 @@ impl ComboboxState {
             self.handle.updated().await;
             return;
         }
-        self.handle.updated().await;
-        if self.close_superseded(id) {
+        let signal = self.handle.updated().await;
+        if signal.aborted() || self.close_superseded(id) {
             return;
         }
         #[cfg(target_arch = "wasm32")]
         {
             let surface = self.surface.borrow().clone().filter(|s| s.is_connected());
             if let Some(surface) = surface {
-                crate::event::wait_for_css_transition(surface, self.handle.signal()).await;
+                crate::event::wait_for_css_transition(surface, signal.raw().clone()).await;
             }
-            if self.close_superseded(id) {
+            if signal.aborted() || self.close_superseded(id) {
                 return;
             }
         }
         self.surface_visible.set(false);
         self.filter_text.borrow_mut().clear();
         self.clear_active();
-        self.handle.updated().await;
-        if self.close_superseded(id) {
+        let signal = self.handle.updated().await;
+        if signal.aborted() || self.close_superseded(id) {
             return;
         }
         let pending = self.pending_input_value.borrow().clone();
         if let Some(next) = pending {
             #[cfg(target_arch = "wasm32")]
             crate::event::sleep(INPUT_COMMIT_DELAY_MS).await;
-            if self.close_superseded(id) || self.pending_input_value.borrow().as_ref() != Some(&next) {
+            if signal.aborted() || self.close_superseded(id) || self.pending_input_value.borrow().as_ref() != Some(&next) {
                 return;
             }
             self.set_input_value(&next);
@@ -406,9 +406,7 @@ impl ComboboxState {
         self.surface_visible.set(true);
         *self.active_value.borrow_mut() = active.as_ref().map(|o| o.option.value.clone());
         *self.active_id.borrow_mut() = active.map(|o| o.id);
-        self.handle.updated().await;
-        #[cfg(target_arch = "wasm32")]
-        if self.handle.signal().aborted() {
+        if self.handle.updated().await.aborted() {
             return;
         }
         let listbox = self.listbox.borrow().clone();

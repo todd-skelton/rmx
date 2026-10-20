@@ -132,7 +132,11 @@ impl Component for ScheduleGrid {
     rmx::client_entry!("ScheduleGrid");
 
     fn setup(props: &ScheduleGridProps, h: &Handle<Self>) -> Self {
-        h.queue_task(|this, _| this.scroll_to_initial_time());
+        h.queue_task(|this, h| {
+            if !h.render_signal().aborted() {
+                this.scroll_to_initial_time();
+            }
+        });
         ScheduleGrid {
             schedule: props.schedule.clone(),
             draft_id: None,

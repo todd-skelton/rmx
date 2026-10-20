@@ -201,8 +201,7 @@ impl SelectState {
         }
         *self.displayed_label.borrow_mut() = self.selected_label.borrow().clone();
         self.phase.set(Phase::Closed);
-        self.handle.updated().await;
-        if !self.handle.is_connected() {
+        if self.handle.updated().await.aborted() {
             return;
         }
         self.dispatch(change);
@@ -280,7 +279,7 @@ impl SelectState {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn futures_join(a: impl std::future::Future<Output = ()>, b: impl std::future::Future<Output = ()> + 'static) {
+async fn futures_join<T>(a: impl std::future::Future<Output = T>, b: impl std::future::Future<Output = ()> + 'static) {
     // Both futures make progress through browser callbacks, so awaiting them in turn
     // finishes when the later one does.
     let b = wasm_bindgen_futures::future_to_promise(async move {

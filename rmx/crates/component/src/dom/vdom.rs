@@ -59,6 +59,7 @@ impl<C: Component> AnyInstance for Instance<C> {
     }
 
     fn render_node(&self) -> Node {
+        self.handle.shared.abort_render_signal();
         let state = self.state.borrow();
         let props = self.props.borrow();
         state.render(&props, &self.handle)

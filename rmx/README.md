@@ -60,7 +60,9 @@ export const Counter = clientEntry(import.meta.url, function Counter(handle: Han
 | --- | --- | --- |
 | `update()` | `handle.update()` | Batched on a microtask; parents render before children. |
 | `on(\|this, h\| ..)`, `on_event(..)` | `on('click', ..)` | Use with `mix={on("click", ..)}` or `on:click={..}`. |
-| `queue_task(..)` | `handle.queueTask` | Runs after the next DOM commit. |
+| `queue_task(..)` | `handle.queueTask` | Runs after the next DOM commit; check `h.render_signal()` for the task signal. |
+| `updated().await` | `await handle.update()` | Resolves after the DOM commit with that render's signal. |
+| `render_signal()` | the `queueTask` / `update()` signal | Aborted on the next render or on removal; never aborts on the server. |
 | `spawn(future)` | async work in setup | Pair with `signal()` to stop when the component is removed. |
 | `signal()` | `handle.signal` | An `AbortSignal` aborted on removal. |
 | `set_context` / `context` | `handle.context` | Typed by Rust type, not by key. |
