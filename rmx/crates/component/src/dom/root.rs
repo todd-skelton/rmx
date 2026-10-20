@@ -166,7 +166,7 @@ impl Root {
                     Some(start) => start.next_sibling(),
                     None => state.parent.first_child(),
                 };
-                hydrate_instance(&*inst, &state.parent, &mut cursor);
+                hydrate_instance(&*inst, &state.parent, &mut cursor, state.end.as_ref());
                 // Drop leftover content the render did not claim.
                 while let Some(node) = cursor.take() {
                     if state.end.as_ref().is_some_and(|end| end.is_same_node(Some(&node))) {

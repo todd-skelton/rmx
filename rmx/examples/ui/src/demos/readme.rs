@@ -413,21 +413,26 @@ impl Component for FormWithScroll {
 
 // handle.signal - Clock
 pub struct Clock {
-    _interval: Option<Interval>,
+    /// Set once mounted in the browser. Remix renders this demo only on the client; here the
+    /// gallery is server-rendered, and the server cannot know the browser's time zone, so
+    /// the time appears after hydration instead of mismatching it.
+    interval: Option<Interval>,
 }
 
 impl Component for Clock {
     type Props = ();
     fn setup(_: &(), h: &Handle<Self>) -> Self {
         h.queue_task(|this, h| {
-            let h = h.clone();
+            let tick = h.clone();
             // Dropping the interval (when the component goes away) clears it.
-            this._interval = Some(Interval::new(1000, move || h.update()));
+            this.interval = Some(Interval::new(1000, move || tick.update()));
+            h.update();
         });
-        Clock { _interval: None }
+        Clock { interval: None }
     }
     fn render(&self, _: &(), _: &Handle<Self>) -> Node {
-        rsx! { <span id="clock">{rmx::browser::local_time_string()}</span> }
+        let time = self.interval.is_some().then(rmx::browser::local_time_string);
+        rsx! { <span id="clock">{time}</span> }
     }
 }
 

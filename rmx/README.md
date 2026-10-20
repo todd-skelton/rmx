@@ -114,8 +114,13 @@ crates:
    is built at runtime (`Node::from_json`). Mixins run without the host's children and raw
    HTML props and cannot add them (Remix's console errors). Custom elements get props they
    define as properties. `create_range_root` panics when its markers do not share a parent.
+   Hydration follows Remix: comments are skipped, nodes it does not claim inside an element
+   are left in place (browser extensions inject them), a tag mismatch skips one node before
+   creating a new element, extra attributes are kept, parser-split text is merged, and
+   mismatches are logged as `Hydration mismatch:` console errors. A root or client entry
+   still drops unclaimed nodes between its own markers.
    The browser runtime is checked by ports of Remix's `vdom.*` test suites
-   (`crates/component/tests/browser_*.rs`, 184 tests).
+   (`crates/component/tests/browser_*.rs`, 257 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

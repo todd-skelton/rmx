@@ -12,7 +12,7 @@ use super::vdom::{hydrate_instance, unmount_root};
 use super::{frames, warn, AnyInstance, Scope};
 use crate::component::{Component, Instance};
 
-type HydrateFn = fn(&str, &web_sys::Node, &mut Option<web_sys::Node>, &Scope) -> Result<Rc<dyn AnyInstance>, String>;
+type HydrateFn = fn(&str, &web_sys::Node, &mut Option<web_sys::Node>, &web_sys::Node, &Scope) -> Result<Rc<dyn AnyInstance>, String>;
 type UpdateFn = fn(&dyn AnyInstance, &str) -> Result<(), String>;
 
 /// A client entry the browser runtime can hydrate, created with [`entry`].
@@ -38,6 +38,7 @@ fn hydrate_entry<C: Component>(
     props_json: &str,
     parent: &web_sys::Node,
     cursor: &mut Option<web_sys::Node>,
+    end: &web_sys::Node,
     scope: &Scope,
 ) -> Result<Rc<dyn AnyInstance>, String>
 where
@@ -45,7 +46,7 @@ where
 {
     let props: C::Props = serde_json::from_str(props_json).map_err(|e| e.to_string())?;
     let inst = super::new_instance::<C>(props, scope);
-    hydrate_instance(&*inst, parent, cursor);
+    hydrate_instance(&*inst, parent, cursor, Some(end));
     Ok(inst)
 }
 
@@ -126,7 +127,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
     let parent = start_node.parent_node()?;
     let mut cursor = start_node.next_sibling();
     let scope = Scope { parent: None, frame, depth: 0, errors: None, svg: false };
-    match hydrate(&props, &parent, &mut cursor, &scope) {
+    match hydrate(&props, &parent, &mut cursor, &end, &scope) {
         Ok(inst) => {
             // Drop server DOM the client render did not claim, up to the end marker.
             while let Some(node) = cursor.take() {

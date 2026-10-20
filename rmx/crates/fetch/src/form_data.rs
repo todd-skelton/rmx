@@ -21,6 +21,10 @@ pub struct File {
 impl File {
     /// A file modified now.
     pub fn new(name: impl Into<String>, content_type: impl Into<String>, bytes: impl Into<Bytes>) -> File {
+        // `SystemTime` panics in wasm32.
+        #[cfg(target_arch = "wasm32")]
+        let now = js_sys::Date::now() as u64;
+        #[cfg(not(target_arch = "wasm32"))]
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
         File { name: name.into(), content_type: content_type.into(), bytes: bytes.into(), last_modified: now }
     }

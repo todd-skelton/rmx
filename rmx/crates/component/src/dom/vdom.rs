@@ -1497,26 +1497,67 @@ fn longest_increasing(sources: &[i64]) -> Vec<bool> {
 // Hydration
 // ---------------------------------------------------------------------------------------
 
-/// Render an instance and adopt the server DOM starting at `cursor`.
-pub(crate) fn hydrate_instance(inst: &dyn AnyInstance, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>) {
+/// Render an instance and adopt the server DOM starting at `cursor`, up to `end` (a range
+/// root's end marker; `None` for the end of `parent`).
+pub(crate) fn hydrate_instance(inst: &dyn AnyInstance, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>, end: Option<&web_sys::Node>) {
     let scope = &inst.live().child_scope;
-    let root = rendered_list(inst).into_iter().map(|n| hydrate_node(n, parent, cursor, scope)).collect();
+    let root = rendered_list(inst).into_iter().map(|n| hydrate_node(n, parent, cursor, end, scope)).collect();
     *inst.live().root.borrow_mut() = root;
     inst.shared().committed.set(true);
 }
 
+/// The node an element or text can claim at `cursor`: comments are skipped (they are
+/// markers, not content), except a frame's start; nothing at or past `end`.
+fn claimable(cursor: Option<web_sys::Node>, end: Option<&web_sys::Node>) -> Option<web_sys::Node> {
+    let mut node = cursor;
+    while let Some(n) = node {
+        if end.is_some_and(|e| e.is_same_node(Some(&n))) {
+            return None;
+        }
+        match n.dyn_ref::<web_sys::Comment>() {
+            Some(c) if !c.data().starts_with("rmx:f:") => node = n.next_sibling(),
+            _ => return Some(n),
+        }
+    }
+    None
+}
+
+/// Server DOM whose tag is `tag`, as hydration compares it (SVG tags are case-sensitive).
+fn same_tag(node: &web_sys::Node, tag: &str) -> Option<web_sys::Element> {
+    let el = node.dyn_ref::<web_sys::Element>()?;
+    let matches = if el.namespace_uri().as_deref() == Some("http://www.w3.org/2000/svg") {
+        el.tag_name() == tag
+    } else {
+        el.tag_name().eq_ignore_ascii_case(tag)
+    };
+    matches.then(|| el.clone())
+}
+
+fn log_mismatch(kind: &str, server: &str, client: &str) {
+    web_sys::console::error_4(&"Hydration mismatch:".into(), &kind.into(), &server.into(), &client.into());
+}
+
 /// Adopt the server DOM at `cursor` for `node`, or create and insert DOM on a mismatch.
-fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>, scope: &Scope) -> Mounted {
+/// Like Remix, nodes hydration does not claim are left in place (browser extensions inject
+/// content), and a tag mismatch skips one node before giving up.
+fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>, end: Option<&web_sys::Node>, scope: &Scope) -> Mounted {
     match node {
-        Node::Element(el) => {
-            // A `<head>` renders into `document.head`; there is nothing in place to adopt.
-            let adopt = cursor
-                .as_ref()
-                .and_then(|c| c.dyn_ref::<web_sys::Element>())
-                .filter(|e| el.tag != "head" && e.tag_name().eq_ignore_ascii_case(el.tag))
-                .cloned();
+        // A `<head>` renders into `document.head`; there is nothing in place to adopt.
+        Node::Element(el) if el.tag != "head" => {
+            let at = claimable(cursor.clone(), end);
+            let mut adopt = at.as_ref().and_then(|n| same_tag(n, el.tag));
+            if adopt.is_none() {
+                if let Some(at) = at.as_ref().filter(|n| n.node_type() == web_sys::Node::ELEMENT_NODE) {
+                    // An injected element in front of ours: try the next one, leaving it in place.
+                    adopt = claimable(at.next_sibling(), end).and_then(|n| same_tag(&n, el.tag));
+                    if adopt.is_none() {
+                        log_mismatch("tag", &at.unchecked_ref::<web_sys::Element>().tag_name().to_ascii_lowercase(), el.tag);
+                    }
+                }
+            }
             let Some(dom) = adopt else {
-                return create_at(Node::Element(el), parent, cursor, scope);
+                *cursor = at;
+                return create_at(Node::Element(el), parent, &cursor.clone().or_else(|| end.cloned()), scope);
             };
             *cursor = dom.next_sibling();
             let mut el = el;
@@ -1541,54 +1582,71 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             let child_scope = element_scope(scope, tag);
             let kids = flatten_children(children)
                 .into_iter()
-                .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, &child_scope))
+                .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, None, &child_scope))
                 .collect();
-            while let Some(extra) = child_cursor.take() {
-                child_cursor = extra.next_sibling();
-                let _ = dom_node.remove_child(&extra);
-            }
             if tag == "select" {
                 sync_select_value(&dom);
             }
             Mounted::Element(Box::new(MElement { tag, key, attrs, listeners, el: dom, children: kids, host }))
         }
         Node::Text(text) if !text.is_empty() => {
-            let adopt = cursor.as_ref().and_then(|c| c.dyn_ref::<web_sys::Text>()).cloned();
-            let Some(dom) = adopt else {
-                return create_at(Node::Text(text), parent, cursor, scope);
+            let at = claimable(cursor.clone(), end);
+            let Some(dom) = at.as_ref().and_then(|n| n.dyn_ref::<web_sys::Text>()).cloned() else {
+                *cursor = at;
+                return create_at(Node::Text(text), parent, &cursor.clone().or_else(|| end.cloned()), scope);
             };
             let data = dom.data();
-            if data == *text {
-                *cursor = dom.next_sibling();
-            } else if data.starts_with(&*text) {
-                // Adjacent text children arrive merged into one DOM text node; split them.
-                let len = text.encode_utf16().count() as u32;
-                *cursor = Some(dom.split_text(len).expect("splitText").into());
-            } else {
-                dom.set_data(&text);
-                *cursor = dom.next_sibling();
+            *cursor = dom.next_sibling();
+            if data != *text {
+                if data.starts_with(&*text) {
+                    // Adjacent text children arrive merged into one DOM text node; split them.
+                    let len = text.encode_utf16().count() as u32;
+                    *cursor = Some(dom.split_text(len).expect("splitText").into());
+                } else if let Some(rest) = text.strip_prefix(data.as_str()) {
+                    // The parser split a long text into several DOM text nodes; merge them.
+                    let mut rest = rest.to_string();
+                    let mut sibling = dom.next_sibling();
+                    while let Some(t) = sibling.as_ref().and_then(|s| s.dyn_ref::<web_sys::Text>()).cloned() {
+                        let chunk = t.data();
+                        if rest.is_empty() || !rest.starts_with(chunk.as_str()) {
+                            break;
+                        }
+                        rest.drain(..chunk.len());
+                        sibling = t.next_sibling();
+                        t.remove();
+                    }
+                    if !rest.is_empty() {
+                        // A chunk can also hold the start of the next text child.
+                        if let Some(t) = sibling.as_ref().and_then(|s| s.dyn_ref::<web_sys::Text>()).filter(|t| t.data().starts_with(rest.as_str())) {
+                            let _ = t.delete_data(0, rest.encode_utf16().count() as u32);
+                        }
+                    }
+                    dom.set_data(&text);
+                    *cursor = sibling;
+                } else {
+                    log_mismatch("text mismatch", &data, &text);
+                    dom.set_data(&text);
+                }
             }
             Mounted::Text(MText { text, node: dom })
         }
         Node::Component(c) => {
             let inst = c.inner.instantiate(scope);
-            hydrate_instance(&*inst, parent, cursor);
+            hydrate_instance(&*inst, parent, cursor, end);
             Mounted::Component(MComponent { key: c.key, inst })
         }
         Node::Frame(f) => {
-            let start = cursor
-                .as_ref()
-                .and_then(|c| c.dyn_ref::<web_sys::Comment>())
-                .filter(|c| c.data().starts_with("rmx:f:"))
-                .cloned();
+            let start = claimable(cursor.clone(), end)
+                .and_then(|n| n.dyn_into::<web_sys::Comment>().ok())
+                .filter(|c| c.data().starts_with("rmx:f:"));
             let state = start.and_then(|s| frames::adopt_server_frame(&s, scope.frame.clone()));
             let Some(state) = state else {
-                return create_at(Node::Frame(f), parent, cursor, scope);
+                return create_at(Node::Frame(f), parent, &cursor.clone().or_else(|| end.cloned()), scope);
             };
             *cursor = state.end().next_sibling();
             Mounted::Frame(Box::new(MFrame { src: f.src.clone(), name: f.name.clone(), state }))
         }
-        other => create_at(other, parent, cursor, scope),
+        other => create_at(other, parent, &cursor.clone().or_else(|| end.cloned()), scope),
     }
 }
 

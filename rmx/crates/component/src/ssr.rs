@@ -181,6 +181,10 @@ pub fn next_id(prefix: char) -> String {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     static SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
     let seed = *SEED.get_or_init(|| {
+        // `SystemTime` panics in wasm32 (server rendering in a browser or a wasm runtime).
+        #[cfg(target_arch = "wasm32")]
+        let t = (js_sys::Date::now() * 1_000_000.0) as u64;
+        #[cfg(not(target_arch = "wasm32"))]
         let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
         (t ^ (t >> 29)) % 1_000_000
     });

@@ -1236,6 +1236,7 @@ dependencies = [
  "bytes",
  "http",
  "http-body",
+ "js-sys",
  "rmx-multipart-parser",
  "rmx-url",
  "serde",
