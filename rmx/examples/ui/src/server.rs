@@ -69,6 +69,7 @@ fn demo_node(slug: &str) -> Node {
         "ui/accordion" => rsx! { <accordion::AccordionDemo/> },
         "ui/anchor" => rsx! { <anchor::AnchorDemo/> },
         "ui/popover" => rsx! { <popover::PopoverDemo/> },
+        "ui/combobox" => rsx! { <combobox::ComboboxDemo/> },
         "ui/listbox" => rsx! { <listbox::ListboxDemo/> },
         "ui/select" => rsx! { <select::SelectDemo/> },
         "ui/tabs" => rsx! { <tabs::TabsDemo/> },

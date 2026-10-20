@@ -36,7 +36,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 // Index
 await page.goto(BASE + '/')
 const links = await page.$$eval('a[href^="/demo/"]', (as) => as.map((a) => a.getAttribute('href')))
-check('the index lists the demos', links.length === 14, links)
+check('the index lists the demos', links.length === 15, links)
 
 // Basic counter
 await open('component/runtime/basic')
@@ -497,6 +497,96 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   check('select: typeahead on the closed trigger selects immediately', !s5.open && s5.label === 'React' && s5.input === 'react' && s5.value === 'value=react', s5)
   const events = await page.evaluate(() => window.__sel)
   check('select: rmx:select-change bubbles from the trigger', eq(events, [['react-router', 'React Router', true, 'BUTTON'], ['react', 'React', true, 'BUTTON']]), events)
+}
+
+// Combobox (packages/ui/src/demos/combobox.demo.tsx, combobox.test.tsx)
+{
+  await open('ui/combobox')
+  await page.evaluate(() => {
+    window.__cb = []
+    document.addEventListener('rmx:combobox-change', (e) => window.__cb.push([e.value, e.label, !!e.optionId, e.target.tagName]))
+  })
+  const input = '[role="combobox"]'
+  const cb = () => page.evaluate(() => {
+    const i = document.querySelector('[role="combobox"]')
+    const s = document.querySelector('[popover]')
+    const active = i.getAttribute('aria-activedescendant')
+    return {
+      text: i.value, expanded: i.getAttribute('aria-expanded'), open: s.matches(':popover-open'), reason: s.dataset.showReason,
+      focus: document.activeElement === i, active: active ? document.getElementById(active)?.textContent : null,
+      visible: [...document.querySelectorAll('[role="option"]')].filter((o) => !o.hidden).map((o) => o.textContent).join(),
+      selectedText: i.value.slice(i.selectionStart, i.selectionEnd),
+      input: document.querySelector('input[type="hidden"]').value, value: [...document.querySelectorAll('p')].pop().textContent,
+      minWidth: s.style.minWidth, inputWidth: i.offsetWidth,
+    }
+  })
+  await settle()
+  const c0 = await cb()
+  check('combobox: starts closed and empty', c0.text === '' && c0.expanded === 'false' && !c0.open && c0.input === '' && c0.value === 'value=none', c0)
+  await page.focus(input)
+  await page.keyboard.type('re')
+  await settle()
+  const c1 = await cb()
+  check('combobox: typing opens a filtered hint list and keeps focus on the input', c1.text === 're' && c1.open && c1.reason === 'hint' && c1.focus && c1.active === null && c1.visible === 'Remix,React Router,React' && c1.minWidth === c1.inputWidth + 'px', c1)
+  await page.keyboard.press('Enter')
+  await settle()
+  const c2 = await cb()
+  check('combobox: Enter does nothing while typing has opened the list with no active option', c2.open && c2.value === 'value=none' && c2.text === 're', c2)
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  const c3 = await cb()
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  const c4 = await cb()
+  check('combobox: ArrowDown navigates the active descendant in nav mode while the input stays focused', c3.active === 'Remix' && c4.active === 'React Router' && c4.reason === 'nav' && c4.focus, { c3, c4 })
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(30)
+  const flashing = await page.evaluate(() => document.querySelector('[data-combobox-flash]')?.textContent)
+  await page.waitForTimeout(400)
+  const c5 = await cb()
+  check('combobox: Enter flashes the option, closes, commits the label and selects the input text', flashing === 'React Router' && !c5.open && c5.text === 'React Router' && c5.selectedText === 'React Router' && c5.input === 'react-router' && c5.value === 'value=react-router' && c5.focus, { flashing, c5 })
+  await page.keyboard.type('x')
+  await settle()
+  const c6 = await cb()
+  check('combobox: typing clears the committed selection; no matches keeps the list closed', c6.text === 'x' && !c6.open && c6.input === '' && c6.value === 'value=none', c6)
+  await page.keyboard.press('Escape')
+  await settle()
+  const c7 = await cb()
+  check('combobox: Escape with a non-matching value clears the input', c7.text === '' && !c7.open, c7)
+  await page.keyboard.type('react')
+  await settle()
+  const c8 = await cb()
+  await page.evaluate(() => document.activeElement.blur())
+  await page.waitForTimeout(300)
+  const c9 = await cb()
+  check('combobox: blur commits an exact match without rewriting the input text', c8.visible === 'React Router,React' && !c9.open && c9.text === 'react' && c9.input === 'react' && c9.value === 'value=react', { c8, c9 })
+  await page.click(input)
+  await settle()
+  const c10 = await cb()
+  check('combobox: clicking the input opens the full list with the selected option active', c10.open && c10.reason === 'nav' && c10.active === 'React' && c10.visible === 'Remix,React Router,React,Archived' && c10.focus, c10)
+  await page.click('[role="option"] >> text=Remix')
+  await page.waitForTimeout(400)
+  const c11 = await cb()
+  check('combobox: pointer selection keeps focus on the input', !c11.open && c11.focus && c11.text === 'Remix' && c11.input === 'remix', c11)
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  const c12 = await cb()
+  check('combobox: ArrowDown on an exact-match closed input opens the unfiltered list', c12.open && c12.active === 'Remix' && c12.visible === 'Remix,React Router,React,Archived' && c12.focus, c12)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  await page.fill(input, '')
+  await page.keyboard.type('rmx')
+  await settle()
+  const c13 = await cb()
+  await page.fill(input, '')
+  await page.keyboard.type('rou')
+  await settle()
+  const c14 = await cb()
+  check('combobox: searchValue strings filter options; disabled options are skipped', c13.visible === 'Remix' && c14.visible === 'React Router', { c13, c14 })
+  const events = await page.evaluate(() => window.__cb)
+  check('combobox: rmx:combobox-change bubbles from the input', eq(events, [
+    ['react-router', 'React Router', true, 'INPUT'], [null, null, false, 'INPUT'], ['react', 'React', true, 'INPUT'], ['remix', 'Remix', true, 'INPUT'], [null, null, false, 'INPUT'],
+  ]), events)
 }
 
 check('no page errors or failed requests', errors.length === 0, errors)

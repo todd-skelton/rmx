@@ -2,6 +2,7 @@ pub mod accordion;
 pub mod anchor;
 pub mod animation;
 pub mod basic;
+pub mod combobox;
 pub mod controlled;
 pub mod draggable;
 pub mod keyed_list;

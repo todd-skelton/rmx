@@ -85,6 +85,14 @@ pub const DEMOS: &[Demo] = &[
         center: true,
     },
     Demo {
+        slug: "ui/combobox",
+        title: "Combobox Primitives",
+        description: "Headless combobox behavior with minimal local styles.",
+        section: "UI",
+        module: "Combobox",
+        center: true,
+    },
+    Demo {
         slug: "ui/listbox",
         title: "Listbox",
         description: "Controlled selection and highlight state with the listbox primitives.",
@@ -153,6 +161,7 @@ pub fn start() {
             rmx::entry::<animation::AnimationGallery>(),
             rmx::entry::<accordion::AccordionDemo>(),
             rmx::entry::<anchor::AnchorDemo>(),
+            rmx::entry::<combobox::ComboboxDemo>(),
             rmx::entry::<popover::PopoverDemo>(),
             rmx::entry::<listbox::ListboxDemo>(),
             rmx::entry::<select::SelectDemo>(),

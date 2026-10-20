@@ -49,7 +49,7 @@ impl ListboxOption {
         self
     }
 
-    fn search_values(&self) -> Vec<String> {
+    pub(crate) fn search_values(&self) -> Vec<String> {
         if self.text_value.is_empty() {
             vec![self.label.clone()]
         } else {
