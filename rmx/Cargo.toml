@@ -15,6 +15,7 @@ members = [
     "crates/crypto",
     "crates/session",
     "crates/file-storage",
+    "crates/tar-parser",
     "crates/headers",
     "crates/component",
     "crates/macros",
@@ -54,6 +55,7 @@ rmx-assets = { path = "crates/assets" }
 rmx-crypto = { path = "crates/crypto" }
 rmx-session = { path = "crates/session" }
 rmx-file-storage = { path = "crates/file-storage" }
+rmx-tar-parser = { path = "crates/tar-parser" }
 rmx-headers = { path = "crates/headers" }
 rmx-cookie = { path = "crates/cookie" }
 bytes = "1"

@@ -1,0 +1,12 @@
+[package]
+name = "rmx-tar-parser"
+description = "A streaming tar parser (remix/tar-parser): ustar, GNU and PAX headers, with size limits and path checks"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+flate2 = "1"
+rmx-crypto.workspace = true

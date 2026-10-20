@@ -1206,6 +1206,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-tar-parser"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "rmx-crypto",
+]
+
+[[package]]
 name = "rmx-url"
 version = "0.1.0"
 
