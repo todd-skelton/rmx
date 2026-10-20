@@ -17,6 +17,7 @@ members = [
     "examples/bench/client",
     "examples/frames",
     "examples/frame-navigation",
+    "examples/lazy-frames",
 ]
 
 [workspace.package]

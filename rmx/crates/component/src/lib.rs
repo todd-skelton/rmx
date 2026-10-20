@@ -9,11 +9,16 @@
 //! streams server content into the page, and the browser runtime ([`run`]) turns links and
 //! forms into soft navigations that reconcile server HTML into the live document.
 
+// Lets `rsx!` (which names `::rmx`) work in this crate's own tests.
+#[cfg(test)]
+extern crate self as rmx;
+
 mod component;
 mod frame;
 mod mixin;
 mod navigation;
 mod node;
+mod node_json;
 
 pub mod browser;
 pub mod ssr;

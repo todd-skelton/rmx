@@ -382,6 +382,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy-frames-demo"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "js-sys",
+ "rmx",
+ "rmx-cookie",
+ "rmx-fetch",
+ "rmx-middleware",
+ "rmx-render",
+ "rmx-router",
+ "rmx-serve",
+ "serde",
+ "tokio",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"

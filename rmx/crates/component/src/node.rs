@@ -256,6 +256,13 @@ impl<T: IntoNode> IntoNode for Vec<T> {
 #[derive(Clone)]
 pub struct Children(Rc<Node>);
 
+impl Children {
+    /// The children as a node.
+    pub fn node(&self) -> &Node {
+        &self.0
+    }
+}
+
 impl Default for Children {
     fn default() -> Self {
         Children(Rc::new(Node::Empty))

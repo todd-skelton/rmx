@@ -355,6 +355,8 @@ pub(crate) trait ErasedComponent {
     fn clone_box(&self) -> Box<dyn ErasedComponent>;
     fn component_type(&self) -> TypeId;
     fn ssr(&self, out: &mut Ssr);
+    /// Run setup and render once, detached, for serializing the output.
+    fn render_static(&self) -> Node;
 
     #[cfg(target_arch = "wasm32")]
     fn instantiate(self: Box<Self>, scope: &crate::dom::Scope) -> Rc<dyn crate::dom::AnyInstance>;
@@ -379,6 +381,11 @@ impl<C: Component> ErasedComponent for PropsOf<C> {
 
     fn component_type(&self) -> TypeId {
         TypeId::of::<C>()
+    }
+
+    fn render_static(&self) -> Node {
+        let handle = Handle::<C>::detached();
+        C::setup(&self.0, &handle).render(&self.0, &handle)
     }
 
     fn ssr(&self, out: &mut Ssr) {
