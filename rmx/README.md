@@ -59,37 +59,54 @@ export const Counter = clientEntry(import.meta.url, function Counter(handle: Han
 | Method | Remix 3 equivalent | Notes |
 | --- | --- | --- |
 | `update()` | `handle.update()` | Batched on a microtask; parents render before children. |
-| `on(\|this, h\| ..)` | `on('click', ..)` | Returns an `EventHandler` for `on:event={..}`. |
-| `on_event(\|this, h, e\| ..)` | handler with event arg | `e.raw()` is the underlying `web_sys::Event`. |
-| `queue_task(\|this, h\| ..)` | `handle.queueTask` | Runs after the next DOM commit. |
-| `id()` | `handle.id` | Stable per instance. |
-| `is_connected()` | `handle.signal` (partly) | No `AbortSignal`; Remix's `update()` also returns one. |
+| `on(\|this, h\| ..)`, `on_event(..)` | `on('click', ..)` | Use with `mix={on("click", ..)}` or `on:click={..}`. |
+| `queue_task(..)` | `handle.queueTask` | Runs after the next DOM commit. |
+| `spawn(future)` | async work in setup | Pair with `signal()` to stop when the component is removed. |
+| `signal()` | `handle.signal` | An `AbortSignal` aborted on removal. |
+| `set_context` / `context` | `handle.context` | Typed by Rust type, not by key. |
+| `listen(target, ..)` | `TypedEventTarget` listeners | Removed with the component. |
+| `frame()`, `frames()`, `on_frame(..)` | `handle.frame`, `handle.frames` | `reload`, `reload_with`, `replace`, `reloadStart`/`reloadComplete`. |
+| `id()`, `dom_id()` | `handle.id` | Stable per instance. |
 
 ## `rsx!`
 
 A proc macro built on `rstml`. Templates live inside `.rs` files; there is no separate
-`.rsx` file format yet.
+`.rsx` file format.
 
 1. Lowercase tags are elements, capitalized tags are components (`<RowView id={1}/>` builds `RowViewProps`).
 2. Text must be quoted (`"Count: "`); expressions go in braces.
-3. `on:click={handler}` attaches a delegated event handler.
+3. `mix={..}` takes one mixin or a list: `on(..)`, `css(..)`, `attrs(..)`, `node_ref(..)`, or a `HostMixin`.
 4. `key={..}` enables keyed list reconciliation.
 5. Child nodes of a component arrive as `props.children`.
 
-## Architecture
+## What Is Implemented
 
-1. `crates/rmx-macros`: the `rsx!` macro.
-2. `crates/rmx/src/node.rs`: the `Node` tree (element, text, fragment, component, raw).
-3. `crates/rmx/src/component.rs`: the `Component` trait and `Handle`.
-4. `crates/rmx/src/ssr.rs`: `render_to_string`. Islands are wrapped in `<!--rmx:h:N-->`
-   comments and their props are serialized to a `<script type="application/json" id="rmx-data">` block.
-5. `crates/rmx/src/dom/mod.rs` (wasm32 only): the browser runtime. It hydrates islands by
-   adopting the server DOM, reconciles keyed children with a longest-increasing-subsequence
-   move pass, and uses one delegated document listener per event type.
-6. `examples/bench`: `app` (shared components), `server` (axum), `client` (wasm entry that
-   registers islands with `rmx::hydrate`), and `public` (static files plus generated `pkg/`).
+Each Remix 3 package is a crate under `crates/` (about 19,600 lines of Rust, measured
+2026-10-20). The core:
 
-Size: about 1,700 lines of Rust in the two crates (measured with a line count on 2026-10-19).
+1. `rmx` (`crates/component`): components, `rsx!`, streaming SSR with hydration markers,
+   client entries hydrated by adopting server DOM, keyed reconciliation, `css` mixins,
+   host mixins with insert/remove/reclaim lifecycles, `<Frame>` (blocking, non-blocking,
+   named, client-mounted, custom resolvers), soft navigation through the Navigation API
+   (`data-rmx-target`, `data-rmx-src`, `data-rmx-history`, `data-rmx-reset-scroll`,
+   `data-rmx-document`), form submissions, redirects, scroll restoration on traversal, and
+   app-level error events (`App::on_error`).
+2. Server: `rmx-router` (routes, middleware, nested mounts), `rmx-route-pattern`,
+   `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper), `rmx-render`,
+   `rmx-middleware` (compression, static files, form data, sessions, auth, CSRF, CORS,
+   COP, method override, logger).
+3. Supporting crates: `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
+   `rmx-file-storage`, `rmx-tar-parser`, `rmx-html-template`, `rmx-headers`,
+   `rmx-mime`, `rmx-spa`, `rmx-url`.
+4. `rmx-ui`: the animation module (spring, tween, entrance, exit, FLIP layout). Its spring
+   CSS output matches Remix's `spring.ts` byte for byte (unit tested).
+
+## Examples
+
+Every Remix 3 demo has a port under `examples/`, each with a Playwright e2e script
+(`examples/<name>/e2e.mjs`): assets, bookstore, frame-navigation, frames, i18n,
+lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `examples/bench` is the
+benchmark app used in `../bench/README.md`.
 
 ## Build and Run
 
@@ -97,21 +114,29 @@ Prereqs: Rust stable with the `wasm32-unknown-unknown` target, plus `wasm-bindge
 and `wasm-opt` (the build script finds the copies cargo-leptos downloaded).
 
 ```powershell
-pwsh ./build.ps1            # wasm client + release server
-./target/release/bench-server.exe
-# http://127.0.0.1:44101/  /ssr/100  /client
-cargo test -p rmx
+./build-client.ps1 -Crate frames-demo -Out examples/frames/public/pkg   # wasm client
+cargo run -p frames-demo                                               # http://127.0.0.1:44110/
+node examples/frames/e2e.mjs                                            # browser checks
+cargo test --workspace
 ```
 
-Server env vars: `HOST` (default `127.0.0.1`), `PORT` (default `44101`), `RMX_THREADS`,
-`RMX_PUBLIC`. A Linux image is in `../bench/docker/rmx.Dockerfile`.
+Server env vars: `HOST` (default `127.0.0.1`), `PORT` (each demo has its own default).
+The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark server is in
+`../bench/docker/rmx.Dockerfile`.
 
-## Limitations
+## Differences From Remix 3
 
-1. No frames or soft navigation (Remix 3's `<Frame>` and client router).
-2. No streaming SSR; pages render to one `String`.
-3. No async tasks, `handle.signal`, `handle.context`, or `handle.frame`.
-4. No CSS or `mix` helpers beyond event handlers.
-5. Islands are registered by name by hand in the client crate.
-6. Creating large lists is slower than Remix's JS runtime (see `../bench/README.md`),
+1. No import maps or module preloading: each demo ships one wasm bundle that registers its
+   client entries by name (`rmx::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 250 KiB to
+   530 KiB uncompressed (measured, `wasm-release` plus `wasm-opt`).
+2. Rust does not throw, so component-level error events are not automatic. Code reports
+   failures with `rmx::report_error`; panics and failed frame loads and navigations are
+   reported to `App::on_error` listeners.
+3. `rmx-ui` has the animation module only; Remix's accordion, anchor, combobox, listbox,
+   menu, popover, select, tabs and toggle components are not ported.
+4. No HMR, CLI, or `node-fetch-server` test harness; e2e checks use Playwright scripts.
+5. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
+6. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`
+   (social-auth), `nodejs-semver` (unpkg), and the usual hyper/tokio/wasm-bindgen stack.
+7. Creating large lists is slower than Remix's JS runtime (see `../bench/README.md`),
    because each DOM node costs several wasm-to-JS calls.
