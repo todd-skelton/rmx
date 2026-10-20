@@ -312,7 +312,9 @@ Covered since phase 0b:
    limits) and form data with Remix's defaults and upload handlers, and `rmx-auth` (OAuth 2
    and OpenID Connect with PKCE: GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and
    generic OIDC). The social-auth demo now logs in through Google, GitHub and X when their
-   client credentials are set.
+   client credentials are set. `rmx-serve` has `node-fetch-server`'s listener options (host,
+   protocol, trusted proxy headers, error handler, client address) and answers handler
+   panics with 500; the logger has Remix's format tokens and colors.
 5. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
@@ -323,5 +325,5 @@ Remaining gaps:
 
 1. Import maps and per-entry module loading: rmx ships one wasm bundle per app.
 2. Component-level error events: Rust does not throw, so errors are reported explicitly.
-3. Tooling: HMR, CLI, and the `remix/test` harness.
+3. Tooling: HMR, CLI, the `remix/test` harness and `remix/component/test`'s `render` helper.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
