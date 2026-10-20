@@ -61,6 +61,14 @@ pub const DEMOS: &[Demo] = &[
         center: false,
     },
     Demo {
+        slug: "ui/animation",
+        title: "Animation Gallery",
+        description: "Entrance, exit, layout and spring animations from the @remix-run/ui animation demos.",
+        section: "UI",
+        module: "Animation",
+        center: false,
+    },
+    Demo {
         slug: "cases/draggable",
         title: "Draggable Mixin",
         description: "A pointer-driven box using the draggable mixin from the standalone demos.",
@@ -86,6 +94,7 @@ pub fn start() {
             rmx::entry::<lifecycle::MixinLifecycle>(),
             rmx::entry::<readme::ReadmeExamples>(),
             rmx::entry::<draggable::DraggableDemo>(),
+            rmx::entry::<animation::AnimationGallery>(),
         ],
         ..Default::default()
     });

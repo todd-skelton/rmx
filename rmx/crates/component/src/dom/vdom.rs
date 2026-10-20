@@ -540,20 +540,96 @@ fn insert(parent: &web_sys::Node, m: &Mounted, before: Option<&web_sys::Node>) {
     });
 }
 
-fn remove(parent: &web_sys::Node, m: &Mounted) {
-    if let Mounted::Element(e) = m {
-        if let Some(host) = &e.host {
-            if host.persist_removal() {
-                // The host stays in the document until its teardown finishes.
-                e.children.iter().for_each(unmount);
+fn remove(parent: &web_sys::Node, m: Mounted) {
+    let m = match m {
+        Mounted::Element(e) if persists_element(&e) => {
+            let host = e.host.clone().expect("persists_element checked the host");
+            let token = NEXT_PERSIST_TOKEN.with(|t| {
+                let n = t.get().wrapping_add(1);
+                t.set(n);
+                n
+            });
+            if host.persist_removal(move || finish_persisted(token)) {
+                // The element stays in the document, still mounted, until its teardown
+                // finishes or the same keyed element is rendered again and reclaims it.
+                PERSISTED.with(|p| p.borrow_mut().push(Persisted { parent: parent.clone(), token, element: e }));
                 return;
             }
+            Mounted::Element(e)
         }
-    }
-    unmount(m);
+        other => other,
+    };
+    unmount(&m);
     m.for_each_dom(&mut |n| {
         let _ = parent.remove_child(n);
     });
+}
+
+/// An element whose removal a mixin deferred with `persist_node` (Remix's persisted
+/// mixin nodes). It is tracked by DOM parent so a keyed element rendered again under the
+/// same parent before the teardown finishes reuses the node instead of creating a new one.
+struct Persisted {
+    parent: web_sys::Node,
+    token: u32,
+    element: Box<MElement>,
+}
+
+thread_local! {
+    static PERSISTED: RefCell<Vec<Persisted>> = const { RefCell::new(Vec::new()) };
+    static NEXT_PERSIST_TOKEN: Cell<u32> = const { Cell::new(0) };
+}
+
+/// The teardown settled: remove the element unless it was reclaimed meanwhile.
+fn finish_persisted(token: u32) {
+    let entry = PERSISTED.with(|p| {
+        let mut p = p.borrow_mut();
+        p.iter().position(|e| e.token == token).map(|i| p.swap_remove(i))
+    });
+    if let Some(entry) = entry {
+        let el = entry.element.el.clone();
+        unmount(&Mounted::Element(entry.element));
+        if let Some(parent) = el.parent_node() {
+            let _ = parent.remove_child(&el);
+        }
+    }
+}
+
+/// Whether `parent` still holds elements waiting for their exit teardown.
+fn has_persisted(parent: &web_sys::Node) -> bool {
+    PERSISTED.with(|p| p.borrow().iter().any(|e| e.parent.is_same_node(Some(parent))))
+}
+
+fn take_persisted(parent: &web_sys::Node, tag: &str, key: &Key) -> Option<Box<MElement>> {
+    PERSISTED.with(|p| {
+        let mut p = p.borrow_mut();
+        let i = p.iter().position(|e| {
+            e.element.tag == tag && e.element.key.as_ref() == Some(key) && e.parent.is_same_node(Some(parent))
+        })?;
+        Some(p.remove(i).element)
+    })
+}
+
+/// Create a node that will be inserted into `parent`. A keyed element matching a persisted
+/// one under the same parent reclaims it: the pending teardown is aborted, the node is
+/// patched in place and its mixins get `reclaimed` instead of `insert`.
+fn create_in(parent: &web_sys::Node, node: Node, scope: &Scope) -> Mounted {
+    let reclaimed = match &node {
+        Node::Element(el) => el.key.as_ref().and_then(|key| take_persisted(parent, el.tag, key)),
+        _ => None,
+    };
+    match (reclaimed, node) {
+        (Some(mut m), Node::Element(el)) => {
+            if let Some(host) = &m.host {
+                host.cancel_removal();
+            }
+            patch_element(&mut m, *el, scope);
+            if let Some(host) = &m.host {
+                host.queue_reclaimed();
+            }
+            Mounted::Element(m)
+        }
+        (_, node) => create(node, scope),
+    }
 }
 
 /// Template strings (tags, attribute names, static text) are interned so repeated rows reuse
@@ -572,7 +648,11 @@ pub(super) fn has_inner_html(attrs: &[(&'static str, AttrValue)]) -> bool {
 
 /// Whether removing this node may be deferred by a `beforeRemove` listener.
 fn persists(m: &Mounted) -> bool {
-    matches!(m, Mounted::Element(e) if e.host.as_ref().is_some_and(|h| h.listens_before_remove()))
+    matches!(m, Mounted::Element(e) if persists_element(e))
+}
+
+fn persists_element(e: &MElement) -> bool {
+    e.host.as_ref().is_some_and(|h| h.listens_before_remove())
 }
 
 pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrValue) {
@@ -810,10 +890,10 @@ fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
             }
         }
         (_, new) => {
-            let replacement = create(new, scope);
+            let replacement = create_in(parent, new, scope);
             insert(parent, &replacement, Some(&old.first_dom()));
-            remove(parent, old);
-            *old = replacement;
+            let previous = std::mem::replace(old, replacement);
+            remove(parent, previous);
         }
     }
 }
@@ -902,17 +982,17 @@ fn patch_children(
     scope: &Scope,
 ) {
     if new.is_empty() {
-        if whole && !old.iter().any(persists) {
+        if whole && !old.iter().any(persists) && !has_persisted(parent) {
             old.drain(..).for_each(|m| unmount(&m));
             parent.set_text_content(None);
         } else {
-            old.drain(..).for_each(|m| remove(parent, &m));
+            old.drain(..).for_each(|m| remove(parent, m));
         }
         return;
     }
     if old.is_empty() {
         for node in new {
-            let m = create(node, scope);
+            let m = create_in(parent, node, scope);
             insert(parent, &m, end);
             old.push(m);
         }
@@ -934,13 +1014,13 @@ fn patch_indexed(parent: &web_sys::Node, old: &mut Vec<Mounted>, new: Vec<Node>,
         if i < old.len() {
             patch(parent, &mut old[i], node, scope);
         } else {
-            let m = create(node, scope);
+            let m = create_in(parent, node, scope);
             insert(parent, &m, end);
             old.push(m);
         }
     }
     if old.len() > new_len {
-        old.drain(new_len..).for_each(|m| remove(parent, &m));
+        old.drain(new_len..).for_each(|m| remove(parent, m));
     }
 }
 
@@ -979,11 +1059,11 @@ fn patch_keyed(
     }
 
     // Nothing reused and the list owns the parent: clear in one DOM call.
-    if !any_reused && whole && !slots.iter().flatten().any(persists) {
+    if !any_reused && whole && !slots.iter().flatten().any(persists) && !has_persisted(parent) {
         slots.into_iter().flatten().for_each(|m| unmount(&m));
         parent.set_text_content(None);
     } else {
-        slots.into_iter().flatten().for_each(|m| remove(parent, &m));
+        slots.into_iter().flatten().for_each(|m| remove(parent, m));
     }
 
     let mut result = Vec::with_capacity(matched.len());
@@ -994,7 +1074,7 @@ fn patch_keyed(
                 patch(parent, &mut m, node, scope);
                 m
             }
-            None => create(node, scope),
+            None => create_in(parent, node, scope),
         };
         result.push(m);
         sources.push(source.map_or(-1, |s| s as i64));

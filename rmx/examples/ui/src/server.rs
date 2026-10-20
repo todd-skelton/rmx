@@ -65,6 +65,7 @@ fn demo_node(slug: &str) -> Node {
         "component/runtime/mixin-lifecycle" => rsx! { <lifecycle::MixinLifecycle/> },
         "component/runtime/readme" => rsx! { <readme::ReadmeExamples/> },
         "cases/draggable" => rsx! { <draggable::DraggableDemo/> },
+        "ui/animation" => rsx! { <animation::AnimationGallery/> },
         _ => Node::Empty,
     }
 }
@@ -137,6 +138,7 @@ type Group = (&'static str, Vec<&'static Demo>);
 fn sections() -> Vec<(&'static str, &'static str, Vec<Group>)> {
     [
         ("Component runtime", "Rendering, interaction, and mixin demos for rmx."),
+        ("UI", "Demos for @remix-run/ui, ported to rmx-ui."),
         ("Cases", "Standalone cases from the Remix ui demos."),
     ]
     .into_iter()

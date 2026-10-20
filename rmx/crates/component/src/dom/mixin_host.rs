@@ -7,7 +7,6 @@ use std::any::TypeId;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
-use wasm_bindgen::JsCast;
 
 use super::vdom::{apply_extra, attach_events, has_inner_html, hydrate_attrs, patch_props, queue_commit, schedule_host_update, set_attr, Listener};
 use super::Scope;
@@ -200,13 +199,21 @@ impl MixinHost {
         }
     }
 
+    /// A host waiting for its exit teardown is no longer part of its owner's updates.
+    fn is_exiting(&self) -> bool {
+        self.removal.borrow().is_some()
+    }
+
     pub(crate) fn before_update(&self) {
+        if self.is_exiting() {
+            return;
+        }
         let node = NodeHandle { el: self.el.clone() };
         self.dispatch_where(Lifecycle::BeforeUpdate, &LifecycleEvent::BeforeUpdate(&node));
     }
 
     pub(crate) fn commit(&self) {
-        if self.alive.get() {
+        if self.alive.get() && !self.is_exiting() {
             let node = NodeHandle { el: self.el.clone() };
             self.dispatch_where(Lifecycle::Commit, &LifecycleEvent::Commit(&node));
         }
@@ -234,8 +241,8 @@ impl MixinHost {
     }
 
     /// Removal is starting: dispatch `beforeRemove`. When a listener persisted the node,
-    /// returns `true` and removes the element once every teardown settles.
-    pub(crate) fn persist_removal(&self) -> bool {
+    /// returns `true` and calls `done` once every teardown settles (or was cancelled).
+    pub(crate) fn persist_removal(&self, done: impl FnOnce() + 'static) -> bool {
         if !self.alive.get() || !self.listens_before_remove() {
             return false;
         }
@@ -249,17 +256,16 @@ impl MixinHost {
         let signal = controller.signal();
         *self.removal.borrow_mut() = Some(controller);
         let pending = Rc::new(Cell::new(teardowns.len()));
+        let done = Rc::new(Cell::new(Some(done)));
         for teardown in teardowns {
             let fut = teardown(signal.clone());
-            let pending = pending.clone();
-            // The owner has already let go of the element; the teardown keeps the host alive.
-            let host = self.me.upgrade();
+            let (pending, done) = (pending.clone(), done.clone());
             wasm_bindgen_futures::spawn_local(async move {
                 fut.await;
                 pending.set(pending.get() - 1);
                 if pending.get() == 0 {
-                    if let Some(host) = host {
-                        host.finish_removal();
+                    if let Some(done) = done.take() {
+                        done();
                     }
                 }
             });
@@ -267,15 +273,22 @@ impl MixinHost {
         true
     }
 
-    fn finish_removal(&self) {
-        // An ancestor's removal disposed the host first.
-        if !self.alive.get() {
-            return;
+    /// The persisted host is being reused: abort its pending teardown signal.
+    pub(crate) fn cancel_removal(&self) {
+        if let Some(c) = self.removal.borrow_mut().take() {
+            c.abort();
         }
-        self.removal.borrow_mut().take();
-        if let Some(parent) = self.el.parent_node() {
-            let _ = parent.remove_child(self.el.unchecked_ref());
-        }
-        self.dispose();
+    }
+
+    /// Dispatch `reclaimed` in the commit phase, after the reused host was patched.
+    pub(crate) fn queue_reclaimed(&self) {
+        let me = self.me.clone();
+        queue_commit(Box::new(move || {
+            let Some(host) = me.upgrade() else { return };
+            if host.alive.get() {
+                let node = NodeHandle { el: host.el.clone() };
+                host.dispatch_where(Lifecycle::Reclaimed, &LifecycleEvent::Reclaimed(&node));
+            }
+        }));
     }
 }

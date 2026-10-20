@@ -87,6 +87,22 @@ pub async fn sleep(ms: u32) {
     let _ = ms;
 }
 
+/// Resolve on the next animation frame with its timestamp (`requestAnimationFrame` as a
+/// future). Resolves at once with `0.0` on the server.
+pub async fn next_frame() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let promise = js_sys::Promise::new(&mut |resolve, _| {
+            if let Some(w) = web_sys::window() {
+                let _ = w.request_animation_frame(&resolve);
+            }
+        });
+        wasm_bindgen_futures::JsFuture::from(promise).await.ok().and_then(|t| t.as_f64()).unwrap_or(0.0)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    0.0
+}
+
 /// `fetch(url, { method, body: formData, signal })` with the given fields as a
 /// `multipart/form-data` body, resolving to the response status. Fails on a network error
 /// or when `signal` aborts. On the server it fails at once.

@@ -20,6 +20,7 @@ members = [
     "crates/headers",
     "crates/component",
     "crates/macros",
+    "crates/ui",
     "examples/bench/app",
     "examples/bench/server",
     "examples/bench/client",
@@ -62,6 +63,7 @@ rmx-tar-parser = { path = "crates/tar-parser" }
 rmx-html-template = { path = "crates/html-template" }
 rmx-headers = { path = "crates/headers" }
 rmx-cookie = { path = "crates/cookie" }
+rmx-ui = { path = "crates/ui" }
 bytes = "1"
 http = "1"
 http-body = "1"

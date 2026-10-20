@@ -1278,6 +1278,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-ui"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "rmx",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "rmx-url"
 version = "0.1.0"
 
@@ -1720,6 +1731,7 @@ dependencies = [
  "rmx-render",
  "rmx-router",
  "rmx-serve",
+ "rmx-ui",
  "serde",
  "tokio",
  "wasm-bindgen",

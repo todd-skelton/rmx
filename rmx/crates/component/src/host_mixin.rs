@@ -89,7 +89,8 @@ pub(crate) type Teardown = Box<dyn FnOnce(web_sys::AbortSignal) -> std::pin::Pin
 
 impl BeforeRemoveEvent {
     /// Keep the host in the document until `teardown` completes. The signal aborts if the
-    /// pending removal is cancelled.
+    /// pending removal is cancelled: the same keyed element was rendered again under the
+    /// same parent and the host was reclaimed (see [`MixinHandle::on_reclaimed`]).
     #[cfg(target_arch = "wasm32")]
     pub fn persist_node<F, Fut>(&self, teardown: F)
     where
@@ -107,6 +108,7 @@ pub(crate) enum Lifecycle {
     BeforeUpdate,
     Commit,
     BeforeRemove,
+    Reclaimed,
 }
 
 pub(crate) enum LifecycleEvent<'a> {
@@ -115,6 +117,7 @@ pub(crate) enum LifecycleEvent<'a> {
     BeforeUpdate(&'a NodeHandle),
     Commit(&'a NodeHandle),
     BeforeRemove(&'a BeforeRemoveEvent),
+    Reclaimed(&'a NodeHandle),
 }
 
 impl LifecycleEvent<'_> {
@@ -125,6 +128,7 @@ impl LifecycleEvent<'_> {
             LifecycleEvent::BeforeUpdate(_) => Lifecycle::BeforeUpdate,
             LifecycleEvent::Commit(_) => Lifecycle::Commit,
             LifecycleEvent::BeforeRemove(_) => Lifecycle::BeforeRemove,
+            LifecycleEvent::Reclaimed(_) => Lifecycle::Reclaimed,
         }
     }
 }
@@ -457,6 +461,18 @@ impl<M: HostMixin> MixinHandle<M> {
         self.listen(Lifecycle::BeforeRemove, move |s, h, e| {
             if let LifecycleEvent::BeforeRemove(ev) = e {
                 f(s, h, ev)
+            }
+        });
+    }
+
+    /// When a keyed host whose removal was deferred by
+    /// [`persist_node`](BeforeRemoveEvent::persist_node) is rendered again before the
+    /// teardown finished. The host is reused without another `insert` event and the
+    /// teardown's signal is aborted.
+    pub fn on_reclaimed(&self, f: impl Fn(&mut M, &MixinHandle<M>, &NodeHandle) + 'static) {
+        self.listen(Lifecycle::Reclaimed, move |s, h, e| {
+            if let LifecycleEvent::Reclaimed(node) = e {
+                f(s, h, node)
             }
         });
     }

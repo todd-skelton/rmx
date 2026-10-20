@@ -1,3 +1,4 @@
+pub mod animation;
 pub mod basic;
 pub mod controlled;
 pub mod draggable;
