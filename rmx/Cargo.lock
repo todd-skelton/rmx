@@ -377,6 +377,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-fetch"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body",
+ "rmx-url",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "rmx-macros"
 version = "0.1.0"
 dependencies = [
@@ -390,6 +403,16 @@ dependencies = [
 name = "rmx-route-pattern"
 version = "0.1.0"
 dependencies = [
+ "rmx-url",
+]
+
+[[package]]
+name = "rmx-router"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-route-pattern",
  "rmx-url",
 ]
 

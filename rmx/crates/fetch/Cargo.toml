@@ -1,0 +1,21 @@
+[package]
+name = "rmx-fetch"
+description = "Request, Response and streaming Body types for rmx, on the standard http crate"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+bytes.workspace = true
+http.workspace = true
+http-body.workspace = true
+rmx-url.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["json"]
+json = ["dep:serde", "dep:serde_json"]
+
+[dev-dependencies]
+tokio = { workspace = true }

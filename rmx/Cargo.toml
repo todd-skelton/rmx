@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "crates/url",
     "crates/route-pattern",
+    "crates/fetch",
+    "crates/router",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
@@ -20,6 +22,12 @@ rmx = { path = "crates/component" }
 rmx-macros = { path = "crates/macros" }
 rmx-url = { path = "crates/url" }
 rmx-route-pattern = { path = "crates/route-pattern" }
+rmx-fetch = { path = "crates/fetch" }
+rmx-router = { path = "crates/router" }
+bytes = "1"
+http = "1"
+http-body = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "sync", "fs", "io-util"] }
 bench-app = { path = "examples/bench/app" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
