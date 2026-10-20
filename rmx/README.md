@@ -100,11 +100,13 @@ crates:
    app-level error events (`App::on_error`).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
-   `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server plus an HTTP/1
-   `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression with
+   `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
+   `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
+   `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; plus an
+   HTTP/1 `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression with
    br/gzip/deflate negotiation, static files with strong ETags, ranges and directory
    listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
-   override, logger), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
+   override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer).
 3. Supporting crates: `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
