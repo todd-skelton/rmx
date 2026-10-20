@@ -362,6 +362,9 @@ impl Ssr {
                 "defaultChecked" => "checked",
                 other => other,
             };
+            if name != "innerHTML" && !crate::attrs::is_allowed_name(name) {
+                continue;
+            }
             match value {
                 AttrValue::Html(html) if name == "innerHTML" => inner_html = Some(html),
                 AttrValue::Str(_) | AttrValue::Bool(_) if name == "innerHTML" => {
@@ -371,8 +374,13 @@ impl Ssr {
                     out.push(' ');
                     out.push_str(name);
                     out.push_str("=\"");
-                    escape_into(out, v, true);
+                    escape_into(out, &crate::attrs::sanitize_url(el.tag, name, v), true);
                     out.push('"');
+                }
+                AttrValue::Bool(b) if crate::attrs::is_booleanish_string(name) || name == "value" => {
+                    out.push(' ');
+                    out.push_str(name);
+                    out.push_str(if *b { "=\"true\"" } else { "=\"false\"" });
                 }
                 AttrValue::Bool(true) => {
                     out.push(' ');
@@ -479,6 +487,17 @@ mod tests {
         assert_eq!(
             render_to_string(&node),
             r#"<a title="say &quot;hi&quot; &amp; &lt;go&gt;" hidden>1 &lt; 2 &amp; 3</a>"#
+        );
+    }
+
+    #[test]
+    fn blocks_javascript_urls_inline_handlers_and_stringifies_booleanish_attributes() {
+        use crate::rsx;
+        let href = String::from("\tJavaScript:alert(1)");
+        let html = render_to_string(&rsx! { <a href={href} onclick="alert(1)" draggable={false}>"x"</a> });
+        assert_eq!(
+            html,
+            format!(r#"<a href="{}" draggable="false">x</a>"#, crate::attrs::BLOCKED_JAVASCRIPT_URL)
         );
     }
 

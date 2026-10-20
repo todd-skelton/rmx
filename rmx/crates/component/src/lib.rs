@@ -14,6 +14,7 @@
 extern crate self as rmx;
 
 mod app;
+mod attrs;
 mod component;
 mod frame;
 mod host_mixin;
@@ -30,7 +31,7 @@ pub mod ssr;
 pub(crate) mod dom;
 
 pub use app::{report_error, AppError};
-pub use component::{set_server_frame_src, Component, Handle};
+pub use component::{set_server_frame_src, Component, Fragment, FragmentProps, Handle};
 pub use frame::{
     Frame, FrameContent, FrameEvent, FrameHandle, FrameProps, FrameRequest, FrameResponse, Frames, ReloadOptions, ResolveFrame,
     ResolveFuture,

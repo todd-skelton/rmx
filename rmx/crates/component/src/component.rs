@@ -623,3 +623,26 @@ impl<C: Component> ErasedComponent for PropsOf<C> {
         crate::dom::rerender(inst);
     }
 }
+
+/// Props for [`Fragment`].
+#[derive(Clone, Default)]
+pub struct FragmentProps {
+    pub children: crate::Children,
+}
+
+/// Groups children without a wrapper element. Use it where a fragment needs a key, so a
+/// keyed list can move the whole group: `<Fragment key={id}><dt/><dd/></Fragment>`
+/// (Remix's `<Fragment key>`). Unkeyed groups can use `<>...</>`.
+pub struct Fragment;
+
+impl Component for Fragment {
+    type Props = FragmentProps;
+
+    fn setup(_: &FragmentProps, _: &Handle<Self>) -> Self {
+        Fragment
+    }
+
+    fn render(&self, props: &FragmentProps, _: &Handle<Self>) -> Node {
+        crate::IntoNode::into_node(&props.children)
+    }
+}

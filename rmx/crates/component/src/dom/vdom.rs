@@ -90,6 +90,7 @@ pub(crate) fn new_instance<C: Component>(props: C::Props, scope: &Scope) -> Rc<d
                     frame: scope.frame.clone(),
                     depth: scope.depth + 1,
                     errors: scope.errors.clone(),
+                    svg: scope.svg,
                 },
                 root: RefCell::new(Vec::new()),
                 hosts: RefCell::new(Vec::new()),
@@ -298,6 +299,26 @@ fn track_cascading_update(inst: &dyn AnyInstance) -> Result<(), String> {
 /// as an error.
 pub fn flush() {
     SCHEDULED.set(false);
+    // Tasks may update components or queue more tasks; keep going until everything has
+    // settled, as Remix's scheduler does. The update-loop check bounds component renders;
+    // the pass cap bounds anything else that keeps rescheduling itself.
+    for _ in 0..1000 {
+        if !flush_pass() {
+            return;
+        }
+        let idle = DIRTY.with(|d| d.borrow().is_empty())
+            && DIRTY_HOSTS.with(|d| d.borrow().is_empty())
+            && COMMITS.with(|t| t.borrow().is_empty())
+            && TASKS.with(|t| t.borrow().is_empty());
+        if idle {
+            return;
+        }
+    }
+}
+
+/// Render dirty components and mixin hosts, then run commit callbacks and tasks. Returns
+/// `false` when an update loop was stopped.
+fn flush_pass() -> bool {
     // Mixin hosts are not tracked per instance; cap the passes so a host that updates
     // itself on every rerun cannot hang the page.
     for _ in 0..1000 {
@@ -317,7 +338,7 @@ pub fn flush() {
                 batch[i..].iter().for_each(|inst| inst.live().dirty.set(false));
                 DIRTY.with(|d| d.borrow_mut().drain(..).for_each(|inst| inst.live().dirty.set(false)));
                 crate::app::report_to(inst.shared().scope.errors.as_ref(), message);
-                return;
+                return false;
             }
             rerender(&**inst);
         }
@@ -329,11 +350,11 @@ pub fn flush() {
     for commit in commits {
         commit();
     }
-    // Tasks may queue more tasks or updates; those run in a later flush.
     let tasks = TASKS.with(|t| std::mem::take(&mut *t.borrow_mut()));
     for task in tasks {
         task();
     }
+    true
 }
 
 // ---------------------------------------------------------------------------------------
@@ -342,6 +363,9 @@ pub fn flush() {
 
 pub(crate) enum Mounted {
     Element(Box<MElement>),
+    /// An explicit `<head>`: its children render into `document.head` (Remix's head
+    /// support); the text node marks its position in the tree.
+    Head(Box<MElement>, web_sys::Text),
     Text(MText),
     Component(MComponent),
     Frame(Box<MFrame>),
@@ -628,7 +652,7 @@ fn merge_events(events: Vec<(&'static str, EventHandler)>) -> Vec<(&'static str,
 impl Mounted {
     fn key(&self) -> Option<&Key> {
         match self {
-            Mounted::Element(e) => e.key.as_ref(),
+            Mounted::Element(e) | Mounted::Head(e, _) => e.key.as_ref(),
             Mounted::Component(c) => c.key.as_ref(),
             Mounted::Text(_) | Mounted::Frame(_) => None,
         }
@@ -637,6 +661,7 @@ impl Mounted {
     pub(crate) fn first_dom(&self) -> web_sys::Node {
         match self {
             Mounted::Element(e) => e.el.clone().into(),
+            Mounted::Head(_, marker) => marker.clone().into(),
             Mounted::Text(t) => t.node.clone().into(),
             Mounted::Component(c) => c.inst.live().root.borrow()[0].first_dom(),
             Mounted::Frame(f) => f.state.start().into(),
@@ -646,6 +671,7 @@ impl Mounted {
     fn last_dom(&self) -> web_sys::Node {
         match self {
             Mounted::Element(e) => e.el.clone().into(),
+            Mounted::Head(_, marker) => marker.clone().into(),
             Mounted::Text(t) => t.node.clone().into(),
             Mounted::Component(c) => c.inst.live().root.borrow().last().expect("component has DOM").last_dom(),
             Mounted::Frame(f) => f.state.end().into(),
@@ -655,6 +681,7 @@ impl Mounted {
     fn for_each_dom(&self, f: &mut dyn FnMut(&web_sys::Node)) {
         match self {
             Mounted::Element(e) => f(e.el.unchecked_ref()),
+            Mounted::Head(_, marker) => f(marker.unchecked_ref()),
             Mounted::Text(t) => f(t.node.unchecked_ref()),
             Mounted::Component(c) => c.inst.live().root.borrow().iter().for_each(|m| m.for_each_dom(f)),
             Mounted::Frame(m) => {
@@ -671,6 +698,7 @@ impl Mounted {
     fn same_kind(&self, node: &Node) -> bool {
         match (self, node) {
             (Mounted::Element(m), Node::Element(n)) => m.tag == n.tag,
+            (Mounted::Head(..), Node::Element(n)) => n.tag == "head",
             (Mounted::Text(_), Node::Text(_)) => true,
             (Mounted::Component(m), Node::Component(n)) => m.inst.component_type() == n.inner.component_type(),
             (Mounted::Frame(_), Node::Frame(_)) => true,
@@ -710,6 +738,20 @@ fn unmount(m: &Mounted) {
                 host.dispose();
             }
             e.children.iter().for_each(unmount);
+        }
+        Mounted::Head(e, _) => {
+            // `document.head` stays: detach this tree's listeners and remove its children.
+            let head: &web_sys::Node = e.el.unchecked_ref();
+            e.listeners.iter().for_each(|l| l.release(Some(&e.el)));
+            if let Some(host) = &e.host {
+                host.dispose();
+            }
+            for child in &e.children {
+                unmount(child);
+                child.for_each_dom(&mut |n| {
+                    let _ = head.remove_child(n);
+                });
+            }
         }
         Mounted::Text(_) => {}
         Mounted::Component(c) => unmount_root(&*c.inst),
@@ -869,13 +911,44 @@ pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrVa
     if name == "value" || name == "checked" {
         track_controlled(el, name, value);
     }
+    if !crate::attrs::is_allowed_name(name) {
+        return;
+    }
+    if is_form_property(el, name) {
+        // Live state, not markup: Remix sets these as properties, so the attribute (the
+        // server-rendered default) is left alone.
+        let v = match value {
+            AttrValue::Str(v) | AttrValue::Html(v) => JsValue::from_str(v),
+            AttrValue::Bool(b) => JsValue::from_bool(*b),
+            AttrValue::Absent if name == "value" => JsValue::from_str(""),
+            AttrValue::Absent => JsValue::FALSE,
+        };
+        let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &v);
+        if matches!(value, AttrValue::Absent) {
+            let _ = el.remove_attribute(name);
+        }
+        return;
+    }
+    if name.starts_with("xlink:") || name.starts_with("xml:") {
+        return set_namespaced_attr(el, name, value);
+    }
     let name = intern(name);
     match value {
         AttrValue::Html(v) => {
-            let _ = el.set_attribute(name, v);
+            let _ = el.set_attribute(name, &crate::attrs::sanitize_url(&el.local_name(), name, v));
+        }
+        AttrValue::Bool(b) if crate::attrs::is_booleanish_string(name) => {
+            let _ = el.set_attribute(name, if *b { "true" } else { "false" });
         }
         AttrValue::Str(v) => {
-            let _ = el.set_attribute(name, interned(v));
+            match name {
+                "href" | "src" | "action" | "formaction" | "data" => {
+                    let _ = el.set_attribute(name, &crate::attrs::sanitize_url(&el.local_name(), name, v));
+                }
+                _ => {
+                    let _ = el.set_attribute(name, interned(v));
+                }
+            }
             if name == "value" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::from_str(v));
             }
@@ -890,11 +963,36 @@ pub(super) fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrVa
             let _ = el.remove_attribute(name);
             if name == "checked" || name == "selected" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::FALSE);
-            } else if name == "value" && matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA") {
-                // The attribute is only the default; clear the live value too.
-                let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::from_str(""));
             }
         }
+    }
+}
+
+/// `xlink:href`, `xml:lang` and friends go in their XML namespaces, as Remix sets them.
+fn set_namespaced_attr(el: &web_sys::Element, name: &str, value: &AttrValue) {
+    let (prefix, local) = name.split_once(':').expect("prefixed name");
+    let ns = if prefix == "xlink" { "http://www.w3.org/1999/xlink" } else { "http://www.w3.org/XML/1998/namespace" };
+    match value {
+        AttrValue::Str(v) | AttrValue::Html(v) => {
+            let _ = el.set_attribute_ns(Some(ns), name, &crate::attrs::sanitize_url("", name, v));
+        }
+        AttrValue::Bool(true) => {
+            let _ = el.set_attribute_ns(Some(ns), name, "");
+        }
+        AttrValue::Bool(false) | AttrValue::Absent => {
+            let _ = el.remove_attribute_ns(Some(ns), local);
+        }
+    }
+}
+
+/// `value` on text controls, `checked` on inputs and `selected` on options: state the
+/// browser keeps as a property, separate from the attribute.
+fn is_form_property(el: &web_sys::Element, name: &str) -> bool {
+    match name {
+        "value" => matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"),
+        "checked" => el.tag_name() == "INPUT",
+        "selected" => el.tag_name() == "OPTION",
+        _ => false,
     }
 }
 
@@ -984,7 +1082,12 @@ fn create(node: Node, scope: &Scope) -> Mounted {
     match node {
         Node::Element(mut el) => {
             let tag = el.tag;
-            let dom = if is_svg(tag) {
+            let head = if tag == "head" { document().head() } else { None };
+            let child_scope = element_scope(scope, tag);
+            let scope = &*child_scope;
+            let dom = if let Some(head) = &head {
+                head.clone().into()
+            } else if in_svg(scope, tag) {
                 document().create_element_ns(Some("http://www.w3.org/2000/svg"), intern(tag)).expect("createElementNS")
             } else {
                 document().create_element(intern(tag)).expect("createElement")
@@ -1007,7 +1110,9 @@ fn create(node: Node, scope: &Scope) -> Mounted {
             };
             let children = if inner_html { Vec::new() } else { children };
             let mut kids = Vec::with_capacity(children.len());
-            for child in flatten_children(children) {
+            let children = flatten_children(children);
+            warn_duplicate_keys(&children);
+            for child in children {
                 let m = create(child, scope);
                 m.for_each_dom(&mut |n| {
                     dom.append_child(n).expect("appendChild");
@@ -1017,7 +1122,11 @@ fn create(node: Node, scope: &Scope) -> Mounted {
             if tag == "select" {
                 sync_select_value(&dom);
             }
-            Mounted::Element(Box::new(MElement { tag, key, attrs, listeners, el: dom, children: kids, host }))
+            let element = Box::new(MElement { tag, key, attrs, listeners, el: dom, children: kids, host });
+            match head {
+                Some(_) => Mounted::Head(element, document().create_text_node("")),
+                None => Mounted::Element(element),
+            }
         }
         Node::Text(text) => {
             let node = document().create_text_node(interned(&text));
@@ -1040,6 +1149,24 @@ fn create(node: Node, scope: &Scope) -> Mounted {
     }
 }
 
+/// Whether an element is created in the SVG namespace: inside `<svg>`, or a tag that only
+/// exists in SVG (for components that render SVG parts without an `<svg>` ancestor).
+/// `scope` is the scope for the element's children ([`element_scope`]).
+fn in_svg(scope: &Scope, tag: &str) -> bool {
+    scope.svg || tag == "foreignObject" || is_svg(tag)
+}
+
+/// The scope for an element's children: SVG inside `<svg>`, HTML again inside
+/// `<foreignObject>`.
+fn element_scope<'a>(scope: &'a Scope, tag: &str) -> Cow<'a, Scope> {
+    let svg = tag != "foreignObject" && (tag == "svg" || scope.svg || is_svg(tag));
+    if svg == scope.svg {
+        Cow::Borrowed(scope)
+    } else {
+        Cow::Owned(Scope { svg, ..scope.clone() })
+    }
+}
+
 /// Tags that only exist in the SVG namespace (shared names like `a` stay HTML).
 fn is_svg(tag: &str) -> bool {
     matches!(
@@ -1059,6 +1186,7 @@ fn create_frame(f: &FrameNode, scope: &Scope) -> Mounted {
 fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
     match (&mut *old, new) {
         (Mounted::Element(m), Node::Element(n)) if m.tag == n.tag => patch_element(m, *n, scope),
+        (Mounted::Head(m, _), Node::Element(n)) if n.tag == "head" => patch_element(m, *n, scope),
         (Mounted::Text(m), Node::Text(t)) => {
             if m.text != t {
                 m.node.set_data(&t);
@@ -1115,7 +1243,10 @@ fn patch_element(m: &mut MElement, mut n: Element, scope: &Scope) {
         m.children.clear();
     } else if !children.is_empty() || !m.children.is_empty() {
         let parent: web_sys::Node = m.el.clone().into();
-        patch_children(&parent, &mut m.children, flatten_children(children), None, true, scope);
+        // `document.head` holds more than this tree, so never clear it wholesale.
+        let whole = m.tag != "head";
+        let scope = element_scope(scope, m.tag);
+        patch_children(&parent, &mut m.children, flatten_children(children), None, whole, &scope);
     }
     if m.tag == "select" {
         sync_select_value(&m.el);
@@ -1182,6 +1313,7 @@ fn patch_children(
         return;
     }
     if old.is_empty() {
+        warn_duplicate_keys(&new);
         for node in new {
             let m = create_in(parent, node, scope);
             insert(parent, &m, end);
@@ -1195,8 +1327,32 @@ fn patch_children(
     if !keyed || same_key_order {
         patch_indexed(parent, old, new, end, scope);
     } else {
+        warn_duplicate_keys(&new);
         patch_keyed(parent, old, new, end, whole, scope);
     }
+}
+
+/// Warn when siblings share a key (the last one wins), as Remix does.
+fn warn_duplicate_keys(nodes: &[Node]) {
+    if nodes.len() < 2 || nodes.iter().all(|n| n.key().is_none()) {
+        return;
+    }
+    // Sort references rather than hash clones: no allocation for string keys.
+    let mut keys: Vec<&Key> = nodes.iter().filter_map(Node::key).collect();
+    keys.sort_unstable();
+    let mut duplicates: Vec<&Key> = keys.windows(2).filter(|w| w[0] == w[1]).map(|w| w[0]).collect();
+    if duplicates.is_empty() {
+        return;
+    }
+    duplicates.dedup();
+    let quoted: Vec<String> = duplicates
+        .iter()
+        .map(|k| match k {
+            Key::Int(i) => format!("\"{i}\""),
+            Key::Str(s) => format!("\"{s}\""),
+        })
+        .collect();
+    super::warn(&format!("Duplicate keys detected in siblings: {}. Keys should be unique.", quoted.join(", ")));
 }
 
 fn patch_indexed(parent: &web_sys::Node, old: &mut Vec<Mounted>, new: Vec<Node>, end: Option<&web_sys::Node>, scope: &Scope) {
@@ -1327,10 +1483,11 @@ pub(crate) fn hydrate_instance(inst: &dyn AnyInstance, parent: &web_sys::Node, c
 fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>, scope: &Scope) -> Mounted {
     match node {
         Node::Element(el) => {
+            // A `<head>` renders into `document.head`; there is nothing in place to adopt.
             let adopt = cursor
                 .as_ref()
                 .and_then(|c| c.dyn_ref::<web_sys::Element>())
-                .filter(|e| e.tag_name().eq_ignore_ascii_case(el.tag))
+                .filter(|e| el.tag != "head" && e.tag_name().eq_ignore_ascii_case(el.tag))
                 .cloned();
             let Some(dom) = adopt else {
                 return create_at(Node::Element(el), parent, cursor, scope);
@@ -1355,9 +1512,10 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             let dom_node: web_sys::Node = dom.clone().into();
             let children = if inner_html { Vec::new() } else { children };
             let mut child_cursor = if inner_html { None } else { dom.first_child() };
+            let child_scope = element_scope(scope, tag);
             let kids = flatten_children(children)
                 .into_iter()
-                .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, scope))
+                .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, &child_scope))
                 .collect();
             while let Some(extra) = child_cursor.take() {
                 child_cursor = extra.next_sibling();

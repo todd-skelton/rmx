@@ -110,7 +110,7 @@ impl Node {
 }
 
 /// Identity for list items so reordering moves DOM nodes instead of rewriting them.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Key {
     Int(i64),
     Str(Str),

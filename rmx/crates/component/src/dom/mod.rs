@@ -38,6 +38,8 @@ pub(crate) struct Scope {
     pub(crate) depth: u32,
     /// Error listeners of the standalone root this component renders in (`None` = the app).
     pub(crate) errors: Option<crate::TypedEventTarget<crate::AppError>>,
+    /// Elements created here are SVG (inside `<svg>`, outside `<foreignObject>`).
+    pub(crate) svg: bool,
 }
 
 /// The nearest value of type `want` provided by `parent` or one of its ancestors.

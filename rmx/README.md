@@ -104,7 +104,12 @@ crates:
    `update()` from `render` or before the first commit, `update()` loops stopped after 50
    cascading renders, `Handle::report_error`, bubbling DOM `error` events), and
    `rmx::test` (`render`, `query`, `query_all`, `act`, `cleanup`), the counterpart of
-   `remix/component/test`.
+   `remix/component/test`. Keyed `<Fragment key>`, an explicit `<head>` that renders into
+   `document.head`, SVG namespaces carried through components (HTML again inside
+   `<foreignObject>`, `xlink:`/`xml:` attributes namespaced), form `value`/`checked`/
+   `selected` set as properties, and Remix's attribute safety rules on server and client
+   (`javascript:` URLs blocked, `on*` attributes dropped). The browser runtime is checked by
+   ports of Remix's `vdom.*` test suites (`crates/component/tests/browser_*.rs`).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
@@ -166,13 +171,16 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
    errors the way Remix does: `update()` from `render` or before the first commit, and
    update loops, go to `Root::on_error`; panics and failed frame loads and navigations go
    to `App::on_error`.
-3. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
+3. `style` takes a string; JSX style objects (with numbers turned into `px`) have no rsx
+   counterpart. Attribute names are written as in HTML (`stroke-linecap`, `xlink:href`),
+   not camelCase. A component that renders nothing keeps an empty text node as its place.
+4. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.
-4. No HMR, CLI, or `remix/test` runner: native tests use `cargo test`, component tests
+5. No HMR, CLI, or `remix/test` runner: native tests use `cargo test`, component tests
    use `wasm-bindgen-test` in Chromium, and e2e checks use Playwright scripts.
-5. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
-6. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`
+6. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
+7. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`
    (social-auth), `nodejs-semver` (unpkg), and the usual hyper/tokio/wasm-bindgen stack.
-7. Creating large lists is slower than Remix's JS runtime (see `../bench/README.md`),
+8. Creating large lists is slower than Remix's JS runtime (see `../bench/README.md`),
    because each DOM node costs several wasm-to-JS calls.
