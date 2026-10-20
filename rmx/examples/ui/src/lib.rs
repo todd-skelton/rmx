@@ -69,6 +69,30 @@ pub const DEMOS: &[Demo] = &[
         center: false,
     },
     Demo {
+        slug: "ui/accordion",
+        title: "Accordion Primitives",
+        description: "Headless accordion behavior with minimal local styles.",
+        section: "UI",
+        module: "Accordion",
+        center: true,
+    },
+    Demo {
+        slug: "ui/tabs",
+        title: "Tabs Primitives",
+        description: "Headless tabs behavior with app-owned markup and minimal local styles.",
+        section: "UI",
+        module: "Tabs",
+        center: true,
+    },
+    Demo {
+        slug: "ui/toggle",
+        title: "Toggle Primitives",
+        description: "Headless switch behavior for native inputs and custom controls.",
+        section: "UI",
+        module: "Toggle",
+        center: true,
+    },
+    Demo {
         slug: "cases/draggable",
         title: "Draggable Mixin",
         description: "A pointer-driven box using the draggable mixin from the standalone demos.",
@@ -95,6 +119,9 @@ pub fn start() {
             rmx::entry::<readme::ReadmeExamples>(),
             rmx::entry::<draggable::DraggableDemo>(),
             rmx::entry::<animation::AnimationGallery>(),
+            rmx::entry::<accordion::AccordionDemo>(),
+            rmx::entry::<tabs::TabsDemo>(),
+            rmx::entry::<toggle::ToggleDemo>(),
         ],
         ..Default::default()
     });

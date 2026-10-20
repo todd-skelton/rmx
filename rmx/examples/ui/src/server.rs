@@ -66,6 +66,9 @@ fn demo_node(slug: &str) -> Node {
         "component/runtime/readme" => rsx! { <readme::ReadmeExamples/> },
         "cases/draggable" => rsx! { <draggable::DraggableDemo/> },
         "ui/animation" => rsx! { <animation::AnimationGallery/> },
+        "ui/accordion" => rsx! { <accordion::AccordionDemo/> },
+        "ui/tabs" => rsx! { <tabs::TabsDemo/> },
+        "ui/toggle" => rsx! { <toggle::ToggleDemo/> },
         _ => Node::Empty,
     }
 }

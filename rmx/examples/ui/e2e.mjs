@@ -36,7 +36,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 // Index
 await page.goto(BASE + '/')
 const links = await page.$$eval('a[href^="/demo/"]', (as) => as.map((a) => a.getAttribute('href')))
-check('the index lists the demos', links.length === 7, links)
+check('the index lists the demos', links.length === 10, links)
 
 // Basic counter
 await open('component/runtime/basic')
@@ -239,6 +239,114 @@ check('a spring iterated per frame counts to 100', (await page.textContent('#htm
 await page.click('#enter .replay')
 await page.waitForTimeout(30)
 check('replay remounts the tile and replays its entrance', await page.evaluate(() => document.querySelector('#enter .ball').getAnimations().length === 1))
+
+// Toggle primitives (packages/ui/src/demos/toggle.demo.tsx, toggle.test.tsx)
+{
+await open('ui/toggle')
+await page.evaluate(() => {
+  window.__toggles = []
+  document.addEventListener('rmx:toggle-change', (e) => window.__toggles.push([e.target.textContent.trim() || e.target.name, e.checked]))
+})
+const sw = () => page.$$eval('[role="switch"]', (els) => els.map((e) => [e.tagName, e.dataset.state, e.getAttribute('aria-checked'), e.checked ?? null, e.getAttribute('tabindex')]))
+const s0 = await sw()
+check('toggle: SSR state for native, custom and disabled switches', eq(s0, [['INPUT', 'checked', null, true, null], ['BUTTON', 'unchecked', 'false', null, '0'], ['BUTTON', 'unchecked', 'false', null, null]]), s0)
+await page.click('input[role="switch"]')
+await settle()
+await page.click('button[role="switch"]:not([disabled])')
+await settle()
+await page.focus('button[role="switch"]:not([disabled])')
+await page.keyboard.press(' ')
+await page.keyboard.press(' ')
+await settle()
+await page.click('button[role="switch"][disabled]', { force: true })
+await settle()
+const s1 = await sw()
+const toggles = await page.evaluate(() => window.__toggles)
+check('toggle: click and Space flip state, disabled stays put', eq(s1.map((s) => s[1]), ['unchecked', 'checked', 'unchecked']) && s1[0][3] === false, s1)
+check('toggle: rmx:toggle-change bubbles with the new state', eq(toggles, [['notifications', false], ['Desktop alerts', true], ['Desktop alerts', false], ['Desktop alerts', true]]), toggles)
+check('toggle: custom control ends checked after click, Space, Space', (await page.getAttribute('button[role="switch"]:not([disabled])', 'aria-checked')) === 'true')
+}
+
+// Tabs primitives (packages/ui/src/demos/tabs.demo.tsx, tabs.test.tsx)
+{
+await open('ui/tabs')
+await page.evaluate(() => {
+  window.__tabs = []
+  document.addEventListener('rmx:tabs-change', (e) => window.__tabs.push([e.activeTab, e.previousActiveTab, e.target.getAttribute('role')]))
+})
+const tabState = () => page.evaluate(() => ({
+  selected: [...document.querySelectorAll('[role="tab"]')].map((t) => t.getAttribute('aria-selected')).join(),
+  hidden: [...document.querySelectorAll('[role="tabpanel"]')].map((p) => p.hidden).join(),
+  focus: document.activeElement?.textContent ?? '',
+}))
+const t0 = await tabState()
+check('tabs: default tab active, others hidden', t0.selected === 'true,false,false' && t0.hidden === 'false,true,true', t0)
+check('tabs: ids link tabs and panels', await page.evaluate(() => [...document.querySelectorAll('[role="tab"]')].every((t) => document.getElementById(t.getAttribute('aria-controls'))?.getAttribute('aria-labelledby') === t.id)))
+await page.click('[role="tab"]:has-text("Activity")')
+await settle()
+const t1 = await tabState()
+check('tabs: click activates a tab and its panel', t1.selected === 'false,true,false' && t1.hidden === 'true,false,true', t1)
+await page.keyboard.press('ArrowRight')
+await settle()
+const t2 = await tabState()
+check('tabs: ArrowRight skips the disabled tab and wraps, moving focus', t2.selected === 'true,false,false' && t2.focus === 'Overview', t2)
+await page.keyboard.press('End')
+await settle()
+const t3 = await tabState()
+check('tabs: End goes to the last enabled tab', t3.selected === 'false,true,false' && t3.focus === 'Activity', t3)
+await page.keyboard.press('Home')
+await settle()
+const t4 = await tabState()
+check('tabs: Home goes to the first tab', t4.selected === 'true,false,false' && t4.focus === 'Overview', t4)
+await page.click('[role="tab"]:has-text("Settings")', { force: true })
+await settle()
+check('tabs: the disabled tab cannot be activated', (await tabState()).selected === 'true,false,false')
+await page.focus('[role="tab"]:has-text("Activity")')
+await page.keyboard.press('Enter')
+await settle()
+check('tabs: Enter activates the focused tab', (await tabState()).selected === 'false,true,false')
+const tabEvents = await page.evaluate(() => window.__tabs)
+check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs', eq(tabEvents, [['activity', 'overview', null], ['overview', 'activity', null], ['activity', 'overview', null], ['overview', 'activity', null], ['activity', 'overview', null]]), tabEvents)
+}
+
+// Accordion primitives (packages/ui/src/demos/accordion.demo.tsx, accordion.test.tsx)
+{
+  await open('ui/accordion')
+  await page.evaluate(() => {
+    window.__acc = []
+    document.addEventListener('rmx:accordion-change', (e) => window.__acc.push([e.accordionType, e.itemValue, e.value, e.target.dataset.type]))
+  })
+  const acc = () => page.evaluate(() => ({
+    expanded: [...document.querySelectorAll('h3 button')].map((b) => b.getAttribute('aria-expanded')).join(),
+    visible: [...document.querySelectorAll('[aria-labelledby]')].map((p) => getComputedStyle(p).display !== 'none').join(),
+    focus: document.activeElement?.textContent ?? '',
+  }))
+  const a0 = await acc()
+  check('accordion: default item open, disabled item closed', a0.expanded === 'true,false,false' && a0.visible === 'true,false,false', a0)
+  check('accordion: triggers and panels are linked', await page.evaluate(() => [...document.querySelectorAll('h3 button')].every((b) => document.getElementById(b.getAttribute('aria-controls'))?.getAttribute('aria-labelledby') === b.id)))
+  await page.click('h3 button:has-text("Billing")')
+  await settle()
+  const a1 = await acc()
+  check('accordion: opening another item closes the first (single)', a1.expanded === 'false,true,false' && a1.visible === 'false,true,false', a1)
+  await page.click('h3 button:has-text("Billing")')
+  await settle()
+  check('accordion: single items collapse by default', (await acc()).expanded === 'false,false,false')
+  await page.click('h3 button:has-text("Archived")', { force: true })
+  await settle()
+  check('accordion: disabled item does not open', (await acc()).expanded === 'false,false,false')
+  await page.focus('h3 button:has-text("Shipping")')
+  await page.keyboard.press('ArrowDown')
+  const f1 = (await acc()).focus
+  await page.keyboard.press('ArrowDown')
+  const f2 = (await acc()).focus
+  await page.keyboard.press('End')
+  const f3 = (await acc()).focus
+  await page.keyboard.press('Home')
+  const f4 = (await acc()).focus
+  check('accordion: arrows wrap over enabled triggers, Home and End', [f1, f2, f3, f4].join() === 'Billing,Shipping,Billing,Shipping', [f1, f2, f3, f4])
+  const events = await page.evaluate(() => window.__acc)
+  check('accordion: rmx:accordion-change bubbles from the root', eq(events, [['single', 'billing', 'billing', 'single'], ['single', 'billing', null, 'single']]), events)
+}
 
 check('no page errors or failed requests', errors.length === 0, errors)
 await browser.close()
