@@ -27,7 +27,7 @@ pub use cache_control::CacheControl;
 pub use conditional::{IfMatch, IfNoneMatch, IfRange};
 pub use content::{ContentDisposition, ContentRange, ContentType};
 pub use cookie::{Cookie, SameSite, SetCookie};
-pub use date::{format_http_date, parse_http_date, unix_seconds};
+pub use date::{format_http_date, parse_http_date, unix_seconds, UtcDateTime};
 pub use params::{parse_params, quote, quote_etag, split_list};
 pub use range::Range;
 pub use vary::Vary;

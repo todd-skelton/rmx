@@ -46,6 +46,51 @@ pub fn parse_http_date(value: &str) -> Option<SystemTime> {
     Some(if secs >= 0 { UNIX_EPOCH + Duration::from_secs(secs as u64) } else { UNIX_EPOCH - Duration::from_secs((-secs) as u64) })
 }
 
+/// A moment as UTC calendar fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UtcDateTime {
+    pub year: i64,
+    /// 1 to 12.
+    pub month: u32,
+    pub day: u32,
+    pub hour: u32,
+    pub minute: u32,
+    pub second: u32,
+    pub millisecond: u32,
+}
+
+impl UtcDateTime {
+    pub fn new(t: SystemTime) -> UtcDateTime {
+        let millis = match t.duration_since(UNIX_EPOCH) {
+            Ok(d) => d.as_millis() as i64,
+            Err(e) => -(e.duration().as_millis() as i64),
+        };
+        let days = millis.div_euclid(86_400_000);
+        let rem = millis.rem_euclid(86_400_000);
+        let (year, month, day) = civil_from_days(days);
+        UtcDateTime {
+            year,
+            month: month as u32,
+            day: day as u32,
+            hour: (rem / 3_600_000) as u32,
+            minute: (rem % 3_600_000 / 60_000) as u32,
+            second: (rem % 60_000 / 1000) as u32,
+            millisecond: (rem % 1000) as u32,
+        }
+    }
+
+    /// `Jan` to `Dec`.
+    pub fn month_name(&self) -> &'static str {
+        MONTHS[(self.month - 1) as usize]
+    }
+
+    /// `Date.prototype.toISOString()`: `2025-09-23T18:34:12.345Z`.
+    pub fn to_iso_string(&self) -> String {
+        let UtcDateTime { year, month, day, hour, minute, second, millisecond } = *self;
+        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millisecond:03}Z")
+    }
+}
+
 /// Seconds since the epoch, for comparing dates at HTTP precision.
 pub fn unix_seconds(t: SystemTime) -> i64 {
     match t.duration_since(UNIX_EPOCH) {
@@ -91,5 +136,14 @@ mod tests {
         assert_eq!(parse_http_date("Mon, 06 Nov 1994 08:49:37 GMT"), None, "wrong weekday");
         assert_eq!(parse_http_date("Sunday, 06-Nov-94 08:49:37 GMT"), None);
         assert_eq!(parse_http_date("Wed, 30 Feb 2022 00:00:00 GMT"), None);
+    }
+
+    #[test]
+    fn utc_fields_and_iso_strings() {
+        let t = UNIX_EPOCH + Duration::from_millis(784_111_777_123);
+        let utc = UtcDateTime::new(t);
+        assert_eq!((utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, utc.millisecond), (1994, 11, 6, 8, 49, 37, 123));
+        assert_eq!((utc.month_name(), utc.to_iso_string().as_str()), ("Nov", "1994-11-06T08:49:37.123Z"));
+        assert_eq!(UtcDateTime::new(UNIX_EPOCH - Duration::from_millis(1)).to_iso_string(), "1969-12-31T23:59:59.999Z");
     }
 }
