@@ -1,6 +1,6 @@
 [package]
 name = "social-auth-demo"
-description = "The Remix 3 social-auth demo (credentials login, signup, password reset, session auth), in rmx"
+description = "The Remix 3 social-auth demo (credentials and Google/GitHub/X login, signup, password reset, session auth), in rmx"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 http.workspace = true
 rmx.workspace = true
+rmx-auth.workspace = true
 rmx-cookie.workspace = true
 rmx-crypto.workspace = true
 rmx-fetch.workspace = true
@@ -21,3 +22,5 @@ rmx-url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+# Provider APIs are HTTPS; Remix uses the runtime's fetch().
+ureq = "3"

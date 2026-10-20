@@ -1,5 +1,6 @@
-//! Users and password reset tokens (data/schema.ts, db/seed.sql), kept in memory: the
-//! Remix demo uses SQLite through remix/data-table, which is not what this port is about.
+//! Users, linked provider accounts and password reset tokens (data/schema.ts, db/seed.sql),
+//! kept in memory: the Remix demo uses SQLite through remix/data-table, which is not what
+//! this port is about.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -18,6 +19,34 @@ pub struct User {
     pub updated_at: i64,
 }
 
+/// A provider account linked to a user (the `auth_accounts` table).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct AuthAccount {
+    pub id: u64,
+    pub user_id: u64,
+    pub provider: String,
+    pub provider_account_id: String,
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub profile_json: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// What a provider profile says about the person (resolve-external-auth.ts).
+#[derive(Clone, Debug, Default)]
+pub struct ExternalProfile {
+    pub email: Option<String>,
+    /// The email when it may link to an existing local account (verified addresses only).
+    pub linkable_email: Option<String>,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub profile_json: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct ResetToken {
     pub token: String,
@@ -28,6 +57,7 @@ pub struct ResetToken {
 #[derive(Default)]
 struct Tables {
     users: Vec<User>,
+    auth_accounts: Vec<AuthAccount>,
     reset_tokens: HashMap<String, ResetToken>,
 }
 
@@ -96,6 +126,78 @@ impl Db {
         user
     }
 
+    pub fn find_auth_account(&self, id: u64) -> Option<AuthAccount> {
+        self.tables().auth_accounts.iter().find(|a| a.id == id).cloned()
+    }
+
+    pub fn find_auth_account_by_provider(&self, provider: &str, provider_account_id: &str) -> Option<AuthAccount> {
+        self.tables().auth_accounts.iter().find(|a| a.provider == provider && a.provider_account_id == provider_account_id).cloned()
+    }
+
+    /// Find or create the local user for a provider login (`resolveExternalAuth`): an account
+    /// seen before keeps its user (recreated if it was deleted), a new account links to the
+    /// user with the same verified email or creates one. Profile details are refreshed each
+    /// time.
+    pub fn resolve_external_auth(&self, provider: &str, provider_account_id: &str, profile: &ExternalProfile) -> (User, AuthAccount) {
+        let mut t = self.tables();
+        let now = now_ms();
+        let existing = t.auth_accounts.iter().position(|a| a.provider == provider && a.provider_account_id == provider_account_id);
+        let user_id = match existing.map(|i| t.auth_accounts[i].user_id) {
+            Some(id) if t.users.iter().any(|u| u.id == id) => id,
+            Some(_) => create_profile_user(&mut t, profile, now),
+            None => match profile.linkable_email.as_deref().and_then(|e| t.users.iter().find(|u| u.email.as_deref() == Some(e))) {
+                Some(user) => user.id,
+                None => create_profile_user(&mut t, profile, now),
+            },
+        };
+        let user = t.users.iter_mut().find(|u| u.id == user_id).expect("resolved user");
+        let mut changed = false;
+        for (field, value) in [(&mut user.email, &profile.linkable_email), (&mut user.name, &profile.display_name), (&mut user.avatar_url, &profile.avatar_url)] {
+            if value.is_some() && field != value {
+                field.clone_from(value);
+                changed = true;
+            }
+        }
+        if changed {
+            user.updated_at = now;
+        }
+        let user = user.clone();
+        let details = |a: &mut AuthAccount| {
+            a.user_id = user_id;
+            a.email = profile.email.as_deref().map(normalize_email);
+            a.username = profile.username.as_deref().and_then(normalize_optional_text);
+            a.display_name = profile.display_name.as_deref().and_then(normalize_optional_text);
+            a.avatar_url = profile.avatar_url.as_deref().and_then(normalize_optional_text);
+            a.profile_json = profile.profile_json.clone();
+            a.updated_at = now;
+        };
+        let account = match existing {
+            Some(i) => {
+                details(&mut t.auth_accounts[i]);
+                t.auth_accounts[i].clone()
+            }
+            None => {
+                let mut account = AuthAccount {
+                    id: t.auth_accounts.iter().map(|a| a.id).max().unwrap_or(0) + 1,
+                    user_id,
+                    provider: provider.to_string(),
+                    provider_account_id: provider_account_id.to_string(),
+                    email: None,
+                    username: None,
+                    display_name: None,
+                    avatar_url: None,
+                    profile_json: String::new(),
+                    created_at: now,
+                    updated_at: now,
+                };
+                details(&mut account);
+                t.auth_accounts.push(account.clone());
+                account
+            }
+        };
+        (user, account)
+    }
+
     pub fn update_password(&self, id: u64, password_hash: String) {
         if let Some(u) = self.tables().users.iter_mut().find(|u| u.id == id) {
             u.password_hash = Some(password_hash);
@@ -128,6 +230,20 @@ impl Db {
     pub fn delete_reset_token(&self, token: &str) {
         self.tables().reset_tokens.remove(token);
     }
+}
+
+fn create_profile_user(t: &mut Tables, profile: &ExternalProfile, now: i64) -> u64 {
+    let id = t.users.iter().map(|u| u.id).max().unwrap_or(0) + 1;
+    t.users.push(User {
+        id,
+        email: profile.linkable_email.as_deref().map(normalize_email),
+        password_hash: None,
+        name: profile.display_name.as_deref().map(|n| n.trim().to_string()),
+        avatar_url: profile.avatar_url.as_deref().and_then(normalize_optional_text),
+        created_at: now,
+        updated_at: now,
+    });
+    id
 }
 
 // utils/password-hash.ts -----------------------------------------------------------------

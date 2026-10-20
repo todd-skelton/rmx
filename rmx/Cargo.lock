@@ -1533,6 +1533,7 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx",
+ "rmx-auth",
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
@@ -1545,6 +1546,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "ureq",
 ]
 
 [[package]]

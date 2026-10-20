@@ -94,11 +94,14 @@ Each Remix 3 package is a crate under `crates/` (about 19,600 lines of Rust, mea
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server plus an HTTP/1
-   `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression,
-   static files, form data, sessions, auth, CSRF, CORS, COP, method override, logger).
+   `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression with
+   br/gzip/deflate negotiation, static files with strong ETags, ranges and directory
+   listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
+   override, logger), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
+   Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer).
 3. Supporting crates: `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
-   `rmx-file-storage`, `rmx-tar-parser`, `rmx-html-template`, `rmx-headers`,
-   `rmx-mime`, `rmx-spa`, `rmx-url`.
+   `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
+   `rmx-headers`, `rmx-mime`, `rmx-spa`, `rmx-url`.
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
    entrance, exit, FLIP layout), combobox, listbox, menu (submenus with hover aim, context
    menus), popover, select, tabs and toggle. The spring CSS output matches Remix's
