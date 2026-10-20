@@ -172,6 +172,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "frames-demo"
+version = "0.1.0"
+dependencies = [
+ "rmx",
+ "rmx-fetch",
+ "rmx-middleware",
+ "rmx-render",
+ "rmx-router",
+ "rmx-serve",
+ "serde",
+ "tokio",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"

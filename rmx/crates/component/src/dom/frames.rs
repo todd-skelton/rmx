@@ -14,7 +14,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
-use super::{diff, document, entries, styles, warn, window};
+use super::{diff, document, entries, js, styles, warn, window};
 use crate::frame::ReloadOptions;
 use crate::ssr::{HydrationData, TEMPLATE_END};
 
@@ -29,6 +29,10 @@ pub(crate) struct FrameState {
     range: Option<(web_sys::Comment, web_sys::Comment)>,
     reload: RefCell<Option<web_sys::AbortController>>,
     disposed: Cell<bool>,
+    /// Showing fallback content while waiting for a streamed template.
+    pending: Cell<bool>,
+    /// `reloadStart` / `reloadComplete` listeners.
+    events: web_sys::EventTarget,
 }
 
 /// A request for new frame content: a reload, a link navigation or a form submission.
@@ -56,6 +60,11 @@ impl FrameState {
         *self.name.borrow_mut() = name;
     }
 
+    /// Whether the frame shows fallback content (its streamed content has not arrived).
+    pub(crate) fn is_pending(&self) -> bool {
+        self.pending.get()
+    }
+
     pub(crate) fn is_top(&self) -> bool {
         self.range.is_none()
     }
@@ -66,6 +75,39 @@ impl FrameState {
 
     pub(crate) fn end(&self) -> web_sys::Comment {
         self.range.as_ref().expect("frame region").1.clone()
+    }
+
+    fn new(src: String, name: Option<String>, range: Option<(web_sys::Comment, web_sys::Comment)>) -> FrameState {
+        FrameState {
+            src: RefCell::new(src),
+            name: RefCell::new(name),
+            range,
+            reload: RefCell::new(None),
+            disposed: Cell::new(false),
+            pending: Cell::new(false),
+            events: web_sys::EventTarget::new().expect("EventTarget"),
+        }
+    }
+
+    /// Call `handler` for `event` until `signal` aborts.
+    pub(crate) fn add_listener(&self, event: &str, handler: crate::node::EventHandler, signal: &web_sys::AbortSignal) {
+        let callback = Closure::<dyn FnMut(web_sys::Event)>::new(move |raw: web_sys::Event| {
+            (handler.0)(&crate::node::Event { raw });
+        })
+        .into_js_value();
+        let options = web_sys::AddEventListenerOptions::new();
+        options.set_signal(signal);
+        let _ = self.events.add_event_listener_with_callback_and_add_event_listener_options(
+            event,
+            callback.unchecked_ref(),
+            &options,
+        );
+    }
+
+    fn emit(&self, event: &str) {
+        if let Ok(e) = web_sys::Event::new(event) {
+            let _ = self.events.dispatch_event(&e);
+        }
     }
 
     /// `FrameHandle::reload_with`: optional new src, method and form fields.
@@ -109,6 +151,18 @@ impl FrameState {
             previous.abort();
         }
         let signal = controller.signal();
+        self.emit("reloadStart");
+        let result = self.fetch_and_apply(submission, &signal).await;
+        if signal.aborted() {
+            // Superseded by a newer load of this frame (or the frame went away).
+            return Ok(None);
+        }
+        self.reload.replace(None);
+        self.emit("reloadComplete");
+        result
+    }
+
+    async fn fetch_and_apply(self: &Rc<Self>, submission: Submission, signal: &web_sys::AbortSignal) -> Result<Option<String>, JsValue> {
 
         let headers = web_sys::Headers::new()?;
         headers.set("Accept", "text/html")?;
@@ -123,7 +177,7 @@ impl FrameState {
         init.set_method(submission.method.as_deref().unwrap_or("GET"));
         init.set_headers(&headers);
         init.set_mode(web_sys::RequestMode::SameOrigin);
-        init.set_signal(Some(&signal));
+        init.set_signal(Some(signal));
         if let Some(body) = &submission.body {
             init.set_body(body);
         }
@@ -133,17 +187,64 @@ impl FrameState {
         if status >= 500 || (status >= 300 && !is_html) {
             return Err(JsValue::from_str(&format!("Failed to resolve frame: {status} {}", response.status_text())));
         }
-        let html = JsFuture::from(response.text()?).await?.as_string().unwrap_or_default();
-        if signal.aborted() || self.disposed.get() {
-            return Ok(None);
-        }
         let redirected = response.redirected().then(|| response.url());
         if let Some(url) = &redirected {
             self.set_src(url);
         }
-        self.apply_html(&html);
-        self.reload.replace(None);
+        self.read_stream(&response, signal).await?;
         Ok(redirected)
+    }
+
+    /// Apply a response as it streams: the main HTML as soon as the server's flush marker
+    /// arrives, then each `<template>` as it completes (the template watcher swaps it into
+    /// its frame).
+    async fn read_stream(self: &Rc<Self>, response: &web_sys::Response, signal: &web_sys::AbortSignal) -> Result<(), JsValue> {
+        let Some(body) = response.body() else {
+            let html = JsFuture::from(response.text()?).await?.as_string().unwrap_or_default();
+            if !signal.aborted() && !self.disposed.get() {
+                self.apply_html(&html);
+            }
+            return Ok(());
+        };
+        let reader = js::call(&body, "getReader", &[])?;
+        let decoder: JsValue = web_sys::TextDecoder::new()?.into();
+        let stream_opts = js::object(&[("stream", JsValue::TRUE)]);
+        let mut buffer = String::new();
+        let mut main_applied = false;
+        loop {
+            let chunk = JsFuture::from(js::call(&reader, "read", &[])?.unchecked_into::<js_sys::Promise>()).await?;
+            if signal.aborted() || self.disposed.get() {
+                let _ = js::call(&reader, "cancel", &[]);
+                return Ok(());
+            }
+            let done = js::get(&chunk, "done").as_bool().unwrap_or(true);
+            if !done {
+                let text = js::call(&decoder, "decode", &[&js::get(&chunk, "value"), &stream_opts])?;
+                buffer.push_str(&text.as_string().unwrap_or_default());
+            }
+            if !main_applied {
+                if let Some((start, end)) = crate::ssr::find_flush_marker(&buffer) {
+                    let rest = buffer.split_off(end);
+                    buffer.truncate(start);
+                    self.apply_html(&buffer);
+                    buffer = rest.trim_start().to_string();
+                    main_applied = true;
+                } else if done {
+                    self.apply_html(&buffer);
+                    return Ok(());
+                }
+            }
+            if main_applied {
+                while let Some(end) = template_end(&buffer) {
+                    let rest = buffer.split_off(end);
+                    append_template(&buffer);
+                    buffer = rest.trim_start().to_string();
+                }
+            }
+            if done {
+                return Ok(());
+            }
+        }
     }
 
     fn apply_html(self: &Rc<Self>, html: &str) {
@@ -200,6 +301,44 @@ impl FrameState {
     }
 }
 
+/// The end of the complete `<template ...>...</template>` at the start of `html`, counting
+/// nested templates.
+fn template_end(html: &str) -> Option<usize> {
+    if !html.starts_with("<template") {
+        return None;
+    }
+    let lower = html.to_ascii_lowercase();
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < lower.len() {
+        let rest = &lower[i..];
+        if rest.starts_with("<template") {
+            depth += 1;
+            i += 9;
+        } else if rest.starts_with("</template>") {
+            depth -= 1;
+            i += 11;
+            if depth == 0 {
+                return Some(i);
+            }
+        } else {
+            i += rest.chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    None
+}
+
+/// Put a streamed `<template id>` into the document for the template watcher.
+fn append_template(html: &str) {
+    let doc = document();
+    let holder: web_sys::HtmlTemplateElement = doc.create_element("template").expect("template").unchecked_into();
+    holder.set_inner_html(html);
+    if let (Some(template), Some(body)) = (holder.content().first_element_child(), doc.body()) {
+        let _ = body.append_child(&template);
+        check_templates();
+    }
+}
+
 fn looks_like_document(html: &str) -> bool {
     let head = html.trim_start().get(..20).unwrap_or(html.trim_start()).to_ascii_lowercase();
     head.starts_with("<!doctype") || head.starts_with("<html")
@@ -240,13 +379,7 @@ pub(crate) fn top() -> Rc<FrameState> {
     TOP.with(|t| {
         t.borrow_mut()
             .get_or_insert_with(|| {
-                Rc::new(FrameState {
-                    src: RefCell::new(window().location().href().unwrap_or_default()),
-                    name: RefCell::new(None),
-                    range: None,
-                    reload: RefCell::new(None),
-                    disposed: Cell::new(false),
-                })
+                Rc::new(FrameState::new(window().location().href().unwrap_or_default(), None, None))
             })
             .clone()
     })
@@ -480,13 +613,7 @@ pub(crate) fn adopt_server_frame(start: &web_sys::Comment, _parent: Option<Rc<Fr
     }
     let end: web_sys::Comment = find_end(start_node)?.unchecked_into();
     let (src, name, pending) = data.unwrap_or_default();
-    let frame = register(FrameState {
-        src: RefCell::new(src),
-        name: RefCell::new(name),
-        range: Some((start.clone(), end)),
-        reload: RefCell::new(None),
-        disposed: Cell::new(false),
-    });
+    let frame = register(FrameState::new(src, name, Some((start.clone(), end))));
     if pending {
         watch(id, &frame);
     }
@@ -517,13 +644,7 @@ pub(crate) fn create_client_frame(
         let _ = fragment.append_child(&template.content());
     }
     let _ = fragment.append_child(&end);
-    let frame = register(FrameState {
-        src: RefCell::new(src.to_string()),
-        name: RefCell::new(name),
-        range: Some((start, end)),
-        reload: RefCell::new(None),
-        disposed: Cell::new(false),
-    });
+    let frame = register(FrameState::new(src.to_string(), name, Some((start, end))));
     spawn_reload(frame.clone());
     frame
 }
@@ -592,6 +713,7 @@ fn find_comment(root: &web_sys::Node, data: &str) -> Option<web_sys::Node> {
 
 /// Wait for the `<template id>` holding a non-blocking frame's content.
 fn watch(id: String, frame: &Rc<FrameState>) {
+    frame.pending.set(true);
     PENDING.with(|p| p.borrow_mut().push((id, Rc::downgrade(frame))));
     OBSERVER.with(|o| {
         let mut o = o.borrow_mut();
@@ -630,6 +752,7 @@ fn check_templates() {
         };
         template.remove();
         mark_resolved(std::slice::from_ref(&id));
+        frame.pending.set(false);
         frame.apply_fragment(&content);
     }
     let empty = PENDING.with(|p| {

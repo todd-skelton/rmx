@@ -40,6 +40,24 @@ impl Component for Frame {
     }
 }
 
+/// Frame lifecycle events, for [`crate::Handle::on_frame`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameEvent {
+    /// A reload (or navigation into the frame) started.
+    ReloadStart,
+    /// The new content is in the page.
+    ReloadComplete,
+}
+
+impl FrameEvent {
+    pub fn name(self) -> &'static str {
+        match self {
+            FrameEvent::ReloadStart => "reloadStart",
+            FrameEvent::ReloadComplete => "reloadComplete",
+        }
+    }
+}
+
 /// Options for [`FrameHandle::reload_with`].
 #[derive(Clone, Debug, Default)]
 pub struct ReloadOptions {

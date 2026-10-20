@@ -14,6 +14,7 @@ members = [
     "examples/bench/app",
     "examples/bench/server",
     "examples/bench/client",
+    "examples/frames",
 ]
 
 [workspace.package]

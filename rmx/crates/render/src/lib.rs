@@ -24,7 +24,7 @@ use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 
 use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use rmx::ssr::{self, FrameSegment, Segment};
+use rmx::ssr::{self, Segment};
 use rmx::Node;
 use rmx_fetch::{Body, Response};
 use rmx_router::{Context, Router};
@@ -155,7 +155,24 @@ fn respond(router: Router, base: Url, forward: HeaderMap, rendered: ssr::Rendere
     html_response(body, init)
 }
 
-type FrameFuture = Pin<Box<dyn Future<Output = (usize, String)> + Send>>;
+/// What finished: a frame's first part (inline content and the rest of its stream), or
+/// the next chunk of a frame's streamed templates.
+enum Done {
+    Frame { index: usize, head: String, rest: Option<Body> },
+    Chunk { rest: Body, chunk: Option<String> },
+}
+
+type Work = Pin<Box<dyn Future<Output = Done> + Send>>;
+
+fn next_chunk(mut rest: Body) -> Work {
+    Box::pin(async move {
+        let chunk = match rest.chunk().await {
+            Some(Ok(bytes)) => Some(String::from_utf8_lossy(&bytes).into_owned()),
+            _ => None,
+        };
+        Done::Chunk { rest, chunk }
+    })
+}
 
 async fn stream_with_frames(
     router: Router,
@@ -165,33 +182,32 @@ async fn stream_with_frames(
     mut send: impl FnMut(String) -> bool,
 ) {
     let ssr::Rendered { segments, mut data, styles } = rendered;
-    let frames: Vec<(usize, &FrameSegment)> = segments
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| match s {
-            Segment::Frame(f) => Some((i, f)),
-            Segment::Html(_) => None,
-        })
-        .collect();
+    let blocking = |i: usize| matches!(&segments[i], Segment::Frame(f) if f.fallback.is_none());
 
     // Start every frame at once; blocking ones must finish before the first byte.
-    let mut pending: Vec<FrameFuture> = frames
-        .iter()
-        .map(|(i, f)| {
-            let i = *i;
+    let mut work: Vec<Work> = Vec::new();
+    for (index, seg) in segments.iter().enumerate() {
+        if let Segment::Frame(f) = seg {
             let fut = fetch_frame(router.clone(), base.clone(), f.src.clone(), forward.clone());
-            Box::pin(async move { (i, fut.await) }) as FrameFuture
-        })
-        .collect();
-    let blocking = |i: usize| matches!(&segments[i], Segment::Frame(f) if f.fallback.is_none());
-    let mut contents: Vec<Option<String>> = vec![None; segments.len()];
-    let mut blocking_left = frames.iter().filter(|(i, _)| blocking(*i)).count();
-    while blocking_left > 0 {
-        let Some((i, html)) = next_done(&mut pending).await else { break };
-        if blocking(i) {
-            blocking_left -= 1;
+            work.push(Box::pin(async move {
+                let (head, rest) = fut.await;
+                Done::Frame { index, head, rest }
+            }));
         }
-        contents[i] = Some(html);
+    }
+    let mut contents: Vec<Option<String>> = vec![None; segments.len()];
+    // Template streams of frames whose content went out already.
+    let mut early_rests: Vec<Body> = Vec::new();
+    let mut blocking_left = (0..segments.len()).filter(|&i| blocking(i)).count();
+    while blocking_left > 0 {
+        let Some(done) = next_done(&mut work).await else { break };
+        if let Done::Frame { index, head, rest } = done {
+            if blocking(index) {
+                blocking_left -= 1;
+            }
+            contents[index] = Some(head);
+            early_rests.extend(rest);
+        }
     }
 
     // The page: blocking frames inlined, non-blocking ones showing their fallback.
@@ -222,16 +238,17 @@ async fn stream_with_frames(
         }
     }
     let html = with_doctype(ssr::finalize_html(html, &styles, &data));
-    let (head, tail) = split_body_end(html);
+    let document = html.starts_with("<!DOCTYPE");
+    let (mut head, tail) = split_body_end(html);
+    let more = !streamed.is_empty() || !early_rests.is_empty() || !work.is_empty();
+    if more {
+        head.push_str(ssr::flush_marker(document));
+    }
     if !send(head) {
         return;
     }
 
-    // Templates for non-blocking frames, in completion order.
-    let id_of = |i: usize| match &segments[i] {
-        Segment::Frame(f) => f.id.clone(),
-        Segment::Html(_) => String::new(),
-    };
+    // Templates for non-blocking frames (and nested frames' templates), as they finish.
     for (id, done) in &streamed {
         if let Some(content) = done {
             if !send(template(id, content)) {
@@ -239,9 +256,28 @@ async fn stream_with_frames(
             }
         }
     }
-    while let Some((i, content)) = next_done(&mut pending).await {
-        if !send(template(&id_of(i), &content)) {
-            return;
+    work.extend(early_rests.into_iter().map(next_chunk));
+    while let Some(done) = next_done(&mut work).await {
+        match done {
+            Done::Frame { index, head, rest } => {
+                let id = match &segments[index] {
+                    Segment::Frame(f) => f.id.clone(),
+                    Segment::Html(_) => String::new(),
+                };
+                if !send(template(&id, &head)) {
+                    return;
+                }
+                if let Some(rest) = rest {
+                    work.push(next_chunk(rest));
+                }
+            }
+            Done::Chunk { rest, chunk: Some(chunk) } => {
+                if !send(chunk) {
+                    return;
+                }
+                work.push(next_chunk(rest));
+            }
+            Done::Chunk { chunk: None, .. } => {}
         }
     }
     send(tail);
@@ -264,17 +300,17 @@ fn split_body_end(mut html: String) -> (String, String) {
 
 /// GET a frame through the router, following redirects. Error responses are used as-is,
 /// so an application's error UI shows up inside the frame.
-async fn fetch_frame(router: Router, base: Url, src: String, forward: HeaderMap) -> String {
-    let mut url = match base.join(&src) {
-        Ok(u) => u,
-        Err(_) => return String::new(),
-    };
+///
+/// Returns the frame's content up to its flush marker, plus the rest of its body (the
+/// templates of its own non-blocking frames) when it streams.
+async fn fetch_frame(router: Router, base: Url, src: String, forward: HeaderMap) -> (String, Option<Body>) {
+    let Ok(mut url) = base.join(&src) else { return (String::new(), None) };
     for _ in 0..10 {
         let mut req = http::Request::builder().method(Method::GET).uri(url.href());
         if let Some(h) = req.headers_mut() {
             h.extend(forward.clone());
         }
-        let Ok(req) = req.body(Body::empty()) else { return String::new() };
+        let Ok(req) = req.body(Body::empty()) else { return (String::new(), None) };
         let res = router.fetch(req).await;
         if res.status().is_redirection() {
             let next = res.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).and_then(|l| url.join(l).ok());
@@ -283,13 +319,22 @@ async fn fetch_frame(router: Router, base: Url, src: String, forward: HeaderMap)
                 continue;
             }
         }
-        return res.into_body().text().await.unwrap_or_default();
+        let mut body = res.into_body();
+        let mut head = String::new();
+        while let Some(Ok(bytes)) = body.chunk().await {
+            head.push_str(&String::from_utf8_lossy(&bytes));
+            if let Some((start, _)) = ssr::find_flush_marker(&head) {
+                head.truncate(start);
+                return (head, Some(body));
+            }
+        }
+        return (head, None);
     }
-    String::new()
+    (String::new(), None)
 }
 
-/// Wait for the next frame future to finish (in any order).
-fn next_done(pending: &mut Vec<FrameFuture>) -> impl Future<Output = Option<(usize, String)>> + '_ {
+/// Wait for the next piece of work to finish (in any order).
+fn next_done(pending: &mut Vec<Work>) -> impl Future<Output = Option<Done>> + '_ {
     std::future::poll_fn(move |cx: &mut TaskContext<'_>| {
         if pending.is_empty() {
             return Poll::Ready(None);
@@ -303,6 +348,5 @@ fn next_done(pending: &mut Vec<FrameFuture>) -> impl Future<Output = Option<(usi
         Poll::Pending
     })
 }
-
 #[cfg(test)]
 mod tests;

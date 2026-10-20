@@ -198,6 +198,12 @@ pub(crate) fn diff_nodes(parent: &web_sys::Node, current: Vec<web_sys::Node>, ne
             (Unit::Entry { start: c, .. }, Unit::Entry { start: n, .. }) => copy_comment(c, n),
             (Unit::Frame { start: c, end: ce }, Unit::Frame { start: n, end: ne }) => {
                 copy_comment(c, n);
+                // A frame showing resolved content keeps it while the new content streams
+                // (the template watcher swaps it in), instead of flashing the fallback.
+                let incoming_pending = marker_id(n, "rmx:f:").and_then(|id| frames::frame_data(&id)).is_some_and(|d| d.2);
+                if incoming_pending && frames::live(c).is_some_and(|f| !f.is_pending()) {
+                    continue;
+                }
                 let interior = frames::range_nodes(c.unchecked_ref(), ce.unchecked_ref(), false);
                 let next_interior = frames::range_nodes(n.unchecked_ref(), ne.unchecked_ref(), false);
                 diff_nodes(parent, interior, next_interior, Some(ce.clone()));

@@ -21,7 +21,7 @@ pub mod ssr;
 pub(crate) mod dom;
 
 pub use component::{set_server_frame_src, Component, Handle};
-pub use frame::{Frame, FrameHandle, FrameProps, Frames, ReloadOptions};
+pub use frame::{Frame, FrameEvent, FrameHandle, FrameProps, Frames, ReloadOptions};
 pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use node::{AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str, StyleRule};
 pub use rmx_macros::rsx;

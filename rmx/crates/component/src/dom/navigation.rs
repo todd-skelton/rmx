@@ -16,11 +16,12 @@
 
 use std::rc::Rc;
 
-use js_sys::{Object, Reflect};
+use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
 use super::frames::{self, Submission};
+use super::js::{call, get, object};
 use super::{warn, window};
 
 /// Options for [`navigate`].
@@ -34,26 +35,6 @@ pub struct NavigateOptions {
     pub replace: bool,
 }
 
-fn get(target: &JsValue, key: &str) -> JsValue {
-    Reflect::get(target, &JsValue::from_str(key)).unwrap_or(JsValue::UNDEFINED)
-}
-
-fn call(target: &JsValue, method: &str, args: &[&JsValue]) -> Result<JsValue, JsValue> {
-    let f: js_sys::Function = get(target, method).dyn_into()?;
-    let array = js_sys::Array::new();
-    for a in args {
-        array.push(a);
-    }
-    f.apply(target, &array)
-}
-
-fn object(entries: &[(&str, JsValue)]) -> JsValue {
-    let o = Object::new();
-    for (k, v) in entries {
-        let _ = Reflect::set(&o, &JsValue::from_str(k), v);
-    }
-    o.into()
-}
 
 fn opt_str(v: Option<&str>) -> JsValue {
     v.map_or(JsValue::UNDEFINED, JsValue::from_str)

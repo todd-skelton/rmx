@@ -205,6 +205,19 @@ impl<C: Component> Handle<C> {
         self.on_event(move |state, h, _event| f(state, h))
     }
 
+    /// A [`crate::node_ref`] mixin whose callback gets the component state, for keeping
+    /// an element around: `mix={h.node_ref(|this, node| this.input = Some(node.clone()))}`.
+    pub fn node_ref(&self, f: impl Fn(&mut C, &crate::NodeHandle) + 'static) -> crate::Mixin {
+        let inst = self.inst.clone();
+        crate::node_ref(move |node| {
+            if let Some(inst) = inst.upgrade() {
+                if let Ok(mut state) = inst.state.try_borrow_mut() {
+                    f(&mut state, node);
+                }
+            }
+        })
+    }
+
     /// Like [`Handle::on`], with access to the DOM event.
     pub fn on_event(&self, f: impl Fn(&mut C, &Handle<C>, &Event) + 'static) -> EventHandler {
         #[cfg(target_arch = "wasm32")]
@@ -294,6 +307,21 @@ impl<C: Component> Handle<C> {
             })
         })
         .and_then(|v| v.downcast::<T>().ok())
+    }
+
+    /// Run `f` when `frame` emits `event`, for as long as this component is mounted
+    /// (`handle.frame.addEventListener(type, fn, { signal: handle.signal })`).
+    ///
+    /// ```ignore
+    /// h.on_frame(&h.frame(), FrameEvent::ReloadStart, |this, h| { this.pending = true; h.update(); });
+    /// ```
+    pub fn on_frame(&self, frame: &FrameHandle, event: crate::FrameEvent, f: impl Fn(&mut C, &Handle<C>) + 'static) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(state) = &frame.frame {
+            state.add_listener(event.name(), self.on(f), &self.signal());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = (frame, event, f);
     }
 
     /// The frame this component renders in (`handle.frame`).

@@ -55,12 +55,90 @@ pub struct RunOptions {
 /// Start the browser runtime: hydrate the client entries in the document, start the
 /// frames the server rendered (including streamed ones), and intercept same-origin
 /// navigations so links and forms reload frames instead of the whole page.
+///
+/// The page can load its script with `async`: on a streamed response the runtime starts
+/// as soon as the main content is parsed (the server's flush marker), so frames that
+/// stream in later appear as they arrive instead of when the response ends. When it is
+/// running, the document receives an `rmx:ready` event.
 pub fn run(options: RunOptions) {
     entries::register(options.entries);
-    styles::adopt_server_styles(&document().into());
-    frames::start();
-    navigation::start();
-    flush();
+    when_content_parsed(Box::new(|| {
+        styles::adopt_server_styles(&document().into());
+        frames::start();
+        navigation::start();
+        flush();
+        if let Ok(event) = web_sys::Event::new("rmx:ready") {
+            let _ = document().dispatch_event(&event);
+        }
+    }));
+}
+
+type Task = Box<dyn FnOnce()>;
+
+/// Run `f` once the document's main content is parsed: right away when parsing is done,
+/// otherwise at the streamed-response flush marker or `DOMContentLoaded`, whichever is first.
+fn when_content_parsed(f: Task) {
+    use std::cell::RefCell;
+    use wasm_bindgen::prelude::*;
+    use wasm_bindgen::JsCast;
+
+    let doc = document();
+    if doc.ready_state() != "loading" || has_flush_marker() {
+        return f();
+    }
+    let slot: Rc<RefCell<Option<Task>>> = Rc::new(RefCell::new(Some(f)));
+    let observer_slot: Rc<RefCell<Option<web_sys::MutationObserver>>> = Rc::default();
+    let fire = {
+        let slot = slot.clone();
+        let observer_slot = observer_slot.clone();
+        move || {
+            if let Some(o) = observer_slot.borrow_mut().take() {
+                o.disconnect();
+            }
+            let f = slot.borrow_mut().take();
+            if let Some(f) = f {
+                f();
+            }
+        }
+    };
+    let on_mutation = {
+        let fire = fire.clone();
+        Closure::<dyn FnMut()>::new(move || {
+            if has_flush_marker() {
+                fire();
+            }
+        })
+        .into_js_value()
+    };
+    if let Ok(observer) = web_sys::MutationObserver::new(on_mutation.unchecked_ref()) {
+        let init = web_sys::MutationObserverInit::new();
+        init.set_child_list(true);
+        init.set_subtree(true);
+        if observer.observe_with_options(&doc, &init).is_ok() {
+            *observer_slot.borrow_mut() = Some(observer);
+        }
+    }
+    let on_loaded = Closure::once_into_js(fire);
+    let _ = doc.add_event_listener_with_callback("DOMContentLoaded", on_loaded.unchecked_ref());
+}
+
+/// Whether the body ends with the server's `<!-- rmx:flush ... -->` marker (possibly
+/// followed by streamed templates).
+fn has_flush_marker() -> bool {
+    use wasm_bindgen::JsCast;
+    let Some(body) = document().body() else { return false };
+    let mut node = body.last_child();
+    while let Some(n) = node {
+        if let Some(c) = n.dyn_ref::<web_sys::Comment>() {
+            if c.data().trim_start().starts_with("rmx:flush") {
+                return true;
+            }
+        } else if n.dyn_ref::<web_sys::Element>().is_some_and(|e| e.tag_name() != "TEMPLATE") {
+            return false;
+        }
+        node = n.previous_sibling();
+    }
+    false
 }
 
 thread_local! {
@@ -74,6 +152,33 @@ pub(crate) fn document() -> web_sys::Document {
 
 pub(crate) fn window() -> web_sys::Window {
     web_sys::window().expect("window")
+}
+
+/// Small `Reflect` helpers for browser APIs that web-sys gates or types awkwardly.
+pub(crate) mod js {
+    use js_sys::{Object, Reflect};
+    use wasm_bindgen::{JsCast, JsValue};
+
+    pub(crate) fn get(target: &JsValue, key: &str) -> JsValue {
+        Reflect::get(target, &JsValue::from_str(key)).unwrap_or(JsValue::UNDEFINED)
+    }
+
+    pub(crate) fn call(target: &JsValue, method: &str, args: &[&JsValue]) -> Result<JsValue, JsValue> {
+        let f: js_sys::Function = get(target, method).dyn_into()?;
+        let array = js_sys::Array::new();
+        for a in args {
+            array.push(a);
+        }
+        f.apply(target, &array)
+    }
+
+    pub(crate) fn object(entries: &[(&str, JsValue)]) -> JsValue {
+        let o = Object::new();
+        for (k, v) in entries {
+            let _ = Reflect::set(&o, &JsValue::from_str(k), v);
+        }
+        o.into()
+    }
 }
 
 pub(crate) fn warn(message: &str) {

@@ -38,6 +38,7 @@ enum MixinKind {
 pub struct NodeRef(#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))] pub(crate) Rc<dyn Fn(&NodeHandle)>);
 
 /// The DOM element a [`node_ref`] callback receives. On the server it is never created.
+#[derive(Clone)]
 pub struct NodeHandle {
     #[cfg(target_arch = "wasm32")]
     pub(crate) el: web_sys::Element,
@@ -48,6 +49,44 @@ impl NodeHandle {
     #[cfg(target_arch = "wasm32")]
     pub fn element(&self) -> &web_sys::Element {
         &self.el
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn call(&self, method: &str) {
+        use wasm_bindgen::JsCast;
+        if let Ok(f) = js_sys::Reflect::get(&self.el, &method.into()).and_then(|f| f.dyn_into::<js_sys::Function>()) {
+            let _ = f.call0(&self.el);
+        }
+    }
+
+    pub fn focus(&self) {
+        #[cfg(target_arch = "wasm32")]
+        self.call("focus");
+    }
+
+    /// Select the text of an input or textarea.
+    pub fn select(&self) {
+        #[cfg(target_arch = "wasm32")]
+        self.call("select");
+    }
+
+    /// The `value` property of a form control.
+    pub fn value(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            js_sys::Reflect::get(&self.el, &"value".into()).ok().and_then(|v| v.as_string()).unwrap_or_default()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        String::new()
+    }
+
+    pub fn set_value(&self, value: &str) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = js_sys::Reflect::set(&self.el, &"value".into(), &value.into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = value;
     }
 }
 

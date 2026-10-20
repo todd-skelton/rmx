@@ -41,11 +41,34 @@ fn inlines_blocking_frames_and_streams_the_rest() {
     assert!(html.contains("<p>Loading</p><!--/rmx:f-->"), "{html}");
     let template = html.find("<template id=\"f").expect("streamed template");
     assert!(html[template..].contains("<section>Slow content</section><!--rmx:te--></template></body></html>"), "{html}");
+    assert!(html[..template].ends_with("<!-- rmx:flush document -->"), "{html}");
     // Hydration data comes before the templates and records which frame is pending.
     let data = html.find("id=\"rmx-data\"").expect("rmx-data");
     assert!(data < template);
     assert!(html.contains(r#""src":"/sidebar","name":null,"status":"resolved""#), "{html}");
     assert!(html.contains(r#""src":"/slow","name":"slow","status":"pending""#), "{html}");
+}
+
+#[test]
+fn nested_streamed_frames_stream_through_the_parent() {
+    let mut router = Router::new();
+    router.get("/", |ctx: Context| async move {
+        ctx.render(rsx! { <html><body><Frame src="/outer" fallback={rsx! { <p>"outer..."</p> }}/></body></html> })
+    });
+    router.get("/outer", |ctx: Context| async move {
+        ctx.render(rsx! { <div>"Outer"<Frame src="/inner" fallback={rsx! { <p>"inner..."</p> }}/></div> })
+    });
+    router.get("/inner", |ctx: Context| async move { ctx.render(rsx! { <b>"Inner"</b> }) });
+    let html = get(&router, "http://localhost/");
+    let outer = html.find("<template id=\"").expect("outer template");
+    let body = &html[outer..];
+    // The outer template carries the inner fallback; the inner content follows as its own template.
+    assert!(body.contains("<div>Outer<!--rmx:f:"), "{html}");
+    assert!(body.contains("<p>inner...</p><!--/rmx:f--></div>"), "{html}");
+    assert!(!body[..body.find("rmx:te").unwrap()].contains("rmx:flush"), "{html}");
+    assert_eq!(body.matches("<template id=").count(), 2, "{html}");
+    assert!(body.contains("<b>Inner</b><!--rmx:te--></template>"), "{html}");
+    assert!(html.ends_with("</template></body></html>"), "{html}");
 }
 
 #[test]

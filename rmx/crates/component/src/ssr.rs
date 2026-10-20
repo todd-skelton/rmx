@@ -27,6 +27,24 @@ use crate::node::{AttrValue, Element, FrameNode, Node, StyleRule};
 /// Marks the end of a streamed frame template.
 pub const TEMPLATE_END: &str = "rmx:te";
 
+/// Written after the first part of a streamed response, before any frame templates:
+/// `<!-- rmx:flush fragment -->` or `<!-- rmx:flush document -->`. A client reading the
+/// response can apply everything before it without waiting for the slow frames.
+pub fn flush_marker(document: bool) -> &'static str {
+    if document {
+        "<!-- rmx:flush document -->"
+    } else {
+        "<!-- rmx:flush fragment -->"
+    }
+}
+
+/// Where the flush marker starts and ends in `html`.
+pub fn find_flush_marker(html: &str) -> Option<(usize, usize)> {
+    let start = html.find("<!-- rmx:flush ")?;
+    let end = html[start..].find("-->")? + start + 3;
+    Some((start, end))
+}
+
 /// A rendered tree, ready for frame resolution and assembly.
 #[derive(Clone, Debug, Default)]
 pub struct Rendered {

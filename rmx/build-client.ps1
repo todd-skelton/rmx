@@ -17,7 +17,7 @@ $profile = if ($Dev) { "dev" } else { "wasm-release" }
 $dir = if ($Dev) { "debug" } else { "wasm-release" }
 $name = $Crate -replace "-", "_"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-cargo build -p $Crate --target wasm32-unknown-unknown --profile $profile
+cargo build -p $Crate --lib --target wasm32-unknown-unknown --profile $profile
 if ($LASTEXITCODE) { throw "$Crate build failed" }
 & $wasmBindgen.FullName --target web --no-typescript --out-dir $Out "target/wasm32-unknown-unknown/$dir/$name.wasm"
 if ($LASTEXITCODE) { throw "wasm-bindgen failed" }

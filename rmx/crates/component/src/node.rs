@@ -292,6 +292,90 @@ impl Event {
     pub fn raw(&self) -> &web_sys::Event {
         &self.raw
     }
+
+    pub fn prevent_default(&self) {
+        #[cfg(target_arch = "wasm32")]
+        self.raw.prevent_default();
+    }
+
+    pub fn stop_propagation(&self) {
+        #[cfg(target_arch = "wasm32")]
+        self.raw.stop_propagation();
+    }
+
+    /// `event.target.value` for inputs, selects and textareas (empty otherwise).
+    pub fn target_value(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.raw
+                .target()
+                .and_then(|t| js_sys::Reflect::get(&t, &"value".into()).ok())
+                .and_then(|v| v.as_string())
+                .unwrap_or_default()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        String::new()
+    }
+
+    /// `event.target.checked` for checkboxes and radios.
+    pub fn target_checked(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.raw
+                .target()
+                .and_then(|t| js_sys::Reflect::get(&t, &"checked".into()).ok())
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        false
+    }
+
+    /// `event.key` for keyboard events.
+    pub fn key(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            js_sys::Reflect::get(&self.raw, &"key".into()).ok().and_then(|v| v.as_string()).unwrap_or_default()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        String::new()
+    }
+
+    /// The text fields of the form this event belongs to (the target, or the target's
+    /// form), as `new FormData(form)` would collect them.
+    pub fn form_fields(&self) -> Vec<(String, String)> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let Some(target) = self.raw.target() else { return Vec::new() };
+            let form = if js_sys::Reflect::get(&target, &"elements".into()).is_ok_and(|v| !v.is_undefined()) {
+                target.unchecked_into::<web_sys::HtmlFormElement>()
+            } else {
+                match js_sys::Reflect::get(&target, &"form".into()).ok().and_then(|f| f.dyn_into().ok()) {
+                    Some(f) => f,
+                    None => return Vec::new(),
+                }
+            };
+            let Ok(data) = web_sys::FormData::new_with_form(&form) else { return Vec::new() };
+            let mut out = Vec::new();
+            if let Ok(iter) = js_sys::try_iter(&data) {
+                for pair in iter.into_iter().flatten().flatten() {
+                    let pair: js_sys::Array = pair.unchecked_into();
+                    if let (Some(k), Some(v)) = (pair.get(0).as_string(), pair.get(1).as_string()) {
+                        out.push((k, v));
+                    }
+                }
+            }
+            out
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Vec::new()
+    }
+
+    /// The first form field with this name.
+    pub fn form_value(&self, name: &str) -> Option<String> {
+        self.form_fields().into_iter().find(|(k, _)| k == name).map(|(_, v)| v)
+    }
 }
 
 /// An event listener created with [`crate::Handle::on`].
