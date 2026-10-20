@@ -10,7 +10,9 @@
 //! assert_eq!(auth.clear(), "auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
 //! ```
 //!
-//! Values are percent-encoded, so any string round-trips.
+//! Values are percent-encoded, so any string round-trips. With [`Cookie::secrets`] the
+//! value is signed (HMAC-SHA-256, `value.signature`) and [`Cookie::parse`] only returns
+//! values signed by one of the secrets, which allows rotating them.
 
 use std::fmt::Write as _;
 
@@ -31,11 +33,21 @@ pub struct Cookie {
     http_only: bool,
     secure: bool,
     same_site: Option<SameSite>,
+    secrets: Vec<String>,
 }
 
 impl Cookie {
     pub fn new(name: impl Into<String>) -> Cookie {
-        Cookie { name: name.into(), path: None, domain: None, max_age: None, http_only: false, secure: false, same_site: None }
+        Cookie {
+            name: name.into(),
+            path: None,
+            domain: None,
+            max_age: None,
+            http_only: false,
+            secure: false,
+            same_site: None,
+            secrets: Vec::new(),
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -73,14 +85,50 @@ impl Cookie {
         self
     }
 
-    /// This cookie's value in a `Cookie` request header.
+    /// Sign values with the first secret and accept values signed with any of them (put a
+    /// new secret first to rotate).
+    pub fn secrets(mut self, secrets: Vec<String>) -> Cookie {
+        self.secrets = secrets;
+        self
+    }
+
+    pub fn is_signed(&self) -> bool {
+        !self.secrets.is_empty()
+    }
+
+    pub fn is_http_only(&self) -> bool {
+        self.http_only
+    }
+
+    pub fn is_secure(&self) -> bool {
+        self.secure
+    }
+
+    pub fn get_max_age(&self) -> Option<i64> {
+        self.max_age
+    }
+
+    /// This cookie's value in a `Cookie` request header. A signed cookie whose signature
+    /// does not verify reads as `None`.
     pub fn parse(&self, header: Option<&str>) -> Option<String> {
-        parse(header?).into_iter().find(|(k, _)| *k == self.name).map(|(_, v)| v)
+        let raw = parse_raw(header?).into_iter().find(|(k, _)| *k == self.name).map(|(_, v)| v)?;
+        if raw.is_empty() {
+            return Some(String::new());
+        }
+        if self.secrets.is_empty() {
+            return Some(rmx_url::decode(raw));
+        }
+        self.secrets.iter().find_map(|secret| unsign(raw, secret)).map(rmx_url::decode)
     }
 
     /// A `Set-Cookie` header value.
     pub fn serialize(&self, value: &str) -> String {
         self.write(value, self.max_age)
+    }
+
+    /// A `Set-Cookie` header value with `HttpOnly` and `Secure` overridden.
+    pub fn serialize_with(&self, value: &str, http_only: bool, secure: bool) -> String {
+        Cookie { http_only, secure, ..self.clone() }.serialize(value)
     }
 
     /// A `Set-Cookie` header value that deletes the cookie.
@@ -89,7 +137,11 @@ impl Cookie {
     }
 
     fn write(&self, value: &str, max_age: Option<i64>) -> String {
-        let mut out = format!("{}={}", self.name, rmx_url::encode_component(value));
+        let mut encoded = rmx_url::encode_component(value);
+        if let (Some(secret), false) = (self.secrets.first(), value.is_empty()) {
+            encoded = sign(&encoded, secret);
+        }
+        let mut out = format!("{}={}", self.name, encoded);
         if let Some(p) = &self.path {
             let _ = write!(out, "; Path={p}");
         }
@@ -117,14 +169,31 @@ impl Cookie {
 
 /// Every `name=value` pair in a `Cookie` header, values decoded.
 pub fn parse(header: &str) -> Vec<(&str, String)> {
+    parse_raw(header).into_iter().map(|(k, v)| (k, rmx_url::decode(v))).collect()
+}
+
+fn parse_raw(header: &str) -> Vec<(&str, &str)> {
     header
         .split(';')
         .filter_map(|pair| {
             let (k, v) = pair.split_once('=')?;
-            let v = v.trim().trim_matches('"');
-            Some((k.trim(), rmx_url::decode(v)))
+            Some((k.trim(), v.trim().trim_matches('"')))
         })
         .collect()
+}
+
+/// `value.signature`, the signature being base64 HMAC-SHA-256 of the value.
+pub fn sign(value: &str, secret: &str) -> String {
+    let mac = rmx_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
+    format!("{value}.{}", rmx_crypto::base64_encode(&mac))
+}
+
+/// The value of a signed `value.signature` string, if the signature matches `secret`.
+pub fn unsign<'a>(signed: &'a str, secret: &str) -> Option<&'a str> {
+    let (value, signature) = signed.rsplit_once('.')?;
+    let given = rmx_crypto::base64_decode(signature)?;
+    let expected = rmx_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
+    rmx_crypto::constant_time_eq(&given, &expected).then_some(value)
 }
 
 #[cfg(test)]
@@ -140,5 +209,25 @@ mod tests {
         assert_eq!(c.parse(Some(&format!("x=1; {pair}"))), Some("a b;c=d".into()));
         assert_eq!(c.parse(Some("x=1")), None);
         assert_eq!(c.parse(None), None);
+    }
+
+    #[test]
+    fn signed_cookies_verify_and_rotate() {
+        let old = Cookie::new("s").secrets(vec!["old".into()]);
+        let set = old.serialize("hello world");
+        let pair = set.split(';').next().unwrap();
+        assert!(pair.starts_with("s=hello%20world."), "{pair}");
+        assert_eq!(old.parse(Some(pair)), Some("hello world".into()));
+
+        let rotated = Cookie::new("s").secrets(vec!["new".into(), "old".into()]);
+        assert_eq!(rotated.parse(Some(pair)), Some("hello world".into()), "old signatures still verify");
+        assert!(rotated.serialize("x").starts_with(&format!("s={}", sign("x", "new"))));
+
+        let other = Cookie::new("s").secrets(vec!["other".into()]);
+        assert_eq!(other.parse(Some(pair)), None, "wrong secret");
+        let tampered = pair.replace("hello", "jello");
+        assert_eq!(old.parse(Some(&tampered)), None, "tampered value");
+        assert_eq!(old.parse(Some("s=unsigned")), None);
+        assert_eq!(old.parse(Some("s=")), Some(String::new()));
     }
 }

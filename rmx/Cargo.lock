@@ -554,8 +554,13 @@ dependencies = [
 name = "rmx-cookie"
 version = "0.1.0"
 dependencies = [
+ "rmx-crypto",
  "rmx-url",
 ]
+
+[[package]]
+name = "rmx-crypto"
+version = "0.1.0"
 
 [[package]]
 name = "rmx-fetch"
