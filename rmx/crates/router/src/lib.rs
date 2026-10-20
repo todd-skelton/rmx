@@ -387,7 +387,9 @@ impl Default for Router {
 
 impl Router {
     pub fn new() -> Router {
-        let not_found: Arc<dyn Handler> = Arc::new(|_: Context| async { response::not_found() });
+        // Remix's default handler: `Not Found: <pathname>`.
+        let not_found: Arc<dyn Handler> =
+            Arc::new(|ctx: Context| async move { response::status(StatusCode::NOT_FOUND, format!("Not Found: {}", ctx.url().pathname())) });
         Router {
             inner: Arc::new(Inner {
                 middleware: Vec::new(),
