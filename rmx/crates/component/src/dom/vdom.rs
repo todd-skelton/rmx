@@ -323,20 +323,33 @@ fn event_key(name: &'static str) -> JsValue {
             return key.clone();
         }
         let key = JsValue::from_str(&format!("__rmx_{name}"));
-        let dispatch_key = key.clone();
-        // `Fn`: a handler may dispatch another event of the same type synchronously.
-        let dispatch = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
-            dispatch(&raw, &dispatch_key);
-        });
-        // Events that do not bubble are caught on the way down instead.
-        let capture = matches!(
+        // `only_bubbles`: handle just the events whose `bubbles` matches.
+        let listen = |capture: bool, only_bubbles: Option<bool>| {
+            let dispatch_key = key.clone();
+            // `Fn`: a handler may dispatch another event of the same type synchronously.
+            let dispatch = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
+                if only_bubbles.is_none_or(|bubbles| raw.bubbles() == bubbles) {
+                    dispatch(&raw, &dispatch_key);
+                }
+            });
+            document()
+                .add_event_listener_with_callback_and_bool(name, dispatch.as_ref().unchecked_ref(), capture)
+                .expect("addEventListener");
+            dispatch.forget();
+        };
+        // Events that never bubble are caught on the way down. Any other type (custom
+        // events included) may be dispatched without `bubbles`, so those instances are
+        // caught on the way down too and the rest on the way up.
+        let never_bubbles = matches!(
             name,
             "focus" | "blur" | "mouseenter" | "mouseleave" | "pointerenter" | "pointerleave" | "load" | "error" | "scroll" | "toggle" | "beforetoggle" | "invalid"
         );
-        document()
-            .add_event_listener_with_callback_and_bool(name, dispatch.as_ref().unchecked_ref(), capture)
-            .expect("addEventListener");
-        dispatch.forget();
+        if never_bubbles {
+            listen(true, None);
+        } else {
+            listen(false, Some(true));
+            listen(true, Some(false));
+        }
         d.borrow_mut().insert(name, key.clone());
         key
     })

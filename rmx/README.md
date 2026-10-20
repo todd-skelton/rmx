@@ -98,8 +98,11 @@ Each Remix 3 package is a crate under `crates/` (about 19,600 lines of Rust, mea
 3. Supporting crates: `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-html-template`, `rmx-headers`,
    `rmx-mime`, `rmx-spa`, `rmx-url`.
-4. `rmx-ui`: the animation module (spring, tween, entrance, exit, FLIP layout). Its spring
-   CSS output matches Remix's `spring.ts` byte for byte (unit tested).
+4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
+   entrance, exit, FLIP layout), combobox, listbox, menu (submenus with hover aim, context
+   menus), popover, select, tabs and toggle. The spring CSS output matches Remix's
+   `spring.ts` byte for byte (unit tested), and each module has the matching demo in
+   `examples/ui` with browser checks.
 
 ## Examples
 
@@ -128,12 +131,14 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
 
 1. No import maps or module preloading: each demo ships one wasm bundle that registers its
    client entries by name (`rmx::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 250 KiB to
-   530 KiB uncompressed (measured, `wasm-release` plus `wasm-opt`).
+   820 KiB uncompressed (measured, `wasm-release` plus `wasm-opt`); the largest is the ui
+   gallery, which bundles all 17 of its demos.
 2. Rust does not throw, so component-level error events are not automatic. Code reports
    failures with `rmx::report_error`; panics and failed frame loads and navigations are
    reported to `App::on_error` listeners.
-3. `rmx-ui` has the animation module only; Remix's accordion, anchor, combobox, listbox,
-   menu, popover, select, tabs and toggle components are not ported.
+3. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
+   carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
+   helpers such as `select::select_change`, rather than `Event` subclasses.
 4. No HMR, CLI, or `node-fetch-server` test harness; e2e checks use Playwright scripts.
 5. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
 6. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`

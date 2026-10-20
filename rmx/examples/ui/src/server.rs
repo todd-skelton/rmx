@@ -65,6 +65,7 @@ fn demo_node(slug: &str) -> Node {
         "component/runtime/mixin-lifecycle" => rsx! { <lifecycle::MixinLifecycle/> },
         "component/runtime/readme" => rsx! { <readme::ReadmeExamples/> },
         "cases/draggable" => rsx! { <draggable::DraggableDemo/> },
+        "cases/drummer" => rsx! { <drummer::DrummerApp/> },
         "ui/animation" => rsx! { <animation::AnimationGallery/> },
         "ui/accordion" => rsx! { <accordion::AccordionDemo/> },
         "ui/anchor" => rsx! { <anchor::AnchorDemo/> },

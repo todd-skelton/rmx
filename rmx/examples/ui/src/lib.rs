@@ -141,6 +141,14 @@ pub const DEMOS: &[Demo] = &[
         center: true,
     },
     Demo {
+        slug: "cases/drummer",
+        title: "Drummer",
+        description: "A browser audio drum machine demo with tempo controls and keyboard input.",
+        section: "Cases",
+        module: "Drummer",
+        center: false,
+    },
+    Demo {
         slug: "cases/draggable",
         title: "Draggable Mixin",
         description: "A pointer-driven box using the draggable mixin from the standalone demos.",
@@ -166,6 +174,7 @@ pub fn start() {
             rmx::entry::<lifecycle::MixinLifecycle>(),
             rmx::entry::<readme::ReadmeExamples>(),
             rmx::entry::<draggable::DraggableDemo>(),
+            rmx::entry::<drummer::DrummerApp>(),
             rmx::entry::<animation::AnimationGallery>(),
             rmx::entry::<accordion::AccordionDemo>(),
             rmx::entry::<anchor::AnchorDemo>(),

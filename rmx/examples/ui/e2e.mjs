@@ -31,12 +31,25 @@ const open = async (slug) => {
   await page.waitForFunction(() => document.documentElement.dataset.rmxReady === 'true', null, { timeout: 10000 })
 }
 const settle = () => page.waitForTimeout(50)
+// Record the text of elements that get `attr` set to "true" (and the element's
+// aria-checked then), so short flashes are seen however slow the machine is.
+const watchFlash = (attr) => page.evaluate((attr) => {
+  window.__flashes = []
+  window.__flashObserver?.disconnect()
+  window.__flashObserver = new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.target.getAttribute(attr) === 'true') window.__flashes.push([r.target.textContent, r.target.getAttribute('aria-checked')])
+    }
+  })
+  window.__flashObserver.observe(document.body, { attributes: true, attributeFilter: [attr], subtree: true })
+}, attr)
+const flashes = () => page.evaluate(() => window.__flashes)
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 // Index
 await page.goto(BASE + '/')
 const links = await page.$$eval('a[href^="/demo/"]', (as) => as.map((a) => a.getAttribute('href')))
-check('the index lists the demos', links.length === 16, links)
+check('the index lists the demos', links.length === 17, links)
 
 // Basic counter
 await open('component/runtime/basic')
@@ -482,10 +495,10 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   await page.keyboard.press('ArrowDown')
   await settle()
   await page.keyboard.press('ArrowDown')
+  await watchFlash('data-select-flash')
   await page.keyboard.press('Enter')
-  await page.waitForTimeout(40)
-  const flashing = await page.evaluate(() => document.querySelector('[data-select-flash]')?.textContent)
-  await page.waitForTimeout(80)
+  await page.waitForFunction(() => window.__flashes.length > 0 && !document.querySelector('[popover]').matches(':popover-open'))
+  const flashing = (await flashes())[0]?.[0]
   const s3 = await sel()
   await page.waitForTimeout(300)
   const s4 = await sel()
@@ -497,6 +510,62 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   check('select: typeahead on the closed trigger selects immediately', !s5.open && s5.label === 'React' && s5.input === 'react' && s5.value === 'value=react', s5)
   const events = await page.evaluate(() => window.__sel)
   check('select: rmx:select-change bubbles from the trigger', eq(events, [['react-router', 'React Router', true, 'BUTTON'], ['react', 'React', true, 'BUTTON']]), events)
+}
+
+// Drummer (demos/ui/cases/drummer)
+{
+  await open('cases/drummer')
+  const drum = () => page.evaluate(() => ({
+    bpm: document.getElementById('bpm').textContent,
+    play: document.getElementById('play').disabled, stop: document.getElementById('stop').disabled,
+    focus: document.activeElement?.id ?? null,
+    bars: document.querySelectorAll('.equalizer-bar').length,
+    lit: [...document.querySelectorAll('.equalizer-bar > div')].filter((d) => d.style.opacity === '1').length,
+  }))
+  const d0 = await drum()
+  check('drummer: renders 9 bars at 80 BPM, stopped', d0.bars === 9 && d0.bpm === '80' && !d0.play && d0.stop && d0.lit === 0, d0)
+  await page.click('#tempo-up')
+  await page.click('#tempo-down')
+  await page.click('#tempo-down')
+  await settle()
+  const d1 = await drum()
+  await page.evaluate(() => document.activeElement?.blur())
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('ArrowUp')
+  await settle()
+  const d2 = await drum()
+  check('drummer: tempo buttons and page ArrowUp change the BPM', d1.bpm === '79' && d2.bpm === '81', { d1, d2 })
+  await page.click('#play')
+  await page.waitForTimeout(400)
+  const d3 = await drum()
+  check('drummer: Play starts the machine, moves focus to Stop and the equalizer reacts', d3.play && !d3.stop && d3.focus === 'stop' && d3.lit > 0, d3)
+  await page.keyboard.press('Enter')
+  await settle()
+  const d4 = await drum()
+  await page.waitForTimeout(1500)
+  const d5 = await drum()
+  check('drummer: Enter on Stop stops, refocuses Play, and the bars decay', !d4.play && d4.stop && d4.focus === 'play' && d5.lit === 0, { d4, d5 })
+  // The expected tempo comes from when the taps actually landed, so a slow machine does not
+  // fail the check.
+  await page.evaluate(() => {
+    window.__taps = []
+    document.getElementById('set-tempo').addEventListener('pointerdown', () => window.__taps.push(Date.now()), true)
+  })
+  for (let i = 0; i < 4; i++) {
+    await page.click('#set-tempo')
+    if (i < 3) await page.waitForTimeout(500)
+  }
+  await page.waitForTimeout(200)
+  const d6 = await drum()
+  const taps = await page.evaluate(() => window.__taps)
+  const gaps = taps.slice(1).map((t, i) => 60000 / (t - taps[i]))
+  const tapped = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length)
+  check('drummer: four taps on Set Tempo play at the tapped tempo', taps.length === 4 && Math.abs(Number(d6.bpm) - tapped) <= 1 && d6.play && !d6.stop, { d6, taps, tapped })
+  await page.evaluate(() => document.activeElement?.blur())
+  await page.keyboard.press(' ')
+  await settle()
+  const d7 = await drum()
+  check('drummer: Space toggles playback from anywhere on the page', !d7.play && d7.stop, d7)
 }
 
 // Combobox (packages/ui/src/demos/combobox.demo.tsx, combobox.test.tsx)
@@ -539,10 +608,10 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   await settle()
   const c4 = await cb()
   check('combobox: ArrowDown navigates the active descendant in nav mode while the input stays focused', c3.active === 'Remix' && c4.active === 'React Router' && c4.reason === 'nav' && c4.focus, { c3, c4 })
+  await watchFlash('data-combobox-flash')
   await page.keyboard.press('Enter')
-  await page.waitForTimeout(30)
-  const flashing = await page.evaluate(() => document.querySelector('[data-combobox-flash]')?.textContent)
   await page.waitForTimeout(400)
+  const flashing = (await flashes())[0]?.[0]
   const c5 = await cb()
   check('combobox: Enter flashes the option, closes, commits the label and selects the input text', flashing === 'React Router' && !c5.open && c5.text === 'React Router' && c5.selectedText === 'React Router' && c5.input === 'react-router' && c5.value === 'value=react-router' && c5.focus, { flashing, c5 })
   await page.keyboard.type('x')
@@ -628,10 +697,10 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   await settle()
   const m3 = await mstate('actions')
   check('menu: typeahead highlights and focuses the matching item', m3.focus === 'Duplicate' && m3.highlighted === 'Duplicate', m3)
+  await watchFlash('data-menu-flash')
   await page.keyboard.press('Enter')
-  await page.waitForTimeout(20)
-  const flashing = await page.evaluate(() => document.querySelector('[data-menu-flash="true"]')?.textContent)
   await page.waitForTimeout(250)
+  const flashing = (await flashes())[0]?.[0]
   const m4 = await mstate('actions')
   check('menu: Enter flashes the item, dispatches the selection, closes and refocuses the trigger', flashing === 'Duplicate' && !m4.open && m4.focus === 'trigger' && m4.selected === 'selected=duplicate', { flashing, m4 })
   await page.keyboard.press('ArrowUp')
@@ -692,10 +761,10 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   await page.mouse.move(box.x + 12, box.y + box.height / 2)
   await settle()
   const h0 = await mstate('view')
+  await watchFlash('data-menu-flash')
   await page.mouse.click(box.x + 12, box.y + box.height / 2)
-  await page.waitForTimeout(20)
-  const flashChecked = await page.evaluate(() => document.querySelector('[data-menu-flash="true"]')?.getAttribute('aria-checked'))
   await page.waitForTimeout(250)
+  const flashChecked = (await flashes())[0]?.[1]
   const checkedAfter = await page.evaluate(() => document.querySelector('[role="menuitemcheckbox"]').getAttribute('aria-checked'))
   check('menu: pointer movement highlights and focuses items', h0.highlighted === 'Word wrap' && h0.focus === 'Word wrap', h0)
   check('menu: a checkbox item flashes its committed checked state', flashChecked === 'true' && checkedAfter === 'true', { flashChecked, checkedAfter })
