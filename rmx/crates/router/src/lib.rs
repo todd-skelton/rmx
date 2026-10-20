@@ -17,6 +17,10 @@
 //! Middleware runs at two levels: router middleware (every request, before matching) and
 //! route middleware (attached with [`Router::group`], after a route matched). Middleware
 //! and handlers share typed, request-scoped values through [`Context::set`] / [`Context::get`].
+//!
+//! The router also runs in the browser (see `rmx-spa`). There, handlers and middleware need
+//! not be `Send` ([`MaybeSend`]); the shared `Arc`s are then only used on one thread.
+#![cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
 
 use std::fmt;
 use std::future::Future;
@@ -32,8 +36,36 @@ pub mod routes;
 
 pub use routes::{IntoRoute, Route};
 
-/// A boxed, sendable future.
+/// A boxed future: `Send` on servers, where requests run on a multi-threaded runtime.
+#[cfg(not(target_arch = "wasm32"))]
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
+/// A boxed future. In the browser everything runs on one thread, and futures that wait on
+/// browser APIs (timers, `fetch`) are not `Send`, so handlers need not be either.
+#[cfg(target_arch = "wasm32")]
+pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + 'static>>;
+
+/// `Send` on servers; implemented by every type in the browser (see [`BoxFuture`]).
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSend: Send {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send> MaybeSend for T {}
+/// `Send` on servers; implemented by every type in the browser (see [`BoxFuture`]).
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSend {}
+#[cfg(target_arch = "wasm32")]
+impl<T> MaybeSend for T {}
+
+/// `Sync` on servers; implemented by every type in the browser.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSync: Sync {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Sync> MaybeSync for T {}
+/// `Sync` on servers; implemented by every type in the browser.
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSync {}
+#[cfg(target_arch = "wasm32")]
+impl<T> MaybeSync for T {}
 
 // ---------------------------------------------------------------------------------------
 // Context
@@ -233,14 +265,14 @@ pub type Result<T = Response, E = Error> = std::result::Result<T, E>;
 // ---------------------------------------------------------------------------------------
 
 /// A request handler (Remix's "action"): any `Fn(Context) -> impl Future<Output = impl IntoResponse>`.
-pub trait Handler: Send + Sync + 'static {
+pub trait Handler: MaybeSend + MaybeSync + 'static {
     fn call(&self, ctx: Context) -> BoxFuture<Response>;
 }
 
 impl<F, Fut, R> Handler for F
 where
-    F: Fn(Context) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = R> + Send + 'static,
+    F: Fn(Context) -> Fut + MaybeSend + MaybeSync + 'static,
+    Fut: Future<Output = R> + MaybeSend + 'static,
     R: IntoResponse,
 {
     fn call(&self, ctx: Context) -> BoxFuture<Response> {
@@ -261,14 +293,14 @@ where
 ///     res
 /// }
 /// ```
-pub trait Middleware: Send + Sync + 'static {
+pub trait Middleware: MaybeSend + MaybeSync + 'static {
     fn call(&self, ctx: Context, next: Next) -> BoxFuture<Response>;
 }
 
 impl<F, Fut> Middleware for F
 where
-    F: Fn(Context, Next) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Response> + Send + 'static,
+    F: Fn(Context, Next) -> Fut + MaybeSend + MaybeSync + 'static,
+    Fut: Future<Output = Response> + MaybeSend + 'static,
 {
     fn call(&self, ctx: Context, next: Next) -> BoxFuture<Response> {
         Box::pin(self(ctx, next))

@@ -411,5 +411,6 @@ pub fn start() {
             rmx::entry::<StateSearchPage>(),
             rmx::entry::<ClientMountedPageExample>(),
         ],
+        ..Default::default()
     });
 }

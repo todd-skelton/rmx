@@ -1,0 +1,29 @@
+[package]
+name = "spa-demo"
+description = "The Remix 3 spa demo, in rmx: the router runs in the browser"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+http.workspace = true
+rmx.workspace = true
+rmx-fetch.workspace = true
+rmx-router.workspace = true
+rmx-spa.workspace = true
+rmx-url.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["console", "Window"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rmx-middleware.workspace = true
+rmx-serve.workspace = true
+tokio.workspace = true

@@ -10,6 +10,7 @@ members = [
     "crates/middleware",
     "crates/render",
     "crates/cookie",
+    "crates/spa",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
@@ -19,6 +20,7 @@ members = [
     "examples/frame-navigation",
     "examples/lazy-frames",
     "examples/sse",
+    "examples/spa",
 ]
 
 [workspace.package]
@@ -37,6 +39,7 @@ rmx-serve = { path = "crates/serve" }
 rmx-mime = { path = "crates/mime" }
 rmx-middleware = { path = "crates/middleware" }
 rmx-render = { path = "crates/render" }
+rmx-spa = { path = "crates/spa" }
 rmx-cookie = { path = "crates/cookie" }
 bytes = "1"
 http = "1"

@@ -407,5 +407,6 @@ fn served_at_style() -> Mixin {
 pub fn start() {
     rmx::run(rmx::RunOptions {
         entries: vec![rmx::entry::<LazyFrame>(), rmx::entry::<ThemeToggle>(), rmx::entry::<FramePlayground>()],
+        ..Default::default()
     });
 }

@@ -13,6 +13,7 @@ pub(crate) mod diff;
 pub(crate) mod entries;
 pub(crate) mod frames;
 pub(crate) mod navigation;
+mod root;
 pub(crate) mod styles;
 mod vdom;
 
@@ -20,6 +21,7 @@ use std::any::{Any, TypeId};
 use std::rc::{Rc, Weak};
 
 pub use entries::{entry, Entry};
+pub use root::{create_range_root, create_root, Root};
 pub use vdom::flush;
 pub(crate) use vdom::{new_instance, queue_task, rerender, schedule_update, AnyInstance, Live};
 
@@ -49,6 +51,9 @@ pub(crate) fn find_context(mut parent: Option<Weak<dyn AnyInstance>>, want: Type
 pub struct RunOptions {
     /// Client entries the page may contain, created with [`entry`].
     pub entries: Vec<Entry>,
+    /// Resolve frame content in the browser instead of fetching it from the server (Remix's
+    /// `resolveFrame`). `rmx-spa` uses it to run a router in the page.
+    pub resolve_frame: Option<crate::frame::ResolveFrame>,
 }
 
 /// Start the browser runtime: hydrate the client entries in the document, start the
@@ -61,6 +66,7 @@ pub struct RunOptions {
 /// running, the document receives an `rmx:ready` event.
 pub fn run(options: RunOptions) {
     entries::register(options.entries);
+    frames::set_resolver(options.resolve_frame);
     when_content_parsed(Box::new(|| {
         styles::adopt_server_styles(&document().into());
         frames::start();

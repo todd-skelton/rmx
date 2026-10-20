@@ -111,6 +111,18 @@ pub(crate) fn rerender(inst: &dyn AnyInstance) {
     patch_children(&parent, &mut root, new, end.as_ref(), false, &live.child_scope);
 }
 
+/// Remove a root instance from the runtime and its DOM from the document.
+pub(crate) fn remove_root(inst: &dyn AnyInstance) {
+    unmount_root(inst);
+    for m in inst.live().root.borrow().iter() {
+        m.for_each_dom(&mut |n| {
+            if let Some(parent) = n.parent_node() {
+                let _ = parent.remove_child(n);
+            }
+        });
+    }
+}
+
 /// Remove a root instance from the runtime (its DOM is removed by the caller).
 pub(crate) fn unmount_root(inst: &dyn AnyInstance) {
     let live = inst.live();
@@ -455,9 +467,29 @@ fn interned(s: &Str) -> &str {
     }
 }
 
+/// Whether an element's content comes from `innerHTML={unsafe_html(..)}` instead of children.
+fn has_inner_html(attrs: &[(&'static str, AttrValue)]) -> bool {
+    attrs.iter().any(|(n, v)| *n == "innerHTML" && matches!(v, AttrValue::Html(_)))
+}
+
 fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrValue) {
+    if name == "innerHTML" {
+        match value {
+            AttrValue::Html(html) => {
+                if el.inner_html() != **html {
+                    el.set_inner_html(html);
+                }
+            }
+            AttrValue::Absent | AttrValue::Bool(false) => el.set_inner_html(""),
+            _ => super::warn("rmx: innerHTML needs a value from rmx::unsafe_html()"),
+        }
+        return;
+    }
     let name = intern(name);
     match value {
+        AttrValue::Html(v) => {
+            let _ = el.set_attribute(name, v);
+        }
         AttrValue::Str(v) => {
             let _ = el.set_attribute(name, interned(v));
             if name == "value" {
@@ -517,6 +549,7 @@ fn create(node: Node, scope: &Scope) -> Mounted {
             }
             apply_extra(&dom, extra, true);
             let listeners = attach_events(&dom, events);
+            let children = if has_inner_html(&attrs) { Vec::new() } else { children };
             let mut kids = Vec::with_capacity(children.len());
             for child in flatten_children(children) {
                 let m = create(child, scope);
@@ -609,7 +642,7 @@ fn patch_element(m: &mut MElement, n: Element, scope: &Scope) {
         }
         for (name, _) in &m.attrs {
             if !attrs.iter().any(|(n, _)| n == name) {
-                let _ = m.el.remove_attribute(name);
+                set_attr(&m.el, name, &AttrValue::Absent);
             }
         }
         m.attrs = attrs;
@@ -630,7 +663,10 @@ fn patch_element(m: &mut MElement, n: Element, scope: &Scope) {
         m.listeners = events.into_iter().map(|(n, h)| Listener::attach(&m.el, n, h)).collect();
     }
 
-    if !children.is_empty() || !m.children.is_empty() {
+    if has_inner_html(&m.attrs) {
+        m.children.iter().for_each(unmount);
+        m.children.clear();
+    } else if !children.is_empty() || !m.children.is_empty() {
         let parent: web_sys::Node = m.el.clone().into();
         patch_children(&parent, &mut m.children, flatten_children(children), None, true, scope);
     }
@@ -814,7 +850,8 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             for (name, value) in &attrs {
                 let current = dom.get_attribute(name);
                 let matches = match value {
-                    AttrValue::Str(v) => current.as_deref() == Some(&**v),
+                    AttrValue::Html(v) if *name == "innerHTML" => dom.inner_html() == **v,
+                    AttrValue::Str(v) | AttrValue::Html(v) => current.as_deref() == Some(&**v),
                     AttrValue::Bool(true) => current.is_some(),
                     AttrValue::Bool(false) | AttrValue::Absent => current.is_none(),
                 };
@@ -825,7 +862,8 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             apply_extra(&dom, extra, true);
             let listeners = attach_events(&dom, events);
             let dom_node: web_sys::Node = dom.clone().into();
-            let mut child_cursor = dom.first_child();
+            let children = if has_inner_html(&attrs) { Vec::new() } else { children };
+            let mut child_cursor = if has_inner_html(&attrs) { None } else { dom.first_child() };
             let kids = flatten_children(children)
                 .into_iter()
                 .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, scope))

@@ -333,9 +333,14 @@ impl Ssr {
         let out = &mut self.out;
         out.push('<');
         out.push_str(el.tag);
+        let mut inner_html = None;
         for (name, value) in &el.attrs {
             match value {
-                AttrValue::Str(v) => {
+                AttrValue::Html(html) if *name == "innerHTML" => inner_html = Some(html),
+                AttrValue::Str(_) | AttrValue::Bool(_) if *name == "innerHTML" => {
+                    panic!("innerHTML on <{}> needs a value from rmx::unsafe_html()", el.tag)
+                }
+                AttrValue::Str(v) | AttrValue::Html(v) => {
                     out.push(' ');
                     out.push_str(name);
                     out.push_str("=\"");
@@ -353,7 +358,9 @@ impl Ssr {
         if is_void(el.tag) {
             return;
         }
-        if el.tag == "script" || el.tag == "style" {
+        if let Some(html) = inner_html {
+            self.out.push_str(html);
+        } else if el.tag == "script" || el.tag == "style" {
             // Raw text elements: children are written unescaped.
             for child in &el.children {
                 if let Node::Text(t) | Node::Raw(t) = child {

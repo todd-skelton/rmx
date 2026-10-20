@@ -84,6 +84,9 @@ fn element_json(el: &Element) -> Value {
             AttrValue::Bool(true) => {
                 props.insert((*name).to_string(), Value::Bool(true));
             }
+            AttrValue::Html(html) => {
+                props.insert((*name).to_string(), serde_json::json!({ "$rmxHtml": html.as_ref() }));
+            }
             AttrValue::Bool(false) | AttrValue::Absent => {}
         }
     }
@@ -134,6 +137,10 @@ fn element_from_json(obj: &Map<String, Value>) -> Node {
                 Value::String(s) => AttrValue::Str(Cow::Owned(s.clone())),
                 Value::Bool(b) => AttrValue::Bool(*b),
                 Value::Number(n) => AttrValue::Str(Cow::Owned(n.to_string())),
+                Value::Object(o) => match o.get("$rmxHtml").and_then(Value::as_str) {
+                    Some(html) => AttrValue::Html(Cow::Owned(html.to_string())),
+                    None => continue,
+                },
                 _ => continue,
             };
             attrs.push((intern(name), value));
@@ -216,6 +223,20 @@ mod tests {
         fn render(&self, props: &BadgeProps, _: &Handle<Self>) -> Node {
             rsx! { <b>{props.label.clone()}</b> }
         }
+    }
+
+    #[test]
+    fn unsafe_html_sets_content_and_survives_json() {
+        let node = rsx! { <div class="md" innerHTML={crate::unsafe_html("<b>bold</b> &amp;")}>"ignored"</div> };
+        assert_eq!(crate::render_to_string(&node), r#"<div class="md"><b>bold</b> &amp;</div>"#);
+        let revived = Node::from_json(&node.to_json());
+        assert_eq!(crate::render_to_string(&revived), r#"<div class="md"><b>bold</b> &amp;</div>"#);
+    }
+
+    #[test]
+    #[should_panic(expected = "unsafe_html")]
+    fn inner_html_rejects_plain_strings() {
+        crate::render_to_string(&rsx! { <div innerHTML="<b>no</b>"></div> });
     }
 
     #[test]

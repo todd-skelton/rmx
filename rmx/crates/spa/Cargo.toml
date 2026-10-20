@@ -1,0 +1,20 @@
+[package]
+name = "rmx-spa"
+description = "Run an rmx-router in the browser: client-only apps with the server's Request/Response contract (port of remix/spa)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx.workspace = true
+rmx-fetch.workspace = true
+rmx-router.workspace = true
+rmx-url.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Document", "Event", "EventTarget", "Window"] }
+
+[dev-dependencies]
+tokio = { workspace = true }

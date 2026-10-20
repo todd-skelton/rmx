@@ -27,15 +27,21 @@ pub mod ssr;
 pub(crate) mod dom;
 
 pub use component::{set_server_frame_src, Component, Handle};
-pub use frame::{Frame, FrameEvent, FrameHandle, FrameProps, Frames, ReloadOptions};
+pub use frame::{
+    Frame, FrameContent, FrameEvent, FrameHandle, FrameProps, FrameRequest, FrameResponse, Frames, ReloadOptions, ResolveFrame,
+    ResolveFuture,
+};
 pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use navigation::{link, link_with, navigate, NavigateOptions};
-pub use node::{AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str, StyleRule};
+pub use node::{
+    unsafe_html, AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str,
+    StyleRule, UnsafeHtml,
+};
 pub use rmx_macros::rsx;
 pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{entry, flush, run, Entry, RunOptions};
+pub use dom::{create_range_root, create_root, entry, flush, run, Entry, Root, RunOptions};
 
 #[doc(hidden)]
 pub mod __private {

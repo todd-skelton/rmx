@@ -14,8 +14,10 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
+use super::root::Root;
 use super::{diff, document, entries, js, styles, warn, window};
-use crate::frame::ReloadOptions;
+use crate::frame::{FrameContent, FrameRequest, ReloadOptions, ResolveFrame};
+use crate::node::Node;
 use crate::ssr::{HydrationData, TEMPLATE_END};
 
 // ---------------------------------------------------------------------------------------
@@ -33,6 +35,17 @@ pub(crate) struct FrameState {
     pending: Cell<bool>,
     /// `reloadStart` / `reloadComplete` listeners.
     events: web_sys::EventTarget,
+    /// Renders node content from a custom resolver (or `replace`) into the region.
+    root: RefCell<Option<Root>>,
+}
+
+thread_local! {
+    /// `RunOptions::resolve_frame`: when set, frame loads go through it instead of `fetch`.
+    static RESOLVER: RefCell<Option<ResolveFrame>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn set_resolver(resolver: Option<ResolveFrame>) {
+    RESOLVER.with(|r| *r.borrow_mut() = resolver);
 }
 
 /// A request for new frame content: a reload, a link navigation or a form submission.
@@ -86,6 +99,7 @@ impl FrameState {
             disposed: Cell::new(false),
             pending: Cell::new(false),
             events: web_sys::EventTarget::new().expect("EventTarget"),
+            root: RefCell::new(None),
         }
     }
 
@@ -163,6 +177,9 @@ impl FrameState {
     }
 
     async fn fetch_and_apply(self: &Rc<Self>, submission: Submission, signal: &web_sys::AbortSignal) -> Result<Option<String>, JsValue> {
+        if let Some(resolve) = RESOLVER.with(|r| r.borrow().clone()) {
+            return self.resolve_and_apply(resolve, submission, signal).await;
+        }
 
         let headers = web_sys::Headers::new()?;
         headers.set("Accept", "text/html")?;
@@ -268,7 +285,61 @@ impl FrameState {
         }
     }
 
+    /// Load through the app's resolver. The pending resolution is dropped when a newer load
+    /// aborts this one.
+    async fn resolve_and_apply(
+        self: &Rc<Self>,
+        resolve: ResolveFrame,
+        submission: Submission,
+        signal: &web_sys::AbortSignal,
+    ) -> Result<Option<String>, JsValue> {
+        let base = window().location().href().unwrap_or_default();
+        let url = web_sys::Url::new_with_base(&self.src(), &base).map(|u| u.href()).unwrap_or_else(|_| self.src());
+        let request = FrameRequest {
+            url,
+            method: submission.method.clone().unwrap_or_else(|| "GET".into()),
+            form: submission.body.as_ref().map(form_pairs),
+            target: self.name(),
+        };
+        let Some(result) = until_aborted(resolve(request), signal).await else { return Ok(None) };
+        let response = result.map_err(|e| JsValue::from_str(&e))?;
+        if let Some(url) = &response.url {
+            self.set_src(url);
+        }
+        match response.content {
+            FrameContent::Html(html) => self.apply_html(&html),
+            FrameContent::Node(node) => self.apply_node(node),
+        }
+        Ok(response.url)
+    }
+
+    /// Render a node tree as the frame's content, reconciling with the previous tree so
+    /// component instances that stay in place keep their state.
+    pub(crate) fn apply_node(self: &Rc<Self>, node: Node) {
+        let existing = self.root.borrow().clone();
+        let root = match existing {
+            Some(root) => root,
+            None => {
+                let root = match &self.range {
+                    Some((start, end)) => Root::in_range(start.as_ref(), end.as_ref(), Some(self.clone())),
+                    None => Root::in_container(document().body().expect("body").into(), Some(self.clone())),
+                };
+                *self.root.borrow_mut() = Some(root.clone());
+                root
+            }
+        };
+        root.render(node);
+    }
+
+    /// Stop rendering node content (HTML content is taking over the region).
+    fn release_root(&self) {
+        if let Some(root) = self.root.borrow_mut().take() {
+            root.release();
+        }
+    }
+
     fn apply_html(self: &Rc<Self>, html: &str) {
+        self.release_root();
         if self.is_top() && looks_like_document(html) {
             self.apply_document(html);
         } else {
@@ -320,6 +391,48 @@ impl FrameState {
         }
         hydrate_region(self);
     }
+}
+
+/// Run `fut` until it finishes or `signal` aborts. On abort the future is dropped, which
+/// cancels whatever it was waiting on.
+async fn until_aborted<T>(fut: impl std::future::Future<Output = T>, signal: &web_sys::AbortSignal) -> Option<T> {
+    use std::future::Future;
+    use std::task::Poll;
+    if signal.aborted() {
+        return None;
+    }
+    let aborted = js_sys::Promise::new(&mut |resolve, _| {
+        let options = web_sys::AddEventListenerOptions::new();
+        options.set_once(true);
+        let _ = signal.add_event_listener_with_callback_and_add_event_listener_options("abort", &resolve, &options);
+    });
+    let mut aborted = JsFuture::from(aborted);
+    let mut fut = std::pin::pin!(fut);
+    std::future::poll_fn(|cx| {
+        if let Poll::Ready(v) = fut.as_mut().poll(cx) {
+            return Poll::Ready(Some(v));
+        }
+        if std::pin::Pin::new(&mut aborted).poll(cx).is_ready() {
+            return Poll::Ready(None);
+        }
+        Poll::Pending
+    })
+    .await
+}
+
+/// The text fields of a `URLSearchParams` or `FormData` body (files contribute their name).
+fn form_pairs(body: &JsValue) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Ok(Some(iter)) = js_sys::try_iter(body) {
+        for pair in iter.flatten() {
+            let pair: js_sys::Array = pair.unchecked_into();
+            let key = pair.get(0).as_string().unwrap_or_default();
+            let value = pair.get(1);
+            let value = value.as_string().unwrap_or_else(|| js::get(&value, "name").as_string().unwrap_or_default());
+            out.push((key, value));
+        }
+    }
+    out
 }
 
 /// The end of the complete `<template ...>...</template>` at the start of `html`, counting
@@ -449,6 +562,7 @@ pub(crate) fn dispose(start: &web_sys::Node) {
     KEY.with(|k| js_sys::Reflect::delete_property(start.unchecked_ref::<js_sys::Object>(), k).ok());
     if let Some(frame) = SLOTS.with(|s| s.borrow_mut().get_mut(slot).and_then(Option::take)) {
         frame.disposed.set(true);
+        frame.release_root();
         if let Some(c) = frame.reload.take() {
             c.abort();
         }

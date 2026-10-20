@@ -176,6 +176,12 @@ impl<C: Component> Handle<C> {
         }
     }
 
+    /// The latest props (`handle.props`), for callbacks that run outside `render`. `None`
+    /// on the server and after the component is removed.
+    pub fn props(&self) -> Option<C::Props> {
+        self.inst.upgrade().map(|inst| inst.props.borrow().clone())
+    }
+
     /// Whether the component is still mounted in the document.
     pub fn is_connected(&self) -> bool {
         #[cfg(target_arch = "wasm32")]

@@ -69,6 +69,38 @@ pub struct ReloadOptions {
     pub body: Option<Vec<(String, String)>>,
 }
 
+/// A request for frame content, handed to a custom resolver (see `RunOptions::resolve_frame`).
+#[derive(Clone, Debug)]
+pub struct FrameRequest {
+    /// Absolute URL of the content.
+    pub url: String,
+    /// `GET`, or the method of the form being submitted.
+    pub method: String,
+    /// Submitted form fields (URL-encoded on the wire).
+    pub form: Option<Vec<(String, String)>>,
+    /// The name of the frame asking, if it has one.
+    pub target: Option<String>,
+}
+
+/// Content a resolver produced: server-style HTML, or a node tree to render directly.
+pub enum FrameContent {
+    Html(String),
+    Node(Node),
+}
+
+/// A resolved frame request. `url` is the final URL when the resolver followed redirects.
+pub struct FrameResponse {
+    pub content: FrameContent,
+    pub url: Option<String>,
+}
+
+/// Future returned by a frame resolver.
+pub type ResolveFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Result<FrameResponse, String>>>>;
+
+/// Resolves frame content in the browser instead of fetching it from the server (Remix's
+/// `resolveFrame`). A newer load of the same frame drops the pending future.
+pub type ResolveFrame = Rc<dyn Fn(FrameRequest) -> ResolveFuture>;
+
 /// A frame in the page: the top-level document or a `<Frame>`.
 #[derive(Clone)]
 pub struct FrameHandle {
@@ -124,6 +156,16 @@ impl FrameHandle {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = options;
+    }
+
+    /// Show `node` as the frame's content now, without a request (Remix's `frame.replace`).
+    pub fn replace(&self, node: Node) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(f) = &self.frame {
+            f.apply_node(node);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = node;
     }
 
     /// Like [`FrameHandle::reload_with`], resolving once the new content is in the page.

@@ -143,6 +143,26 @@ pub enum AttrValue {
     Bool(bool),
     /// Omit the attribute (for example `class={None}`).
     Absent,
+    /// Raw HTML from [`unsafe_html`], for `innerHTML` (the element's content) and `srcdoc`.
+    Html(Str),
+}
+
+/// HTML that rmx inserts without escaping (Remix's `unsafeHTML`). Only pass trusted or
+/// already-sanitized content.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsafeHtml(Str);
+
+/// Allow a string to be inserted as raw HTML: `<div innerHTML={unsafe_html(html)}/>` sets
+/// the element's content, and `<iframe srcdoc={unsafe_html(doc)}/>` its document. Plain
+/// strings are rejected for `innerHTML`, so raw HTML is always an explicit choice.
+pub fn unsafe_html(html: impl Into<Str>) -> UnsafeHtml {
+    UnsafeHtml(html.into())
+}
+
+impl IntoAttr for UnsafeHtml {
+    fn into_attr(self) -> AttrValue {
+        AttrValue::Html(self.0)
+    }
 }
 
 /// Values usable as attribute values in `rsx!`.
