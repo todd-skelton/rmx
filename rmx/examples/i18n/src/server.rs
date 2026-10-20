@@ -13,7 +13,7 @@ use rmx_cookie::{Cookie, SameSite};
 use rmx_fetch::{response, Response};
 use rmx_headers::{AcceptLanguage, Vary};
 use rmx_middleware::form_data::{form_data, FormDataExt};
-use rmx_middleware::static_files::{static_files, StaticOptions};
+use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx_render::Render;
 use rmx_router::routes::{get, post, Route};
 use rmx_router::{middleware, Context, Middleware, Next, Router};
@@ -57,7 +57,7 @@ pub fn router(public: &str) -> Router {
     let mut router = Router::new();
     router.use_middleware(static_files(
         public,
-        StaticOptions { cache_control: Some("no-store".into()), etag: false, last_modified: false, index: false, ..Default::default() },
+        StaticOptions { cache_control: Some("no-store".into()), etag: ETag::Off, last_modified: false, index: vec![], ..Default::default() },
     ));
     router.use_middleware(form_data());
 

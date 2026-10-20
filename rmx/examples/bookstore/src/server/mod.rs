@@ -24,7 +24,7 @@ use rmx_middleware::form_data::{form_data, FileUpload};
 use rmx_middleware::logger::logger;
 use rmx_middleware::method_override::method_override;
 use rmx_middleware::session::{session, SessionExt};
-use rmx_middleware::static_files::{static_files, StaticOptions};
+use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx_render::{Render, ResponseInit};
 use rmx_router::{Context, Middleware, Next, Router};
 use rmx_session::SessionStorage;
@@ -65,7 +65,7 @@ pub fn router<S: SessionStorage, U: FileStorage + Clone>(options: BookstoreOptio
     router.use_middleware(compression());
     router.use_middleware(static_files(
         &public_dir,
-        StaticOptions { cache_control: Some("no-store, must-revalidate".into()), etag: false, last_modified: false, ..Default::default() },
+        StaticOptions { cache_control: Some("no-store, must-revalidate".into()), etag: ETag::Off, last_modified: false, ..Default::default() },
     ));
     router.use_middleware(form_data().upload_handler(upload_handler(uploads.clone())));
     router.use_middleware(method_override());

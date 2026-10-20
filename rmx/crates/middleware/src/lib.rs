@@ -53,5 +53,5 @@ pub use method_override::method_override;
 #[cfg(feature = "session")]
 pub use session::{session, SessionExt};
 #[cfg(feature = "static")]
-pub use static_files::{file_response, static_files, StaticOptions};
+pub use static_files::{file_response, file_response_for, static_files, AcceptRanges, ETag, StaticOptions};
 

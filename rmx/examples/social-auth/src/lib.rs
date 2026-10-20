@@ -24,7 +24,7 @@ use rmx_fetch::{response, Response};
 use rmx_middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
 use rmx_middleware::form_data::{form_data, FormDataExt};
 use rmx_middleware::session::{session, SessionExt};
-use rmx_middleware::static_files::{static_files, StaticOptions};
+use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx_render::{Render, ResponseInit};
 use rmx_router::{middleware, Context, IntoResponse, Middleware, Next, Router};
 use rmx_session::{Session, SessionStorage};
@@ -42,7 +42,7 @@ pub fn router<S: SessionStorage>(cookie: Cookie, storage: S, db: Db, public: &st
     let mut router = Router::new();
     router.use_middleware(static_files(
         public,
-        StaticOptions { cache_control: Some("no-store, must-revalidate".into()), etag: false, last_modified: false, ..Default::default() },
+        StaticOptions { cache_control: Some("no-store, must-revalidate".into()), etag: ETag::Off, last_modified: false, ..Default::default() },
     ));
     router.use_middleware(form_data());
     router.use_middleware(session(cookie, storage));

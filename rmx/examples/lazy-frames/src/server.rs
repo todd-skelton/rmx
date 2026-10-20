@@ -84,7 +84,7 @@ pub fn router(config: Config) -> Router {
     router.use_middleware(move |ctx: Context, next: Next| demo_latency(ctx, next, latency));
     router.use_middleware(static_files(
         config.root.join("public"),
-        StaticOptions { cache_control: Some("no-store".into()), index: false, ..Default::default() },
+        StaticOptions { cache_control: Some("no-store".into()), index: vec![], ..Default::default() },
     ));
     router.use_middleware(form_data());
 

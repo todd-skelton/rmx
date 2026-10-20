@@ -42,6 +42,27 @@ pub fn from_extension(ext: &str) -> &'static str {
     }
 }
 
+/// The `Content-Type` for a bare MIME type (Remix's `mimeTypeToContentType`): text types,
+/// JSON and JavaScript get `; charset=utf-8`. `text/xml` and values that already name a
+/// charset are returned unchanged.
+pub fn to_content_type(mime_type: &str) -> String {
+    let utf8 = mime_type.starts_with("text/") || mime_type.ends_with("+json") || mime_type == "application/json" || mime_type == "application/javascript";
+    if mime_type.contains("charset") || mime_type == "text/xml" || !utf8 {
+        mime_type.to_string()
+    } else {
+        format!("{mime_type}; charset=utf-8")
+    }
+}
+
+/// The MIME type for a path without parameters, or `None` for an unknown extension
+/// (Remix's `detectMimeType`).
+pub fn detect_mime_type(path: &str) -> Option<&'static str> {
+    match from_path(path) {
+        "application/octet-stream" => None,
+        known => known.split(';').next(),
+    }
+}
+
 /// Types mime-db marks compressible that the generic rules below do not cover (the list
 /// Remix generates for `isCompressibleMimeType`).
 const COMPRESSIBLE: &[&str] = &[
@@ -111,5 +132,12 @@ mod tests {
         assert!(super::is_compressible("application/wasm"));
         assert!(!super::is_compressible("video/mp4"));
         assert!(!super::is_compressible(""));
+        assert_eq!(super::to_content_type("text/plain"), "text/plain; charset=utf-8");
+        assert_eq!(super::to_content_type("application/ld+json"), "application/ld+json; charset=utf-8");
+        assert_eq!(super::to_content_type("text/xml"), "text/xml");
+        assert_eq!(super::to_content_type("text/html; charset=latin1"), "text/html; charset=latin1");
+        assert_eq!(super::to_content_type("image/png"), "image/png");
+        assert_eq!(super::detect_mime_type("a.js"), Some("text/javascript"));
+        assert_eq!(super::detect_mime_type("a.unknown"), None);
     }
 }

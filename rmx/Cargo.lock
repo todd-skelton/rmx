@@ -1247,6 +1247,7 @@ dependencies = [
  "rmx-crypto",
  "rmx-fetch",
  "rmx-headers",
+ "rmx-html-template",
  "rmx-mime",
  "rmx-router",
  "rmx-session",

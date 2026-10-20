@@ -57,6 +57,12 @@ impl Body {
         Body { inner: Inner::Boxed(Box::pin(MapErr(body))) }
     }
 
+    /// A body read on demand from a blocking reader, up to 64 KiB per chunk (Remix's lazy
+    /// files). Each chunk is read when the body is polled, so only one chunk is held at a time.
+    pub fn from_reader<R: std::io::Read + Send + Unpin + 'static>(reader: R) -> Body {
+        Body::wrap(ReaderBody(Some(reader)))
+    }
+
     /// A streaming body and the [`BodySender`] that feeds it. The body ends when every
     /// sender is dropped.
     pub fn channel() -> (BodySender, Body) {
@@ -242,6 +248,40 @@ fn poll_shared(shared: &Shared, cx: &mut Context<'_>) -> Poll<Option<Result<Byte
     Poll::Pending
 }
 
+struct ReaderBody<R>(Option<R>);
+
+impl<R: std::io::Read + Unpin> http_body::Body for ReaderBody<R> {
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Bytes>, std::io::Error>>> {
+        let this = self.get_mut();
+        let Some(reader) = this.0.as_mut() else { return Poll::Ready(None) };
+        let mut buf = vec![0; 64 * 1024];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => {
+                    this.0 = None;
+                    return Poll::Ready(None);
+                }
+                Ok(n) => {
+                    buf.truncate(n);
+                    return Poll::Ready(Some(Ok(Frame::data(Bytes::from(buf)))));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    this.0 = None;
+                    return Poll::Ready(Some(Err(e)));
+                }
+            }
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.0.is_none()
+    }
+}
+
 struct MapErr<B>(B);
 
 impl<B> http_body::Body for MapErr<B>
@@ -387,6 +427,16 @@ mod tests {
         assert_eq!(block_on(body.text()).unwrap(), "ab");
         t.join().unwrap();
         assert_eq!(block_on(Body::from("a=1&b=x+y").form()).unwrap().get("b"), Some("x y"));
+    }
+
+    #[test]
+    fn reader_body_streams_in_chunks() {
+        let data: Vec<u8> = (0..200_000u32).map(|i| i as u8).collect();
+        let mut body = Body::from_reader(std::io::Cursor::new(data.clone()));
+        let first = block_on(body.chunk()).unwrap().unwrap();
+        assert_eq!(first.len(), 64 * 1024);
+        let rest = block_on(body.bytes()).unwrap();
+        assert_eq!([&first[..], &rest[..]].concat(), data);
     }
 
     #[test]

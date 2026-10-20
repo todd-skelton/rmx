@@ -6,7 +6,7 @@ use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
 use rmx_fetch::{Body, Response};
 use rmx_middleware::compression::compression;
 use rmx_middleware::logger::logger;
-use rmx_middleware::static_files::{static_files, StaticOptions};
+use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx_render::Render;
 use rmx_router::routes::{get, Route};
 use rmx_router::{Context, Router};
@@ -40,7 +40,7 @@ pub fn router(public: &str, interval: Duration) -> Router {
     router.use_middleware(compression());
     router.use_middleware(static_files(
         public,
-        StaticOptions { cache_control: Some("no-store".into()), etag: false, last_modified: false, index: false, ..Default::default() },
+        StaticOptions { cache_control: Some("no-store".into()), etag: ETag::Off, last_modified: false, index: vec![], ..Default::default() },
     ));
 
     router.route(&ROUTES.home, |ctx: Context| async move {
