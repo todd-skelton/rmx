@@ -30,6 +30,12 @@ pub(crate) fn dispatch(target: &web_sys::EventTarget, name: &str, fields: &[Fiel
     let _ = target.dispatch_event(&event);
 }
 
+/// Log a warning to the browser console.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn warn(message: &str) {
+    web_sys::console::warn_1(&message.into());
+}
+
 /// Run `f` once when `signal` aborts.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn on_abort(signal: &web_sys::AbortSignal, f: impl FnOnce() + 'static) {

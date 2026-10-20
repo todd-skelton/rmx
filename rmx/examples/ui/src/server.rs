@@ -67,6 +67,8 @@ fn demo_node(slug: &str) -> Node {
         "cases/draggable" => rsx! { <draggable::DraggableDemo/> },
         "ui/animation" => rsx! { <animation::AnimationGallery/> },
         "ui/accordion" => rsx! { <accordion::AccordionDemo/> },
+        "ui/anchor" => rsx! { <anchor::AnchorDemo/> },
+        "ui/popover" => rsx! { <popover::PopoverDemo/> },
         "ui/tabs" => rsx! { <tabs::TabsDemo/> },
         "ui/toggle" => rsx! { <toggle::ToggleDemo/> },
         _ => Node::Empty,

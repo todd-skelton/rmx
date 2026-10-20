@@ -36,7 +36,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 // Index
 await page.goto(BASE + '/')
 const links = await page.$$eval('a[href^="/demo/"]', (as) => as.map((a) => a.getAttribute('href')))
-check('the index lists the demos', links.length === 10, links)
+check('the index lists the demos', links.length === 12, links)
 
 // Basic counter
 await open('component/runtime/basic')
@@ -346,6 +346,65 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   check('accordion: arrows wrap over enabled triggers, Home and End', [f1, f2, f3, f4].join() === 'Billing,Shipping,Billing,Shipping', [f1, f2, f3, f4])
   const events = await page.evaluate(() => window.__acc)
   check('accordion: rmx:accordion-change bubbles from the root', eq(events, [['single', 'billing', 'billing', 'single'], ['single', 'billing', null, 'single']]), events)
+}
+
+// Anchor (packages/ui/src/demos/anchor.demo.tsx)
+{
+  await open('ui/anchor')
+  await page.waitForTimeout(50)
+  const a = await page.evaluate(() => {
+    const b = document.querySelector('button').getBoundingClientRect()
+    const f = [...document.querySelectorAll('div')].find((d) => d.textContent === 'Positioned surface')
+    const r = f.getBoundingClientRect()
+    return { placement: f.dataset.anchorPlacement, dy: Math.round(r.top - b.bottom), dx: Math.round(r.left - b.left), position: f.style.position }
+  })
+  check('anchor: floating element sits 8px below the anchor, start-aligned', a.placement === 'bottom-start' && a.dy === 8 && a.dx === 0 && a.position === 'absolute', a)
+  await page.setViewportSize({ width: 900, height: 720 })
+  await page.waitForTimeout(100)
+  const moved = await page.evaluate(() => {
+    const b = document.querySelector('button').getBoundingClientRect()
+    const r = [...document.querySelectorAll('div')].find((d) => d.textContent === 'Positioned surface').getBoundingClientRect()
+    return { dy: Math.round(r.top - b.bottom), dx: Math.round(r.left - b.left) }
+  })
+  check('anchor: it follows the anchor when a resize moves it', moved.dy === 8 && moved.dx === 0, moved)
+  await page.setViewportSize({ width: 1280, height: 720 })
+}
+
+// Popover (packages/ui/src/demos/popover.demo.tsx, popover.test.tsx)
+{
+  await open('ui/popover')
+  const pop = () => page.evaluate(() => {
+    const s = document.querySelector('[popover]')
+    const b = document.querySelector('button').getBoundingClientRect()
+    const r = s.getBoundingClientRect()
+    return { open: s.matches(':popover-open'), focus: document.activeElement?.textContent, overflow: document.documentElement.style.overflow, placement: s.dataset.anchorPlacement, dy: Math.round(r.top - b.bottom), dx: Math.round(r.left - b.left) }
+  })
+  const p0 = await pop()
+  check('popover: closed manual popover after hydration', !p0.open && p0.overflow === '', p0)
+  await page.click('button:has-text("View options")')
+  await settle()
+  const p1 = await pop()
+  check('popover: opens anchored below, focuses the show target, locks scroll', p1.open && p1.focus === 'Close' && p1.placement === 'bottom-start' && p1.dy === 8 && p1.dx === 0 && p1.overflow === 'hidden', p1)
+  await page.keyboard.press('Escape')
+  await settle()
+  const p2 = await pop()
+  check('popover: Escape hides, restores focus and scrolling', !p2.open && p2.focus === 'View options' && p2.overflow === '', p2)
+  await page.click('button:has-text("View options")')
+  await settle()
+  await page.mouse.click(5, 5)
+  await settle()
+  check('popover: an outside click hides it', !(await pop()).open)
+  await page.click('button:has-text("View options")')
+  await settle()
+  await page.click('button:has-text("View options")')
+  await settle()
+  check('popover: clicking the anchor while open closes it (the click does not reopen it)', !(await pop()).open)
+  await page.click('button:has-text("View options")')
+  await settle()
+  await page.click('button:has-text("Close")')
+  await settle()
+  const p3 = await pop()
+  check('popover: the close button hides it and focus returns to the anchor', !p3.open && p3.focus === 'View options', p3)
 }
 
 check('no page errors or failed requests', errors.length === 0, errors)

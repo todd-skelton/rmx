@@ -4,7 +4,9 @@
 //! not re-exported by `rmx`. It provides [`accordion`], [`animation`], [`tabs`] and [`toggle`].
 
 pub mod accordion;
+pub mod anchor;
 pub mod animation;
 mod event;
+pub mod popover;
 pub mod tabs;
 pub mod toggle;

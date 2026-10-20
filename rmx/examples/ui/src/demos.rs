@@ -1,10 +1,12 @@
 pub mod accordion;
+pub mod anchor;
 pub mod animation;
 pub mod basic;
 pub mod controlled;
 pub mod draggable;
 pub mod keyed_list;
 pub mod lifecycle;
+pub mod popover;
 pub mod readme;
 pub mod tabs;
 pub mod toggle;

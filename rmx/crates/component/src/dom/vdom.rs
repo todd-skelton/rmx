@@ -331,7 +331,7 @@ fn event_key(name: &'static str) -> JsValue {
         // Events that do not bubble are caught on the way down instead.
         let capture = matches!(
             name,
-            "focus" | "blur" | "mouseenter" | "mouseleave" | "load" | "error" | "scroll" | "toggle" | "invalid"
+            "focus" | "blur" | "mouseenter" | "mouseleave" | "load" | "error" | "scroll" | "toggle" | "beforetoggle" | "invalid"
         );
         document()
             .add_event_listener_with_callback_and_bool(name, dispatch.as_ref().unchecked_ref(), capture)
