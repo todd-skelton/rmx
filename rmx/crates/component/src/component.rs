@@ -209,7 +209,7 @@ impl<C: Component> Clone for Handle<C> {
 thread_local! {
     static NEXT_ID: Cell<u32> = const { Cell::new(0) };
     #[cfg(not(target_arch = "wasm32"))]
-    static NOOP_HANDLER: EventHandler = EventHandler(Rc::new(|_| {}));
+    static NOOP_HANDLER: EventHandler = EventHandler(Rc::new(|_| {}), false);
     /// Server rendering: contexts provided by the components currently being rendered.
     static SSR_CONTEXT: RefCell<Vec<Rc<HandleShared>>> = const { RefCell::new(Vec::new()) };
     /// Server rendering: (frame src, top frame src) for `h.frame()` / `h.frames().top()`.
@@ -384,7 +384,7 @@ impl<C: Component> Handle<C> {
                         }
                     }
                 });
-            }))
+            }), false)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

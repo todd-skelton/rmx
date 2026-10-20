@@ -1,6 +1,6 @@
 //! The browser runtime for stateful mixins: one [`MixinHost`] per element whose `mix`
 //! contains a [`HostMixin`](crate::HostMixin). It owns the mixin slots and the element's
-//! applied attributes and listeners, so `update()` can re-run the mixins and patch the
+//! applied attributes, listeners and styles, so `update()` can re-run the mixins and patch the
 //! element without re-rendering its owner.
 
 use std::any::TypeId;
@@ -8,11 +8,11 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 
-use super::vdom::{apply_extra, attach_events, has_inner_html, hydrate_attrs, patch_props, queue_commit, schedule_host_update, set_attr, Listener};
+use super::vdom::{apply_styles, attach_events, has_inner_html, hydrate_attrs, patch_props, queue_commit, schedule_host_update, set_attr, Applied};
 use super::Scope;
 use crate::host_mixin::{take_mixins, AnySlot, BeforeRemoveEvent, InsertEvent, Lifecycle, LifecycleEvent, SlotContext};
 use crate::mixin::NodeHandle;
-use crate::node::{AttrValue, Element, Key};
+use crate::node::{Element, Key};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Mode {
@@ -33,8 +33,7 @@ pub(crate) struct MixinHost {
     slots: RefCell<Vec<(TypeId, Rc<dyn AnySlot>)>>,
     /// The element as its owner last rendered it, without children, for `update()`.
     base: RefCell<Option<Element>>,
-    attrs: RefCell<Vec<(&'static str, AttrValue)>>,
-    listeners: RefCell<Vec<Listener>>,
+    props: RefCell<Applied>,
     /// Aborts pending `persist_node` teardowns.
     removal: RefCell<Option<web_sys::AbortController>>,
 }
@@ -52,8 +51,7 @@ impl MixinHost {
             dirty: Cell::new(false),
             slots: RefCell::new(Vec::new()),
             base: RefCell::new(None),
-            attrs: RefCell::new(Vec::new()),
-            listeners: RefCell::new(Vec::new()),
+            props: RefCell::new(Applied::default()),
             removal: RefCell::new(None),
         });
         if let Some(owner) = scope.parent.as_ref().and_then(Weak::upgrade) {
@@ -71,9 +69,8 @@ impl MixinHost {
     }
 
     /// Take over the props of an element that was mounted before it had stateful mixins.
-    pub(crate) fn adopt(&self, attrs: Vec<(&'static str, AttrValue)>, listeners: Vec<Listener>) {
-        *self.attrs.borrow_mut() = attrs;
-        *self.listeners.borrow_mut() = listeners;
+    pub(crate) fn adopt(&self, props: Applied) {
+        *self.props.borrow_mut() = props;
     }
 
     /// Run the mixins over the owner's element (children already taken) and apply the
@@ -127,24 +124,21 @@ impl MixinHost {
         let Element { attrs, events, extra, .. } = el;
         let inner_html = has_inner_html(&attrs);
         match mode {
-            Mode::Create => {
-                for (name, value) in &attrs {
-                    set_attr(&self.el, self.tag, name, value);
+            Mode::Create | Mode::Hydrate => {
+                if mode == Mode::Create {
+                    for (name, value) in &attrs {
+                        set_attr(&self.el, self.tag, name, value);
+                    }
+                } else {
+                    hydrate_attrs(&self.el, self.tag, &attrs);
                 }
-                apply_extra(&self.el, extra, true);
-                *self.listeners.borrow_mut() = attach_events(&self.el, events);
-                *self.attrs.borrow_mut() = attrs;
-            }
-            Mode::Hydrate => {
-                hydrate_attrs(&self.el, self.tag, &attrs);
-                apply_extra(&self.el, extra, true);
-                *self.listeners.borrow_mut() = attach_events(&self.el, events);
-                *self.attrs.borrow_mut() = attrs;
+                let mut props = self.props.borrow_mut();
+                apply_styles(extra, &mut props.styles);
+                props.listeners = attach_events(&self.el, events);
+                props.attrs = attrs;
             }
             Mode::Patch => {
-                let mut old_attrs = self.attrs.borrow_mut();
-                let mut listeners = self.listeners.borrow_mut();
-                patch_props(&self.el, self.tag, &mut old_attrs, &mut listeners, attrs, events, extra);
+                patch_props(&self.el, self.tag, &mut self.props.borrow_mut(), attrs, events, extra);
             }
         }
 
@@ -237,9 +231,7 @@ impl MixinHost {
         for (_, slot) in slots {
             slot.dispose();
         }
-        for listener in self.listeners.borrow_mut().drain(..) {
-            listener.release(None);
-        }
+        std::mem::take(&mut *self.props.borrow_mut()).release(None);
     }
 
     /// Removal is starting: dispatch `beforeRemove`. When a listener persisted the node,

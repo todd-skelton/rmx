@@ -13,7 +13,7 @@ use super::{document, frames, styles, Scope};
 use crate::component::{Component, Handle, HandleShared, Instance, Phase};
 use crate::host_mixin::has_mixins;
 use super::mixin_host::MixinHost;
-use crate::node::{AttrValue, Element, Event, EventHandler, FrameNode, Key, Node, Str};
+use crate::node::{AttrValue, Element, ElementExtra, Event, EventHandler, FrameNode, Key, Node, Str, StyleRule};
 
 // ---------------------------------------------------------------------------------------
 // Instances
@@ -371,12 +371,29 @@ pub(crate) enum Mounted {
     Frame(Box<MFrame>),
 }
 
+/// What has been applied to a DOM element: attributes, listeners and the `css()` rules
+/// it holds a reference to.
+#[derive(Default)]
+pub(crate) struct Applied {
+    pub(super) attrs: Vec<(&'static str, AttrValue)>,
+    pub(super) listeners: Vec<Listener>,
+    pub(super) styles: Vec<Rc<StyleRule>>,
+}
+
+impl Applied {
+    /// Free the listener slots and style references. `el` is given when the element
+    /// stays in the document, so its listeners are removed too.
+    pub(super) fn release(&self, el: Option<&web_sys::Element>) {
+        self.listeners.iter().for_each(|l| l.release(el));
+        release_styles(&self.styles);
+    }
+}
+
 pub(crate) struct MElement {
     tag: &'static str,
     key: Option<Key>,
-    /// Applied attributes and listeners; empty when `host` owns them.
-    attrs: Vec<(&'static str, AttrValue)>,
-    listeners: Vec<Listener>,
+    /// Empty when `host` owns the element's props.
+    props: Applied,
     el: web_sys::Element,
     children: Vec<Mounted>,
     /// Stateful mixins bound to this element.
@@ -400,12 +417,14 @@ pub(crate) struct MFrame {
     state: Rc<frames::FrameState>,
 }
 
-/// Event handling is delegated: one document listener per event type, and each element
-/// stores the id of its handler in an expando property. Creating a row costs one property
-/// write instead of a JS closure plus addEventListener, and re-renders only swap the
+/// Event listeners live on their host element, as in Remix (so an ancestor's
+/// `stopPropagation` does not hide them, and capture listeners work). Every element shares
+/// one JS function per event type and phase, and stores the id of its Rust handler in an
+/// expando property, so binding costs one call into JS and a re-render only swaps the
 /// handler in the Rust-side table.
 pub(crate) struct Listener {
     name: &'static str,
+    capture: bool,
     id: u32,
 }
 
@@ -417,7 +436,7 @@ struct HandlerTable {
     signals: HashMap<u32, web_sys::AbortController>,
 }
 
-/// The signal for the current run of a delegated listener.
+/// The signal for the current run of a listener.
 pub(crate) fn listener_signal(id: u32) -> web_sys::AbortSignal {
     HANDLERS.with(|h| {
         let mut table = h.borrow_mut();
@@ -431,159 +450,65 @@ fn abort_listener_signal(table: &mut HandlerTable, id: u32) {
     }
 }
 
-/// The document-level listeners for one event type.
-struct Delegated {
-    key: JsValue,
-    /// (capture, listener) pairs, also added to standalone root containers.
-    listeners: Vec<(bool, js_sys::Function)>,
-}
-
-/// A standalone root's container, which listens too so trees outside the document (a
-/// root rendered into a detached element) still get their events.
-struct WatchedContainer {
-    node: web_sys::Node,
-    added: Vec<(&'static str, bool, js_sys::Function)>,
+/// The shared functions for one event type and phase. `bind` and `unbind` run with the
+/// element as `this`: they set or delete the expando and add or remove the listener.
+struct EventType {
+    bind: js_sys::Function,
+    unbind: js_sys::Function,
 }
 
 thread_local! {
     static HANDLERS: RefCell<HandlerTable> = RefCell::new(HandlerTable::default());
-    static DELEGATED: RefCell<HashMap<&'static str, Delegated>> = RefCell::new(HashMap::new());
-    static CONTAINERS: RefCell<Vec<WatchedContainer>> = const { RefCell::new(Vec::new()) };
-    /// Set on an event once it has been dispatched, so a container and the document do
-    /// not both run its handlers.
-    static DISPATCHED: JsValue = JsValue::from_str("__rmx_dispatched");
+    static EVENT_TYPES: RefCell<HashMap<(&'static str, bool), EventType>> = RefCell::new(HashMap::new());
 }
 
-fn add_listener(target: &web_sys::EventTarget, name: &str, capture: bool, f: &js_sys::Function) {
-    let _ = target.add_event_listener_with_callback_and_bool(name, f, capture);
-}
-
-/// Listen for every delegated event type on `node` too, until [`unwatch_container`].
-pub(crate) fn watch_container(node: &web_sys::Node) {
-    if CONTAINERS.with(|c| c.borrow().iter().any(|w| w.node.is_same_node(Some(node)))) {
-        return;
-    }
-    let mut added = Vec::new();
-    DELEGATED.with(|d| {
-        for (name, delegated) in d.borrow().iter() {
-            for (capture, f) in &delegated.listeners {
-                add_listener(node, name, *capture, f);
-                added.push((*name, *capture, f.clone()));
-            }
+/// Call `f` with the shared functions for `name` in this phase, creating them on first use.
+fn with_event_type<R>(name: &'static str, capture: bool, f: impl FnOnce(&EventType) -> R) -> R {
+    EVENT_TYPES.with(|types| {
+        if let Some(t) = types.borrow().get(&(name, capture)) {
+            return f(t);
         }
-    });
-    CONTAINERS.with(|c| c.borrow_mut().push(WatchedContainer { node: node.clone(), added }));
-}
-
-pub(crate) fn unwatch_container(node: &web_sys::Node) {
-    CONTAINERS.with(|c| {
-        let mut list = c.borrow_mut();
-        if let Some(i) = list.iter().position(|w| w.node.is_same_node(Some(node))) {
-            let w = list.swap_remove(i);
-            for (name, capture, f) in w.added {
-                let _ = w.node.remove_event_listener_with_callback_and_bool(name, &f, capture);
-            }
-        }
-    });
-}
-
-/// The expando property name for an event, registering the document listener on first use.
-fn event_key(name: &'static str) -> JsValue {
-    DELEGATED.with(|d| {
-        if let Some(delegated) = d.borrow().get(name) {
-            return delegated.key.clone();
-        }
-        let key = JsValue::from_str(&format!("__rmx_{name}"));
-        let mut listeners = Vec::new();
-        // `only_bubbles`: handle just the events whose `bubbles` matches.
-        let mut listen = |capture: bool, only_bubbles: Option<bool>| {
-            let dispatch_key = key.clone();
-            // `Fn`: a handler may dispatch another event of the same type synchronously.
-            let dispatch: js_sys::Function = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
-                if only_bubbles.is_none_or(|bubbles| raw.bubbles() == bubbles) && first_dispatch(&raw) {
-                    dispatch(&raw, &dispatch_key);
-                }
-            })
+        let key = JsValue::from_str(&format!("__rmx_{}{name}", if capture { "c_" } else { "" }));
+        let dispatch_key = key.clone();
+        // `Fn`: a handler may dispatch another event of the same type synchronously.
+        let listener: js_sys::Function = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| dispatch(&raw, &dispatch_key))
             .into_js_value()
             .unchecked_into();
-            add_listener(&document(), name, capture, &dispatch);
-            CONTAINERS.with(|c| {
-                for w in c.borrow_mut().iter_mut() {
-                    add_listener(&w.node, name, capture, &dispatch);
-                    w.added.push((name, capture, dispatch.clone()));
-                }
-            });
-            listeners.push((capture, dispatch));
-        };
-        // Events that never bubble are caught on the way down. Any other type (custom
-        // events included) may be dispatched without `bubbles`, so those instances are
-        // caught on the way down too and the rest on the way up.
-        let never_bubbles = matches!(
-            name,
-            "focus" | "blur" | "mouseenter" | "mouseleave" | "pointerenter" | "pointerleave" | "load" | "error" | "scroll" | "toggle" | "beforetoggle" | "invalid"
+        let make = js_sys::Function::new_with_args(
+            "f,k,n,c",
+            "return [function(id){this[k]=id;this.addEventListener(n,f,c)},function(){delete this[k];this.removeEventListener(n,f,c)}]",
         );
-        if never_bubbles {
-            listen(true, None);
-        } else {
-            listen(false, Some(true));
-            listen(true, Some(false));
-        }
-        d.borrow_mut().insert(name, Delegated { key: key.clone(), listeners });
-        key
+        let pair: js_sys::Array = make
+            .apply(&JsValue::NULL, &js_sys::Array::of4(&listener, &key, &JsValue::from_str(name), &JsValue::from_bool(capture)))
+            .expect("event binders")
+            .unchecked_into();
+        let t = EventType { bind: pair.get(0).unchecked_into(), unbind: pair.get(1).unchecked_into() };
+        let out = f(&t);
+        types.borrow_mut().insert((name, capture), t);
+        out
     })
 }
 
-/// Whether this is the first delegated listener to see `raw` (only tracked while a
-/// standalone root's container listens as well as the document).
-fn first_dispatch(raw: &web_sys::Event) -> bool {
-    if CONTAINERS.with(|c| c.borrow().is_empty()) {
-        return true;
-    }
-    DISPATCHED.with(|key| {
-        if js_sys::Reflect::get(raw, key).is_ok_and(|v| v.is_truthy()) {
-            return false;
-        }
-        let _ = js_sys::Reflect::set(raw, key, &JsValue::TRUE);
-        true
-    })
-}
-
-/// Walk from the target to the root, calling every handler registered for this event.
-/// Events that do not bubble only reach the target's handler, as with `addEventListener`.
+/// Run the handler of the element the event is at (`currentTarget`).
 fn dispatch(raw: &web_sys::Event, key: &JsValue) {
-    let bubbles = raw.bubbles();
-    let mut node = raw.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
-    while let Some(current) = node {
-        if let Some(id) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) {
-            let id = id as u32;
-            let handler = HANDLERS.with(|h| {
-                let mut table = h.borrow_mut();
-                if !table.signals.is_empty() {
-                    abort_listener_signal(&mut table, id);
-                }
-                table.items.get(id as usize).cloned().flatten()
-            });
-            if let Some(handler) = handler {
-                (handler.0)(&Event { raw: raw.clone(), current: Some(current.clone()), listener: Some(id) });
-            }
-            if raw.cancel_bubble() {
-                break;
-            }
+    let Some(current) = raw.current_target() else { return };
+    let Some(id) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) else { return };
+    let id = id as u32;
+    let handler = HANDLERS.with(|h| {
+        let mut table = h.borrow_mut();
+        if !table.signals.is_empty() {
+            abort_listener_signal(&mut table, id);
         }
-        if !bubbles {
-            break;
-        }
-        node = current.parent_node();
-    }
-    // Queued after the handlers, so a render they schedule settles the value first.
-    let ty = raw.type_();
-    if ty == "input" || ty == "change" {
-        restore_controlled(raw);
+        table.items.get(id as usize).cloned().flatten()
+    });
+    if let Some(handler) = handler {
+        (handler.0)(&Event { raw: raw.clone(), current: current.dyn_into().ok(), listener: Some(id) });
     }
 }
 
 impl Listener {
     fn attach(el: &web_sys::Element, name: &'static str, handler: EventHandler) -> Listener {
+        let capture = handler.1;
         let id = HANDLERS.with(|h| {
             let mut table = h.borrow_mut();
             match table.free.pop() {
@@ -597,8 +522,10 @@ impl Listener {
                 }
             }
         });
-        let _ = js_sys::Reflect::set(el, &event_key(name), &JsValue::from(id));
-        Listener { name, id }
+        with_event_type(name, capture, |t| {
+            let _ = t.bind.call1(el, &JsValue::from(id));
+        });
+        Listener { name, capture, id }
     }
 
     fn replace(&self, handler: EventHandler) {
@@ -616,7 +543,9 @@ impl Listener {
             }
         });
         if let Some(el) = el {
-            let _ = js_sys::Reflect::delete_property(el, &event_key(self.name).unchecked_into());
+            with_event_type(self.name, self.capture, |t| {
+                let _ = t.unbind.call0(el);
+            });
         }
     }
 }
@@ -632,7 +561,7 @@ fn merge_events(events: Vec<(&'static str, EventHandler)>) -> Vec<(&'static str,
     }
     let mut merged: Vec<(&'static str, Vec<EventHandler>)> = Vec::new();
     for (name, handler) in events {
-        match merged.iter_mut().find(|(n, _)| *n == name) {
+        match merged.iter_mut().find(|(n, list)| *n == name && list[0].1 == handler.1) {
             Some((_, list)) => list.push(handler),
             None => merged.push((name, vec![handler])),
         }
@@ -643,7 +572,8 @@ fn merge_events(events: Vec<(&'static str, EventHandler)>) -> Vec<(&'static str,
             if list.len() == 1 {
                 (name, list.pop().expect("one handler"))
             } else {
-                (name, EventHandler(Rc::new(move |e: &Event| list.iter().for_each(|h| (h.0)(e)))))
+                let capture = list[0].1;
+                (name, EventHandler(Rc::new(move |e: &Event| list.iter().for_each(|h| (h.0)(e))), capture))
             }
         })
         .collect()
@@ -733,7 +663,10 @@ fn flatten_children(children: Vec<Node>) -> Vec<Node> {
 fn unmount(m: &Mounted) {
     match m {
         Mounted::Element(e) => {
-            e.listeners.iter().for_each(|l| l.release(None));
+            e.props.release(None);
+            if matches!(e.tag, "input" | "textarea" | "select") {
+                untrack_controlled(&e.el);
+            }
             if let Some(host) = &e.host {
                 host.dispose();
             }
@@ -742,7 +675,7 @@ fn unmount(m: &Mounted) {
         Mounted::Head(e, _) => {
             // `document.head` stays: detach this tree's listeners and remove its children.
             let head: &web_sys::Node = e.el.unchecked_ref();
-            e.listeners.iter().for_each(|l| l.release(Some(&e.el)));
+            e.props.release(Some(&e.el));
             if let Some(host) = &e.host {
                 host.dispose();
             }
@@ -1038,10 +971,21 @@ fn track_controlled(el: &web_sys::Element, name: &str, value: &AttrValue) {
     };
     match tracked {
         Some(v) => {
+            let value_key = JsValue::from_str(CONTROLLED_VALUE);
+            let checked_key = JsValue::from_str(CONTROLLED_CHECKED);
+            let first = !js_sys::Reflect::has(el, &value_key).unwrap_or(false) && !js_sys::Reflect::has(el, &checked_key).unwrap_or(false);
             let _ = js_sys::Reflect::set(el, &key, &v);
-            // The restore runs from the delegated listeners.
-            event_key("input");
-            event_key("change");
+            if first {
+                // Like Remix, listen after the commit, so the element's own handlers run first
+                // and a render they schedule settles the value before the restore.
+                let el = el.clone();
+                queue_commit(Box::new(move || {
+                    RESTORE.with(|f| {
+                        let _ = el.add_event_listener_with_callback("input", f);
+                        let _ = el.add_event_listener_with_callback("change", f);
+                    });
+                }));
+            }
         }
         None => {
             let _ = js_sys::Reflect::delete_property(el.unchecked_ref::<js_sys::Object>(), &key);
@@ -1049,10 +993,28 @@ fn track_controlled(el: &web_sys::Element, name: &str, value: &AttrValue) {
     }
 }
 
+/// Stop restoring a removed control's value (Remix's `teardownControlledReflection`).
+fn untrack_controlled(el: &web_sys::Element) {
+    for key in [CONTROLLED_VALUE, CONTROLLED_CHECKED] {
+        let _ = js_sys::Reflect::delete_property(el.unchecked_ref::<js_sys::Object>(), &JsValue::from_str(key));
+    }
+    RESTORE.with(|f| {
+        let _ = el.remove_event_listener_with_callback("input", f);
+        let _ = el.remove_event_listener_with_callback("change", f);
+    });
+}
+
+thread_local! {
+    /// The `input`/`change` listener of controlled form controls.
+    static RESTORE: js_sys::Function = Closure::<dyn Fn(web_sys::Event)>::new(|raw: web_sys::Event| restore_controlled(&raw))
+        .into_js_value()
+        .unchecked_into();
+}
+
 /// After an `input`/`change` event, put a controlled control back to its rendered value
 /// unless a render (which runs first, on an earlier microtask) changed it.
 fn restore_controlled(raw: &web_sys::Event) {
-    let Some(target) = raw.target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) else { return };
+    let Some(target) = raw.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) else { return };
     let value_key = JsValue::from_str(CONTROLLED_VALUE);
     let checked_key = JsValue::from_str(CONTROLLED_CHECKED);
     let has_value = js_sys::Reflect::has(&target, &value_key).unwrap_or(false);
@@ -1090,12 +1052,20 @@ fn sync_select_value(el: &web_sys::Element) {
     }
 }
 
-/// Insert an element's `css()` rules.
-pub(super) fn apply_extra(_el: &web_sys::Element, extra: Option<Box<crate::node::ElementExtra>>, _mounted: bool) {
-    let Some(extra) = extra else { return };
-    for rule in &extra.styles {
-        styles::insert(rule);
+/// Point an element's `css()` rules at `extra`'s: references to new rules are taken
+/// before old ones are dropped, so a rule kept across the update is never deleted.
+pub(super) fn apply_styles(extra: Option<Box<ElementExtra>>, applied: &mut Vec<Rc<StyleRule>>) {
+    let next = extra.map(|x| x.styles).unwrap_or_default();
+    if next.len() == applied.len() && next.iter().zip(applied.iter()).all(|(a, b)| a.class == b.class) {
+        return;
     }
+    next.iter().for_each(|r| styles::retain(r));
+    release_styles(applied);
+    *applied = next;
+}
+
+pub(super) fn release_styles(applied: &[Rc<StyleRule>]) {
+    applied.iter().for_each(|r| styles::release(&r.class));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1118,20 +1088,21 @@ fn create(node: Node, scope: &Scope) -> Mounted {
                 document().create_element(intern(tag)).expect("createElement")
             };
             let children = std::mem::take(&mut el.children);
-            let (key, attrs, listeners, host, inner_html) = if has_mixins(&el) {
+            let (key, props, host, inner_html) = if has_mixins(&el) {
                 let key = el.key.clone();
                 let host = MixinHost::new(dom.clone(), scope, tag, key.clone());
                 let inner_html = host.apply(*el, true);
-                (key, Vec::new(), Vec::new(), Some(host), inner_html)
+                (key, Applied::default(), Some(host), inner_html)
             } else {
                 let Element { key, attrs, events, extra, .. } = *el;
                 for (name, value) in &attrs {
                     set_attr(&dom, tag, name, value);
                 }
-                apply_extra(&dom, extra, true);
+                let mut styles = Vec::new();
+                apply_styles(extra, &mut styles);
                 let listeners = attach_events(&dom, events);
                 let inner_html = has_inner_html(&attrs);
-                (key, attrs, listeners, None, inner_html)
+                (key, Applied { attrs, listeners, styles }, None, inner_html)
             };
             let children = if inner_html { Vec::new() } else { children };
             let mut kids = Vec::with_capacity(children.len());
@@ -1147,7 +1118,7 @@ fn create(node: Node, scope: &Scope) -> Mounted {
             if tag == "select" {
                 sync_select_value(&dom);
             }
-            let element = Box::new(MElement { tag, key, attrs, listeners, el: dom, children: kids, host });
+            let element = Box::new(MElement { tag, key, props, el: dom, children: kids, host });
             match head {
                 Some(_) => Mounted::Head(element, document().create_text_node("")),
                 None => Mounted::Element(element),
@@ -1248,7 +1219,7 @@ fn patch_element(m: &mut MElement, mut n: Element, scope: &Scope) {
     if m.host.is_none() && has_mixins(&n) {
         // Stateful mixins added to a mounted element: the host takes over its props.
         let host = MixinHost::new(m.el.clone(), scope, m.tag, m.key.clone());
-        host.adopt(std::mem::take(&mut m.attrs), std::mem::take(&mut m.listeners));
+        host.adopt(std::mem::take(&mut m.props));
         m.host = Some(host);
     }
     let inner_html = match &m.host {
@@ -1258,8 +1229,8 @@ fn patch_element(m: &mut MElement, mut n: Element, scope: &Scope) {
         }
         None => {
             let Element { attrs, events, extra, .. } = n;
-            patch_props(&m.el, m.tag, &mut m.attrs, &mut m.listeners, attrs, events, extra);
-            has_inner_html(&m.attrs)
+            patch_props(&m.el, m.tag, &mut m.props, attrs, events, extra);
+            has_inner_html(&m.props.attrs)
         }
     };
 
@@ -1282,12 +1253,12 @@ fn patch_element(m: &mut MElement, mut n: Element, scope: &Scope) {
 pub(super) fn patch_props(
     el: &web_sys::Element,
     tag: &str,
-    old_attrs: &mut Vec<(&'static str, AttrValue)>,
-    listeners: &mut Vec<Listener>,
+    applied: &mut Applied,
     attrs: Vec<(&'static str, AttrValue)>,
     events: Vec<(&'static str, EventHandler)>,
-    extra: Option<Box<crate::node::ElementExtra>>,
+    extra: Option<Box<ElementExtra>>,
 ) {
+    let Applied { attrs: old_attrs, listeners, styles } = applied;
     if *old_attrs != attrs {
         for (name, value) in &attrs {
             let unchanged = old_attrs.iter().any(|(n, v)| n == name && v == value);
@@ -1302,11 +1273,11 @@ pub(super) fn patch_props(
         }
         *old_attrs = attrs;
     }
-    apply_extra(el, extra, false);
+    apply_styles(extra, styles);
 
     let events = merge_events(events);
-    let same_events =
-        listeners.len() == events.len() && listeners.iter().zip(&events).all(|(l, (name, _))| l.name == *name);
+    let same_events = listeners.len() == events.len()
+        && listeners.iter().zip(&events).all(|(l, (name, h))| l.name == *name && l.capture == h.1);
     if same_events {
         for (listener, (_, handler)) in listeners.iter().zip(events) {
             listener.replace(handler);
@@ -1563,18 +1534,19 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             let mut el = el;
             let tag = el.tag;
             let children = std::mem::take(&mut el.children);
-            let (key, attrs, listeners, host, inner_html) = if has_mixins(&el) {
+            let (key, props, host, inner_html) = if has_mixins(&el) {
                 let key = el.key.clone();
                 let host = MixinHost::new(dom.clone(), scope, tag, key.clone());
                 let inner_html = host.hydrate(*el);
-                (key, Vec::new(), Vec::new(), Some(host), inner_html)
+                (key, Applied::default(), Some(host), inner_html)
             } else {
                 let Element { key, attrs, events, extra, .. } = *el;
                 hydrate_attrs(&dom, tag, &attrs);
-                apply_extra(&dom, extra, true);
+                let mut styles = Vec::new();
+                apply_styles(extra, &mut styles);
                 let listeners = attach_events(&dom, events);
                 let inner_html = has_inner_html(&attrs);
-                (key, attrs, listeners, None, inner_html)
+                (key, Applied { attrs, listeners, styles }, None, inner_html)
             };
             let dom_node: web_sys::Node = dom.clone().into();
             let children = if inner_html { Vec::new() } else { children };
@@ -1587,7 +1559,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             if tag == "select" {
                 sync_select_value(&dom);
             }
-            Mounted::Element(Box::new(MElement { tag, key, attrs, listeners, el: dom, children: kids, host }))
+            Mounted::Element(Box::new(MElement { tag, key, props, el: dom, children: kids, host }))
         }
         Node::Text(text) if !text.is_empty() => {
             let at = claimable(cursor.clone(), end);

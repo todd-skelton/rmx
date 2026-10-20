@@ -78,7 +78,7 @@ A proc macro built on `rstml`. Templates live inside `.rs` files; there is no se
 
 1. Lowercase tags are elements, capitalized tags are components (`<RowView id={1}/>` builds `RowViewProps`).
 2. Text must be quoted (`"Count: "`); expressions go in braces.
-3. `mix={..}` takes one mixin or a list: `on(..)`, `css(..)`, `attrs(..)`, `node_ref(..)`, or a `HostMixin`.
+3. `mix={..}` takes one mixin or a list: `on(..)`, `on_capture(..)` (Remix's `on(type, handler, true)`), `css(..)`, `attrs(..)`, `node_ref(..)`, or a `HostMixin`.
 4. `key={..}` enables keyed list reconciliation.
 5. Child nodes of a component arrive as `props.children`.
 
@@ -119,8 +119,16 @@ crates:
    creating a new element, extra attributes are kept, parser-split text is merged, and
    mismatches are logged as `Hydration mismatch:` console errors. A root or client entry
    still drops unclaimed nodes between its own markers.
-   The browser runtime is checked by ports of Remix's `vdom.*` test suites
-   (`crates/component/tests/browser_*.rs`, 257 tests).
+   `css(..)` rules live in one constructed stylesheet on `document.adoptedStyleSheets`
+   (Remix's style manager, public as `StyleManager`): server `<style data-rmx-style>` tags
+   are moved into it and pinned, rules added on the client are reference counted and
+   deleted when the last element using them goes, and `@keyframes`/`@font-face` blocks
+   are hoisted out of the class rule.
+   Event handlers are listeners on the host element, as in Remix (no document-level
+   delegation), so `stopPropagation` and capture order match the DOM; `on_capture(..)`
+   registers a capture-phase handler.
+   The browser runtime is checked by ports of Remix's `vdom.*`, mixin and stylesheet test suites
+   (`crates/component/tests/browser_*.rs`, 307 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

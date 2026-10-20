@@ -37,7 +37,7 @@ pub use frame::{
     ResolveFuture,
 };
 pub use host_mixin::{mixin, BeforeRemoveEvent, HostMixin, InsertEvent, MixinHandle};
-pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
+pub use mixin::{attrs, css, node_ref, on, on_capture, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use navigation::{link, link_with, navigate, navigate_async, NavigateOptions};
 pub use node::{
     unsafe_html, AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoHtmlAttr, IntoNode, IntoProp, Key, Node,
@@ -49,6 +49,9 @@ pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]
 pub use dom::{create_range_root, create_root, entry, flush, run, App, Entry, Root, RunOptions};
+/// The stylesheet behind `css()` (`createStyleManager` in `remix/component`).
+#[cfg(target_arch = "wasm32")]
+pub use dom::styles::{StyleManager, STYLE_LAYER};
 
 /// Component testing helpers (`remix/component/test`): [`test::render`] mounts a tree for a
 /// browser test.

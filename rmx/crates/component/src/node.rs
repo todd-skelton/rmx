@@ -378,8 +378,7 @@ impl IntoNode for Children {
 pub struct Event {
     #[cfg(target_arch = "wasm32")]
     pub(crate) raw: web_sys::Event,
-    /// The element whose handler is running (events are delegated, so the browser's
-    /// `currentTarget` is the document).
+    /// The element whose handler is running (`currentTarget`).
     #[cfg(target_arch = "wasm32")]
     pub(crate) current: Option<web_sys::Node>,
     /// The delegated listener running, for [`Event::signal`].
@@ -578,21 +577,22 @@ impl Event {
     }
 }
 
-/// An event listener created with [`crate::Handle::on`] or [`EventHandler::new`].
+/// An event listener created with [`crate::Handle::on`] or [`EventHandler::new`]. The flag
+/// is set for capture-phase listeners ([`crate::on_capture`]).
 #[derive(Clone)]
-pub struct EventHandler(pub(crate) Rc<dyn Fn(&Event)>);
+pub struct EventHandler(pub(crate) Rc<dyn Fn(&Event)>, pub(crate) bool);
 
 impl EventHandler {
     /// A handler that does not touch component state (use [`crate::Handle::on`] for that).
     pub fn new(f: impl Fn(&Event) + 'static) -> EventHandler {
         #[cfg(target_arch = "wasm32")]
         {
-            EventHandler(Rc::new(f))
+            EventHandler(Rc::new(f), false)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
             drop(f);
-            EventHandler(Rc::new(|_| {}))
+            EventHandler(Rc::new(|_| {}), false)
         }
     }
 }

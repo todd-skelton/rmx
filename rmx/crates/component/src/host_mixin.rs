@@ -332,12 +332,12 @@ impl<M: HostMixin> MixinHandle<M> {
                         f(&mut state, &slot.handle, event);
                     }
                 }
-            }))
+            }), false)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
             drop(f);
-            EventHandler(Rc::new(|_| {}))
+            EventHandler(Rc::new(|_| {}), false)
         }
     }
 

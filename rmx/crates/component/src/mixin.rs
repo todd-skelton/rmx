@@ -336,6 +336,12 @@ pub fn on(event: &'static str, handler: EventHandler) -> Mixin {
     Mixin(MixinKind::Event(event, handler))
 }
 
+/// Attach a capture-phase listener (`on('keydown', ..., true)` in Remix): it runs on the
+/// way down, before listeners on the target and its descendants.
+pub fn on_capture(event: &'static str, handler: EventHandler) -> Mixin {
+    Mixin(MixinKind::Event(event, EventHandler(handler.0, true)))
+}
+
 /// Run `f` with the DOM element after it is inserted (Remix's `ref`, browser only). The
 /// signal aborts when the element is removed: clean up observers and listeners with it.
 pub fn node_ref(f: impl Fn(&NodeHandle, &Signal) + 'static) -> Mixin {
@@ -385,7 +391,106 @@ fn hash36(s: &str) -> String {
 /// The full CSS text for a rule, wrapped in its cascade layer:
 /// `@layer rmx.rmxc-x { .rmxc-x { ... } }`.
 pub(crate) fn rule_css(rule: &StyleRule) -> String {
-    format!("@layer rmx.{0} {{ .{0} {{ {1} }} }}", rule.class, rule.css)
+    format!("@layer rmx.{} {{ {} }}", rule.class, rule_body(rule))
+}
+
+/// The rule without its layer: `.rmxc-x { ... }`. Top-level at-rules that cannot be
+/// nested in a style rule (`@keyframes`, `@font-face`, `@property`, `@function`,
+/// `@counter-style`) are moved in front of it, as Remix does for its style objects.
+pub(crate) fn rule_body(rule: &StyleRule) -> String {
+    let (prelude, rest) = split_prelude(&rule.css);
+    let body = format!(".{} {{ {} }}", rule.class, rest.trim());
+    if prelude.is_empty() {
+        body
+    } else {
+        format!("{} {body}", prelude.join(" "))
+    }
+}
+
+fn hoisted_at_rule(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let name = name.trim_start_matches('@');
+    let name = ["-webkit-", "-moz-", "-o-"].iter().find_map(|p| name.strip_prefix(p)).unwrap_or(name);
+    matches!(name, "keyframes" | "font-face" | "property" | "function" | "counter-style")
+}
+
+/// Split CSS text into the hoisted top-level at-rule blocks and everything else.
+fn split_prelude(css: &str) -> (Vec<&str>, String) {
+    let bytes = css.as_bytes();
+    let (mut prelude, mut rest) = (Vec::new(), String::with_capacity(css.len()));
+    let (mut i, mut kept) = (0, 0);
+    let mut depth = 0u32;
+    let mut quote: Option<u8> = None;
+    let mut statement_start = true;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = quote {
+            if b == b'\\' {
+                i += 1;
+            } else if b == q {
+                quote = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'"' | b'\'' => quote = Some(b),
+            b'{' => depth += 1,
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                statement_start = depth == 0;
+                i += 1;
+                continue;
+            }
+            b';' if depth == 0 => statement_start = true,
+            b'@' if depth == 0 && statement_start => {
+                let name_end = css[i..].find(|c: char| c.is_whitespace() || c == '{').map_or(css.len(), |n| i + n);
+                if hoisted_at_rule(&css[i..name_end]) {
+                    if let Some(end) = block_end(bytes, i) {
+                        rest.push_str(&css[kept..i]);
+                        prelude.push(css[i..end].trim());
+                        kept = end;
+                        i = end;
+                        continue;
+                    }
+                }
+                statement_start = false;
+            }
+            c if !c.is_ascii_whitespace() => statement_start = false,
+            _ => {}
+        }
+        i += 1;
+    }
+    rest.push_str(&css[kept..]);
+    (prelude, rest)
+}
+
+/// The index just past the `}` closing the first block that starts at or after `from`.
+fn block_end(bytes: &[u8], from: usize) -> Option<usize> {
+    let mut depth = 0u32;
+    let mut quote: Option<u8> = None;
+    let mut i = from;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = quote {
+            if b == b'\\' {
+                i += 1;
+            } else if b == q {
+                quote = None;
+            }
+        } else {
+            match b {
+                b'"' | b'\'' => quote = Some(b),
+                b'{' => depth += 1,
+                b'}' if depth == 1 => return Some(i + 1),
+                b'}' => depth = depth.saturating_sub(1),
+                b';' if depth == 0 => return None,
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    None
 }
 
 #[cfg(test)]
@@ -405,5 +510,20 @@ mod tests {
         assert_eq!(el.attr("class"), Some(&AttrValue::Str(format!("lead {}", ra.class).into())));
         assert_eq!(el.attr("title"), Some(&AttrValue::Str("t".into())));
         assert_eq!(rule_css(&ra), format!("@layer rmx.{0} {{ .{0} {{ color: red; padding: 4px }} }}", ra.class));
+    }
+
+    #[test]
+    fn hoists_keyframes_out_of_the_class_rule() {
+        let rule = StyleRule {
+            class: "c".into(),
+            css: "animation: spin 1s; @keyframes spin { from { opacity: 0 } to { opacity: 1 } } content: \"@keyframes x {}\"; @media (width > 1px) { color: red }".into(),
+        };
+        assert_eq!(
+            rule_body(&rule),
+            ".c { animation: spin 1s;  content: \"@keyframes x {}\"; @media (width > 1px) { color: red } }"
+                .replace(".c {", "@keyframes spin { from { opacity: 0 } to { opacity: 1 } } .c {")
+        );
+        let plain = StyleRule { class: "d".into(), css: "&:hover { color: red } @font-face { font-family: X }".into() };
+        assert_eq!(rule_body(&plain), "@font-face { font-family: X } .d { &:hover { color: red } }");
     }
 }
