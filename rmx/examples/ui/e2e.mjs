@@ -36,7 +36,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 // Index
 await page.goto(BASE + '/')
 const links = await page.$$eval('a[href^="/demo/"]', (as) => as.map((a) => a.getAttribute('href')))
-check('the index lists the demos', links.length === 12, links)
+check('the index lists the demos', links.length === 14, links)
 
 // Basic counter
 await open('component/runtime/basic')
@@ -405,6 +405,98 @@ check('tabs: rmx:tabs-change bubbles from the root with active and previous tabs
   await settle()
   const p3 = await pop()
   check('popover: the close button hides it and focus returns to the anchor', !p3.open && p3.focus === 'View options', p3)
+}
+
+// Listbox (packages/ui/src/demos/listbox.demo.tsx, listbox.test.tsx)
+{
+  await open('ui/listbox')
+  const lb = () => page.evaluate(() => ({
+    selected: [...document.querySelectorAll('[role="option"]')].map((o) => o.getAttribute('aria-selected')).join(),
+    highlighted: [...document.querySelectorAll('[role="option"]')].map((o) => o.dataset.highlighted).join(),
+    value: [...document.querySelectorAll('p')].pop().textContent,
+  }))
+  const l0 = await lb()
+  check('listbox: initial value and highlight', l0.selected === 'true,false,false,false' && l0.highlighted === 'true,false,false,false' && l0.value === 'value=remix', l0)
+  await page.focus('[role="listbox"]')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  check('listbox: arrows move the highlight', (await lb()).highlighted === 'false,false,true,false')
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  check('listbox: navigation wraps past the disabled option', (await lb()).highlighted === 'true,false,false,false')
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(120)
+  const l1 = await lb()
+  check('listbox: End and Enter select the last enabled option', l1.selected === 'false,false,true,false' && l1.value === 'value=react', l1)
+  await page.keyboard.press('Home')
+  await page.keyboard.type('r')
+  await settle()
+  const t1 = (await lb()).highlighted
+  await page.keyboard.type('e')
+  await settle()
+  const t2 = (await lb()).highlighted
+  check('listbox: typeahead searches from the highlighted option', t1 === 'false,true,false,false' && t2 === 'false,false,true,false', [t1, t2])
+  await page.waitForTimeout(800)
+  await page.hover('[role="option"]:has-text("Remix")')
+  await settle()
+  check('listbox: hovering highlights', (await lb()).highlighted === 'true,false,false,false')
+  await page.click('[role="option"]:has-text("Archived")', { force: true })
+  await page.click('[role="option"]:has-text("Remix")')
+  await page.waitForTimeout(120)
+  const l2 = await lb()
+  check('listbox: clicking selects; disabled options are ignored', l2.selected === 'true,false,false,false' && l2.value === 'value=remix', l2)
+}
+
+// Select (packages/ui/src/demos/select.demo.tsx, select.test.tsx)
+{
+  await open('ui/select')
+  await page.evaluate(() => {
+    window.__sel = []
+    document.addEventListener('rmx:select-change', (e) => window.__sel.push([e.value, e.label, !!e.optionId, e.target.tagName]))
+  })
+  const sel = () => page.evaluate(() => {
+    const t = document.querySelector('[aria-haspopup="listbox"]')
+    const s = document.querySelector('[popover]')
+    return {
+      label: t.textContent, expanded: t.getAttribute('aria-expanded'), describedby: t.getAttribute('aria-describedby'),
+      open: s.matches(':popover-open'), focus: document.activeElement?.getAttribute('role') ?? document.activeElement?.tagName,
+      selected: [...document.querySelectorAll('[role="option"]')].map((o) => o.getAttribute('aria-selected')).join(),
+      input: document.querySelector('input[type="hidden"]').value, value: [...document.querySelectorAll('p')].pop().textContent,
+      minWidth: s.style.minWidth, triggerWidth: t.offsetWidth,
+    }
+  })
+  await page.waitForTimeout(50)
+  const s0 = await sel()
+  const selectedId = await page.evaluate(() => document.querySelector('[role="option"][aria-selected="true"]').id)
+  check('select: default value selected, default label on the trigger, aria-describedby wired', s0.label === 'Choose framework' && s0.selected === 'true,false,false,false' && s0.describedby === selectedId && s0.input === 'remix', { s0, selectedId })
+  await page.click('[aria-haspopup="listbox"]')
+  await settle()
+  const s1 = await sel()
+  check('select: click opens, syncs min-width and moves focus into the list', s1.open && s1.expanded === 'true' && s1.focus === 'listbox' && s1.minWidth === s1.triggerWidth + 'px', s1)
+  await page.keyboard.press('Escape')
+  await settle()
+  const s2 = await sel()
+  check('select: Escape closes and restores focus to the trigger', !s2.open && s2.focus === 'BUTTON', s2)
+  await page.keyboard.press('ArrowDown')
+  await settle()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(40)
+  const flashing = await page.evaluate(() => document.querySelector('[data-select-flash]')?.textContent)
+  await page.waitForTimeout(80)
+  const s3 = await sel()
+  await page.waitForTimeout(300)
+  const s4 = await sel()
+  check('select: ArrowDown reopens; Enter flashes the option and closes', flashing === 'React Router' && !s3.open, { flashing, s3 })
+  check('select: the label swaps after the delay and the change event fires', s3.label === 'Choose framework' && s4.label === 'React Router' && s4.value === 'value=react-router' && s4.input === 'react-router', { s3, s4 })
+  await page.keyboard.type('r')
+  await page.waitForTimeout(100)
+  const s5 = await sel()
+  check('select: typeahead on the closed trigger selects immediately', !s5.open && s5.label === 'React' && s5.input === 'react' && s5.value === 'value=react', s5)
+  const events = await page.evaluate(() => window.__sel)
+  check('select: rmx:select-change bubbles from the trigger', eq(events, [['react-router', 'React Router', true, 'BUTTON'], ['react', 'React', true, 'BUTTON']]), events)
 }
 
 check('no page errors or failed requests', errors.length === 0, errors)

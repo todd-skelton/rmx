@@ -30,6 +30,79 @@ pub(crate) fn dispatch(target: &web_sys::EventTarget, name: &str, fields: &[Fiel
     let _ = target.dispatch_event(&event);
 }
 
+/// Resolve after `ms` milliseconds.
+#[cfg(target_arch = "wasm32")]
+pub(crate) async fn sleep(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        if let Some(w) = web_sys::window() {
+            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
+        }
+    });
+    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+}
+
+/// Resolve when a CSS transition on `node` ends, or after two frames if none started
+/// (Remix's `waitForCssTransition`). Resolves at once when `signal` aborts.
+#[cfg(target_arch = "wasm32")]
+pub(crate) async fn wait_for_css_transition(node: web_sys::HtmlElement, signal: web_sys::AbortSignal) {
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+    use wasm_bindgen::closure::Closure;
+    use wasm_bindgen::JsCast;
+
+    let resolve: Rc<RefCell<Option<js_sys::Function>>> = Rc::default();
+    let slot = resolve.clone();
+    let promise = js_sys::Promise::new(&mut |res, _| *slot.borrow_mut() = Some(res));
+    let finish = move || {
+        if let Some(f) = resolve.borrow_mut().take() {
+            let _ = f.call0(&wasm_bindgen::JsValue::UNDEFINED);
+        }
+    };
+    let finish = Rc::new(finish);
+    let saw_run = Rc::new(Cell::new(false));
+    let target: wasm_bindgen::JsValue = node.clone().into();
+
+    let (t, saw) = (target.clone(), saw_run.clone());
+    let on_run = Closure::<dyn Fn(web_sys::Event)>::new(move |e: web_sys::Event| {
+        if e.target().is_some_and(|x| wasm_bindgen::JsValue::from(x) == t) {
+            saw.set(true);
+        }
+    });
+    let (t, f) = (target.clone(), finish.clone());
+    let on_end = Closure::<dyn Fn(web_sys::Event)>::new(move |e: web_sys::Event| {
+        if e.target().is_some_and(|x| wasm_bindgen::JsValue::from(x) == t) {
+            f();
+        }
+    });
+    let f = finish.clone();
+    let on_abort = Closure::<dyn Fn()>::new(move || f());
+    let _ = node.add_event_listener_with_callback("transitionrun", on_run.as_ref().unchecked_ref());
+    let _ = node.add_event_listener_with_callback("transitionend", on_end.as_ref().unchecked_ref());
+    let _ = node.add_event_listener_with_callback("transitioncancel", on_end.as_ref().unchecked_ref());
+    let _ = signal.add_event_listener_with_callback("abort", on_abort.as_ref().unchecked_ref());
+    if signal.aborted() {
+        finish();
+    } else if let Some(w) = web_sys::window() {
+        let (f, saw) = (finish.clone(), saw_run.clone());
+        let second = Closure::once_into_js(move || {
+            if !saw.get() {
+                f();
+            }
+        });
+        let first = Closure::once_into_js(move || {
+            if let Some(w) = web_sys::window() {
+                let _ = w.request_animation_frame(second.unchecked_ref());
+            }
+        });
+        let _ = w.request_animation_frame(first.unchecked_ref());
+    }
+    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+    let _ = node.remove_event_listener_with_callback("transitionrun", on_run.as_ref().unchecked_ref());
+    let _ = node.remove_event_listener_with_callback("transitionend", on_end.as_ref().unchecked_ref());
+    let _ = node.remove_event_listener_with_callback("transitioncancel", on_end.as_ref().unchecked_ref());
+    let _ = signal.remove_event_listener_with_callback("abort", on_abort.as_ref().unchecked_ref());
+}
+
 /// Log a warning to the browser console.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn warn(message: &str) {

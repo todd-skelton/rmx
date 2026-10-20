@@ -28,5 +28,7 @@ web-sys = { workspace = true, features = [
     "EventTarget",
     "HtmlElement",
     "Node",
+    "ScrollIntoViewOptions",
+    "ScrollLogicalPosition",
     "Window",
 ] }

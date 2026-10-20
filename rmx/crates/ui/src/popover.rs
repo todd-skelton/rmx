@@ -105,6 +105,18 @@ impl PopoverState {
         self.inner.borrow_mut().anchor = Some((target, options));
     }
 
+    /// The element focused when the surface closes (what `focus_on_hide` sets).
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_hide_focus_target(&self, el: Option<web_sys::HtmlElement>) {
+        self.inner.borrow_mut().hide_focus_target = el;
+    }
+
+    /// Forget the anchor.
+    #[cfg(target_arch = "wasm32")]
+    pub fn clear_anchor(&self) {
+        self.inner.borrow_mut().anchor = None;
+    }
+
     /// The registered surface element.
     #[cfg(target_arch = "wasm32")]
     pub fn surface(&self) -> Option<web_sys::HtmlElement> {
