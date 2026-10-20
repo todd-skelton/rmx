@@ -91,6 +91,10 @@ fn upload_handler<U: FileStorage + Clone>(uploads: U) -> impl Fn(FileUpload) -> 
     move |upload: FileUpload| {
         let uploads = uploads.clone();
         Box::pin(async move {
+            // An empty file input arrives as an empty, nameless file; keep the current cover.
+            if upload.file.name.is_empty() && upload.file.size() == 0 {
+                return None;
+            }
             let ext = upload.file.name.rsplit('.').next().filter(|e| !e.is_empty()).unwrap_or("jpg").to_string();
             let key = format!("{}/{}-{}.{ext}", upload.field_name, now_ms(), random_base36(6));
             uploads.set(&key, upload.file).await.ok()?;

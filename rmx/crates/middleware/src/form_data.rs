@@ -3,31 +3,27 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use http::header;
-use rmx_fetch::{File, FormData, FormLimits, FormValue};
+use http::{header, StatusCode};
+pub use rmx_fetch::form_data::FileUpload;
+use rmx_fetch::{FormData, FormLimits, FormValue};
 use rmx_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
-
-/// A file from a multipart body, before it reaches the form (`FileUpload`).
-#[derive(Clone, Debug)]
-pub struct FileUpload {
-    /// The form field the file was sent under.
-    pub field_name: String,
-    pub file: File,
-}
 
 type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Option<FormValue>> + Send + Sync>;
 
-/// The `formData()` middleware. Parses URL-encoded and multipart bodies.
-/// Other requests (GET, HEAD, JSON and any other media type) get an empty `FormData` and
-/// keep their body for the handler. Malformed bodies and bodies over the limits get a 400.
+/// The `formData()` middleware. Parses URL-encoded and multipart bodies, streaming
+/// multipart files to the upload handler as they arrive. Other requests (GET, HEAD, JSON and
+/// any other media type) get an empty `FormData` and keep their body for the handler. A
+/// request that already has a `FormData` is left alone. Bodies over the limits get a 413
+/// and malformed bodies a 400 (or an empty form with [`FormDataParser::suppress_errors`]).
 #[derive(Clone)]
 pub struct FormDataParser {
     limits: FormLimits,
     upload_handler: Option<UploadHandler>,
+    suppress_errors: bool,
 }
 
 pub fn form_data() -> FormDataParser {
-    FormDataParser { limits: FormLimits::default(), upload_handler: None }
+    FormDataParser { limits: FormLimits::default(), upload_handler: None, suppress_errors: false }
 }
 
 pub fn form_data_with(limits: FormLimits) -> FormDataParser {
@@ -37,6 +33,13 @@ pub fn form_data_with(limits: FormLimits) -> FormDataParser {
 impl FormDataParser {
     pub fn limits(mut self, limits: FormLimits) -> FormDataParser {
         self.limits = limits;
+        self
+    }
+
+    /// Treat a malformed body as an empty form instead of answering 400 (`suppressErrors`).
+    /// Limit errors are never suppressed.
+    pub fn suppress_errors(mut self, suppress: bool) -> FormDataParser {
+        self.suppress_errors = suppress;
         self
     }
 
@@ -65,41 +68,31 @@ impl FormDataParser {
 
 impl Middleware for FormDataParser {
     fn call(&self, mut ctx: Context, next: Next) -> BoxFuture<rmx_fetch::Response> {
-        let (limits, handler) = (self.limits, self.upload_handler.clone());
+        let this = self.clone();
         Box::pin(async move {
+            if ctx.get::<FormData>().is_some() {
+                return next.run(ctx).await;
+            }
             let content_type = ctx.header(header::CONTENT_TYPE.as_str()).map(str::to_string);
             if !is_form_request(ctx.method(), content_type.as_deref()) {
                 ctx.set(FormData::new());
                 return next.run(ctx).await;
             }
             let body = ctx.take_body();
-            let form = match FormData::parse(content_type.as_deref(), body, limits).await {
-                Ok(form) => form,
-                Err(e) => return Error::bad_request(format!("invalid form data: {e}")).into_response(),
+            let parsed = match &this.upload_handler {
+                Some(handler) => FormData::parse_with(content_type.as_deref(), body, this.limits, |upload| handler(upload)).await,
+                None => FormData::parse(content_type.as_deref(), body, this.limits).await,
             };
-            let form = match handler {
-                Some(handler) => handle_uploads(form, &handler).await,
-                None => form,
+            let form = match parsed {
+                Ok(form) => form,
+                Err(e) if e.is_limit() => return Error::new(StatusCode::PAYLOAD_TOO_LARGE, e.to_string()).into_response(),
+                Err(_) if this.suppress_errors => FormData::new(),
+                Err(e) => return Error::bad_request(format!("invalid form data: {e}")).into_response(),
             };
             ctx.set(form);
             next.run(ctx).await
         })
     }
-}
-
-async fn handle_uploads(form: FormData, handler: &UploadHandler) -> FormData {
-    let mut out = FormData::new();
-    for (name, value) in form.iter() {
-        match value {
-            FormValue::Text(text) => out.append(name, text.clone()),
-            FormValue::File(file) => match handler(FileUpload { field_name: name.to_string(), file: file.clone() }).await {
-                Some(FormValue::Text(text)) => out.append(name, text),
-                Some(FormValue::File(file)) => out.append_file(name, file),
-                None => {}
-            },
-        }
-    }
-    out
 }
 
 /// `ctx.form_data()`: the parsed form (empty when the middleware did not run).
@@ -168,6 +161,42 @@ mod tests {
         let req = http::Request::post("http://x/").header("content-type", "application/json").body(Body::from("{\"a\":1}")).unwrap();
         let text = block_on(block_on(router.fetch(req)).into_body().text()).unwrap();
         assert_eq!(text, r#"0 {"a":1}"#);
+    }
+
+    fn post(content_type: &str, body: &'static str) -> Request {
+        http::Request::post("http://x/").header("content-type", content_type).body(Body::from(body)).unwrap()
+    }
+
+    #[test]
+    fn limits_and_malformed_bodies() {
+        let mut router = Router::new().with(form_data_with(FormLimits { max_files: 1, ..Default::default() }));
+        router.post("/", echo());
+        let res = block_on(router.fetch(multipart()));
+        assert_eq!(res.status(), 413);
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "Maximum number of files exceeded: 1");
+
+        let mut router = Router::new().with(form_data_with(FormLimits { max_parts: 2, ..Default::default() }));
+        router.post("/", echo());
+        assert_eq!(block_on(router.fetch(post("application/x-www-form-urlencoded", "a=1&b=2&c=3"))).status(), 413);
+        assert_eq!(block_on(router.fetch(post("application/x-www-form-urlencoded", "a=1&&b=2&"))).status(), 200, "empty pairs do not count");
+
+        let malformed = || post("multipart/form-data; boundary=b", "--b\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n1");
+        let mut strict = Router::new().with(form_data());
+        strict.post("/", echo());
+        assert_eq!(block_on(strict.fetch(malformed())).status(), 400);
+        let mut lenient = Router::new().with(form_data().suppress_errors(true));
+        lenient.post("/", echo());
+        let res = block_on(lenient.fetch(malformed()));
+        assert_eq!(res.status(), 200);
+        assert_eq!(block_on(res.into_body().text()).unwrap(), r#""" []"#);
+    }
+
+    #[test]
+    fn an_existing_form_is_reused() {
+        let mut router = Router::new().with(form_data()).with(form_data().upload_handler(|_: FileUpload| async { panic!("parsed twice") }));
+        router.post("/", echo());
+        let text = block_on(block_on(router.fetch(multipart())).into_body().text()).unwrap();
+        assert_eq!(text, r#""title=Dune&cover=dune.png&skip=x.bin" ["cover=dune.png", "skip=x.bin"]"#);
     }
 
     #[test]

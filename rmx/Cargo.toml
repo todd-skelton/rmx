@@ -16,6 +16,7 @@ members = [
     "crates/session",
     "crates/file-storage",
     "crates/tar-parser",
+    "crates/multipart-parser",
     "crates/html-template",
     "crates/headers",
     "crates/fetch-proxy",
@@ -61,6 +62,7 @@ rmx-crypto = { path = "crates/crypto" }
 rmx-session = { path = "crates/session" }
 rmx-file-storage = { path = "crates/file-storage" }
 rmx-tar-parser = { path = "crates/tar-parser" }
+rmx-multipart-parser = { path = "crates/multipart-parser" }
 rmx-html-template = { path = "crates/html-template" }
 rmx-headers = { path = "crates/headers" }
 rmx-fetch-proxy = { path = "crates/fetch-proxy" }

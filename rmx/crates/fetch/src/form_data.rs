@@ -1,8 +1,11 @@
 //! `FormData`: parsed form fields and uploaded files, from URL-encoded or multipart bodies.
 
-use bytes::Bytes;
+use std::fmt;
 
-use crate::{Body, BoxError, SearchParams};
+use bytes::Bytes;
+use rmx_multipart_parser::{get_multipart_boundary, parse_multipart_stream, MultipartError, MultipartOptions};
+
+use crate::{Body, SearchParams};
 
 /// A file, like the web's `File`: an uploaded file, or one read back from storage.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,19 +60,79 @@ pub struct FormData {
     entries: Vec<(String, FormValue)>,
 }
 
-/// Limits for multipart parsing.
-#[derive(Clone, Copy, Debug)]
+/// Parsing limits (Remix's `ParseFormDataOptions`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FormLimits {
-    pub max_total_size: usize,
-    pub max_file_size: usize,
+    /// Most file parts. Default 20.
     pub max_files: usize,
+    /// Largest part (files and text fields). Default 2 MiB.
+    pub max_file_size: usize,
+    /// Largest header block per multipart part. Default 8 KiB.
+    pub max_header_size: usize,
+    /// Most parts or URL-encoded pairs. Default 1000.
     pub max_parts: usize,
+    /// Largest body. Default `max_files * max_file_size + 1 MiB`.
+    pub max_total_size: Option<usize>,
 }
 
 impl Default for FormLimits {
     fn default() -> Self {
-        FormLimits { max_total_size: 20 * 1024 * 1024, max_file_size: 10 * 1024 * 1024, max_files: 20, max_parts: 1000 }
+        FormLimits { max_files: 20, max_file_size: 2 * 1024 * 1024, max_header_size: 8 * 1024, max_parts: 1000, max_total_size: None }
     }
+}
+
+impl FormLimits {
+    /// The effective total limit.
+    pub fn total_size(&self) -> usize {
+        self.max_total_size.unwrap_or_else(|| self.max_files.saturating_mul(self.max_file_size).saturating_add(1024 * 1024))
+    }
+
+    fn multipart(&self) -> MultipartOptions {
+        MultipartOptions { max_header_size: self.max_header_size, max_file_size: self.max_file_size, max_parts: self.max_parts, max_total_size: Some(self.total_size()) }
+    }
+}
+
+/// Why a form could not be parsed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FormDataError {
+    /// A malformed body (`FormDataParseError`).
+    Parse(String),
+    /// More file parts than `max_files` (`MaxFilesExceededError`).
+    MaxFilesExceeded(usize),
+    /// A multipart limit, or a URL-encoded body over `max_parts` or the total size.
+    Limit(MultipartError),
+}
+
+impl FormDataError {
+    /// Whether a configured limit was exceeded (as opposed to a malformed body).
+    pub fn is_limit(&self) -> bool {
+        !matches!(self, FormDataError::Parse(_))
+    }
+
+    fn cannot_parse(cause: impl fmt::Display) -> FormDataError {
+        FormDataError::Parse(format!("Cannot parse form data: {cause}"))
+    }
+}
+
+impl fmt::Display for FormDataError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FormDataError::Parse(message) => f.write_str(message),
+            FormDataError::MaxFilesExceeded(max) => write!(f, "Maximum number of files exceeded: {max}"),
+            FormDataError::Limit(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for FormDataError {}
+
+/// A file part as it is parsed, before it reaches the form (`FileUpload`). Give it to an
+/// upload handler with [`FormData::parse_with`].
+#[derive(Clone, Debug)]
+pub struct FileUpload {
+    /// The form field the file was sent under.
+    pub field_name: String,
+    pub file: File,
 }
 
 impl FormData {
@@ -137,33 +200,68 @@ impl FormData {
             .collect()
     }
 
-    /// Parse a body according to its `Content-Type`. Other content types give an empty form.
-    pub async fn parse(content_type: Option<&str>, body: Body, limits: FormLimits) -> Result<FormData, BoxError> {
+    /// Parse a body according to its `Content-Type`: URL-encoded, multipart (streamed, with
+    /// files kept in memory) or `text/plain`. Other content types give an empty form.
+    pub async fn parse(content_type: Option<&str>, body: Body, limits: FormLimits) -> Result<FormData, FormDataError> {
+        FormData::parse_with(content_type, body, limits, |upload: FileUpload| std::future::ready(Some(FormValue::File(upload.file)))).await
+    }
+
+    /// [`FormData::parse`] with an upload handler (`parseFormData(request, options,
+    /// uploadHandler)`): each file part is passed to `upload_handler` as soon as it has been
+    /// read, and the value it returns (a stored file's URL, the file itself, or `None` to
+    /// drop it) goes into the form. Fields without a name are skipped. Empty file inputs
+    /// arrive as empty files, as in the browser's `FormData`.
+    pub async fn parse_with<F, Fut>(content_type: Option<&str>, body: Body, limits: FormLimits, mut upload_handler: F) -> Result<FormData, FormDataError>
+    where
+        F: FnMut(FileUpload) -> Fut,
+        Fut: std::future::Future<Output = Option<FormValue>>,
+    {
         let Some(ct) = content_type else { return Ok(FormData::new()) };
         let essence = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
-        match essence.as_str() {
-            "application/x-www-form-urlencoded" => {
-                let bytes = read_limited(body, limits.max_total_size).await?;
-                let params = SearchParams::parse(&String::from_utf8_lossy(&bytes));
-                Ok(FormData { entries: params.iter().map(|(k, v)| (k.to_string(), FormValue::Text(v.to_string()))).collect() })
-            }
-            "multipart/form-data" => {
-                let boundary = header_param(ct, "boundary").ok_or("multipart/form-data without a boundary")?;
-                let bytes = read_limited(body, limits.max_total_size).await?;
-                parse_multipart(&bytes, &boundary, limits)
-            }
-            "text/plain" => {
-                let bytes = read_limited(body, limits.max_total_size).await?;
-                let text = String::from_utf8_lossy(&bytes);
-                let mut form = FormData::new();
-                for line in text.split("\r\n").filter(|l| !l.is_empty()) {
-                    let (k, v) = line.split_once('=').unwrap_or((line, ""));
-                    form.append(k, v);
-                }
-                Ok(form)
-            }
-            _ => Ok(FormData::new()),
+        if essence == "application/x-www-form-urlencoded" {
+            let bytes = read_url_encoded(body, limits).await?;
+            return Ok(SearchParams::parse(&String::from_utf8_lossy(&bytes)).into());
         }
+        if essence == "text/plain" {
+            let bytes = read_limited(body, limits.total_size()).await?;
+            let text = String::from_utf8_lossy(&bytes);
+            let mut form = FormData::new();
+            for line in text.split("\r\n").filter(|l| !l.is_empty()) {
+                let (k, v) = line.split_once('=').unwrap_or((line, ""));
+                form.append(k, v);
+            }
+            return Ok(form);
+        }
+        if !essence.starts_with("multipart/") {
+            return Ok(FormData::new());
+        }
+        let boundary = get_multipart_boundary(ct).ok_or_else(|| FormDataError::cannot_parse("Invalid Content-Type header: missing boundary"))?;
+        let multipart_error = |e: MultipartError| if e.is_limit() { FormDataError::Limit(e) } else { FormDataError::cannot_parse(e) };
+        let mut parts = parse_multipart_stream(body, &boundary, &limits.multipart()).map_err(multipart_error)?;
+        let mut form = FormData::new();
+        let mut files = 0;
+        while let Some(part) = parts.next_part().await {
+            let part = part.map_err(multipart_error)?;
+            let Some(name) = part.name().filter(|n| !n.is_empty()) else { continue };
+            if part.is_file() {
+                files += 1;
+                if files > limits.max_files {
+                    return Err(FormDataError::MaxFilesExceeded(limits.max_files));
+                }
+                let file_name = part.filename().unwrap_or_else(|| "file-upload".into());
+                let media_type = part.media_type().unwrap_or_else(|| "application/octet-stream".into());
+                let file = File::new(file_name, media_type, part.bytes());
+                match upload_handler(FileUpload { field_name: name.clone(), file }).await {
+                    Some(FormValue::Text(text)) => form.append(name, text),
+                    Some(FormValue::File(file)) => form.append_file(name, file),
+                    None => {}
+                }
+            } else {
+                let text = part.text().map_err(FormDataError::cannot_parse)?;
+                form.append(name, text);
+            }
+        }
+        Ok(form)
     }
 }
 
@@ -173,15 +271,25 @@ impl From<SearchParams> for FormData {
     }
 }
 
-async fn read_limited(mut body: Body, max: usize) -> Result<Vec<u8>, BoxError> {
+async fn read_limited(mut body: Body, max: usize) -> Result<Vec<u8>, FormDataError> {
     let mut buf = Vec::new();
     while let Some(chunk) = body.chunk().await {
-        buf.extend_from_slice(&chunk?);
+        buf.extend_from_slice(&chunk.map_err(FormDataError::cannot_parse)?);
         if buf.len() > max {
-            return Err(format!("form body exceeds {max} bytes").into());
+            return Err(FormDataError::Limit(MultipartError::MaxTotalSizeExceeded(max)));
         }
     }
     Ok(buf)
+}
+
+/// Read a URL-encoded body, counting `&`-separated pairs against `max_parts` as it arrives.
+async fn read_url_encoded(body: Body, limits: FormLimits) -> Result<Vec<u8>, FormDataError> {
+    let bytes = read_limited(body, limits.total_size()).await?;
+    let pairs = bytes.split(|b| *b == b'&').filter(|pair| !pair.is_empty()).count();
+    if pairs > limits.max_parts {
+        return Err(FormDataError::Limit(MultipartError::MaxPartsExceeded(limits.max_parts)));
+    }
+    Ok(bytes)
 }
 
 /// A parameter from a header value such as `multipart/form-data; boundary=x`.
@@ -194,73 +302,6 @@ pub fn header_param(value: &str, name: &str) -> Option<String> {
         let v = v.trim();
         Some(v.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(v).to_string())
     })
-}
-
-fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
-    if needle.is_empty() || hay.len() < needle.len() {
-        return None;
-    }
-    (from..=hay.len() - needle.len()).find(|&i| &hay[i..i + needle.len()] == needle)
-}
-
-fn parse_multipart(body: &[u8], boundary: &str, limits: FormLimits) -> Result<FormData, BoxError> {
-    let delim = format!("--{boundary}");
-    let delim = delim.as_bytes();
-    let mut form = FormData::new();
-    let mut pos = find(body, delim, 0).ok_or("multipart body has no boundary")? + delim.len();
-    let (mut parts, mut files) = (0, 0);
-    loop {
-        if body[pos..].starts_with(b"--") {
-            return Ok(form);
-        }
-        // Skip the CRLF after the boundary.
-        if body[pos..].starts_with(b"\r\n") {
-            pos += 2;
-        }
-        let header_end = find(body, b"\r\n\r\n", pos).ok_or("multipart part without headers")?;
-        let headers = String::from_utf8_lossy(&body[pos..header_end]).into_owned();
-        let content_start = header_end + 4;
-        let mut end_delim = b"\r\n".to_vec();
-        end_delim.extend_from_slice(delim);
-        let content_end = find(body, &end_delim, content_start).ok_or("multipart part is not terminated")?;
-        let content = &body[content_start..content_end];
-        pos = content_end + end_delim.len();
-
-        parts += 1;
-        if parts > limits.max_parts {
-            return Err("too many multipart parts".into());
-        }
-        let mut name = None;
-        let mut filename = None;
-        let mut content_type = String::from("application/octet-stream");
-        for line in headers.split("\r\n") {
-            let Some((k, v)) = line.split_once(':') else { continue };
-            if k.trim().eq_ignore_ascii_case("content-disposition") {
-                name = header_param(v, "name");
-                filename = header_param(v, "filename");
-            } else if k.trim().eq_ignore_ascii_case("content-type") {
-                content_type = v.trim().to_string();
-            }
-        }
-        let Some(name) = name else { continue };
-        match filename {
-            Some(filename) => {
-                files += 1;
-                if files > limits.max_files {
-                    return Err("too many files".into());
-                }
-                if content.len() > limits.max_file_size {
-                    return Err(format!("file {filename:?} exceeds {} bytes", limits.max_file_size).into());
-                }
-                // Browsers send an empty part for an empty file input.
-                if filename.is_empty() && content.is_empty() {
-                    continue;
-                }
-                form.append_file(name, File::new(filename, content_type, Bytes::copy_from_slice(content)));
-            }
-            None => form.append(name, String::from_utf8_lossy(content).into_owned()),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -277,6 +318,39 @@ mod tests {
         assert_eq!(f.name, "a.txt");
         assert_eq!(f.content_type, "text/plain");
         assert_eq!(&f.bytes[..], b"file\r\nbody");
+    }
+
+    #[test]
+    fn streams_files_to_an_upload_handler() {
+        let body = "--b\r\nContent-Disposition: form-data; name=\"a\"; filename=\"one.txt\"\r\n\r\n1\r\n\
+                    --b\r\nContent-Disposition: form-data; name=\"empty\"; filename=\"\"\r\nContent-Type: application/octet-stream\r\n\r\n\r\n\
+                    --b\r\nContent-Disposition: form-data; name=\"raw\"\r\nContent-Type: application/octet-stream\r\n\r\nxyz\r\n\
+                    --b\r\nContent-Disposition: form-data\r\n\r\nnameless\r\n--b--";
+        let mut seen = Vec::new();
+        let form = block_on(FormData::parse_with(Some("multipart/form-data; boundary=b"), Body::from(body), FormLimits::default(), |upload: FileUpload| {
+            seen.push((upload.field_name.clone(), upload.file.name.clone(), upload.file.content_type.clone(), upload.file.size()));
+            std::future::ready((upload.field_name != "a").then(|| FormValue::Text(format!("stored:{}", upload.field_name))))
+        }))
+        .unwrap();
+        assert_eq!(
+            seen,
+            [
+                ("a".into(), "one.txt".into(), "application/octet-stream".into(), 1),
+                ("empty".into(), String::new(), "application/octet-stream".into(), 0),
+                ("raw".into(), "file-upload".into(), "application/octet-stream".into(), 3),
+            ]
+        );
+        assert_eq!(form.to_search_params().to_string(), "empty=stored%3Aempty&raw=stored%3Araw");
+
+        let err = block_on(FormData::parse(Some("multipart/form-data; boundary=b"), Body::from(body), FormLimits { max_files: 2, ..Default::default() })).unwrap_err();
+        assert_eq!(err, FormDataError::MaxFilesExceeded(2));
+        let err = block_on(FormData::parse(Some("multipart/form-data"), Body::from(body), FormLimits::default())).unwrap_err();
+        assert_eq!(err.to_string(), "Cannot parse form data: Invalid Content-Type header: missing boundary");
+        assert!(!err.is_limit());
+        let err = block_on(FormData::parse(Some("multipart/form-data; boundary=b"), Body::from(body), FormLimits { max_file_size: 2, ..Default::default() })).unwrap_err();
+        assert_eq!(err.to_string(), "File size exceeds maximum allowed size of 2 bytes");
+        let err = block_on(FormData::parse(Some("application/x-www-form-urlencoded"), Body::from("a=1234"), FormLimits { max_total_size: Some(3), ..Default::default() })).unwrap_err();
+        assert!(err.is_limit());
     }
 
     #[test]

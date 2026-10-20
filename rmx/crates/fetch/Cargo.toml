@@ -9,6 +9,7 @@ license.workspace = true
 bytes.workspace = true
 http.workspace = true
 http-body.workspace = true
+rmx-multipart-parser.workspace = true
 rmx-url.workspace = true
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }

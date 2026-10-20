@@ -20,7 +20,7 @@ pub use rmx_url::{SearchParams, Url};
 pub mod form_data;
 pub mod response;
 
-pub use form_data::{File, FormData, FormLimits, FormValue};
+pub use form_data::{File, FileUpload, FormData, FormDataError, FormLimits, FormValue};
 
 /// An HTTP request with an rmx [`Body`].
 pub type Request = http::Request<Body>;

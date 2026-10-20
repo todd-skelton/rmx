@@ -1,0 +1,15 @@
+[package]
+name = "rmx-multipart-parser"
+description = "A streaming multipart/form-data parser (remix/multipart-parser) with header, part, file and total size limits"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+bytes.workspace = true
+http.workspace = true
+http-body.workspace = true
+rmx-headers.workspace = true
+
+[dev-dependencies]
+rmx-fetch.workspace = true
