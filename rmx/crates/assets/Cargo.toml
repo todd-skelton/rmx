@@ -1,0 +1,13 @@
+[package]
+name = "rmx-assets"
+description = "Serve browser assets from source directories: access rules, fingerprints, file transforms, CSS url() and module import rewriting (port of remix/assets)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-fetch.workspace = true
+rmx-mime.workspace = true
+rmx-router.workspace = true
+rmx-url.workspace = true
