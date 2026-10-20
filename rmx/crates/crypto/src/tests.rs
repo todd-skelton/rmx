@@ -74,3 +74,17 @@ fn randomness_and_comparison() {
     assert!(!constant_time_eq(b"abc", b"abd"));
     assert!(!constant_time_eq(b"abc", b"abcd"));
 }
+
+#[test]
+fn scrypt_vectors() {
+    // RFC 7914 section 12, test vectors 1 and 2.
+    let v1 = scrypt(b"", b"", ScryptParams { n: 16, r: 1, p: 1 }, 64).unwrap();
+    assert_eq!(hex(&v1), "77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442fcd0069ded0948f8326a753a0fc81f17e8d3e0fb2e0d3628cf35e20c38d18906");
+    let v2 = scrypt(b"password", b"NaCl", ScryptParams { n: 1024, r: 8, p: 16 }, 64).unwrap();
+    assert_eq!(hex(&v2), "fdbabe1c9d3472007856e7190d01e9fe7c6ad7cbc8237830e77376634b3731622eaf30d92e22a3886ff109279d9830dac727afb94a83ee6d8360cbdfa2cc0640");
+    // Node's crypto.scryptSync('password123', salt, 64) with its defaults (N=16384, r=8, p=1).
+    let node = scrypt(b"password123", b"0123456789abcdef0123456789abcdef", ScryptParams::default(), 64).unwrap();
+    assert_eq!(hex(&node), "7bfc2ad8e90d7252b24c322d25a3ef314bb6f3b0ad29738a3140d921aa2606024e5f3f7eef2b45dfb16dd5428705bb539af7384b2504308175cc714be9c428bf");
+    assert_eq!(scrypt(b"x", b"y", ScryptParams { n: 3, r: 1, p: 1 }, 16), None, "n must be a power of two");
+    assert_eq!(scrypt(b"x", b"y", ScryptParams { n: 1 << 20, r: 8, p: 1 }, 16), None, "beyond Node's 32 MiB maxmem");
+}

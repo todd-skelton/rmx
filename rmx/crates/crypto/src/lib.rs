@@ -1,14 +1,16 @@
 //! The small slice of Web Crypto that Remix's server packages use, in plain Rust:
-//! SHA-256, HMAC-SHA-256, PBKDF2-HMAC-SHA-256, base64, constant-time comparison and the
+//! SHA-256, HMAC-SHA-256, PBKDF2-HMAC-SHA-256, scrypt, base64, constant-time comparison and the
 //! operating system's random number generator (`crypto.getRandomValues`,
 //! `crypto.randomUUID`). No dependencies.
 
 mod base64;
 mod random;
+mod scrypt;
 mod sha256;
 
 pub use base64::{base64_decode, base64_encode, base64url_decode, base64url_encode};
 pub use random::{fill_random, random_bytes, random_hex, random_uuid};
+pub use scrypt::{scrypt, ScryptParams};
 pub use sha256::{hmac_sha256, pbkdf2_sha256, sha256, Sha256};
 
 /// Lowercase hex.
