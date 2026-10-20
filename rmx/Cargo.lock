@@ -1313,6 +1313,7 @@ dependencies = [
  "rmx-fetch",
  "rmx-fetch-proxy",
  "rmx-router",
+ "rmx-url",
  "tokio",
 ]
 
