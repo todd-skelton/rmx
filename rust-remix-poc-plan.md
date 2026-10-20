@@ -283,3 +283,30 @@ What the benchmarks say (details and caveats in `bench/README.md`):
 
 Next phases unchanged: routes and loaders (phase 1), then frames and soft navigation (phase 3),
 which is the largest Remix 3 feature rmx does not have.
+
+## 11. Parity status (2026-10-20)
+
+Phases 1 to 3 are done: routes and middleware, frames, and soft navigation all exist, and all
+12 Remix 3 demos are ported under `rmx/examples/` with Playwright e2e scripts that mirror the
+Remix demo tests where they exist. Details are in `rmx/README.md`.
+
+Covered since phase 0b:
+
+1. Server: router, route patterns, Fetch-style Request/Response, streaming render, the Remix
+   middleware set (compression, static, form data, sessions, auth, CSRF, CORS, COP, method
+   override, logger), cookies, sessions, file storage, tar parsing, assets, SPA fallback.
+2. Browser: `<Frame>` in every Remix mode, Navigation API soft navigation with the
+   `data-rmx-*` attributes, form submissions and redirects, `handle.signal`, `spawn`,
+   context, typed event targets, host mixins with reclaim, app error events, and scroll
+   handling that matches Remix (traversal restore after reconciliation shrinks the page,
+   `resetScroll: false`, anchoring suppression).
+3. `rmx-ui` animation (spring, tween, entrance, exit, FLIP layout), with spring output that
+   matches Remix's `spring.ts` byte for byte.
+
+Remaining gaps:
+
+1. Import maps and per-entry module loading: rmx ships one wasm bundle per app.
+2. Component-level error events: Rust does not throw, so errors are reported explicitly.
+3. `@remix-run/ui` widgets other than animation (accordion, menu, popover, select and so on).
+4. Tooling: HMR, CLI, and the `remix/test` harness.
+5. Data access (`data-table`) is intentionally left to existing Rust libraries.
