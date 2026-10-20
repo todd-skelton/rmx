@@ -15,8 +15,31 @@ pub fn html(body: impl Into<String>) -> Response {
     with_type(Body::from(body), "text/html; charset=UTF-8")
 }
 
-/// A `text/html` response streamed from `body`. The caller writes the doctype.
+/// A `text/html` response streamed from `body`. Adds `<!DOCTYPE html>` when the first chunk
+/// does not start with one (an empty stream becomes just the doctype).
 pub fn html_stream(body: Body) -> Response {
+    let body = Body::from_task(move |tx| async move {
+        let mut body = body;
+        let first = match body.chunk().await {
+            Some(Ok(chunk)) => chunk,
+            Some(Err(_)) => return,
+            None => {
+                tx.send(DOCTYPE);
+                return;
+            }
+        };
+        if !starts_with_doctype(&String::from_utf8_lossy(&first)) {
+            tx.send(DOCTYPE);
+        }
+        if !tx.send(first) {
+            return;
+        }
+        while let Some(Ok(chunk)) = body.chunk().await {
+            if !tx.send(chunk) {
+                return;
+            }
+        }
+    });
     with_type(body, "text/html; charset=UTF-8")
 }
 
@@ -81,6 +104,25 @@ mod tests {
         assert_eq!(res.headers()["content-type"], "text/html; charset=UTF-8");
         assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html><p>x</p>");
         assert_eq!(block_on(html("<!doctype html><p/>").into_body().text()).unwrap(), "<!doctype html><p/>");
+    }
+
+    fn chunked(parts: &'static [&'static str]) -> Body {
+        Body::from_task(move |tx| async move {
+            for part in parts {
+                tx.send(*part);
+            }
+        })
+    }
+
+    #[test]
+    fn html_stream_adds_doctype_once() {
+        let res = html_stream(chunked(&["<p>", "x</p>"]));
+        assert_eq!(res.headers()["content-type"], "text/html; charset=UTF-8");
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html><p>x</p>");
+        let res = html_stream(chunked(&["<!doctype html>", "<p/>"]));
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!doctype html><p/>");
+        let res = html_stream(chunked(&[]));
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html>");
     }
 
     #[test]

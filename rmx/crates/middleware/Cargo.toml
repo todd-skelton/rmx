@@ -12,6 +12,7 @@ rmx-headers.workspace = true
 rmx-mime.workspace = true
 rmx-router.workspace = true
 rmx-url.workspace = true
+brotli = { version = "9", default-features = false, features = ["std"], optional = true }
 flate2 = { version = "1", optional = true }
 rmx-cookie = { workspace = true, optional = true }
 rmx-crypto = { workspace = true, optional = true }
@@ -24,7 +25,7 @@ static = []
 logger = []
 form-data = []
 method-override = ["form-data"]
-compression = ["dep:flate2"]
+compression = ["dep:flate2", "dep:brotli"]
 session = ["dep:rmx-session", "dep:rmx-cookie", "dep:serde_json"]
 csrf = ["session", "form-data", "dep:rmx-crypto"]
 auth = ["session"]

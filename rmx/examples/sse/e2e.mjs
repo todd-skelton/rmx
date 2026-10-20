@@ -47,7 +47,7 @@ await page.waitForTimeout(1500)
 check('a closed stream does not reconnect', (await messages()).length === 3)
 const headers = await streamResponses[0]?.allHeaders()
 check('the stream is text/event-stream', headers?.['content-type'] === 'text/event-stream', headers)
-check('the stream is compressed', headers?.['content-encoding'] === 'gzip', headers)
+check('the stream is brotli compressed', headers?.['content-encoding'] === 'br', headers)
 
 // No limit: the link adds one; leaving the page closes the stream.
 await page.goto(BASE + '/')

@@ -83,6 +83,23 @@ web-sys = "0.3"
 [profile.dev.package.rmx-crypto]
 opt-level = 3
 
+# Compression runs per request; unoptimized brotli is several times slower. Its generic
+# encoder is instantiated in rmx-middleware, so that crate is optimized too.
+[profile.dev.package.rmx-middleware]
+opt-level = 3
+
+[profile.dev.package.brotli]
+opt-level = 3
+
+[profile.dev.package.alloc-no-stdlib]
+opt-level = 3
+
+[profile.dev.package.alloc-stdlib]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
 # Size-optimized browser build; the server uses the normal release profile.
 [profile.wasm-release]
 inherits = "release"
