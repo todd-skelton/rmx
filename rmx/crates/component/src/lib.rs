@@ -20,7 +20,7 @@ pub mod ssr;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod dom;
 
-pub use component::{Component, Handle};
+pub use component::{set_server_frame_src, Component, Handle};
 pub use frame::{Frame, FrameHandle, FrameProps, Frames, ReloadOptions};
 pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use node::{AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str, StyleRule};
@@ -28,7 +28,7 @@ pub use rmx_macros::rsx;
 pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{entry, flush, run, Entry, RunOptions};
+pub use dom::{entry, flush, navigate, run, Entry, NavigateOptions, RunOptions};
 
 #[doc(hidden)]
 pub mod __private {

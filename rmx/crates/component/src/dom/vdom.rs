@@ -1,18 +1,18 @@
-//! Browser runtime: hydration, mounting, keyed reconciliation and update scheduling.
+//! Component instances, mounting, keyed reconciliation, hydration and update scheduling.
 
 use std::any::{Any, TypeId};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
-use serde::Deserialize;
-use serde_json::value::RawValue;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{intern, JsCast};
 
-use crate::component::{Component, Handle, Instance};
-use crate::node::{AttrValue, Element, Event, EventHandler, Key, Node, Str};
+use super::{document, frames, styles, Scope};
+use crate::component::{Component, Handle, HandleShared, Instance};
+use crate::mixin::{NodeHandle, NodeRef};
+use crate::node::{AttrValue, Element, Event, EventHandler, FrameNode, Key, Node, Str};
 
 // ---------------------------------------------------------------------------------------
 // Instances
@@ -23,6 +23,8 @@ pub(crate) struct Live {
     pub(crate) alive: Cell<bool>,
     dirty: Cell<bool>,
     depth: u32,
+    /// Scope handed to the components this one renders.
+    child_scope: Scope,
     /// What the component's last render produced. Never empty: an empty render mounts an
     /// empty text node so the component always has a DOM position.
     root: RefCell<Vec<Mounted>>,
@@ -32,6 +34,7 @@ pub(crate) trait AnyInstance {
     fn as_any(&self) -> &dyn Any;
     fn component_type(&self) -> TypeId;
     fn live(&self) -> &Live;
+    fn shared(&self) -> &HandleShared;
     fn render_node(&self) -> Node;
 }
 
@@ -48,6 +51,10 @@ impl<C: Component> AnyInstance for Instance<C> {
         &self.live
     }
 
+    fn shared(&self) -> &HandleShared {
+        &self.handle.shared
+    }
+
     fn render_node(&self) -> Node {
         let state = self.state.borrow();
         let props = self.props.borrow();
@@ -56,10 +63,11 @@ impl<C: Component> AnyInstance for Instance<C> {
 }
 
 /// Run `setup` for a new instance. The caller renders and mounts (or hydrates) it.
-pub(crate) fn new_instance<C: Component>(props: C::Props, depth: u32) -> Rc<dyn AnyInstance> {
+pub(crate) fn new_instance<C: Component>(props: C::Props, scope: &Scope) -> Rc<dyn AnyInstance> {
     Rc::<Instance<C>>::new_cyclic(|weak| {
-        let handle = Handle::attached(weak.clone());
+        let handle = Handle::attached(weak.clone(), scope);
         let state = C::setup(&props, &handle);
+        let parent: Weak<dyn AnyInstance> = weak.clone();
         Instance {
             state: RefCell::new(state),
             props: RefCell::new(props),
@@ -67,7 +75,8 @@ pub(crate) fn new_instance<C: Component>(props: C::Props, depth: u32) -> Rc<dyn 
             live: Live {
                 alive: Cell::new(true),
                 dirty: Cell::new(false),
-                depth,
+                depth: scope.depth,
+                child_scope: Scope { parent: Some(parent), frame: scope.frame.clone(), depth: scope.depth + 1 },
                 root: RefCell::new(Vec::new()),
             },
         }
@@ -95,10 +104,20 @@ pub(crate) fn rerender(inst: &dyn AnyInstance) {
         let root = live.root.borrow();
         let first = root.first().expect("mounted component has DOM").first_dom();
         let last = root.last().expect("mounted component has DOM").last_dom();
-        (first.parent_node().expect("mounted component is attached"), last.next_sibling())
+        let Some(parent) = first.parent_node() else { return };
+        (parent, last.next_sibling())
     };
     let mut root = live.root.borrow_mut();
-    patch_children(&parent, &mut root, new, end.as_ref(), false, live.depth + 1);
+    patch_children(&parent, &mut root, new, end.as_ref(), false, &live.child_scope);
+}
+
+/// Remove a root instance from the runtime (its DOM is removed by the caller).
+pub(crate) fn unmount_root(inst: &dyn AnyInstance) {
+    let live = inst.live();
+    if live.alive.replace(false) {
+        inst.shared().dispose();
+        live.root.borrow().iter().for_each(unmount);
+    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -106,18 +125,10 @@ pub(crate) fn rerender(inst: &dyn AnyInstance) {
 // ---------------------------------------------------------------------------------------
 
 thread_local! {
-    static DOCUMENT: web_sys::Document =
-        web_sys::window().and_then(|w| w.document()).expect("rmx needs a browser document");
     static DIRTY: RefCell<Vec<Rc<dyn AnyInstance>>> = const { RefCell::new(Vec::new()) };
     static TASKS: RefCell<Vec<Box<dyn FnOnce()>>> = const { RefCell::new(Vec::new()) };
     static SCHEDULED: Cell<bool> = const { Cell::new(false) };
     static FLUSH: js_sys::Function = Closure::<dyn FnMut()>::new(flush).into_js_value().unchecked_into();
-    /// Hydrated client entries; children are owned by their parents' mounted trees.
-    static ROOTS: RefCell<Vec<Rc<dyn AnyInstance>>> = const { RefCell::new(Vec::new()) };
-}
-
-fn document() -> web_sys::Document {
-    DOCUMENT.with(Clone::clone)
 }
 
 pub(crate) fn schedule_update<C: Component>(inst: Rc<Instance<C>>) {
@@ -136,8 +147,7 @@ pub(crate) fn queue_task(task: Box<dyn FnOnce()>) {
 
 fn schedule_flush() {
     if !SCHEDULED.replace(true) {
-        let window = web_sys::window().expect("window");
-        FLUSH.with(|f| window.queue_microtask(f));
+        FLUSH.with(|f| super::window().queue_microtask(f));
     }
 }
 
@@ -145,7 +155,7 @@ fn schedule_flush() {
 /// queued tasks. Runs automatically on a microtask; call it to flush synchronously.
 pub fn flush() {
     SCHEDULED.set(false);
-    // A component that updates itself from render would loop forever; cap the passes.
+    // A component that updates itself from every render would loop forever; cap the passes.
     for _ in 0..100 {
         let mut batch = DIRTY.with(|d| std::mem::take(&mut *d.borrow_mut()));
         if batch.is_empty() {
@@ -159,6 +169,7 @@ pub fn flush() {
             }
         }
     }
+    // Tasks may queue more tasks or updates; those run in a later flush.
     let tasks = TASKS.with(|t| std::mem::take(&mut *t.borrow_mut()));
     for task in tasks {
         task();
@@ -173,6 +184,7 @@ pub(crate) enum Mounted {
     Element(Box<MElement>),
     Text(MText),
     Component(MComponent),
+    Frame(Box<MFrame>),
 }
 
 pub(crate) struct MElement {
@@ -192,6 +204,13 @@ pub(crate) struct MText {
 pub(crate) struct MComponent {
     key: Option<Key>,
     inst: Rc<dyn AnyInstance>,
+}
+
+/// A `<Frame>` rendered by a component: a comment-bounded range the frame owns.
+pub(crate) struct MFrame {
+    src: String,
+    name: Option<String>,
+    state: Rc<frames::FrameState>,
 }
 
 /// Event handling is delegated: one document listener per event type, and each element
@@ -226,7 +245,10 @@ fn event_key(name: &'static str) -> JsValue {
             dispatch(&raw, &dispatch_key);
         });
         // Events that do not bubble are caught on the way down instead.
-        let capture = matches!(name, "focus" | "blur" | "mouseenter" | "mouseleave" | "load" | "error" | "scroll");
+        let capture = matches!(
+            name,
+            "focus" | "blur" | "mouseenter" | "mouseleave" | "load" | "error" | "scroll" | "toggle" | "invalid"
+        );
         document()
             .add_event_listener_with_callback_and_bool(name, dispatch.as_ref().unchecked_ref(), capture)
             .expect("addEventListener");
@@ -289,20 +311,50 @@ impl Listener {
         }
     }
 }
+
+/// Attach several handlers for the same event as one listener that calls them in order.
+fn attach_events(el: &web_sys::Element, events: Vec<(&'static str, EventHandler)>) -> Vec<Listener> {
+    merge_events(events).into_iter().map(|(n, h)| Listener::attach(el, n, h)).collect()
+}
+
+fn merge_events(events: Vec<(&'static str, EventHandler)>) -> Vec<(&'static str, EventHandler)> {
+    if events.len() < 2 {
+        return events;
+    }
+    let mut merged: Vec<(&'static str, Vec<EventHandler>)> = Vec::new();
+    for (name, handler) in events {
+        match merged.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, list)) => list.push(handler),
+            None => merged.push((name, vec![handler])),
+        }
+    }
+    merged
+        .into_iter()
+        .map(|(name, mut list)| {
+            if list.len() == 1 {
+                (name, list.pop().expect("one handler"))
+            } else {
+                (name, EventHandler(Rc::new(move |e: &Event| list.iter().for_each(|h| (h.0)(e)))))
+            }
+        })
+        .collect()
+}
+
 impl Mounted {
     fn key(&self) -> Option<&Key> {
         match self {
             Mounted::Element(e) => e.key.as_ref(),
             Mounted::Component(c) => c.key.as_ref(),
-            Mounted::Text(_) => None,
+            Mounted::Text(_) | Mounted::Frame(_) => None,
         }
     }
 
-    fn first_dom(&self) -> web_sys::Node {
+    pub(crate) fn first_dom(&self) -> web_sys::Node {
         match self {
             Mounted::Element(e) => e.el.clone().into(),
             Mounted::Text(t) => t.node.clone().into(),
             Mounted::Component(c) => c.inst.live().root.borrow()[0].first_dom(),
+            Mounted::Frame(f) => f.state.start().into(),
         }
     }
 
@@ -310,9 +362,8 @@ impl Mounted {
         match self {
             Mounted::Element(e) => e.el.clone().into(),
             Mounted::Text(t) => t.node.clone().into(),
-            Mounted::Component(c) => {
-                c.inst.live().root.borrow().last().expect("component has DOM").last_dom()
-            }
+            Mounted::Component(c) => c.inst.live().root.borrow().last().expect("component has DOM").last_dom(),
+            Mounted::Frame(f) => f.state.end().into(),
         }
     }
 
@@ -321,6 +372,14 @@ impl Mounted {
             Mounted::Element(e) => f(e.el.unchecked_ref()),
             Mounted::Text(t) => f(t.node.unchecked_ref()),
             Mounted::Component(c) => c.inst.live().root.borrow().iter().for_each(|m| m.for_each_dom(f)),
+            Mounted::Frame(m) => {
+                let start: web_sys::Node = m.state.start().into();
+                // A frame created detached keeps its range in a fragment until inserted.
+                match start.parent_node() {
+                    Some(p) if p.node_type() == web_sys::Node::DOCUMENT_FRAGMENT_NODE => f(&p),
+                    _ => frames::range_nodes(&m.state.start(), &m.state.end(), true).iter().for_each(f),
+                }
+            }
         }
     }
 
@@ -328,9 +387,8 @@ impl Mounted {
         match (self, node) {
             (Mounted::Element(m), Node::Element(n)) => m.tag == n.tag,
             (Mounted::Text(_), Node::Text(_)) => true,
-            (Mounted::Component(m), Node::Component(n)) => {
-                m.inst.component_type() == n.inner.component_type()
-            }
+            (Mounted::Component(m), Node::Component(n)) => m.inst.component_type() == n.inner.component_type(),
+            (Mounted::Frame(_), Node::Frame(_)) => true,
             _ => false,
         }
     }
@@ -366,10 +424,11 @@ fn unmount(m: &Mounted) {
             e.children.iter().for_each(unmount);
         }
         Mounted::Text(_) => {}
-        Mounted::Component(c) => {
-            let live = c.inst.live();
-            live.alive.set(false);
-            live.root.borrow().iter().for_each(unmount);
+        Mounted::Component(c) => unmount_root(&*c.inst),
+        Mounted::Frame(f) => {
+            for node in frames::range_nodes(&f.state.start(), &f.state.end(), true) {
+                super::diff::dispose_subtree(&node);
+            }
         }
     }
 }
@@ -381,15 +440,15 @@ fn insert(parent: &web_sys::Node, m: &Mounted, before: Option<&web_sys::Node>) {
 }
 
 fn remove(parent: &web_sys::Node, m: &Mounted) {
+    unmount(m);
     m.for_each_dom(&mut |n| {
         let _ = parent.remove_child(n);
     });
-    unmount(m);
 }
 
 /// Template strings (tags, attribute names, static text) are interned so repeated rows reuse
 /// one JS string instead of re-decoding UTF-8 on every call; dynamic text is not.
-fn interned<'a>(s: &'a Str) -> &'a str {
+fn interned(s: &Str) -> &str {
     match s {
         Cow::Borrowed(b) => intern(b),
         Cow::Owned(o) => o,
@@ -407,16 +466,35 @@ fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrValue) {
         }
         AttrValue::Bool(true) => {
             let _ = el.set_attribute(name, "");
-            if name == "checked" {
+            if name == "checked" || name == "selected" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::TRUE);
             }
         }
         AttrValue::Bool(false) | AttrValue::Absent => {
             let _ = el.remove_attribute(name);
-            if name == "checked" {
+            if name == "checked" || name == "selected" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::FALSE);
             }
         }
+    }
+}
+
+/// Insert an element's `css()` rules and, for a newly mounted element, schedule its
+/// `node_ref` callbacks to run after the commit.
+fn apply_extra(el: &web_sys::Element, extra: Option<Box<crate::node::ElementExtra>>, mounted: bool) {
+    let Some(extra) = extra else { return };
+    for rule in &extra.styles {
+        styles::insert(rule);
+    }
+    if mounted && !extra.refs.is_empty() {
+        let el = el.clone();
+        let refs: Vec<NodeRef> = extra.refs;
+        queue_task(Box::new(move || {
+            let handle = NodeHandle { el };
+            for r in &refs {
+                (r.0)(&handle);
+            }
+        }));
     }
 }
 
@@ -425,18 +503,23 @@ fn set_attr(el: &web_sys::Element, name: &'static str, value: &AttrValue) {
 // ---------------------------------------------------------------------------------------
 
 /// Build detached DOM for a node. The caller inserts it.
-fn create(node: Node, depth: u32) -> Mounted {
+fn create(node: Node, scope: &Scope) -> Mounted {
     match node {
         Node::Element(el) => {
-            let Element { tag, key, attrs, events, children } = *el;
-            let dom = document().create_element(intern(tag)).expect("createElement");
+            let Element { tag, key, attrs, events, children, extra } = *el;
+            let dom = if is_svg(tag) {
+                document().create_element_ns(Some("http://www.w3.org/2000/svg"), intern(tag)).expect("createElementNS")
+            } else {
+                document().create_element(intern(tag)).expect("createElement")
+            };
             for (name, value) in &attrs {
                 set_attr(&dom, name, value);
             }
-            let listeners = events.into_iter().map(|(n, h)| Listener::attach(&dom, n, h)).collect();
+            apply_extra(&dom, extra, true);
+            let listeners = attach_events(&dom, events);
             let mut kids = Vec::with_capacity(children.len());
             for child in flatten_children(children) {
-                let m = create(child, depth);
+                let m = create(child, scope);
                 m.for_each_dom(&mut |n| {
                     dom.append_child(n).expect("appendChild");
                 });
@@ -449,36 +532,63 @@ fn create(node: Node, depth: u32) -> Mounted {
             Mounted::Text(MText { text, node })
         }
         Node::Component(c) => {
-            let inst = c.inner.instantiate(depth);
-            let root = rendered_list(&*inst).into_iter().map(|n| create(n, depth + 1)).collect();
+            let inst = c.inner.instantiate(scope);
+            let child_scope = &inst.live().child_scope;
+            let root = rendered_list(&*inst).into_iter().map(|n| create(n, child_scope)).collect();
             *inst.live().root.borrow_mut() = root;
             Mounted::Component(MComponent { key: c.key, inst })
         }
+        Node::Frame(f) => create_frame(&f, scope),
         other => {
             let mut flat = Vec::new();
             flatten(other, &mut flat);
-            create(flat.into_iter().next().unwrap_or_else(empty_text), depth)
+            create(flat.into_iter().next().unwrap_or_else(empty_text), scope)
         }
     }
 }
 
-fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, depth: u32) {
+/// Tags that only exist in the SVG namespace (shared names like `a` stay HTML).
+fn is_svg(tag: &str) -> bool {
+    matches!(
+        tag,
+        "svg" | "path" | "circle" | "rect" | "line" | "polyline" | "polygon" | "ellipse" | "g" | "defs" | "use"
+            | "symbol" | "text" | "tspan" | "clipPath" | "mask" | "pattern" | "linearGradient"
+            | "radialGradient" | "stop" | "foreignObject" | "marker" | "filter"
+    )
+}
+
+fn create_frame(f: &FrameNode, scope: &Scope) -> Mounted {
+    let fallback = f.fallback.as_ref().map(crate::ssr::render_to_string).unwrap_or_default();
+    let state = frames::create_client_frame(&f.src, f.name.clone(), scope.frame.clone(), &fallback);
+    Mounted::Frame(Box::new(MFrame { src: f.src.clone(), name: f.name.clone(), state }))
+}
+
+fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
     match (&mut *old, new) {
-        (Mounted::Element(m), Node::Element(n)) if m.tag == n.tag => patch_element(m, *n, depth),
+        (Mounted::Element(m), Node::Element(n)) if m.tag == n.tag => patch_element(m, *n, scope),
         (Mounted::Text(m), Node::Text(t)) => {
             if m.text != t {
                 m.node.set_data(&t);
                 m.text = t;
             }
         }
-        (Mounted::Component(m), Node::Component(c))
-            if m.inst.component_type() == c.inner.component_type() =>
-        {
+        (Mounted::Component(m), Node::Component(c)) if m.inst.component_type() == c.inner.component_type() => {
             m.key = c.key;
             c.inner.update_instance(&*m.inst);
         }
+        (Mounted::Frame(m), Node::Frame(f)) => {
+            if m.name != f.name {
+                m.state.set_name(f.name.clone());
+                m.name = f.name.clone();
+            }
+            if m.src != f.src {
+                m.src = f.src.clone();
+                m.state.set_src(&f.src);
+                frames::spawn_reload(m.state.clone());
+            }
+        }
         (_, new) => {
-            let replacement = create(new, depth);
+            let replacement = create(new, scope);
             insert(parent, &replacement, Some(&old.first_dom()));
             remove(parent, old);
             *old = replacement;
@@ -486,8 +596,8 @@ fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, depth: u32) {
     }
 }
 
-fn patch_element(m: &mut MElement, n: Element, depth: u32) {
-    let Element { key, attrs, events, children, .. } = n;
+fn patch_element(m: &mut MElement, n: Element, scope: &Scope) {
+    let Element { key, attrs, events, children, extra, .. } = n;
     m.key = key;
 
     if m.attrs != attrs {
@@ -504,9 +614,11 @@ fn patch_element(m: &mut MElement, n: Element, depth: u32) {
         }
         m.attrs = attrs;
     }
+    apply_extra(&m.el, extra, false);
 
-    let same_events = m.listeners.len() == events.len()
-        && m.listeners.iter().zip(&events).all(|(l, (name, _))| l.name == *name);
+    let events = merge_events(events);
+    let same_events =
+        m.listeners.len() == events.len() && m.listeners.iter().zip(&events).all(|(l, (name, _))| l.name == *name);
     if same_events {
         for (listener, (_, handler)) in m.listeners.iter().zip(events) {
             listener.replace(handler);
@@ -520,7 +632,7 @@ fn patch_element(m: &mut MElement, n: Element, depth: u32) {
 
     if !children.is_empty() || !m.children.is_empty() {
         let parent: web_sys::Node = m.el.clone().into();
-        patch_children(&parent, &mut m.children, flatten_children(children), None, true, depth);
+        patch_children(&parent, &mut m.children, flatten_children(children), None, true, scope);
     }
 }
 
@@ -532,12 +644,12 @@ fn patch_children(
     new: Vec<Node>,
     end: Option<&web_sys::Node>,
     whole: bool,
-    depth: u32,
+    scope: &Scope,
 ) {
     if new.is_empty() {
         if whole {
-            parent.set_text_content(None);
             old.drain(..).for_each(|m| unmount(&m));
+            parent.set_text_content(None);
         } else {
             old.drain(..).for_each(|m| remove(parent, &m));
         }
@@ -545,7 +657,7 @@ fn patch_children(
     }
     if old.is_empty() {
         for node in new {
-            let m = create(node, depth);
+            let m = create(node, scope);
             insert(parent, &m, end);
             old.push(m);
         }
@@ -553,28 +665,21 @@ fn patch_children(
     }
 
     let keyed = new.iter().any(|n| n.key().is_some()) && old.iter().any(|m| m.key().is_some());
-    let same_key_order =
-        old.len() == new.len() && old.iter().zip(&new).all(|(o, n)| o.key() == n.key());
+    let same_key_order = old.len() == new.len() && old.iter().zip(&new).all(|(o, n)| o.key() == n.key());
     if !keyed || same_key_order {
-        patch_indexed(parent, old, new, end, depth);
+        patch_indexed(parent, old, new, end, scope);
     } else {
-        patch_keyed(parent, old, new, end, whole, depth);
+        patch_keyed(parent, old, new, end, whole, scope);
     }
 }
 
-fn patch_indexed(
-    parent: &web_sys::Node,
-    old: &mut Vec<Mounted>,
-    new: Vec<Node>,
-    end: Option<&web_sys::Node>,
-    depth: u32,
-) {
+fn patch_indexed(parent: &web_sys::Node, old: &mut Vec<Mounted>, new: Vec<Node>, end: Option<&web_sys::Node>, scope: &Scope) {
     let new_len = new.len();
     for (i, node) in new.into_iter().enumerate() {
         if i < old.len() {
-            patch(parent, &mut old[i], node, depth);
+            patch(parent, &mut old[i], node, scope);
         } else {
-            let m = create(node, depth);
+            let m = create(node, scope);
             insert(parent, &m, end);
             old.push(m);
         }
@@ -590,7 +695,7 @@ fn patch_keyed(
     new: Vec<Node>,
     end: Option<&web_sys::Node>,
     whole: bool,
-    depth: u32,
+    scope: &Scope,
 ) {
     let mut slots: Vec<Option<Mounted>> = old.drain(..).map(Some).collect();
     let mut by_key: HashMap<Key, usize> = HashMap::with_capacity(slots.len());
@@ -620,8 +725,8 @@ fn patch_keyed(
 
     // Nothing reused and the list owns the parent: clear in one DOM call.
     if !any_reused && whole {
-        parent.set_text_content(None);
         slots.into_iter().flatten().for_each(|m| unmount(&m));
+        parent.set_text_content(None);
     } else {
         slots.into_iter().flatten().for_each(|m| remove(parent, &m));
     }
@@ -631,10 +736,10 @@ fn patch_keyed(
     for (existing, node, source) in matched {
         let m = match existing {
             Some(mut m) => {
-                patch(parent, &mut m, node, depth);
+                patch(parent, &mut m, node, scope);
                 m
             }
-            None => create(node, depth),
+            None => create(node, scope),
         };
         result.push(m);
         sources.push(source.map_or(-1, |s| s as i64));
@@ -684,109 +789,15 @@ fn longest_increasing(sources: &[i64]) -> Vec<bool> {
 // Hydration
 // ---------------------------------------------------------------------------------------
 
-type HydrateFn = fn(&str, &web_sys::Node, &mut Option<web_sys::Node>) -> Result<Rc<dyn AnyInstance>, String>;
-
-/// A client entry the browser runtime can hydrate, created with [`entry`].
-pub struct Entry {
-    name: &'static str,
-    hydrate: HydrateFn,
-}
-
-/// Register a component marked with `rmx::client_entry!` for hydration.
-pub fn entry<C: Component>() -> Entry
-where
-    C::Props: serde::de::DeserializeOwned,
-{
-    Entry {
-        name: C::CLIENT_ENTRY.expect("rmx::entry::<C>() needs rmx::client_entry! in C's Component impl"),
-        hydrate: hydrate_entry::<C>,
-    }
-}
-
-fn hydrate_entry<C: Component>(
-    props_json: &str,
-    parent: &web_sys::Node,
-    cursor: &mut Option<web_sys::Node>,
-) -> Result<Rc<dyn AnyInstance>, String>
-where
-    C::Props: serde::de::DeserializeOwned,
-{
-    let props: C::Props = serde_json::from_str(props_json).map_err(|e| e.to_string())?;
-    let inst = new_instance::<C>(props, 0);
-    hydrate_instance(&*inst, parent, cursor);
-    Ok(inst)
-}
-
-#[derive(Deserialize)]
-struct EntryData<'a> {
-    n: &'a str,
-    #[serde(borrow)]
-    p: &'a RawValue,
-}
-
-/// Find the client entries the server rendered, adopt their DOM and attach handlers.
-/// Everything else on the page stays static HTML.
-pub fn hydrate(entries: &[Entry]) {
-    let doc = document();
-    let Some(data) = doc.get_element_by_id("rmx-data") else { return };
-    let json = data.text_content().unwrap_or_default();
-    let items: Vec<EntryData> = match serde_json::from_str(&json) {
-        Ok(items) => items,
-        Err(e) => return warn(&format!("rmx: bad #rmx-data: {e}")),
-    };
-
-    let Some(body) = doc.body() else { return };
-    let walker = doc
-        .create_tree_walker_with_what_to_show(&body, 0x80 /* SHOW_COMMENT */)
-        .expect("createTreeWalker");
-    let mut starts = Vec::new();
-    while let Ok(Some(node)) = walker.next_node() {
-        let comment: web_sys::Comment = node.unchecked_into();
-        if let Some(id) = comment.data().strip_prefix("rmx:h:").and_then(|s| s.parse::<usize>().ok()) {
-            starts.push((id, comment));
-        }
-    }
-
-    for (id, start) in starts {
-        let Some(item) = items.get(id) else { continue };
-        let Some(entry) = entries.iter().find(|e| e.name == item.n) else {
-            warn(&format!("rmx: no client entry registered for {}", item.n));
-            continue;
-        };
-        let parent = start.parent_node().expect("marker has a parent");
-        let mut cursor = start.next_sibling();
-        match (entry.hydrate)(item.p.get(), &parent, &mut cursor) {
-            Ok(inst) => {
-                // Drop server DOM the client render did not claim, up to the end marker.
-                while let Some(node) = cursor.take() {
-                    let is_end = node
-                        .dyn_ref::<web_sys::Comment>()
-                        .is_some_and(|c| c.data() == "/rmx:h");
-                    if is_end {
-                        break;
-                    }
-                    cursor = node.next_sibling();
-                    let _ = parent.remove_child(&node);
-                }
-                ROOTS.with(|r| r.borrow_mut().push(inst));
-            }
-            Err(e) => warn(&format!("rmx: could not hydrate {}: {e}", item.n)),
-        }
-    }
-    flush();
-}
-
-fn hydrate_instance(inst: &dyn AnyInstance, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>) {
-    let depth = inst.live().depth + 1;
-    let root = rendered_list(inst)
-        .into_iter()
-        .map(|n| hydrate_node(n, parent, cursor, depth))
-        .collect();
+/// Render an instance and adopt the server DOM starting at `cursor`.
+pub(crate) fn hydrate_instance(inst: &dyn AnyInstance, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>) {
+    let scope = &inst.live().child_scope;
+    let root = rendered_list(inst).into_iter().map(|n| hydrate_node(n, parent, cursor, scope)).collect();
     *inst.live().root.borrow_mut() = root;
 }
 
 /// Adopt the server DOM at `cursor` for `node`, or create and insert DOM on a mismatch.
-fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>, depth: u32) -> Mounted {
+fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys::Node>, scope: &Scope) -> Mounted {
     match node {
         Node::Element(el) => {
             let adopt = cursor
@@ -795,16 +806,29 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
                 .filter(|e| e.tag_name().eq_ignore_ascii_case(el.tag))
                 .cloned();
             let Some(dom) = adopt else {
-                return create_at(Node::Element(el), parent, cursor, depth);
+                return create_at(Node::Element(el), parent, cursor, scope);
             };
             *cursor = dom.next_sibling();
-            let Element { tag, key, attrs, events, children } = *el;
-            let listeners = events.into_iter().map(|(n, h)| Listener::attach(&dom, n, h)).collect();
+            let Element { tag, key, attrs, events, children, extra } = *el;
+            // Server and client attributes can differ (ids from h.id(), dynamic values).
+            for (name, value) in &attrs {
+                let current = dom.get_attribute(name);
+                let matches = match value {
+                    AttrValue::Str(v) => current.as_deref() == Some(&**v),
+                    AttrValue::Bool(true) => current.is_some(),
+                    AttrValue::Bool(false) | AttrValue::Absent => current.is_none(),
+                };
+                if !matches {
+                    set_attr(&dom, name, value);
+                }
+            }
+            apply_extra(&dom, extra, true);
+            let listeners = attach_events(&dom, events);
             let dom_node: web_sys::Node = dom.clone().into();
             let mut child_cursor = dom.first_child();
             let kids = flatten_children(children)
                 .into_iter()
-                .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, depth))
+                .map(|c| hydrate_node(c, &dom_node, &mut child_cursor, scope))
                 .collect();
             while let Some(extra) = child_cursor.take() {
                 child_cursor = extra.next_sibling();
@@ -815,7 +839,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
         Node::Text(text) if !text.is_empty() => {
             let adopt = cursor.as_ref().and_then(|c| c.dyn_ref::<web_sys::Text>()).cloned();
             let Some(dom) = adopt else {
-                return create_at(Node::Text(text), parent, cursor, depth);
+                return create_at(Node::Text(text), parent, cursor, scope);
             };
             let data = dom.data();
             if data == *text {
@@ -831,20 +855,29 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             Mounted::Text(MText { text, node: dom })
         }
         Node::Component(c) => {
-            let inst = c.inner.instantiate(depth);
+            let inst = c.inner.instantiate(scope);
             hydrate_instance(&*inst, parent, cursor);
             Mounted::Component(MComponent { key: c.key, inst })
         }
-        other => create_at(other, parent, cursor, depth),
+        Node::Frame(f) => {
+            let start = cursor
+                .as_ref()
+                .and_then(|c| c.dyn_ref::<web_sys::Comment>())
+                .filter(|c| c.data().starts_with("rmx:f:"))
+                .cloned();
+            let state = start.and_then(|s| frames::adopt_server_frame(&s, scope.frame.clone()));
+            let Some(state) = state else {
+                return create_at(Node::Frame(f), parent, cursor, scope);
+            };
+            *cursor = state.end().next_sibling();
+            Mounted::Frame(Box::new(MFrame { src: f.src.clone(), name: f.name.clone(), state }))
+        }
+        other => create_at(other, parent, cursor, scope),
     }
 }
 
-fn create_at(node: Node, parent: &web_sys::Node, cursor: &Option<web_sys::Node>, depth: u32) -> Mounted {
-    let m = create(node, depth);
+fn create_at(node: Node, parent: &web_sys::Node, cursor: &Option<web_sys::Node>, scope: &Scope) -> Mounted {
+    let m = create(node, scope);
     insert(parent, &m, cursor.as_ref());
     m
-}
-
-fn warn(message: &str) {
-    web_sys::console::warn_1(&JsValue::from_str(message));
 }

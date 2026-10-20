@@ -40,6 +40,7 @@ serde_json = "1"
 # Pinned to match the wasm-bindgen CLI used by build-client.ps1.
 wasm-bindgen = { version = "=0.2.129", features = ["enable-interning"] }
 js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 
 # Size-optimized browser build; the server uses the normal release profile.

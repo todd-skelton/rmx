@@ -64,14 +64,36 @@ pub(crate) struct Instance<C: Component> {
 /// The component's connection to the runtime (Remix's `handle`).
 pub struct Handle<C: Component> {
     pub(crate) inst: Weak<Instance<C>>,
+    pub(crate) shared: Rc<HandleShared>,
+}
+
+/// Per-instance data that exists before `setup` runs, so context, frame and signal work
+/// inside `setup`.
+pub(crate) struct HandleShared {
     id: u32,
     /// Context this component provides (`set_context`).
-    pub(crate) contexts: Rc<ContextList>,
+    pub(crate) contexts: ContextList,
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) scope: crate::dom::Scope,
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) controller: RefCell<Option<web_sys::AbortController>>,
+    pub(crate) removed: Cell<bool>,
+}
+
+impl HandleShared {
+    /// The component left the document: abort its signal.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn dispose(&self) {
+        self.removed.set(true);
+        if let Some(c) = self.controller.borrow().as_ref() {
+            c.abort();
+        }
+    }
 }
 
 impl<C: Component> Clone for Handle<C> {
     fn clone(&self) -> Self {
-        Handle { inst: self.inst.clone(), id: self.id, contexts: self.contexts.clone() }
+        Handle { inst: self.inst.clone(), shared: self.shared.clone() }
     }
 }
 
@@ -80,7 +102,7 @@ thread_local! {
     #[cfg(not(target_arch = "wasm32"))]
     static NOOP_HANDLER: EventHandler = EventHandler(Rc::new(|_| {}));
     /// Server rendering: contexts provided by the components currently being rendered.
-    static SSR_CONTEXT: RefCell<Vec<Rc<ContextList>>> = const { RefCell::new(Vec::new()) };
+    static SSR_CONTEXT: RefCell<Vec<Rc<HandleShared>>> = const { RefCell::new(Vec::new()) };
     /// Server rendering: (frame src, top frame src) for `h.frame()` / `h.frames().top()`.
     static SSR_FRAME: RefCell<(String, String)> = const { RefCell::new((String::new(), String::new())) };
 }
@@ -99,6 +121,7 @@ pub fn set_server_frame_src(frame_src: &str, top_src: &str) {
     SSR_FRAME.with(|f| *f.borrow_mut() = (frame_src.to_string(), top_src.to_string()));
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) fn server_frame_src() -> (String, String) {
     SSR_FRAME.with(|f| f.borrow().clone())
 }
@@ -106,22 +129,42 @@ pub(crate) fn server_frame_src() -> (String, String) {
 impl<C: Component> Handle<C> {
     /// A handle with no instance behind it, used for server rendering.
     pub(crate) fn detached() -> Self {
-        Handle { inst: Weak::new(), id: next_id(), contexts: Rc::default() }
+        Handle {
+            inst: Weak::new(),
+            shared: Rc::new(HandleShared {
+                id: next_id(),
+                contexts: ContextList::default(),
+                #[cfg(target_arch = "wasm32")]
+                scope: crate::dom::Scope::default(),
+                #[cfg(target_arch = "wasm32")]
+                controller: RefCell::new(None),
+                removed: Cell::new(false),
+            }),
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) fn attached(inst: Weak<Instance<C>>) -> Self {
-        Handle { inst, id: next_id(), contexts: Rc::default() }
+    pub(crate) fn attached(inst: Weak<Instance<C>>, scope: &crate::dom::Scope) -> Self {
+        Handle {
+            inst,
+            shared: Rc::new(HandleShared {
+                id: next_id(),
+                contexts: ContextList::default(),
+                scope: scope.clone(),
+                controller: RefCell::new(None),
+                removed: Cell::new(false),
+            }),
+        }
     }
 
     /// Stable per-instance id, useful for `id`/`for` attribute pairs.
     pub fn id(&self) -> u32 {
-        self.id
+        self.shared.id
     }
 
     /// A string id for HTML attributes, like `"rmx-12"`.
     pub fn dom_id(&self) -> String {
-        format!("rmx-{}", self.id)
+        format!("rmx-{}", self.shared.id)
     }
 
     /// Schedule a re-render of this component. Renders are batched on a microtask, so
@@ -149,14 +192,12 @@ impl<C: Component> Handle<C> {
     /// `fetch` or `addEventListener` so work stops with the component.
     #[cfg(target_arch = "wasm32")]
     pub fn signal(&self) -> web_sys::AbortSignal {
-        match self.inst.upgrade() {
-            Some(inst) => inst.live.signal(),
-            None => {
-                let c = web_sys::AbortController::new().expect("AbortController");
-                c.abort();
-                c.signal()
-            }
+        let mut slot = self.shared.controller.borrow_mut();
+        let controller = slot.get_or_insert_with(|| web_sys::AbortController::new().expect("AbortController"));
+        if self.shared.removed.get() {
+            controller.abort();
         }
+        controller.signal()
     }
 
     /// An event handler that gets mutable access to the component state.
@@ -235,7 +276,7 @@ impl<C: Component> Handle<C> {
 
     /// Provide a value to descendants (`handle.context.set`). Does not trigger an update.
     pub fn set_context<T: 'static>(&self, value: T) {
-        let mut list = self.contexts.borrow_mut();
+        let mut list = self.shared.contexts.borrow_mut();
         list.retain(|(t, _)| *t != TypeId::of::<T>());
         list.push((TypeId::of::<T>(), Rc::new(value)));
     }
@@ -244,12 +285,12 @@ impl<C: Component> Handle<C> {
     pub fn context<T: 'static>(&self) -> Option<Rc<T>> {
         let want = TypeId::of::<T>();
         #[cfg(target_arch = "wasm32")]
-        if let Some(inst) = self.inst.upgrade() {
-            return crate::dom::find_context(inst.live.parent.as_ref(), want).and_then(|v| v.downcast::<T>().ok());
+        if self.shared.scope.parent.is_some() {
+            return crate::dom::find_context(self.shared.scope.parent.clone(), want).and_then(|v| v.downcast::<T>().ok());
         }
         SSR_CONTEXT.with(|stack| {
-            stack.borrow().iter().rev().find_map(|list| {
-                list.borrow().iter().find(|(t, _)| *t == want).map(|(_, v)| v.clone())
+            stack.borrow().iter().rev().find_map(|shared| {
+                shared.contexts.borrow().iter().find(|(t, _)| *t == want).map(|(_, v)| v.clone())
             })
         })
         .and_then(|v| v.downcast::<T>().ok())
@@ -259,7 +300,7 @@ impl<C: Component> Handle<C> {
     pub fn frame(&self) -> FrameHandle {
         #[cfg(target_arch = "wasm32")]
         {
-            let frame = self.inst.upgrade().and_then(|i| i.live.frame.clone());
+            let frame = self.shared.scope.frame.clone();
             FrameHandle { frame: Some(frame.unwrap_or_else(crate::dom::frames::top)) }
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -316,9 +357,9 @@ impl<C: Component> ErasedComponent for PropsOf<C> {
         let handle = Handle::<C>::detached();
         let state = C::setup(&self.0, &handle);
         let node = state.render(&self.0, &handle);
-        let provides = !handle.contexts.borrow().is_empty();
+        let provides = !handle.shared.contexts.borrow().is_empty();
         if provides {
-            SSR_CONTEXT.with(|s| s.borrow_mut().push(handle.contexts.clone()));
+            SSR_CONTEXT.with(|s| s.borrow_mut().push(handle.shared.clone()));
         }
         match C::CLIENT_ENTRY {
             Some(name) => out.client_entry(name, || C::props_json(&self.0).unwrap_or_default(), &node),
