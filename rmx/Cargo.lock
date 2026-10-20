@@ -387,6 +387,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-route-pattern"
+version = "0.1.0"
+dependencies = [
+ "rmx-url",
+]
+
+[[package]]
+name = "rmx-url"
+version = "0.1.0"
+
+[[package]]
 name = "rstml"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

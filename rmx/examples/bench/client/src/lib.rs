@@ -1,4 +1,5 @@
 //! Browser entry: hydrate the client entries the server rendered.
+#![cfg(target_arch = "wasm32")]
 
 use wasm_bindgen::prelude::*;
 

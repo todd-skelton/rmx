@@ -6,3 +6,4 @@ node_modules/
 /bench/tools/
 /bench/remix-app/prof/
 *.cpuprofile
+/.tools/
