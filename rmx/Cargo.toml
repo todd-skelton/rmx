@@ -8,6 +8,7 @@ members = [
     "crates/serve",
     "crates/mime",
     "crates/middleware",
+    "crates/render",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
@@ -30,6 +31,7 @@ rmx-router = { path = "crates/router" }
 rmx-serve = { path = "crates/serve" }
 rmx-mime = { path = "crates/mime" }
 rmx-middleware = { path = "crates/middleware" }
+rmx-render = { path = "crates/render" }
 bytes = "1"
 http = "1"
 http-body = "1"

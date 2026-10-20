@@ -1,7 +1,7 @@
 //! `rsx!`: JSX-like templates that compile to `rmx::Node` trees.
 //!
 //! - Lowercase tags are elements: `<div class="x">"text" {expr}</div>`.
-//! - Capitalized tags are components: `<Counter initial=5/>` builds `CounterProps { initial: 5 }`.
+//! - Capitalized tags are components: `<Counter initial=5/>` builds `Counter`'s `Props`
 //! - `on:click={handler}` attaches an event handler, `key={id}` sets a list key.
 //! - `mix={css(..)}` or `mix={[a, b]}` applies mixins to the host element.
 //! - Component props left out of the template use `Default` values.
@@ -9,7 +9,7 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use rstml::node::{KeyedAttribute, Node, NodeAttribute, NodeElement, NodeName};
 use syn::spanned::Spanned;
 use syn::{Expr, ExprLit, Lit};
@@ -86,6 +86,8 @@ fn attr_value(attr: &KeyedAttribute) -> Option<&Expr> {
 fn block_expr(block: &syn::Block) -> Tokens {
     match block.stmts.as_slice() {
         [syn::Stmt::Expr(expr, None)] => expr.to_token_stream(),
+        // `{rsx! { .. }}`: a brace-delimited macro call parses as a statement.
+        [syn::Stmt::Macro(m)] if m.semi_token.is_none() && m.attrs.is_empty() => m.mac.to_token_stream(),
         _ => block.to_token_stream(),
     }
 }
@@ -182,9 +184,6 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
 fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
     let NodeName::Path(path) = el.name() else { unreachable!("checked by is_component") };
     let component = path.path.clone();
-    let mut props_path = component.clone();
-    let last = props_path.segments.last_mut().expect("non-empty path");
-    last.ident = format_ident!("{}Props", last.ident);
 
     let mut key = quote! { ::core::option::Option::None };
     let mut fields = Vec::new();
@@ -230,8 +229,10 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
     } else {
         quote! {
             {
+                // The props struct is named through the component, so it need not be imported.
+                type __Props = <#component as ::rmx::Component>::Props;
                 #[allow(clippy::needless_update)]
-                let __props = #props_path { #(#fields,)* ..::core::default::Default::default() };
+                let __props = __Props { #(#fields,)* ..::core::default::Default::default() };
                 __props
             }
         }

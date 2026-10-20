@@ -511,6 +511,17 @@ name = "rmx-mime"
 version = "0.1.0"
 
 [[package]]
+name = "rmx-render"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx",
+ "rmx-fetch",
+ "rmx-router",
+ "rmx-url",
+]
+
+[[package]]
 name = "rmx-route-pattern"
 version = "0.1.0"
 dependencies = [
