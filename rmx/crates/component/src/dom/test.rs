@@ -19,6 +19,10 @@ use std::future::Future;
 use wasm_bindgen::JsCast;
 
 use super::{create_root, document, Root};
+
+/// Focus and selection capture around DOM moves (Remix's `createDocumentState`), for tests.
+#[doc(hidden)]
+pub use super::document_state::DocumentState;
 use crate::node::IntoNode;
 
 /// Options for [`render_with`].

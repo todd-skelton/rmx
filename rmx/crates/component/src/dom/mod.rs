@@ -15,6 +15,7 @@ pub(crate) mod frames;
 pub(crate) mod navigation;
 mod mixin_host;
 mod root;
+pub(crate) mod document_state;
 pub(crate) mod styles;
 pub mod test;
 mod vdom;

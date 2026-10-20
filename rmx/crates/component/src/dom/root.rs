@@ -151,7 +151,9 @@ impl Root {
             Some(inst) => {
                 let host = inst.as_any().downcast_ref::<Instance<RootHost>>().expect("root host");
                 *host.props.borrow_mut() = children;
+                let focus = super::document_state::DocumentState::capture();
                 rerender(&*inst);
+                focus.restore();
             }
             None => {
                 if self.0.errors.is_some() {

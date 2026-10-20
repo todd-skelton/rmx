@@ -9,6 +9,7 @@ use std::rc::{Rc, Weak};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{intern, JsCast};
 
+use super::document_state::DocumentState;
 use super::{document, frames, styles, Scope};
 use crate::component::{Component, Handle, HandleShared, Instance, Phase};
 use crate::host_mixin::has_mixins;
@@ -319,6 +320,9 @@ pub fn flush() {
 /// Render dirty components and mixin hosts, then run commit callbacks and tasks. Returns
 /// `false` when an update loop was stopped.
 fn flush_pass() -> bool {
+    // Keyed moves can blur the focused element; put focus and selection back before
+    // commit callbacks run, as Remix's scheduler does.
+    let focus = DocumentState::capture();
     // Mixin hosts are not tracked per instance; cap the passes so a host that updates
     // itself on every rerun cannot hang the page.
     for _ in 0..1000 {
@@ -338,6 +342,7 @@ fn flush_pass() -> bool {
                 batch[i..].iter().for_each(|inst| inst.live().dirty.set(false));
                 DIRTY.with(|d| d.borrow_mut().drain(..).for_each(|inst| inst.live().dirty.set(false)));
                 crate::app::report_to(inst.shared().scope.errors.as_ref(), message);
+                focus.restore();
                 return false;
             }
             rerender(&**inst);
@@ -346,6 +351,7 @@ fn flush_pass() -> bool {
             host.rerun();
         }
     }
+    focus.restore();
     let commits = COMMITS.with(|t| std::mem::take(&mut *t.borrow_mut()));
     for commit in commits {
         commit();
