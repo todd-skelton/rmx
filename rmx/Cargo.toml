@@ -9,12 +9,14 @@ members = [
     "crates/mime",
     "crates/middleware",
     "crates/render",
+    "crates/cookie",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
     "examples/bench/server",
     "examples/bench/client",
     "examples/frames",
+    "examples/frame-navigation",
 ]
 
 [workspace.package]
@@ -33,6 +35,7 @@ rmx-serve = { path = "crates/serve" }
 rmx-mime = { path = "crates/mime" }
 rmx-middleware = { path = "crates/middleware" }
 rmx-render = { path = "crates/render" }
+rmx-cookie = { path = "crates/cookie" }
 bytes = "1"
 http = "1"
 http-body = "1"

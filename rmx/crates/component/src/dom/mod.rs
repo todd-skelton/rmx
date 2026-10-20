@@ -20,7 +20,6 @@ use std::any::{Any, TypeId};
 use std::rc::{Rc, Weak};
 
 pub use entries::{entry, Entry};
-pub use navigation::{navigate, NavigateOptions};
 pub use vdom::flush;
 pub(crate) use vdom::{new_instance, queue_task, rerender, schedule_update, AnyInstance, Live};
 

@@ -12,6 +12,7 @@
 mod component;
 mod frame;
 mod mixin;
+mod navigation;
 mod node;
 
 pub mod browser;
@@ -23,12 +24,13 @@ pub(crate) mod dom;
 pub use component::{set_server_frame_src, Component, Handle};
 pub use frame::{Frame, FrameEvent, FrameHandle, FrameProps, Frames, ReloadOptions};
 pub use mixin::{attrs, css, node_ref, on, IntoMixins, Mixin, NodeHandle, NodeRef};
+pub use navigation::{link, link_with, navigate, NavigateOptions};
 pub use node::{AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoNode, IntoProp, Key, Node, Str, StyleRule};
 pub use rmx_macros::rsx;
 pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{entry, flush, navigate, run, Entry, NavigateOptions, RunOptions};
+pub use dom::{entry, flush, run, Entry, RunOptions};
 
 #[doc(hidden)]
 pub mod __private {

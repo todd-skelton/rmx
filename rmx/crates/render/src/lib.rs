@@ -188,7 +188,7 @@ async fn stream_with_frames(
     let mut work: Vec<Work> = Vec::new();
     for (index, seg) in segments.iter().enumerate() {
         if let Segment::Frame(f) = seg {
-            let fut = fetch_frame(router.clone(), base.clone(), f.src.clone(), forward.clone());
+            let fut = fetch_frame(router.clone(), base.clone(), f.src.clone(), f.name.clone(), forward.clone());
             work.push(Box::pin(async move {
                 let (head, rest) = fut.await;
                 Done::Frame { index, head, rest }
@@ -207,6 +207,24 @@ async fn stream_with_frames(
             }
             contents[index] = Some(head);
             early_rests.extend(rest);
+        }
+    }
+    // Inlined frame content brings its own styles and hydration data; they belong to the
+    // page (head and the one rmx-data script), not inside the frame region.
+    let mut styles = styles;
+    for (i, content) in contents.iter_mut().enumerate() {
+        let inline = blocking(i) || matches!(&segments[i], Segment::Frame(f) if f.fallback.is_some());
+        if let (true, Some(html)) = (inline, content.as_mut()) {
+            let (body, frame_styles, frame_data) = split_frame_html(std::mem::take(html));
+            *html = body;
+            for (class, css) in frame_styles {
+                if !styles.iter().any(|(c, _)| *c == class) {
+                    styles.push((class, css));
+                }
+            }
+            if let Some(d) = frame_data {
+                data.merge(d);
+            }
         }
     }
 
@@ -283,6 +301,31 @@ async fn stream_with_frames(
     send(tail);
 }
 
+/// Take the leading `<style data-rmx-style>` tags and the `rmx-data` script out of a
+/// rendered frame fragment.
+fn split_frame_html(html: String) -> (String, Vec<(String, String)>, Option<ssr::HydrationData>) {
+    const STYLE_OPEN: &str = "<style data-rmx-style=\"";
+    const DATA_OPEN: &str = "<script type=\"application/json\" id=\"rmx-data\">";
+    let mut rest = html.as_str();
+    let mut styles = Vec::new();
+    while let Some(after) = rest.strip_prefix(STYLE_OPEN) {
+        let Some(q) = after.find("\">") else { break };
+        let Some(end) = after.find("</style>") else { break };
+        styles.push((after[..q].to_string(), after[q + 2..end].to_string()));
+        rest = &after[end + 8..];
+    }
+    let mut body = rest.to_string();
+    let mut data = None;
+    if let Some(start) = body.find(DATA_OPEN) {
+        if let Some(len) = body[start..].find("</script>") {
+            let json = body[start + DATA_OPEN.len()..start + len].replace("\\u003c", "<");
+            data = ssr::HydrationData::from_json(&json);
+            body.replace_range(start..start + len + 9, "");
+        }
+    }
+    (body, styles, data)
+}
+
 fn template(id: &str, content: &str) -> String {
     format!("<template id=\"{id}\">{content}<!--{}--></template>", ssr::TEMPLATE_END)
 }
@@ -303,7 +346,11 @@ fn split_body_end(mut html: String) -> (String, String) {
 ///
 /// Returns the frame's content up to its flush marker, plus the rest of its body (the
 /// templates of its own non-blocking frames) when it streams.
-async fn fetch_frame(router: Router, base: Url, src: String, forward: HeaderMap) -> (String, Option<Body>) {
+async fn fetch_frame(router: Router, base: Url, src: String, name: Option<String>, mut forward: HeaderMap) -> (String, Option<Body>) {
+    // Named frames tell the handler which frame they are, like browser frame requests.
+    if let Some(v) = name.as_deref().and_then(|n| HeaderValue::from_str(n).ok()) {
+        forward.insert(HeaderName::from_static(TARGET_HEADER), v);
+    }
     let Ok(mut url) = base.join(&src) else { return (String::new(), None) };
     for _ in 0..10 {
         let mut req = http::Request::builder().method(Method::GET).uri(url.href());

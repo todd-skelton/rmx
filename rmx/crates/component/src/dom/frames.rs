@@ -91,8 +91,8 @@ impl FrameState {
 
     /// Call `handler` for `event` until `signal` aborts.
     pub(crate) fn add_listener(&self, event: &str, handler: crate::node::EventHandler, signal: &web_sys::AbortSignal) {
-        let callback = Closure::<dyn FnMut(web_sys::Event)>::new(move |raw: web_sys::Event| {
-            (handler.0)(&crate::node::Event { raw });
+        let callback = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
+            (handler.0)(&crate::node::Event { raw, current: None });
         })
         .into_js_value();
         let options = web_sys::AddEventListenerOptions::new();
@@ -191,18 +191,36 @@ impl FrameState {
         if let Some(url) = &redirected {
             self.set_src(url);
         }
-        self.read_stream(&response, signal).await?;
+        // A redirect can land a named frame on a page that is not frame content (a login
+        // page, say). If it sends a whole document, load it as one.
+        let document_fallback = redirected.clone().filter(|_| !self.is_top());
+        self.read_stream(&response, signal, document_fallback).await?;
         Ok(redirected)
     }
 
     /// Apply a response as it streams: the main HTML as soon as the server's flush marker
     /// arrives, then each `<template>` as it completes (the template watcher swaps it into
     /// its frame).
-    async fn read_stream(self: &Rc<Self>, response: &web_sys::Response, signal: &web_sys::AbortSignal) -> Result<(), JsValue> {
+    async fn read_stream(
+        self: &Rc<Self>,
+        response: &web_sys::Response,
+        signal: &web_sys::AbortSignal,
+        document_fallback: Option<String>,
+    ) -> Result<(), JsValue> {
+        let apply = |html: &str| match &document_fallback {
+            Some(url) if looks_like_document(html) => {
+                let _ = window().location().assign(url);
+                false
+            }
+            _ => {
+                self.apply_html(html);
+                true
+            }
+        };
         let Some(body) = response.body() else {
             let html = JsFuture::from(response.text()?).await?.as_string().unwrap_or_default();
             if !signal.aborted() && !self.disposed.get() {
-                self.apply_html(&html);
+                apply(&html);
             }
             return Ok(());
         };
@@ -226,11 +244,14 @@ impl FrameState {
                 if let Some((start, end)) = crate::ssr::find_flush_marker(&buffer) {
                     let rest = buffer.split_off(end);
                     buffer.truncate(start);
-                    self.apply_html(&buffer);
+                    if !apply(&buffer) {
+                        let _ = js::call(&reader, "cancel", &[]);
+                        return Ok(());
+                    }
                     buffer = rest.trim_start().to_string();
                     main_applied = true;
                 } else if done {
-                    self.apply_html(&buffer);
+                    apply(&buffer);
                     return Ok(());
                 }
             }
@@ -720,7 +741,7 @@ fn watch(id: String, frame: &Rc<FrameState>) {
         if o.is_some() {
             return;
         }
-        let callback = Closure::<dyn FnMut()>::new(check_templates).into_js_value();
+        let callback = Closure::<dyn Fn()>::new(check_templates).into_js_value();
         let Ok(observer) = web_sys::MutationObserver::new(callback.unchecked_ref()) else { return };
         let init = web_sys::MutationObserverInit::new();
         init.set_child_list(true);

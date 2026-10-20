@@ -284,6 +284,10 @@ impl IntoNode for Children {
 pub struct Event {
     #[cfg(target_arch = "wasm32")]
     pub(crate) raw: web_sys::Event,
+    /// The element whose handler is running (events are delegated, so the browser's
+    /// `currentTarget` is the document).
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) current: Option<web_sys::Node>,
 }
 
 impl Event {
@@ -291,6 +295,13 @@ impl Event {
     #[cfg(target_arch = "wasm32")]
     pub fn raw(&self) -> &web_sys::Event {
         &self.raw
+    }
+
+    /// The element whose handler is running.
+    #[cfg(target_arch = "wasm32")]
+    pub fn current_element(&self) -> Option<web_sys::Element> {
+        use wasm_bindgen::JsCast;
+        self.current.clone()?.dyn_into().ok()
     }
 
     pub fn prevent_default(&self) {
@@ -372,15 +383,88 @@ impl Event {
         Vec::new()
     }
 
+    /// A boolean property of the event (`metaKey`, `repeat`, ...).
+    pub fn prop_bool(&self, name: &str) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            js_sys::Reflect::get(&self.raw, &name.into()).ok().and_then(|v| v.as_bool()).unwrap_or(false)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = name;
+            false
+        }
+    }
+
+    /// A numeric property of the event (`button`, `clientX`, ...).
+    pub fn prop_f64(&self, name: &str) -> Option<f64> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            js_sys::Reflect::get(&self.raw, &name.into()).ok().and_then(|v| v.as_f64())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = name;
+            None
+        }
+    }
+
+    /// An attribute of the element the handler is attached to (`currentTarget`).
+    pub fn current_attr(&self, name: &str) -> Option<String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            self.current.clone()?.dyn_into::<web_sys::Element>().ok()?.get_attribute(name)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = name;
+            None
+        }
+    }
+
+    /// Submit the form the event target belongs to, as if its submit button was pressed
+    /// (`form.requestSubmit()`), so the navigation runtime handles it.
+    pub fn request_submit(&self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let Some(target) = self.raw.target() else { return };
+            let form = if js_sys::Reflect::get(&target, &"elements".into()).is_ok_and(|v| !v.is_undefined()) {
+                Some(target.unchecked_into::<web_sys::HtmlFormElement>())
+            } else {
+                js_sys::Reflect::get(&target, &"form".into()).ok().and_then(|f| f.dyn_into().ok())
+            };
+            if let Some(form) = form {
+                let _ = form.request_submit();
+            }
+        }
+    }
+
     /// The first form field with this name.
     pub fn form_value(&self, name: &str) -> Option<String> {
         self.form_fields().into_iter().find(|(k, _)| k == name).map(|(_, v)| v)
     }
 }
 
-/// An event listener created with [`crate::Handle::on`].
+/// An event listener created with [`crate::Handle::on`] or [`EventHandler::new`].
 #[derive(Clone)]
 pub struct EventHandler(pub(crate) Rc<dyn Fn(&Event)>);
+
+impl EventHandler {
+    /// A handler that does not touch component state (use [`crate::Handle::on`] for that).
+    pub fn new(f: impl Fn(&Event) + 'static) -> EventHandler {
+        #[cfg(target_arch = "wasm32")]
+        {
+            EventHandler(Rc::new(f))
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            drop(f);
+            EventHandler(Rc::new(|_| {}))
+        }
+    }
+}
 
 /// Conversions applied to component prop values in `rsx!`: identity, `T` into `Option<T>`,
 /// and string literals into `String`.

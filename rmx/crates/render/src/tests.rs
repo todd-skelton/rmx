@@ -39,6 +39,7 @@ fn inlines_blocking_frames_and_streams_the_rest() {
     assert!(html.starts_with("<!DOCTYPE html><html><body><h1>Home</h1><!--rmx:f:"), "{html}");
     assert!(html.contains("<nav>Sidebar frame</nav><!--/rmx:f-->"), "{html}");
     assert!(html.contains("<p>Loading</p><!--/rmx:f-->"), "{html}");
+    assert_eq!(html.matches("id=\"rmx-data\"").count(), 1, "{html}");
     let template = html.find("<template id=\"f").expect("streamed template");
     assert!(html[template..].contains("<section>Slow content</section><!--rmx:te--></template></body></html>"), "{html}");
     assert!(html[..template].ends_with("<!-- rmx:flush document -->"), "{html}");
@@ -69,6 +70,21 @@ fn nested_streamed_frames_stream_through_the_parent() {
     assert_eq!(body.matches("<template id=").count(), 2, "{html}");
     assert!(body.contains("<b>Inner</b><!--rmx:te--></template>"), "{html}");
     assert!(html.ends_with("</template></body></html>"), "{html}");
+}
+
+#[test]
+fn named_frames_send_their_target() {
+    let mut router = Router::new();
+    // The same URL renders the whole page or, for its own frame, just the content.
+    router.get("/courses", |ctx: Context| async move {
+        if ctx.frame_target() == Some("courses") {
+            return ctx.render(rsx! { <ul><li>"Course"</li></ul> });
+        }
+        let src = ctx.url().href();
+        ctx.render(rsx! { <html><body><Frame name="courses" src={src}/></body></html> })
+    });
+    let html = get(&router, "http://localhost/courses");
+    assert!(html.contains("<ul><li>Course</li></ul><!--/rmx:f-->"), "{html}");
 }
 
 #[test]

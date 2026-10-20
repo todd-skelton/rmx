@@ -1,0 +1,9 @@
+[package]
+name = "rmx-cookie"
+description = "Cookie header parsing and Set-Cookie serialization for rmx (Remix's cookie package)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+rmx-url.workspace = true

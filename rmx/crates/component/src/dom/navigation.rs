@@ -24,16 +24,7 @@ use super::frames::{self, Submission};
 use super::js::{call, get, object};
 use super::{warn, window};
 
-/// Options for [`navigate`].
-#[derive(Clone, Debug, Default)]
-pub struct NavigateOptions {
-    /// A named frame to load into instead of the top frame.
-    pub target: Option<String>,
-    /// The URL to load into the target frame (defaults to `href`).
-    pub src: Option<String>,
-    /// Replace the current history entry instead of pushing one.
-    pub replace: bool,
-}
+pub use crate::navigation::NavigateOptions;
 
 
 fn opt_str(v: Option<&str>) -> JsValue {
@@ -56,8 +47,23 @@ fn navigation() -> Option<JsValue> {
     Reflect::has(&proto, &JsValue::from_str("sourceElement")).ok()?.then_some(nav)
 }
 
-fn state(target: Option<&str>, src: &str) -> JsValue {
-    object(&[("$rmx", JsValue::TRUE), ("target", opt_str(target)), ("src", JsValue::from_str(src))])
+fn behavior(reset: bool) -> JsValue {
+    JsValue::from_str(if reset { "after-transition" } else { "manual" })
+}
+
+fn state(target: Option<&str>, src: &str, reset_scroll: bool, reset_focus: bool) -> JsValue {
+    object(&[
+        ("$rmx", JsValue::TRUE),
+        ("target", opt_str(target)),
+        ("src", JsValue::from_str(src)),
+        ("resetScroll", behavior(reset_scroll)),
+        ("resetFocus", behavior(reset_focus)),
+    ])
+}
+
+/// `"false"` / `"manual"` turn a reset off; anything else (or nothing) keeps it on.
+fn reset_attr(value: Option<String>) -> bool {
+    !matches!(value.as_deref(), Some("false" | "manual"))
 }
 
 fn is_runtime_state(v: &JsValue) -> bool {
@@ -73,8 +79,10 @@ pub fn navigate(href: &str, options: NavigateOptions) {
         return;
     };
     let src = options.src.as_deref().unwrap_or(href);
+    let reset_scroll = options.reset_scroll != Some(false);
+    let reset_focus = options.reset_focus != Some(false);
     let opts = object(&[
-        ("state", state(options.target.as_deref(), src)),
+        ("state", state(options.target.as_deref(), src, reset_scroll, reset_focus)),
         ("history", JsValue::from_str(if options.replace { "replace" } else { "push" })),
     ]);
     let _ = call(&nav, "navigate", &[&JsValue::from_str(href), &opts]);
@@ -83,8 +91,9 @@ pub fn navigate(href: &str, options: NavigateOptions) {
 pub(crate) fn start() {
     let Some(nav) = navigation() else { return };
     let href = window().location().href().unwrap_or_default();
-    let _ = call(&nav, "updateCurrentEntry", &[&object(&[("state", state(None, &href))])]);
-    let listener = Closure::<dyn FnMut(JsValue)>::new(on_navigate);
+    let _ = call(&nav, "updateCurrentEntry", &[&object(&[("state", state(None, &href, true, true))])]);
+    // `Fn`, not `FnMut`: a navigation can start another one synchronously (re-entry).
+    let listener = Closure::<dyn Fn(JsValue)>::new(on_navigate);
     let _ = call(&nav, "addEventListener", &[&JsValue::from_str("navigate"), listener.as_ref()]);
     listener.forget();
 }
@@ -100,6 +109,8 @@ struct Plan {
     target: Option<String>,
     src: String,
     replace: bool,
+    reset_scroll: bool,
+    reset_focus: bool,
     submission: Option<Submission>,
 }
 
@@ -138,15 +149,21 @@ fn on_navigate(event: JsValue) {
 
     let Some(nav) = navigation() else { return };
     let cancelable = get(&event, "cancelable").as_bool().unwrap_or(false);
+    let entry_state = state(plan.target.as_deref(), &plan.src, plan.reset_scroll, plan.reset_focus);
     if plan.replace && nav_type == "push" && plan.submission.is_none() && cancelable {
         let _ = call(&event, "preventDefault", &[]);
-        let opts = object(&[("state", state(plan.target.as_deref(), &plan.src)), ("history", JsValue::from_str("replace"))]);
+        let opts = object(&[("state", entry_state), ("history", JsValue::from_str("replace"))]);
         let _ = call(&nav, "navigate", &[&JsValue::from_str(&dest), &opts]);
         return;
     }
+    // A form submission that replaces history: rewrite the entry before it commits.
+    let precommit_replace = plan.replace
+        && plan.submission.is_some()
+        && nav_type == "push"
+        && !get(&window().into(), "NavigationPrecommitController").is_undefined();
 
-    let entry_state = state(plan.target.as_deref(), &plan.src);
     let traverse = nav_type == "traverse";
+    let (reset_scroll, reset_focus) = if traverse { (true, true) } else { (plan.reset_scroll, plan.reset_focus) };
     let handler = Closure::once_into_js(move || -> JsValue {
         wasm_bindgen_futures::future_to_promise(async move {
             if !traverse {
@@ -159,7 +176,7 @@ fn on_navigate(event: JsValue) {
             match frame.load(plan.submission.unwrap_or_default()).await {
                 Ok(Some(redirected)) if Rc::ptr_eq(&frame, &top) => {
                     let opts = object(&[
-                        ("state", state(None, &redirected)),
+                        ("state", state(None, &redirected, reset_scroll, reset_focus)),
                         ("history", JsValue::from_str("replace")),
                         ("info", object(&[("type", JsValue::from_str("rmx-redirect"))])),
                     ]);
@@ -175,7 +192,17 @@ fn on_navigate(event: JsValue) {
         })
         .into()
     });
-    intercept(&event, handler, true);
+    let mut opts = vec![("handler", handler), ("scroll", behavior(reset_scroll)), ("focusReset", behavior(reset_focus))];
+    if precommit_replace {
+        let url = get(&get(&event, "destination"), "url");
+        let precommit = Closure::once_into_js(move |controller: JsValue| {
+            let _ = call(&controller, "redirect", &[&url, &object(&[("history", JsValue::from_str("replace"))])]);
+        });
+        opts.push(("precommitHandler", precommit));
+    }
+    if let Err(e) = call(&event, "intercept", &[&object(&opts)]) {
+        warn(&format!("rmx: could not intercept navigation: {}", frames::js_error(&e)));
+    }
 }
 
 fn intercept(event: &JsValue, handler: JsValue, scroll: bool) {
@@ -195,6 +222,8 @@ fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> O
             target: get(&s, "target").as_string(),
             src: get(&s, "src").as_string().unwrap_or_else(|| dest.to_string()),
             replace: false,
+            reset_scroll: get(&s, "resetScroll").as_string().as_deref() != Some("manual"),
+            reset_focus: get(&s, "resetFocus").as_string().as_deref() != Some("manual"),
             submission: None,
         })
     };
@@ -215,6 +244,8 @@ fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> O
             target: link.get_attribute("data-rmx-target"),
             src: link.get_attribute("data-rmx-src").unwrap_or_else(|| dest.to_string()),
             replace: link.get_attribute("data-rmx-history").as_deref() == Some("replace"),
+            reset_scroll: reset_attr(link.get_attribute("data-rmx-reset-scroll")),
+            reset_focus: reset_attr(link.get_attribute("data-rmx-reset-focus")),
             submission: None,
         });
     }
@@ -258,10 +289,19 @@ fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> O
         };
         Some(Submission { method: Some(method.to_ascii_uppercase()), body, content_type })
     };
+    // Submitting a form back to the current URL replaces the entry unless told otherwise.
+    let same_url = window().location().href().ok().as_deref() == Some(dest);
+    let replace = match attr("data-rmx-history", "data-rmx-history").as_deref() {
+        Some("replace") => true,
+        Some("push") => false,
+        _ => submission.is_some() && same_url,
+    };
     Some(Plan {
         target: attr("data-rmx-target", "data-rmx-target"),
         src: attr("data-rmx-src", "data-rmx-src").unwrap_or_else(|| dest.to_string()),
-        replace: attr("data-rmx-history", "data-rmx-history").as_deref() == Some("replace"),
+        replace,
+        reset_scroll: reset_attr(attr("data-rmx-reset-scroll", "data-rmx-reset-scroll")),
+        reset_focus: reset_attr(attr("data-rmx-reset-focus", "data-rmx-reset-focus")),
         submission,
     })
 }

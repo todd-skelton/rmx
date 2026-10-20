@@ -179,14 +179,20 @@ pub(crate) fn diff_nodes(parent: &web_sys::Node, current: Vec<web_sys::Node>, ne
         }
     }
 
-    // Then pair the remaining plain, unkeyed nodes in order.
-    let rest_current: Vec<usize> = (0..current.len()).filter(|&j| !used[j]).collect();
-    let rest_next: Vec<usize> = (0..next.len()).filter(|&i| matched[i].is_none()).collect();
-    for (&j, &i) in rest_current.iter().zip(&rest_next) {
-        let (c, n) = (&current[j], &next[i]);
-        if c.kind() == 0 && n.kind() == 0 && c.key().is_none() && n.key().is_none() && comparable(c.first(), n.first()) {
+    // Then pair the remaining plain, unkeyed nodes in order, skipping live nodes that
+    // have no counterpart (they are removed below).
+    let mut cursor = 0;
+    for i in 0..next.len() {
+        if matched[i].is_some() || next[i].kind() != 0 || next[i].key().is_some() {
+            continue;
+        }
+        let found = (cursor..current.len()).find(|&j| {
+            !used[j] && current[j].kind() == 0 && current[j].key().is_none() && comparable(current[j].first(), next[i].first())
+        });
+        if let Some(j) = found {
             used[j] = true;
             matched[i] = Some(j);
+            cursor = j + 1;
         }
     }
 

@@ -241,7 +241,8 @@ fn event_key(name: &'static str) -> JsValue {
         }
         let key = JsValue::from_str(&format!("__rmx_{name}"));
         let dispatch_key = key.clone();
-        let dispatch = Closure::<dyn FnMut(web_sys::Event)>::new(move |raw: web_sys::Event| {
+        // `Fn`: a handler may dispatch another event of the same type synchronously.
+        let dispatch = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| {
             dispatch(&raw, &dispatch_key);
         });
         // Events that do not bubble are caught on the way down instead.
@@ -261,12 +262,11 @@ fn event_key(name: &'static str) -> JsValue {
 /// Walk from the target to the root, calling every handler registered for this event.
 fn dispatch(raw: &web_sys::Event, key: &JsValue) {
     let mut node = raw.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
-    let event = Event { raw: raw.clone() };
     while let Some(current) = node {
         if let Some(id) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) {
             let handler = HANDLERS.with(|h| h.borrow().items.get(id as usize).cloned().flatten());
             if let Some(handler) = handler {
-                (handler.0)(&event);
+                (handler.0)(&Event { raw: raw.clone(), current: Some(current.clone()) });
             }
             if raw.cancel_bubble() {
                 break;
