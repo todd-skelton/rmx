@@ -80,10 +80,79 @@ pub(crate) struct HandleShared {
     /// Aborted when the component renders again or is removed (the render signal).
     #[cfg(target_arch = "wasm32")]
     pub(crate) render_controller: RefCell<Option<web_sys::AbortController>>,
+    /// What the component is running now, to catch `update()` from setup or render.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) phase: Cell<Phase>,
+    /// Set once the first render's DOM exists; `update()` before that is an error.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) committed: Cell<bool>,
+    /// The component's full type name (`std::any::type_name`), for runtime messages.
+    type_name: &'static str,
     pub(crate) removed: Cell<bool>,
 }
 
+#[cfg(target_arch = "wasm32")]
+type ScopeRef = crate::dom::Scope;
+#[cfg(not(target_arch = "wasm32"))]
+type ScopeRef = ();
+
+/// The part of its lifecycle a component is running.
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Phase {
+    Setup,
+    Render,
+    Idle,
+}
+
+/// `my_app::ui::Counter<T>` -> `Counter`.
+fn short_type_name(full: &'static str) -> &'static str {
+    let base = full.split('<').next().unwrap_or(full);
+    base.rsplit("::").next().unwrap_or(base)
+}
+
 impl HandleShared {
+    /// Not generic, so it is compiled once rather than inlined per component type.
+    /// `scope` is `None` for a detached (server) handle.
+    #[inline(never)]
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
+    fn new(type_name: &'static str, scope: Option<&ScopeRef>) -> Rc<HandleShared> {
+        Rc::new(HandleShared {
+            id: next_id(),
+            contexts: ContextList::default(),
+            #[cfg(target_arch = "wasm32")]
+            scope: scope.cloned().unwrap_or_default(),
+            #[cfg(target_arch = "wasm32")]
+            controller: RefCell::new(None),
+            #[cfg(target_arch = "wasm32")]
+            render_controller: RefCell::new(None),
+            #[cfg(target_arch = "wasm32")]
+            phase: Cell::new(if scope.is_some() { Phase::Setup } else { Phase::Idle }),
+            #[cfg(target_arch = "wasm32")]
+            committed: Cell::new(false),
+            type_name,
+            removed: Cell::new(false),
+        })
+    }
+
+    /// A render is starting: abort the previous render's signal and enter the render
+    /// phase. Returns the phase to restore with [`HandleShared::end_render`].
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn begin_render(&self) -> Phase {
+        self.abort_render_signal();
+        self.phase.replace(Phase::Render)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn end_render(&self, outer: Phase) {
+        self.phase.set(outer);
+    }
+
+    /// The component's name for messages (`Counter`, like a JS function's `name`).
+    pub(crate) fn name(&self) -> &'static str {
+        short_type_name(self.type_name)
+    }
+
     /// The component left the document: abort its signal.
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn dispose(&self) {
@@ -92,6 +161,34 @@ impl HandleShared {
             c.abort();
         }
         self.abort_render_signal();
+    }
+
+    /// Whether `update()` may schedule a render now; warns or reports when it may not.
+    /// Not generic, so the messages are compiled once rather than per component type.
+    #[cfg(target_arch = "wasm32")]
+    #[inline(never)]
+    pub(crate) fn may_update(&self) -> bool {
+        if self.removed.get() {
+            return false;
+        }
+        let name = self.name();
+        let message = match self.phase.get() {
+            Phase::Idle if self.committed.get() => return true,
+            Phase::Setup => {
+                web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&format!(
+                    "Ignored handle.update() while {name} is running its setup function. The initial render includes setup changes."
+                )));
+                return false;
+            }
+            Phase::Render => format!(
+                "Cannot call handle.update() while {name} is running its render function. Call it from an event handler or handle.queueTask() instead."
+            ),
+            Phase::Idle => format!(
+                "Cannot call handle.update() before {name}'s initial render commits. Call it from an event handler or handle.queueTask() instead."
+            ),
+        };
+        crate::app::report_to(self.scope.errors.as_ref(), message);
+        false
     }
 
     /// A new render is starting: the previous render's signal is done.
@@ -150,35 +247,12 @@ pub(crate) fn server_frame_src() -> (String, String) {
 impl<C: Component> Handle<C> {
     /// A handle with no instance behind it, used for server rendering.
     pub(crate) fn detached() -> Self {
-        Handle {
-            inst: Weak::new(),
-            shared: Rc::new(HandleShared {
-                id: next_id(),
-                contexts: ContextList::default(),
-                #[cfg(target_arch = "wasm32")]
-                scope: crate::dom::Scope::default(),
-                #[cfg(target_arch = "wasm32")]
-                controller: RefCell::new(None),
-                #[cfg(target_arch = "wasm32")]
-                render_controller: RefCell::new(None),
-                removed: Cell::new(false),
-            }),
-        }
+        Handle { inst: Weak::new(), shared: HandleShared::new(std::any::type_name::<C>(), None) }
     }
 
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn attached(inst: Weak<Instance<C>>, scope: &crate::dom::Scope) -> Self {
-        Handle {
-            inst,
-            shared: Rc::new(HandleShared {
-                id: next_id(),
-                contexts: ContextList::default(),
-                scope: scope.clone(),
-                controller: RefCell::new(None),
-                render_controller: RefCell::new(None),
-                removed: Cell::new(false),
-            }),
-        }
+        Handle { inst, shared: HandleShared::new(std::any::type_name::<C>(), Some(scope)) }
     }
 
     /// Stable per-instance id, useful for `id`/`for` attribute pairs.
@@ -193,11 +267,30 @@ impl<C: Component> Handle<C> {
 
     /// Schedule a re-render of this component. Renders are batched on a microtask, so
     /// several `update()` calls in one handler produce one render. No-op on the server.
+    ///
+    /// Call it from event handlers, tasks and async work. As in Remix, a call from `setup`
+    /// is ignored with a warning (the first render already sees setup's changes), and a
+    /// call from `render`, or before the first render is in the DOM, is reported as an
+    /// error (see [`crate::Root::on_error`]) and ignored.
     pub fn update(&self) {
         #[cfg(target_arch = "wasm32")]
-        if let Some(inst) = self.inst.upgrade() {
-            crate::dom::schedule_update(inst);
+        if self.shared.may_update() {
+            if let Some(inst) = self.inst.upgrade() {
+                crate::dom::schedule_update(inst);
+            }
         }
+    }
+
+    /// Report an error from this component: log it with `console.error` and dispatch it
+    /// to the error listeners of the root it renders in ([`crate::Root::on_error`]), or of
+    /// the app ([`crate::App::on_error`]) for client entries and frames. This is the Rust
+    /// counterpart of throwing from a Remix component, since a panic cannot be caught in
+    /// WebAssembly. On the server it logs to stderr.
+    pub fn report_error(&self, error: impl std::fmt::Display) {
+        #[cfg(target_arch = "wasm32")]
+        crate::app::report_to(self.shared.scope.errors.as_ref(), error);
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::report_error(error);
     }
 
     /// The latest props (`handle.props`), for callbacks that run outside `render`. `None`

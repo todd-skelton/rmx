@@ -49,6 +49,11 @@ pub use ssr::{render_to_string, Rendered};
 #[cfg(target_arch = "wasm32")]
 pub use dom::{create_range_root, create_root, entry, flush, run, App, Entry, Root, RunOptions};
 
+/// Component testing helpers (`remix/component/test`): [`test::render`] mounts a tree for a
+/// browser test.
+#[cfg(target_arch = "wasm32")]
+pub use dom::test;
+
 #[doc(hidden)]
 pub mod __private {
     pub use serde_json;

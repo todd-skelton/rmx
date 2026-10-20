@@ -16,6 +16,7 @@ pub(crate) mod navigation;
 mod mixin_host;
 mod root;
 pub(crate) mod styles;
+pub mod test;
 mod vdom;
 
 use std::any::{Any, TypeId};
@@ -35,6 +36,8 @@ pub(crate) struct Scope {
     pub(crate) parent: Option<Weak<dyn AnyInstance>>,
     pub(crate) frame: Option<Rc<frames::FrameState>>,
     pub(crate) depth: u32,
+    /// Error listeners of the standalone root this component renders in (`None` = the app).
+    pub(crate) errors: Option<crate::TypedEventTarget<crate::AppError>>,
 }
 
 /// The nearest value of type `want` provided by `parent` or one of its ancestors.

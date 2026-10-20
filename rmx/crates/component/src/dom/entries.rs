@@ -125,7 +125,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
     };
     let parent = start_node.parent_node()?;
     let mut cursor = start_node.next_sibling();
-    let scope = Scope { parent: None, frame, depth: 0 };
+    let scope = Scope { parent: None, frame, depth: 0, errors: None };
     match hydrate(&props, &parent, &mut cursor, &scope) {
         Ok(inst) => {
             // Drop server DOM the client render did not claim, up to the end marker.

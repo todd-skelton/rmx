@@ -69,6 +69,7 @@ export const Counter = clientEntry(import.meta.url, function Counter(handle: Han
 | `listen(target, ..)` | `TypedEventTarget` listeners | Removed with the component. |
 | `frame()`, `frames()`, `on_frame(..)` | `handle.frame`, `handle.frames` | `reload`, `reload_with`, `replace`, `reloadStart`/`reloadComplete`. |
 | `id()`, `dom_id()` | `handle.id` | Stable per instance. |
+| `report_error(e)` | throwing from a component | Logs and dispatches to the root's `on_error` listeners (the app's for entries and frames). |
 
 ## `rsx!`
 
@@ -98,8 +99,12 @@ crates:
    host mixins with insert/remove/reclaim lifecycles, `<Frame>` (blocking, non-blocking,
    named, client-mounted, custom resolvers), soft navigation through the Navigation API
    (`data-rmx-target`, `data-rmx-src`, `data-rmx-history`, `data-rmx-reset-scroll`,
-   `data-rmx-document`), form submissions, redirects, scroll restoration on traversal, and
-   app-level error events (`App::on_error`).
+   `data-rmx-document`), form submissions, redirects, scroll restoration on traversal,
+   app-level error events (`App::on_error`), root-level error events (`Root::on_error`:
+   `update()` from `render` or before the first commit, `update()` loops stopped after 50
+   cascading renders, `Handle::report_error`, bubbling DOM `error` events), and
+   `rmx::test` (`render`, `query`, `query_all`, `act`, `cleanup`), the counterpart of
+   `remix/component/test`.
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
@@ -136,7 +141,13 @@ and `wasm-opt` (the build script finds the copies cargo-leptos downloaded).
 cargo run -p frames-demo                                               # http://127.0.0.1:44110/
 node examples/frames/e2e.mjs                                            # browser checks
 cargo test --workspace
+./test-browser.ps1                                                      # component tests in headless Chromium
 ```
+
+`test-browser.ps1` runs each `tests/browser_*.rs` file of a crate with `wasm-bindgen-test`
+(default crate `rmx-component`; `-Test browser_errors` picks one file). It needs a
+ChromeDriver matching the Chromium binary: set `CHROMEDRIVER` and `CHROMIUM_PATH`, or use
+the defaults under `%LOCALAPPDATA%`.
 
 Server env vars: `HOST` (default `127.0.0.1`), `PORT` (each demo has its own default).
 The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark server is in
@@ -148,13 +159,18 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
    client entries by name (`rmx::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 250 KiB to
    820 KiB uncompressed (measured, `wasm-release` plus `wasm-opt`); the largest is the ui
    gallery, which bundles all 17 of its demos.
-2. Rust does not throw, so component-level error events are not automatic. Code reports
-   failures with `rmx::report_error`; panics and failed frame loads and navigations are
-   reported to `App::on_error` listeners.
+2. Rust does not throw, and a panic cannot be caught in wasm32 (it aborts the module), so
+   a failing `setup`, `render` or task is not turned into an error event the way a
+   thrown exception is in Remix. Code reports failures with `Handle::report_error` (to
+   the component's root) or `rmx::report_error` (to the app). The runtime reports its own
+   errors the way Remix does: `update()` from `render` or before the first commit, and
+   update loops, go to `Root::on_error`; panics and failed frame loads and navigations go
+   to `App::on_error`.
 3. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.
-4. No HMR, CLI, or `node-fetch-server` test harness; e2e checks use Playwright scripts.
+4. No HMR, CLI, or `remix/test` runner: native tests use `cargo test`, component tests
+   use `wasm-bindgen-test` in Chromium, and e2e checks use Playwright scripts.
 5. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
 6. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`
    (social-auth), `nodejs-semver` (unpkg), and the usual hyper/tokio/wasm-bindgen stack.

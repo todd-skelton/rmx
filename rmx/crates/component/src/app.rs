@@ -4,8 +4,10 @@
 //! A frame that fails to load or reload, a soft navigation whose content cannot be loaded,
 //! and a panic are reported to every listener added with
 //! [`App::on_error`](crate::App::on_error) and logged with `console.error`. Rust code
-//! does not throw, so a component's async work reports its own failures with
-//! [`report_error`].
+//! does not throw, so a component reports its own failures with [`report_error`] or
+//! [`Handle::report_error`](crate::Handle::report_error). Components in a standalone root
+//! ([`create_root`](crate::create_root)) report to that root's
+//! [`Root::on_error`](crate::Root::on_error) listeners instead.
 
 use std::fmt;
 
@@ -38,6 +40,15 @@ pub fn report_error(error: impl fmt::Display) {
     #[cfg(not(target_arch = "wasm32"))]
     eprintln!("{}", error.message);
     dispatch(&error);
+}
+
+/// Report to a root's error listeners, or to the app's when `target` is `None`.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn report_to(target: Option<&TypedEventTarget<AppError>>, error: impl fmt::Display) {
+    let Some(target) = target else { return report_error(error) };
+    let error = AppError { message: error.to_string() };
+    web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&error.message));
+    target.dispatch(&error);
 }
 
 pub(crate) fn dispatch(error: &AppError) {

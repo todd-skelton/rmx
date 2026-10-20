@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::{intern, JsCast};
 
 use super::{document, frames, styles, Scope};
-use crate::component::{Component, Handle, HandleShared, Instance};
+use crate::component::{Component, Handle, HandleShared, Instance, Phase};
 use crate::host_mixin::has_mixins;
 use super::mixin_host::MixinHost;
 use crate::node::{AttrValue, Element, Event, EventHandler, FrameNode, Key, Node, Str};
@@ -24,6 +24,8 @@ pub(crate) struct Live {
     pub(crate) alive: Cell<bool>,
     dirty: Cell<bool>,
     depth: u32,
+    /// (event loop turn, renders in that turn) for the update-loop check.
+    cascade: Cell<(u32, u32)>,
     /// Scope handed to the components this one renders.
     child_scope: Scope,
     /// What the component's last render produced. Never empty: an empty render mounts an
@@ -59,10 +61,11 @@ impl<C: Component> AnyInstance for Instance<C> {
     }
 
     fn render_node(&self) -> Node {
-        self.handle.shared.abort_render_signal();
-        let state = self.state.borrow();
-        let props = self.props.borrow();
-        state.render(&props, &self.handle)
+        let shared = &self.handle.shared;
+        let outer = shared.begin_render();
+        let node = self.state.borrow().render(&self.props.borrow(), &self.handle);
+        shared.end_render(outer);
+        node
     }
 }
 
@@ -71,6 +74,7 @@ pub(crate) fn new_instance<C: Component>(props: C::Props, scope: &Scope) -> Rc<d
     Rc::<Instance<C>>::new_cyclic(|weak| {
         let handle = Handle::attached(weak.clone(), scope);
         let state = C::setup(&props, &handle);
+        handle.shared.phase.set(Phase::Idle);
         let parent: Weak<dyn AnyInstance> = weak.clone();
         Instance {
             state: RefCell::new(state),
@@ -80,7 +84,13 @@ pub(crate) fn new_instance<C: Component>(props: C::Props, scope: &Scope) -> Rc<d
                 alive: Cell::new(true),
                 dirty: Cell::new(false),
                 depth: scope.depth,
-                child_scope: Scope { parent: Some(parent), frame: scope.frame.clone(), depth: scope.depth + 1 },
+                cascade: Cell::new((0, 0)),
+                child_scope: Scope {
+                    parent: Some(parent),
+                    frame: scope.frame.clone(),
+                    depth: scope.depth + 1,
+                    errors: scope.errors.clone(),
+                },
                 root: RefCell::new(Vec::new()),
                 hosts: RefCell::new(Vec::new()),
             },
@@ -208,23 +218,108 @@ fn schedule_flush() {
     }
 }
 
+/// Updates per event loop turn before the runtime warns, and per component before it
+/// stops a loop (Remix's scheduler limits).
+const CASCADING_UPDATE_WARN_THRESHOLD: u32 = 50;
+const MAX_CASCADING_COMPONENT_UPDATES: u32 = 50;
+
+/// Component renders in the current event loop turn, to catch `update()` loops.
+#[derive(Default)]
+struct Cascade {
+    /// Which event loop turn this is; instance counts from older turns are stale.
+    turn: u32,
+    total: u32,
+    /// Renders per component name, in first-seen order.
+    per_name: Vec<(&'static str, u32)>,
+    warned: bool,
+    reset_scheduled: bool,
+}
+
+thread_local! {
+    static CASCADE: RefCell<Cascade> = RefCell::new(Cascade::default());
+    static RESET_CASCADE: js_sys::Function = Closure::<dyn FnMut()>::new(|| {
+        CASCADE.with(|c| {
+            let mut c = c.borrow_mut();
+            *c = Cascade { turn: c.turn.wrapping_add(1), ..Cascade::default() };
+        });
+    })
+    .into_js_value()
+    .unchecked_into();
+}
+
+fn format_counts(counts: &[(&'static str, u32)]) -> String {
+    counts.iter().map(|(name, n)| format!("{name} x{n}")).collect::<Vec<_>>().join(", ")
+}
+
+/// Count a render of `inst`. Returns an error message when it has looped too often.
+fn track_cascading_update(inst: &dyn AnyInstance) -> Result<(), String> {
+    CASCADE.with(|c| {
+        let mut c = c.borrow_mut();
+        c.total += 1;
+        let name = inst.shared().name();
+        match c.per_name.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, n)) => *n += 1,
+            None => c.per_name.push((name, 1)),
+        }
+        let (turn, n) = inst.live().cascade.get();
+        let count = if turn == c.turn { n + 1 } else { 1 };
+        inst.live().cascade.set((c.turn, count));
+        if !c.reset_scheduled {
+            c.reset_scheduled = true;
+            // Reset when control returns to the event loop; microtask flushes in the same
+            // turn still count as cascading.
+            RESET_CASCADE.with(|f| {
+                let _ = super::window().set_timeout_with_callback_and_timeout_and_arguments_0(f, 0);
+            });
+        }
+        if !c.warned && c.total >= CASCADING_UPDATE_WARN_THRESHOLD {
+            c.warned = true;
+            web_sys::console::warn_1(&JsValue::from_str(&format!(
+                "{} cascading component updates detected in one event loop turn. Consider reducing hydration regions. Components: {}",
+                c.total,
+                format_counts(&c.per_name)
+            )));
+        }
+        if count > MAX_CASCADING_COMPONENT_UPDATES {
+            return Err(format!(
+                "handle.update() infinite loop detected in {name} after {count} cascading updates. Components: {}",
+                format_counts(&c.per_name)
+            ));
+        }
+        Ok(())
+    })
+}
+
 /// Render every component that called `update()`, parents before children, then run
 /// queued tasks. Runs automatically on a microtask; call it to flush synchronously.
+///
+/// A component that keeps updating itself (for example from a task queued by every
+/// render) is stopped after 50 renders in one event loop turn, and the loop is reported
+/// as an error.
 pub fn flush() {
     SCHEDULED.set(false);
-    // A component that updates itself from every render would loop forever; cap the passes.
-    for _ in 0..100 {
+    // Mixin hosts are not tracked per instance; cap the passes so a host that updates
+    // itself on every rerun cannot hang the page.
+    for _ in 0..1000 {
         let mut batch = DIRTY.with(|d| std::mem::take(&mut *d.borrow_mut()));
         let hosts = DIRTY_HOSTS.with(|d| std::mem::take(&mut *d.borrow_mut()));
         if batch.is_empty() && hosts.is_empty() {
             break;
         }
         batch.sort_by_key(|i| i.live().depth);
-        for inst in &batch {
+        for (i, inst) in batch.iter().enumerate() {
             // A parent re-render already refreshed children it passed new props to.
-            if inst.live().dirty.get() {
-                rerender(&**inst);
+            if !inst.live().dirty.get() {
+                continue;
             }
+            if let Err(message) = track_cascading_update(&**inst) {
+                // Drop this batch and everything still pending, as Remix does.
+                batch[i..].iter().for_each(|inst| inst.live().dirty.set(false));
+                DIRTY.with(|d| d.borrow_mut().drain(..).for_each(|inst| inst.live().dirty.set(false)));
+                crate::app::report_to(inst.shared().scope.errors.as_ref(), message);
+                return;
+            }
+            rerender(&**inst);
         }
         for host in hosts {
             host.rerun();
@@ -857,6 +952,7 @@ fn create(node: Node, scope: &Scope) -> Mounted {
             let child_scope = &inst.live().child_scope;
             let root = rendered_list(&*inst).into_iter().map(|n| create(n, child_scope)).collect();
             *inst.live().root.borrow_mut() = root;
+            inst.shared().committed.set(true);
             Mounted::Component(MComponent { key: c.key, inst })
         }
         Node::Frame(f) => create_frame(&f, scope),
@@ -1148,6 +1244,7 @@ pub(crate) fn hydrate_instance(inst: &dyn AnyInstance, parent: &web_sys::Node, c
     let scope = &inst.live().child_scope;
     let root = rendered_list(inst).into_iter().map(|n| hydrate_node(n, parent, cursor, scope)).collect();
     *inst.live().root.borrow_mut() = root;
+    inst.shared().committed.set(true);
 }
 
 /// Adopt the server DOM at `cursor` for `node`, or create and insert DOM on a mismatch.
