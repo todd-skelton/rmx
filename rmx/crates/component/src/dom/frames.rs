@@ -150,7 +150,7 @@ impl FrameState {
             submission.method = Some(method.to_ascii_uppercase());
         }
         if let Err(e) = self.load(submission).await {
-            warn(&format!("rmx: frame reload failed: {}", js_error(&e)));
+            crate::report_error(js_error(&e));
         }
     }
 
@@ -557,6 +557,15 @@ fn register(state: FrameState) -> Rc<FrameState> {
 }
 
 /// Forget the frame whose region starts at `start` (its DOM is left to the caller).
+impl FrameState {
+    /// Cancel an in-flight load, if any.
+    pub(crate) fn abort_reload(&self) {
+        if let Some(c) = self.reload.take() {
+            c.abort();
+        }
+    }
+}
+
 pub(crate) fn dispose(start: &web_sys::Node) {
     let Some(slot) = slot_of(start) else { return };
     KEY.with(|k| js_sys::Reflect::delete_property(start.unchecked_ref::<js_sys::Object>(), k).ok());
@@ -787,7 +796,7 @@ pub(crate) fn create_client_frame(
 pub(crate) fn spawn_reload(frame: Rc<FrameState>) {
     wasm_bindgen_futures::spawn_local(async move {
         if let Err(e) = frame.load(Submission::default()).await {
-            warn(&format!("rmx: frame load failed: {}", js_error(&e)));
+            crate::report_error(js_error(&e));
         }
     });
 }

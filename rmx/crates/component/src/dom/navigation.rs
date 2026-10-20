@@ -101,6 +101,12 @@ fn start_navigation(href: &str, options: NavigateOptions) -> Option<JsValue> {
     call(&nav, "navigate", &[&JsValue::from_str(href), &opts]).ok()
 }
 
+type NavigateListener = Closure<dyn Fn(JsValue)>;
+
+thread_local! {
+    static LISTENER: std::cell::RefCell<Option<NavigateListener>> = const { std::cell::RefCell::new(None) };
+}
+
 pub(crate) fn start() {
     let Some(nav) = navigation() else { return };
     let href = window().location().href().unwrap_or_default();
@@ -108,7 +114,15 @@ pub(crate) fn start() {
     // `Fn`, not `FnMut`: a navigation can start another one synchronously (re-entry).
     let listener = Closure::<dyn Fn(JsValue)>::new(on_navigate);
     let _ = call(&nav, "addEventListener", &[&JsValue::from_str("navigate"), listener.as_ref()]);
-    listener.forget();
+    LISTENER.with(|l| *l.borrow_mut() = Some(listener));
+}
+
+/// Stop intercepting navigations (`App::dispose`).
+pub(crate) fn stop() {
+    let Some(listener) = LISTENER.with(|l| l.borrow_mut().take()) else { return };
+    if let Some(nav) = navigation() {
+        let _ = call(&nav, "removeEventListener", &[&JsValue::from_str("navigate"), listener.as_ref()]);
+    }
 }
 
 fn same_origin(url: &str) -> bool {
@@ -197,7 +211,12 @@ fn on_navigate(event: JsValue) {
                 }
                 Ok(_) => {}
                 Err(e) => {
-                    warn(&format!("rmx: navigation failed, loading the document: {}", frames::js_error(&e)));
+                    let message = frames::js_error(&e);
+                    if crate::app::has_listeners() {
+                        crate::report_error(message);
+                        return Err(e);
+                    }
+                    warn(&format!("rmx: navigation failed, loading the document: {message}"));
                     let _ = window().location().assign(&dest);
                 }
             }

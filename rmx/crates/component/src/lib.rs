@@ -13,6 +13,7 @@
 #[cfg(test)]
 extern crate self as rmx;
 
+mod app;
 mod component;
 mod frame;
 mod host_mixin;
@@ -28,6 +29,7 @@ pub mod ssr;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod dom;
 
+pub use app::{report_error, AppError};
 pub use component::{set_server_frame_src, Component, Handle};
 pub use frame::{
     Frame, FrameContent, FrameEvent, FrameHandle, FrameProps, FrameRequest, FrameResponse, Frames, ReloadOptions, ResolveFrame,
@@ -45,7 +47,7 @@ pub use signal::{ListenerId, Signal, TypedEventTarget};
 pub use ssr::{render_to_string, Rendered};
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{create_range_root, create_root, entry, flush, run, Entry, Root, RunOptions};
+pub use dom::{create_range_root, create_root, entry, flush, run, App, Entry, Root, RunOptions};
 
 #[doc(hidden)]
 pub mod __private {

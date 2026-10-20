@@ -101,6 +101,38 @@ await page.click('#settings-nav a[href="/settings/grading"]')
 await page.waitForSelector('#login-title')
 check('auth: redirected frame navigation falls back to the login document', (await page.evaluate(() => location.pathname)) === '/auth/login' && !(await page.evaluate(() => !!document.querySelector('#settings-content'))))
 
+// Errors: a 500 in a frame renders the resolver's reload card in place.
+await page.click('#login')
+await until(() => document.querySelector('#page-title')?.innerText === 'Dashboard')
+await page.goto(BASE + '/settings/overview')
+await ready()
+await mark()
+await page.click('#settings-nav a[href="/settings/privacy"]')
+await page.waitForSelector('.error-card', { timeout: 5000 })
+check(
+  'errors: a 500 frame response shows the reload card in the frame',
+  (await page.locator('.error-card h1').innerText()) === 'Reload required' &&
+    (await page.evaluate(() => location.pathname)) === '/settings/privacy' &&
+    (await soft()) &&
+    !!(await page.$('#main-nav')),
+)
+check('errors: the reload link opts out of soft navigation', (await page.getAttribute('.error-card a', 'data-rmx-document')) === '')
+
+// A failed frame request reaches the app error listener, which replaces the page.
+await page.goto(BASE + '/settings/overview')
+await ready()
+await page.route('**/settings/grading', (route) => route.abort())
+await page.click('#settings-nav a[href="/settings/grading"]')
+await page.waitForSelector('#app-error .error-card', { timeout: 5000 })
+check(
+  'errors: a failed load shows the app error page',
+  (await page.locator('#app-error h1').innerText()) === 'Something went wrong' && /fetch/i.test(await page.locator('#app-error .error-card p >> nth=1').innerText()),
+  await page.locator('#app-error').innerText(),
+)
+await page.unroute('**/settings/grading')
+// The runtime is disposed: links are plain document navigations now.
+check('errors: the disposed runtime no longer intercepts navigation', !(await page.$('#main-nav')))
+
 check('no page errors', errors.length === 0, errors)
 await browser.close()
 console.log(failures ? `${failures} failed` : 'all passed')

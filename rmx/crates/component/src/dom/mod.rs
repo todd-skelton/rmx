@@ -67,18 +67,95 @@ pub struct RunOptions {
 /// as soon as the main content is parsed (the server's flush marker), so frames that
 /// stream in later appear as they arrive instead of when the response ends. When it is
 /// running, the document receives an `rmx:ready` event.
-pub fn run(options: RunOptions) {
+///
+/// Returns the [`App`] (Remix's `AppRuntime`): listen for errors, wait until the page is
+/// hydrated, or dispose the runtime.
+pub fn run(options: RunOptions) -> App {
+    install_panic_hook();
     entries::register(options.entries);
     frames::set_resolver(options.resolve_frame);
-    when_content_parsed(Box::new(|| {
+    let mut resolve_ready = None;
+    let ready = js_sys::Promise::new(&mut |resolve, _| resolve_ready = Some(resolve));
+    when_content_parsed(Box::new(move || {
         styles::adopt_server_styles(&document().into());
         frames::start();
         navigation::start();
         flush();
+        if let Some(resolve) = resolve_ready {
+            let _ = resolve.call0(&wasm_bindgen::JsValue::UNDEFINED);
+        }
         if let Ok(event) = web_sys::Event::new("rmx:ready") {
             let _ = document().dispatch_event(&event);
         }
     }));
+    App { ready }
+}
+
+/// The running browser app returned by [`run`] (Remix's `AppRuntime`).
+///
+/// ```ignore
+/// let app = rmx::run(RunOptions { entries, ..Default::default() });
+/// app.on_error(move |error| show_error_page(&error.message));
+/// ```
+#[derive(Clone)]
+pub struct App {
+    ready: js_sys::Promise,
+}
+
+impl App {
+    /// Call `f` for each error the runtime reports: a frame load or reload that failed, a
+    /// navigation whose content could not be loaded, a panic, or [`crate::report_error`].
+    ///
+    /// Without listeners a failed navigation falls back to loading the document; with
+    /// one, the app decides what to show.
+    pub fn on_error(&self, f: impl Fn(&crate::AppError) + 'static) -> crate::ListenerId {
+        crate::app::add_listener(f)
+    }
+
+    pub fn remove_error_listener(&self, id: crate::ListenerId) {
+        crate::app::remove_listener(id);
+    }
+
+    /// Resolves once the document is hydrated and its frames have started.
+    pub async fn ready(&self) {
+        let _ = wasm_bindgen_futures::JsFuture::from(self.ready.clone()).await;
+    }
+
+    /// The page's frames (`app.frames`).
+    pub fn frames(&self) -> crate::Frames {
+        crate::Frames
+    }
+
+    /// Apply pending component updates now.
+    pub fn flush(&self) {
+        flush();
+    }
+
+    /// Stop intercepting navigations and tear down every client entry and frame in the
+    /// document, leaving its DOM in place for the app to replace.
+    pub fn dispose(&self) {
+        navigation::stop();
+        if let Some(body) = document().body() {
+            diff::dispose_subtree(&body.into());
+        }
+        frames::top().abort_reload();
+    }
+}
+
+/// Log panics with `console.error` and report them to the app before the module aborts.
+/// Any hook installed earlier still runs first.
+fn install_panic_hook() {
+    use std::sync::Once;
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            previous(info);
+            let error = crate::AppError { message: info.to_string() };
+            web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&error.message));
+            crate::app::dispatch(&error);
+        }));
+    });
 }
 
 type Task = Box<dyn FnOnce()>;

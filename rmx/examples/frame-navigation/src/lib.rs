@@ -177,9 +177,12 @@ impl Component for CourseFilterInput {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+mod entry;
+
 /// Browser entry.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions { entries: vec![rmx::entry::<DashboardStatGrid>(), rmx::entry::<CourseFilterInput>()], ..Default::default() });
+    entry::start();
 }
