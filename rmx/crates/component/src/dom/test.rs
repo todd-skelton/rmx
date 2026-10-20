@@ -114,3 +114,14 @@ impl Drop for RenderResult {
         self.cleanup();
     }
 }
+
+/// Reconcile `container`'s children to `next_html` the way a navigation or frame reload
+/// does (Remix's `diffNodes`). For tests of the DOM diff itself.
+#[doc(hidden)]
+pub fn diff_html(container: &web_sys::Element, next_html: &str) {
+    let template: web_sys::HtmlTemplateElement = document().create_element("template").expect("template").unchecked_into();
+    template.set_inner_html(next_html);
+    let parent: &web_sys::Node = container.as_ref();
+    let next = super::frames::child_nodes(template.content().as_ref());
+    super::diff::diff_nodes(parent, super::frames::child_nodes(parent), next, None);
+}

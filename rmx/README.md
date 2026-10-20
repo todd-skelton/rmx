@@ -131,8 +131,13 @@ crates:
    follow Remix's link mixin: `data-rmx-*` attributes on `<a>`/`<area>`, and on other
    elements link semantics, Enter to navigate, swallowed keyboard clicks, new-tab clicks,
    and no navigation while `disabled` or `aria-disabled`.
-   The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref, css, link) and stylesheet test suites
-   (`crates/component/tests/browser_*.rs`, 325 tests).
+   Navigations and frame reloads diff the server HTML into the live DOM: keyed elements
+   match by `data-rmx-key`, live state wins (typed values, checked, selected, open,
+   popovers), `data-rmx-preserve-dom` / `data-rmx-preserve-attrs` opt out, and nodes
+   already in order stay put, so a custom element is not reconnected when siblings move.
+   The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
+   css, link), stylesheet and diff-dom test suites
+   (`crates/component/tests/browser_*.rs`, 356 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

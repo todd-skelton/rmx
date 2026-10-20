@@ -230,8 +230,12 @@ pub(crate) fn diff_nodes(parent: &web_sys::Node, current: Vec<web_sys::Node>, ne
         }
     }
 
-    // Place units in order, back to front.
-    let mut anchor = tail;
+    // Place units in order, back to front. The longest run of matched units already in
+    // order stays put and everything else moves around it, so a moved element is not
+    // disconnected when moving its siblings would do (custom elements see no reconnect).
+    let stable = in_order(&matched);
+    let before_tail = |n: &web_sys::Node| tail.as_ref().is_none_or(|t| n.compare_document_position(t) & web_sys::Node::DOCUMENT_POSITION_FOLLOWING != 0);
+    let mut anchor = tail.clone();
     for (i, unit) in next.iter().enumerate().rev() {
         let placed = match matched[i] {
             Some(j) => &current[j],
@@ -242,7 +246,8 @@ pub(crate) fn diff_nodes(parent: &web_sys::Node, current: Vec<web_sys::Node>, ne
             Unit::Node(n) => n.next_sibling(),
             Unit::Entry { end, .. } | Unit::Frame { end, .. } => end.next_sibling(),
         };
-        let in_place = first.parent_node().is_some_and(|p| p.is_same_node(Some(parent))) && same(after.as_ref(), anchor.as_ref());
+        let attached = first.parent_node().is_some_and(|p| p.is_same_node(Some(parent)));
+        let in_place = attached && ((stable[i] && before_tail(&first)) || same(after.as_ref(), anchor.as_ref()));
         if !in_place {
             for node in placed.nodes() {
                 let _ = parent.insert_before(&node, anchor.as_ref());
@@ -250,6 +255,31 @@ pub(crate) fn diff_nodes(parent: &web_sys::Node, current: Vec<web_sys::Node>, ne
         }
         anchor = Some(first);
     }
+}
+
+/// Which entries of `matched` (current indices in next order) form the longest
+/// increasing subsequence: those units are already in the right relative order.
+fn in_order(matched: &[Option<usize>]) -> Vec<bool> {
+    let mut stable = vec![false; matched.len()];
+    // tails[k]: index in `matched` ending the best run of length k + 1.
+    let mut tails: Vec<usize> = Vec::new();
+    let mut prev: Vec<Option<usize>> = vec![None; matched.len()];
+    for (i, m) in matched.iter().enumerate() {
+        let Some(v) = *m else { continue };
+        let k = tails.partition_point(|&t| matched[t].expect("matched") < v);
+        prev[i] = k.checked_sub(1).map(|p| tails[p]);
+        if k == tails.len() {
+            tails.push(i);
+        } else {
+            tails[k] = i;
+        }
+    }
+    let mut at = tails.last().copied();
+    while let Some(i) = at {
+        stable[i] = true;
+        at = prev[i];
+    }
+    stable
 }
 
 fn same(a: Option<&web_sys::Node>, b: Option<&web_sys::Node>) -> bool {
@@ -310,6 +340,7 @@ fn keep_live(current: &web_sys::Element, next: &web_sys::Element, name: &str) ->
         "open" if tag == "DETAILS" || tag == "DIALOG" => prop(current, "open") != prop(next, "open"),
         "checked" if tag == "INPUT" => prop(current, "checked") != prop(next, "checked"),
         "selected" if tag == "OPTION" => prop(current, "selected") != prop(next, "selected"),
+        "popover" => popover_open(current) != popover_open(next),
         "value" if tag == "INPUT" => {
             let ty = prop_str(current, "type");
             !matches!(ty.as_str(), "button" | "checkbox" | "hidden" | "image" | "radio" | "reset" | "submit")
@@ -317,6 +348,10 @@ fn keep_live(current: &web_sys::Element, next: &web_sys::Element, name: &str) ->
         }
         _ => false,
     }
+}
+
+fn popover_open(el: &web_sys::Element) -> bool {
+    el.matches(":popover-open").unwrap_or(false)
 }
 
 pub(crate) fn diff_attributes(current: &web_sys::Element, next: &web_sys::Element) {
