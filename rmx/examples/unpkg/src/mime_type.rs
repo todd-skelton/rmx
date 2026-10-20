@@ -17,7 +17,7 @@ pub fn detect_file_mime_type(filename: &str) -> &'static str {
         "jsx" => "text/jsx",
         "yaml" | "yml" => "text/yaml",
         "markdown" => "text/markdown",
-        _ => rmx_mime::from_path(filename).split(';').next().unwrap_or("application/octet-stream"),
+        _ => rmx::mime::from_path(filename).split(';').next().unwrap_or("application/octet-stream"),
     }
 }
 

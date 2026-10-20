@@ -9,14 +9,14 @@ use std::sync::LazyLock;
 
 use http::{header, HeaderValue, StatusCode};
 use rmx::{rsx, Children, Component, Handle, Node};
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{response, Response};
-use rmx_headers::{AcceptLanguage, Vary};
-use rmx_middleware::form_data::{form_data, FormDataExt};
-use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx_render::Render;
-use rmx_router::routes::{get, post, Route};
-use rmx_router::{middleware, Context, Middleware, Next, Router};
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{response, Response};
+use rmx::headers::{AcceptLanguage, Vary};
+use rmx::middleware::form_data::{form_data, FormDataExt};
+use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
+use rmx::render::Render;
+use rmx::router::routes::{get, post, Route};
+use rmx::router::{middleware, Context, Middleware, Next, Router};
 use serde_json::Value;
 
 use crate::i18n::{DetectionSource, Language, Translator};
@@ -31,7 +31,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("i18n demo running at http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(&public))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------

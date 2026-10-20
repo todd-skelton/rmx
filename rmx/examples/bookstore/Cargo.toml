@@ -11,7 +11,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 rmx.workspace = true
-rmx-router.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
@@ -20,13 +19,4 @@ wasm-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 http.workspace = true
-rmx-cookie.workspace = true
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-file-storage.workspace = true
-rmx-middleware.workspace = true
-rmx-render.workspace = true
-rmx-serve.workspace = true
-rmx-session.workspace = true
-rmx-url.workspace = true
 tokio.workspace = true

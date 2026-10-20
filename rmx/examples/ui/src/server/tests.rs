@@ -1,5 +1,5 @@
 use super::*;
-use rmx_fetch::Body;
+use rmx::fetch::Body;
 
 fn get(url: &str) -> (http::response::Parts, String) {
     tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {

@@ -7,7 +7,7 @@
 //! keyframes) and press.
 
 use rmx::{css, on, rsx, Children, Component, Handle, Mixin, Node};
-use rmx_ui::animation::{
+use rmx::ui::animation::{
     animate_entrance, animate_exit, animate_layout, spring, Animate, Layout, SpringOptions, SpringPreset,
 };
 

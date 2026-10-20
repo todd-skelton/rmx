@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::listbox::{self, ListboxOption};
+use rmx::ui::listbox::{self, ListboxOption};
 
 pub struct ListboxDemo {
     value: Option<String>,

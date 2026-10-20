@@ -2,8 +2,8 @@
 //! restoration and outside-click dismissal.
 
 use rmx::{css, on, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::anchor::{AnchorOptions, Placement};
-use rmx_ui::popover;
+use rmx::ui::anchor::{AnchorOptions, Placement};
+use rmx::ui::popover;
 
 pub struct PopoverDemo {
     open: bool,

@@ -1,15 +1,15 @@
 //! The spa demo: a client-only app whose router runs in the browser.
 //!
 //! `routes`, `router` and the pages are ordinary rmx code; the same router could run on a
-//! server with `rmx-render`. In the page, [`start`] hands it to `rmx_spa::run`.
+//! server with `rmx-render`. In the page, [`start`] hands it to `rmx::spa::run`.
 
 use std::sync::LazyLock;
 
 use http::StatusCode;
 use rmx::{css, on, rsx, Children, Component, FrameEvent, Handle, Mixin, Node};
-use rmx_router::routes::{get, post, Route};
-use rmx_router::{Context, Next, Router};
-use rmx_spa::{Render, ResponseInit};
+use rmx::router::routes::{get, post, Route};
+use rmx::router::{Context, Next, Router};
+use rmx::spa::{Render, ResponseInit};
 
 // app/routes.ts
 pub struct Routes {
@@ -46,7 +46,7 @@ fn log(message: &str) {
 }
 
 /// `[SPA] → GET /about` / `[SPA] ← 200 GET /about (701 ms)`
-async fn log_spa_requests(ctx: Context, next: Next) -> rmx_fetch::Response {
+async fn log_spa_requests(ctx: Context, next: Next) -> rmx::fetch::Response {
     let (method, url) = (ctx.method().clone(), ctx.url().clone());
     let path = format!("{}{}", url.pathname(), url.search());
     let start = rmx::browser::now();
@@ -88,7 +88,7 @@ pub fn router() -> Router {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx_spa::run(router(), rmx_spa::RunOptions { fallback: Some(rsx! { <LoadingIndicator/> }) });
+    rmx::spa::run(router(), rmx::spa::RunOptions { fallback: Some(rsx! { <LoadingIndicator/> }) });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -282,7 +282,7 @@ impl Component for Layout {
         h.queue_task(|_, h| {
             let frame = h.frame();
             h.on_frame(&frame, FrameEvent::ReloadStart, |this, h| {
-                let loading = rmx_url::Url::parse(&h.frame().src()).map(|u| u.pathname().to_string()).unwrap_or_default();
+                let loading = rmx::url::Url::parse(&h.frame().src()).map(|u| u.pathname().to_string()).unwrap_or_default();
                 let current = h.props().map(|p| p.url).unwrap_or_default();
                 this.show_loading = loading != current;
                 h.update();
@@ -401,7 +401,7 @@ mod tests {
 
     fn render(url: &str, method: &str, form: Option<Vec<(String, String)>>) -> (Option<String>, String) {
         let request = rmx::FrameRequest { url: url.into(), method: method.into(), form, target: None };
-        let res = block_on(rmx_spa::resolve(&router(), request)).expect("route renders");
+        let res = block_on(rmx::spa::resolve(&router(), request)).expect("route renders");
         let html = match res.content {
             rmx::FrameContent::Node(node) => rmx::render_to_string(&node),
             rmx::FrameContent::Html(html) => html,

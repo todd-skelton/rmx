@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use rmx_router::routes::{prefix, Form, Route};
+use rmx::router::routes::{prefix, Form, Route};
 
 pub struct Routes {
     pub assets: Route,
@@ -32,7 +32,7 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| {
     let schedules = prefix("/schedules");
     Routes {
         assets: prefix("/assets").get("/*path"),
-        home: rmx_router::routes::any("/"),
+        home: rmx::router::routes::any("/"),
         auth: Auth { index: auth.any("/"), login: auth.form("login"), logout: auth.post("logout"), signup: auth.form("signup") },
         schedules: Schedules {
             index: schedules.get("/"),

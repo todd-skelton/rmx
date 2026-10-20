@@ -1,12 +1,12 @@
 //! `actions/auth`: login, register, logout, forgot and reset password.
 
 use rmx::{css, rsx, Mixin, Node};
-use rmx_fetch::{response, Response};
-use rmx_middleware::auth::{complete_auth, credentials_provider, verify_credentials};
-use rmx_middleware::form_data::FormDataExt;
-use rmx_middleware::session::SessionExt;
-use rmx_render::ResponseInit;
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::middleware::auth::{complete_auth, credentials_provider, verify_credentials};
+use rmx::middleware::form_data::FormDataExt;
+use rmx::middleware::session::SessionExt;
+use rmx::render::ResponseInit;
+use rmx::router::{Context, Router};
 
 use super::data::{hash_password, normalize_email, now_ms, verify_password, PasswordResetToken, UserInput};
 use super::ui::Document;
@@ -195,7 +195,7 @@ fn forgot_password_page() -> Node {
 
 async fn forgot_password(ctx: Context) -> Response {
     let token = db(&ctx).find_user_by_email(field(&ctx, "email")).map(|user| {
-        let token = rmx_crypto::random_hex(13);
+        let token = rmx::crypto::random_hex(13);
         db(&ctx).create_reset_token(PasswordResetToken { token: token.clone(), user_id: user.id, expires_at: now_ms() + 3_600_000 });
         token
     });

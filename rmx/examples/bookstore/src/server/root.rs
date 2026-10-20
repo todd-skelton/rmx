@@ -3,13 +3,13 @@
 
 use http::{Method, StatusCode};
 use rmx::{css, rsx, IntoNode, Node};
-use rmx_fetch::{response, Response};
-use rmx_file_storage::FileStorage;
-use rmx_middleware::form_data::FormDataExt;
-use rmx_middleware::session::SessionExt;
-use rmx_middleware::static_files::{file_response_for, StaticOptions};
-use rmx_render::ResponseInit;
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::file_storage::FileStorage;
+use rmx::middleware::form_data::FormDataExt;
+use rmx::middleware::session::SessionExt;
+use rmx::middleware::static_files::{file_response_for, StaticOptions};
+use rmx::render::ResponseInit;
+use rmx::router::{Context, Router};
 
 use super::data::Book;
 use super::ui::{book_card, Layout};

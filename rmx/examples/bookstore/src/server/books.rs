@@ -1,9 +1,9 @@
 //! `actions/books`: the catalog, genres and book pages.
 
 use rmx::{css, rsx, Frame, Node};
-use rmx_fetch::Response;
-use rmx_render::ResponseInit;
-use rmx_router::{Context, Router};
+use rmx::fetch::Response;
+use rmx::render::ResponseInit;
+use rmx::router::{Context, Router};
 
 use super::data::Book;
 use super::ui::{book_card, Layout};

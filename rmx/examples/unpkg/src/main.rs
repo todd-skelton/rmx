@@ -2,7 +2,7 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    use rmx_file_storage::FsFileStorage;
+    use rmx::file_storage::FsFileStorage;
     use unpkg_demo::fetch::Fetch;
     use unpkg_demo::npm::Npm;
 
@@ -13,7 +13,7 @@ fn main() {
     let addr = format!("{host}:{port}");
     println!("unpkg demo is running on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, unpkg_demo::router(Npm::new(Fetch::network(), cache)))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, unpkg_demo::router(Npm::new(Fetch::network(), cache)))).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -7,7 +7,8 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx.workspace = true
+# Imported as `rmx` so `rsx!` output (`::rmx::...`) resolves without the umbrella crate.
+rmx = { package = "rmx-component", path = "../component" }
 rmx-fetch.workspace = true
 rmx-router.workspace = true
 rmx-url.workspace = true

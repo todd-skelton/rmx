@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use http::StatusCode;
 use rmx::{rsx, Frame};
-use rmx_fetch::{response, Response};
-use rmx_middleware::form_data::FormDataExt;
-use rmx_middleware::session::SessionExt;
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::middleware::form_data::FormDataExt;
+use rmx::middleware::session::SessionExt;
+use rmx::router::{Context, Router};
 
 use super::ui::Layout;
 use super::{current_cart, db, no_content, parse_id, render};

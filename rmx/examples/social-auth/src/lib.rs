@@ -10,7 +10,7 @@
 //! | `auth({ schemes: [createSessionAuthScheme(..)] })` | `auth(vec![scheme(session_scheme(..))])` |
 //! | `requireAuth({ onFailure })` | `require_auth().on_failure(..)` |
 //! | `completeAuth(context)` | `complete_auth(&ctx)` |
-//! | `startExternalAuth` / `finishExternalAuth` | `rmx_auth::start_external_auth` / `finish_external_auth` |
+//! | `startExternalAuth` / `finishExternalAuth` | `rmx::auth::start_external_auth` / `finish_external_auth` |
 //! | `createExternalProviderRegistry({ env, origin })` | `ExternalProviders::from_env(origin, env, fetch)` |
 //! | `session.flash('error', ..)` / `session.get('error')` | the same, on `ctx.session()` |
 //!
@@ -23,15 +23,15 @@ pub mod ui;
 
 use http::StatusCode;
 use rmx::{css, rsx, Node};
-use rmx_cookie::Cookie;
-use rmx_fetch::{response, Response};
-use rmx_middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
-use rmx_middleware::form_data::{form_data, FormDataExt};
-use rmx_middleware::session::{session, SessionExt};
-use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx_render::{Render, ResponseInit};
-use rmx_router::{middleware, Context, IntoResponse, Middleware, Next, Router};
-use rmx_session::{Session, SessionStorage};
+use rmx::cookie::Cookie;
+use rmx::fetch::{response, Response};
+use rmx::middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
+use rmx::middleware::form_data::{form_data, FormDataExt};
+use rmx::middleware::session::{session, SessionExt};
+use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
+use rmx::render::{Render, ResponseInit};
+use rmx::router::{middleware, Context, IntoResponse, Middleware, Next, Router};
+use rmx::session::{Session, SessionStorage};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -154,7 +154,7 @@ fn post_auth_redirect(ctx: &Context) -> String {
 /// `path` with the request's safe `returnTo` carried along.
 fn with_return_to(path: &str, ctx: &Context) -> String {
     match safe_return_to(ctx) {
-        Some(r) => format!("{path}?{}", [("returnTo", r)].into_iter().collect::<rmx_url::SearchParams>()),
+        Some(r) => format!("{path}?{}", [("returnTo", r)].into_iter().collect::<rmx::url::SearchParams>()),
         None => path.to_string(),
     }
 }

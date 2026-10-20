@@ -22,6 +22,7 @@ members = [
     "crates/fetch-proxy",
     "crates/auth",
     "crates/component",
+    "crates/rmx",
     "crates/macros",
     "crates/ui",
     "examples/bench/app",
@@ -47,7 +48,8 @@ version = "0.1.0"
 license = "MIT"
 
 [workspace.dependencies]
-rmx = { path = "crates/component" }
+rmx = { path = "crates/rmx" }
+rmx-component = { path = "crates/component" }
 rmx-macros = { path = "crates/macros" }
 rmx-url = { path = "crates/url" }
 rmx-route-pattern = { path = "crates/route-pattern" }

@@ -2,10 +2,10 @@
 //! `requireAuth()`.
 
 use rmx::{css, rsx, Node};
-use rmx_fetch::{response, Response};
-use rmx_middleware::form_data::FormDataExt;
-use rmx_middleware::session::SessionExt;
-use rmx_router::{middleware, Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::middleware::form_data::FormDataExt;
+use rmx::middleware::session::SessionExt;
+use rmx::router::{middleware, Context, Router};
 
 use super::data::{hash_password, locale_date, Order, ShippingAddress, UserInput};
 use super::ui::{Layout, RestfulForm};

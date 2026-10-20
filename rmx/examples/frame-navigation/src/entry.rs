@@ -7,7 +7,7 @@ use std::rc::Rc;
 use js_sys::{Array, Object, Reflect};
 use rmx::browser::{self, FetchInit};
 use rmx::{css, on, rsx, Component, EventHandler, FrameContent, FrameRequest, FrameResponse, Handle, Mixin, Node, ResolveFuture};
-use rmx_ui::animation::{animate_entrance, spring, Animate, SpringPreset};
+use rmx::ui::animation::{animate_entrance, spring, Animate, SpringPreset};
 use wasm_bindgen::JsCast;
 
 use crate::{CourseFilterInput, DashboardStatGrid};

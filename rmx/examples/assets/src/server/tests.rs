@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use http::header;
-use rmx_fetch::Body;
+use rmx::fetch::Body;
 
 use super::*;
 

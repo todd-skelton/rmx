@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::{popover, select};
+use rmx::ui::{popover, select};
 
 use super::listbox::frameworks;
 

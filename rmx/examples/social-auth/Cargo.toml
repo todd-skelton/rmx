@@ -9,16 +9,6 @@ publish = false
 [dependencies]
 http.workspace = true
 rmx.workspace = true
-rmx-auth.workspace = true
-rmx-cookie.workspace = true
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-middleware.workspace = true
-rmx-render.workspace = true
-rmx-router.workspace = true
-rmx-serve.workspace = true
-rmx-session.workspace = true
-rmx-url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

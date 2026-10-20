@@ -2,7 +2,7 @@
 //! custom controls.
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::toggle::{toggle, ToggleOptions};
+use rmx::ui::toggle::{toggle, ToggleOptions};
 
 pub struct ToggleDemo;
 

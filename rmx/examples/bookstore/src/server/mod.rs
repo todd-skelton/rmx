@@ -15,19 +15,19 @@ use std::time::Duration;
 
 use http::StatusCode;
 use rmx::{rsx, Node};
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{response, FormValue, Response};
-use rmx_file_storage::FileStorage;
-use rmx_middleware::auth::{auth, require_auth as require_auth_identity, scheme, session_scheme, AuthExt};
-use rmx_middleware::compression::compression;
-use rmx_middleware::form_data::{form_data, FileUpload};
-use rmx_middleware::logger::logger;
-use rmx_middleware::method_override::method_override;
-use rmx_middleware::session::{session, SessionExt};
-use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx_render::{Render, ResponseInit};
-use rmx_router::{Context, Middleware, Next, Router};
-use rmx_session::SessionStorage;
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{response, FormValue, Response};
+use rmx::file_storage::FileStorage;
+use rmx::middleware::auth::{auth, require_auth as require_auth_identity, scheme, session_scheme, AuthExt};
+use rmx::middleware::compression::compression;
+use rmx::middleware::form_data::{form_data, FileUpload};
+use rmx::middleware::logger::logger;
+use rmx::middleware::method_override::method_override;
+use rmx::middleware::session::{session, SessionExt};
+use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
+use rmx::render::{Render, ResponseInit};
+use rmx::router::{Context, Middleware, Next, Router};
+use rmx::session::SessionStorage;
 use serde::{Deserialize, Serialize};
 
 use crate::cart::Cart;
@@ -106,7 +106,7 @@ fn upload_handler<U: FileStorage + Clone>(uploads: U) -> impl Fn(FileUpload) -> 
 fn random_base36(len: usize) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut bytes = vec![0u8; len];
-    rmx_crypto::fill_random(&mut bytes);
+    rmx::crypto::fill_random(&mut bytes);
     bytes.iter().map(|b| DIGITS[*b as usize % 36] as char).collect()
 }
 
@@ -191,7 +191,7 @@ pub fn post_auth_redirect(ctx: &Context) -> String {
 }
 
 /// `getLoginRedirectURL(url, route)`: `route` carrying the request's safe `returnTo`.
-pub fn login_redirect_url(ctx: &Context, route: &rmx_router::Route) -> String {
+pub fn login_redirect_url(ctx: &Context, route: &rmx::router::Route) -> String {
     match safe_return_to(ctx.url().search_params().get("returnTo")) {
         Some(r) => route.href_with_search((), &[("returnTo", r)].into_iter().collect()),
         None => route.href(()),
@@ -223,7 +223,7 @@ pub fn not_found_page(ctx: &Context, node: Node) -> Response {
 
 /// `new Response(null, { status: 204 })`
 pub fn no_content() -> Response {
-    let mut res = Response::new(rmx_fetch::Body::empty());
+    let mut res = Response::new(rmx::fetch::Body::empty());
     *res.status_mut() = StatusCode::NO_CONTENT;
     res
 }

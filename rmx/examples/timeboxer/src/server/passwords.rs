@@ -1,7 +1,7 @@
 //! `data/passwords.ts`: `scrypt:<key length>:<salt>:<derived key>`, all hex. As in Remix, the
 //! hex salt string itself is the scrypt salt.
 
-use rmx_crypto::{constant_time_eq, hex, random_hex, scrypt, ScryptParams};
+use rmx::crypto::{constant_time_eq, hex, random_hex, scrypt, ScryptParams};
 
 const KEY_LENGTH: usize = 64;
 

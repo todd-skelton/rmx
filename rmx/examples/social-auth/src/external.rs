@@ -3,14 +3,14 @@
 
 use std::sync::Arc;
 
-use rmx_auth::{
+use rmx::auth::{
     finish_external_auth, github_provider, google_provider, start_external_auth, x_provider, ClientOptions, Fetch, FinishExternalAuthOptions, GitHubProfile,
     GitHubProvider, OAuthProvider, OidcProfile, OidcProvider, StartExternalAuthOptions, XProfile, XProvider,
 };
-use rmx_fetch::{response, BoxError, BoxFuture, Request, Response};
-use rmx_middleware::auth::complete_auth;
-use rmx_middleware::session::SessionExt;
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, BoxError, BoxFuture, Request, Response};
+use rmx::middleware::auth::complete_auth;
+use rmx::middleware::session::SessionExt;
+use rmx::router::{Context, Router};
 use serde::Serialize;
 
 use crate::data::{normalize_email, ExternalProfile};

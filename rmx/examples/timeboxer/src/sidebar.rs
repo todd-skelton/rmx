@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use rmx::browser::{self, FetchInit, FetchResponse};
 use rmx::{css, on, rsx, Component, Handle, Mixin, NavigateOptions, Node, NodeHandle};
-use rmx_ui::animation::{animate_entrance, animate_exit, Animate, SpringPreset};
+use rmx::ui::animation::{animate_entrance, animate_exit, Animate, SpringPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::dom_util;

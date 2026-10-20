@@ -6,9 +6,9 @@
 //! `X_CLIENT_ID`/`X_CLIENT_SECRET` to enable each provider. Register
 //! `http://127.0.0.1:<PORT>/auth/<provider>/callback` as the provider's redirect URI.
 
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{Body, BoxError, Request, Response};
-use rmx_session::FsStorage;
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{Body, BoxError, Request, Response};
+use rmx::session::FsStorage;
 use social_auth_demo::external::{demo_origin, provider_label, ExternalProviders, PROVIDER_NAMES};
 use social_auth_demo::{data::Db, router};
 
@@ -61,5 +61,5 @@ fn main() {
     }
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(cookie, storage, Db::seeded(), &public, providers))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(cookie, storage, Db::seeded(), &public, providers))).expect("serve");
 }

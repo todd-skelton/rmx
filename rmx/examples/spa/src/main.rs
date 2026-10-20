@@ -8,8 +8,8 @@
 fn main() {
     use std::path::PathBuf;
 
-    use rmx_middleware::static_files::{file_response, static_files, ETag, StaticOptions};
-    use rmx_router::{Context, Router};
+    use rmx::middleware::static_files::{file_response, static_files, ETag, StaticOptions};
+    use rmx::router::{Context, Router};
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44103".into());
@@ -20,12 +20,12 @@ fn main() {
     let index = public.join("index.html");
     router.not_found(move |ctx: Context| {
         let (index, options) = (index.clone(), options.clone());
-        async move { file_response(&index, ctx.headers(), false, &options).unwrap_or_else(|_| rmx_fetch::response::not_found()) }
+        async move { file_response(&index, ctx.headers(), false, &options).unwrap_or_else(|_| rmx::fetch::response::not_found()) }
     });
     let addr = format!("{host}:{port}");
     println!("spa demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router)).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router)).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

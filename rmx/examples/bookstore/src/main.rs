@@ -8,8 +8,8 @@ fn main() {
     use std::time::Duration;
 
     use bookstore_demo::server::{data::Db, router, session_cookie, BookstoreOptions};
-    use rmx_file_storage::FsFileStorage;
-    use rmx_session::FsStorage;
+    use rmx::file_storage::FsFileStorage;
+    use rmx::session::FsStorage;
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44108".into());
@@ -28,7 +28,7 @@ fn main() {
     let addr = format!("{host}:{port}");
     println!("Bookstore is running on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(options))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(options))).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

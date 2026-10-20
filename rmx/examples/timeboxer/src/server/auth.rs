@@ -2,12 +2,12 @@
 
 use http::StatusCode;
 use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
-use rmx_fetch::{response, Response};
-use rmx_middleware::auth::{complete_auth, credentials_provider, verify_credentials};
-use rmx_middleware::form_data::FormDataExt;
-use rmx_middleware::session::SessionExt;
-use rmx_render::ResponseInit;
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::middleware::auth::{complete_auth, credentials_provider, verify_credentials};
+use rmx::middleware::form_data::FormDataExt;
+use rmx::middleware::session::SessionExt;
+use rmx::render::ResponseInit;
+use rmx::router::{Context, Router};
 
 use super::passwords::{hash_password, verify_password};
 use super::ui::Layout;

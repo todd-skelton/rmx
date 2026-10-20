@@ -2,7 +2,7 @@
 //! local styles.
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::accordion;
+use rmx::ui::accordion;
 
 pub struct AccordionDemo;
 

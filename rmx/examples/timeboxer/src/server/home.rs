@@ -1,8 +1,8 @@
 //! `actions/home`: signed-in visitors go to their latest schedule; others see the intro.
 
 use rmx::{css, rsx, Component, Handle, Node};
-use rmx_fetch::{response, Response};
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::router::{Context, Router};
 
 use super::schedules::SchedulePage;
 use super::ui::Layout;

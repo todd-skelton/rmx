@@ -2,8 +2,8 @@
 //! `actions/auth/controller.test.ts` and `actions/schedules/{controller,authorization,
 //! validation}.test.ts`, with their request helpers as [`Client`].
 
-use rmx_fetch::{block_on, Body};
-use rmx_session::MemoryStorage;
+use rmx::fetch::{block_on, Body};
+use rmx::session::MemoryStorage;
 use serde_json::{json, Value};
 
 use super::*;

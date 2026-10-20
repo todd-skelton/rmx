@@ -5,14 +5,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use http::{header, HeaderValue, StatusCode};
 use lazy_frames_demo::*;
 use rmx::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{response, Response};
-use rmx_middleware::form_data::{form_data, FormDataExt};
-use rmx_middleware::logger::logger;
-use rmx_middleware::static_files::{file_response, static_files, StaticOptions};
-use rmx_render::{Render, ResponseInit};
-use rmx_router::routes::{get, post, prefix, Route};
-use rmx_router::{Context, Next, Router};
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{response, Response};
+use rmx::middleware::form_data::{form_data, FormDataExt};
+use rmx::middleware::logger::logger;
+use rmx::middleware::static_files::{file_response, static_files, StaticOptions};
+use rmx::render::{Render, ResponseInit};
+use rmx::router::routes::{get, post, prefix, Route};
+use rmx::router::{Context, Next, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -21,7 +21,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("lazy-frames demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(Config::from_env(root)))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(Config::from_env(root)))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------

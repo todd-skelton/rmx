@@ -3,14 +3,14 @@ use std::sync::{LazyLock, Mutex};
 use frame_navigation_demo::*;
 use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Frame, Handle, Mixin, Node};
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{response, Response};
-use rmx_middleware::form_data::{form_data, FormDataExt};
-use rmx_middleware::logger::logger;
-use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx_render::{Render, ResponseInit};
-use rmx_middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
-use rmx_router::{middleware, Context, Middleware, Router};
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{response, Response};
+use rmx::middleware::form_data::{form_data, FormDataExt};
+use rmx::middleware::logger::logger;
+use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
+use rmx::render::{Render, ResponseInit};
+use rmx::middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
+use rmx::router::{middleware, Context, Middleware, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -19,7 +19,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("frame-navigation demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(&public))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------

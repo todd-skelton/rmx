@@ -1,9 +1,9 @@
 //! app/router.test.ts, with memory session storage like test/helpers.ts.
 
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{block_on, Body, Response};
-use rmx_router::Router;
-use rmx_session::MemoryStorage;
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{block_on, Body, Response};
+use rmx::router::Router;
+use rmx::session::MemoryStorage;
 
 use super::*;
 
@@ -18,7 +18,7 @@ fn create_test_router() -> TestApp {
     create_test_router_with(ExternalProviders::from_env(ORIGIN, |_| None, unexpected_fetch))
 }
 
-async fn unexpected_fetch(req: rmx_fetch::Request) -> Result<Response, rmx_fetch::BoxError> {
+async fn unexpected_fetch(req: rmx::fetch::Request) -> Result<Response, rmx::fetch::BoxError> {
     panic!("Unexpected fetch: {}", req.uri())
 }
 
@@ -52,7 +52,7 @@ impl TestApp {
     }
 
     fn post(&self, path: &str, form: &[(&str, &str)], cookie: Option<&str>) -> Response {
-        let body = form.iter().copied().collect::<rmx_url::SearchParams>().to_string();
+        let body = form.iter().copied().collect::<rmx::url::SearchParams>().to_string();
         let mut req = http::Request::post(format!("{ORIGIN}{path}")).header("content-type", "application/x-www-form-urlencoded");
         if let Some(c) = cookie {
             req = req.header("cookie", c);
@@ -239,7 +239,7 @@ fn google_env(name: &str) -> Option<String> {
     }
 }
 
-async fn google_fetch(req: rmx_fetch::Request) -> Result<Response, rmx_fetch::BoxError> {
+async fn google_fetch(req: rmx::fetch::Request) -> Result<Response, rmx::fetch::BoxError> {
     let url = req.uri().to_string();
     let body = req.into_body().form().await?;
     let json = match url.as_str() {
@@ -257,7 +257,7 @@ async fn google_fetch(req: rmx_fetch::Request) -> Result<Response, rmx_fetch::Bo
         }),
         _ => panic!("Unexpected fetch: {url}"),
     };
-    Ok(rmx_fetch::response::json(&json))
+    Ok(rmx::fetch::response::json(&json))
 }
 
 #[test]
@@ -269,12 +269,12 @@ fn completes_external_google_login_and_persists_the_linked_account() {
 
     let login = app.get("/auth/google/login?returnTo=/account", None);
     assert_eq!(login.status().as_u16(), 302);
-    let authorize = rmx_url::Url::parse(location(&login)).unwrap();
+    let authorize = rmx::url::Url::parse(location(&login)).unwrap();
     assert_eq!((authorize.origin().as_str(), authorize.pathname()), ("https://accounts.google.com", "/o/oauth2/v2/auth"));
     let state = authorize.search_params().get("state").unwrap().to_string();
     let login_cookie = session_cookie(&login).expect("login session cookie");
 
-    let state_param = [("state", state.as_str())].into_iter().collect::<rmx_url::SearchParams>();
+    let state_param = [("state", state.as_str())].into_iter().collect::<rmx::url::SearchParams>();
     let callback = app.get(&format!("/auth/google/callback?code=test-google-code&{state_param}"), Some(&login_cookie));
     assert_eq!((callback.status().as_u16(), location(&callback)), (302, "/account"));
     let callback_cookie = session_cookie(&callback).expect("callback session cookie");

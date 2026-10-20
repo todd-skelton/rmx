@@ -12,17 +12,17 @@ pub mod ui;
 
 use http::StatusCode;
 use rmx::{rsx, Node};
-use rmx_assets::{AssetOptions, AssetServer};
-use rmx_cookie::{Cookie, SameSite};
-use rmx_fetch::{response, Response};
-use rmx_middleware::auth::{auth, scheme, session_scheme, AuthExt};
-use rmx_middleware::csrf::{csrf, csrf_token};
-use rmx_middleware::form_data::form_data;
-use rmx_middleware::logger::logger;
-use rmx_middleware::session::session;
-use rmx_render::{Render, ResponseInit};
-use rmx_router::{Context, Middleware, Next, Router};
-use rmx_session::SessionStorage;
+use rmx::assets::{AssetOptions, AssetServer};
+use rmx::cookie::{Cookie, SameSite};
+use rmx::fetch::{response, Response};
+use rmx::middleware::auth::{auth, scheme, session_scheme, AuthExt};
+use rmx::middleware::csrf::{csrf, csrf_token};
+use rmx::middleware::form_data::form_data;
+use rmx::middleware::logger::logger;
+use rmx::middleware::session::session;
+use rmx::render::{Render, ResponseInit};
+use rmx::router::{Context, Middleware, Next, Router};
+use rmx::session::SessionStorage;
 use serde::{Deserialize, Serialize};
 
 use crate::routes::ROUTES;
@@ -53,7 +53,7 @@ pub fn session_cookie(secret: &str, secure: bool) -> Cookie {
 }
 
 /// `actions/assets/controller.ts`: the asset server for the client entry and its wasm.
-pub fn asset_server(root: &std::path::Path, fingerprint: bool) -> Result<AssetServer, rmx_assets::AssetError> {
+pub fn asset_server(root: &std::path::Path, fingerprint: bool) -> Result<AssetServer, rmx::assets::AssetError> {
     AssetServer::new(AssetOptions {
         root_dir: root.to_path_buf(),
         base_path: "/assets".into(),

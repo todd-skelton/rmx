@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use rmx_router::routes::{form, get, post, prefix, resources_with_param, Form, Resources, Route};
+use rmx::router::routes::{form, get, post, prefix, resources_with_param, Form, Resources, Route};
 
 pub struct Routes {
     pub uploads: Route,

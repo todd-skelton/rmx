@@ -1,0 +1,43 @@
+[package]
+name = "rmx"
+description = "Remix 3 for Rust in one dependency: components and rsx! at the root, plus the router, middleware, auth, sessions and the rest of the toolkit as modules"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[features]
+default = ["ui"]
+# The rmx-ui component library (accordion, menu, popover, ...).
+ui = ["dep:rmx-ui"]
+
+[dependencies]
+rmx-component.workspace = true
+rmx-fetch.workspace = true
+rmx-headers.workspace = true
+rmx-mime.workspace = true
+rmx-route-pattern.workspace = true
+rmx-router.workspace = true
+rmx-spa.workspace = true
+rmx-ui = { workspace = true, optional = true }
+rmx-url.workspace = true
+
+# The server side is native only. Browser builds get the component runtime and the crates
+# above (route maps and hrefs are shared between server and client, and `spa` runs the router in
+# the browser).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rmx-assets.workspace = true
+rmx-auth.workspace = true
+rmx-cookie.workspace = true
+rmx-crypto.workspace = true
+rmx-fetch-proxy.workspace = true
+rmx-file-storage.workspace = true
+rmx-html-template.workspace = true
+rmx-middleware.workspace = true
+rmx-multipart-parser.workspace = true
+rmx-render.workspace = true
+rmx-serve.workspace = true
+rmx-session.workspace = true
+rmx-tar-parser.workspace = true
+
+[dev-dependencies]
+http.workspace = true

@@ -3,9 +3,9 @@
 
 use std::time::Duration;
 
-use rmx_fetch::{block_on, Body};
-use rmx_file_storage::MemoryFileStorage;
-use rmx_session::MemoryStorage;
+use rmx::fetch::{block_on, Body};
+use rmx::file_storage::MemoryFileStorage;
+use rmx::session::MemoryStorage;
 
 use super::*;
 
@@ -50,7 +50,7 @@ impl Client {
     }
 
     fn form(&mut self, method: &str, path: &str, fields: &[(&str, &str)]) -> Response {
-        let body = fields.iter().copied().collect::<rmx_fetch::SearchParams>().to_string();
+        let body = fields.iter().copied().collect::<rmx::fetch::SearchParams>().to_string();
         let req = http::Request::builder()
             .method(method)
             .uri(format!("{ORIGIN}{path}"))

@@ -3,8 +3,8 @@
 
 use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Handle, Node};
-use rmx_fetch::{response, Body, Response};
-use rmx_router::{Context, Router};
+use rmx::fetch::{response, Body, Response};
+use rmx::router::{Context, Router};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 

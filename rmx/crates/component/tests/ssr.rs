@@ -1,3 +1,5 @@
+extern crate rmx_component as rmx;
+
 use rmx::{render_to_string, rsx, Children, Component, Handle, Node};
 use serde::{Deserialize, Serialize};
 

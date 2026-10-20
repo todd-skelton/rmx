@@ -3,14 +3,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::{header, HeaderValue};
 use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
-use rmx_fetch::{Body, Response};
-use rmx_middleware::compression::compression;
-use rmx_middleware::logger::logger;
-use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx_render::Render;
-use rmx_router::routes::{get, Route};
-use rmx_router::{Context, Router};
-use rmx_url::Url;
+use rmx::fetch::{Body, Response};
+use rmx::middleware::compression::compression;
+use rmx::middleware::logger::logger;
+use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
+use rmx::render::Render;
+use rmx::router::routes::{get, Route};
+use rmx::router::{Context, Router};
+use rmx::url::Url;
 use sse_demo::*;
 
 pub fn main() {
@@ -20,7 +20,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("Server-Sent Events demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(&public, Duration::from_secs(1)))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(&public, Duration::from_secs(1)))).expect("serve");
 }
 
 // app/routes.ts

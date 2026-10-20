@@ -2,8 +2,8 @@
 //! styles.
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::combobox;
-use rmx_ui::listbox::ListboxOption;
+use rmx::ui::combobox;
+use rmx::ui::listbox::ListboxOption;
 
 pub struct ComboboxDemo {
     value: String,

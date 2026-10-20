@@ -9,13 +9,13 @@ pub struct AnchorDemo {
     #[cfg(target_arch = "wasm32")]
     floating: Option<web_sys::HtmlElement>,
     #[cfg(target_arch = "wasm32")]
-    tracking: Option<rmx_ui::anchor::Anchored>,
+    tracking: Option<rmx::ui::anchor::Anchored>,
 }
 
 impl AnchorDemo {
     #[cfg(target_arch = "wasm32")]
     fn position(&mut self) {
-        use rmx_ui::anchor::{anchor, AnchorOptions, AnchorTarget, Placement};
+        use rmx::ui::anchor::{anchor, AnchorOptions, AnchorTarget, Placement};
         self.tracking = None;
         if let (Some(a), Some(f)) = (&self.anchor, &self.floating) {
             self.tracking = Some(anchor(f, AnchorTarget::Element(a.clone()), AnchorOptions::new(Placement::BottomStart).offset(8.0)));

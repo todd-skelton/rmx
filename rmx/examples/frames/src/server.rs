@@ -4,13 +4,13 @@ use frames_demo::scroll_reload::*;
 use frames_demo::*;
 use http::StatusCode;
 use rmx::{css, rsx, Frame, Node};
-use rmx_fetch::response;
-use rmx_middleware::compression::compression;
-use rmx_middleware::form_data::{form_data, FormDataExt};
-use rmx_middleware::logger::logger;
-use rmx_middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx_render::Render;
-use rmx_router::{Context, Router};
+use rmx::fetch::response;
+use rmx::middleware::compression::compression;
+use rmx::middleware::form_data::{form_data, FormDataExt};
+use rmx::middleware::logger::logger;
+use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
+use rmx::render::Render;
+use rmx::router::{Context, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -20,7 +20,7 @@ pub fn main() {
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let addr = format!("{host}:{port}");
     println!("frames demo on http://{addr}");
-    rt.block_on(rmx_serve::listen(&addr, router)).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router)).expect("serve");
 }
 
 pub fn router(public: &str) -> Router {

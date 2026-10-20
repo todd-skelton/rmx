@@ -20,14 +20,14 @@ fn main() {
 
     let options = TimeboxerOptions {
         session_cookie: session_cookie(&secret, production),
-        session_storage: rmx_session::FsStorage::new(tmp.join("sessions")).expect("session directory"),
+        session_storage: rmx::session::FsStorage::new(tmp.join("sessions")).expect("session directory"),
         db: Db::new(),
         assets: Some(asset_server(std::path::Path::new(&root), production).expect("asset server")),
     };
     let addr = format!("{host}:{port}");
     println!("Timeboxer is running on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(options))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(options))).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

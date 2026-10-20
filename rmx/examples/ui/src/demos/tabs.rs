@@ -1,7 +1,7 @@
 //! `packages/ui/src/demos/tabs.demo.tsx`: headless tabs with app-owned markup.
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::tabs;
+use rmx::ui::tabs;
 
 pub struct TabsDemo;
 

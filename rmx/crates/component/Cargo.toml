@@ -1,5 +1,5 @@
 [package]
-name = "rmx"
+name = "rmx-component"
 description = "A Remix 3 style component model for Rust: setup once, render on update(), server HTML, client entries"
 edition.workspace = true
 version.workspace = true

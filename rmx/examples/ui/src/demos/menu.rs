@@ -4,7 +4,7 @@
 //! submenus and context menus.
 
 use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx_ui::menu::{self, ItemOptions, SubmenuTriggerOptions};
+use rmx::ui::menu::{self, ItemOptions, SubmenuTriggerOptions};
 
 pub struct MenuDemo {
     selected: String,

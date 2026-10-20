@@ -5,7 +5,7 @@
 
 use rmx::browser::{self, FetchInit};
 use rmx::{css, on, rsx, Component, Handle, Mixin, Node, NodeHandle};
-use rmx_ui::animation::{animate_layout, Layout, SpringPreset};
+use rmx::ui::animation::{animate_layout, Layout, SpringPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::dom_util::{self, Pointer, WindowListeners};

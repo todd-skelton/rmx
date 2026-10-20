@@ -7,8 +7,8 @@ use std::io::Read;
 
 use bytes::Bytes;
 use nodejs_semver::{Range, Version};
-use rmx_file_storage::{File, FileStorage};
-use rmx_tar_parser::{parse_tar, TarEntryType, TarOptions};
+use rmx::file_storage::{File, FileStorage};
+use rmx::tar_parser::{parse_tar, TarEntryType, TarOptions};
 use serde::Deserialize;
 
 use crate::fetch::Fetch;
@@ -103,7 +103,7 @@ impl<C: FileStorage> Npm<C> {
 
     /// `fetchPackageMetadata(name)`
     pub async fn metadata(&self, package_name: &str) -> Result<PackageMetadata, NpmError> {
-        let url = format!("{NPM_REGISTRY}/{}", rmx_url::encode_component(package_name).replacen("%40", "@", 1));
+        let url = format!("{NPM_REGISTRY}/{}", rmx::url::encode_component(package_name).replacen("%40", "@", 1));
         let req = http::Request::get(&url).header("accept", "application/json").body(()).map_err(|e| NpmError::Other(e.to_string()))?;
         let res = self.fetch.fetch(req).await.map_err(NpmError::Other)?;
         if res.status() == http::StatusCode::NOT_FOUND {
@@ -177,7 +177,7 @@ pub fn resolve_version(metadata: &PackageMetadata, specifier: &str) -> Result<St
 }
 
 /// Files and directories (from the paths) in an npm tarball, minus its `package/` prefix.
-pub fn parse_tarball(data: &[u8]) -> Result<(PackageFiles, HashMap<String, Bytes>), rmx_tar_parser::TarError> {
+pub fn parse_tarball(data: &[u8]) -> Result<(PackageFiles, HashMap<String, Bytes>), rmx::tar_parser::TarError> {
     let mut files = BTreeMap::new();
     let mut contents = HashMap::new();
     let mut directories = BTreeSet::new();
@@ -240,7 +240,7 @@ pub struct PackagePath {
 
 /// `parsePackagePath`: `lodash@4/lib/utils.js`, `@remix-run/cookie@1.0.0/src/index.ts`, `react@^18.2`.
 pub fn parse_package_path(path: &str) -> Result<PackagePath, NpmError> {
-    let decoded = rmx_url::decode(path);
+    let decoded = rmx::url::decode(path);
     let parts: Vec<&str> = decoded.split('/').collect();
     let (mut name, rest) = if path.starts_with('@') {
         if parts.len() < 2 {

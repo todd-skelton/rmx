@@ -21,14 +21,14 @@ async fn fetch(router: &Router, method: &str, url: &str, headers: &[(&str, &str)
     for (k, v) in headers {
         req = req.header(*k, *v);
     }
-    let req = req.body(rmx_fetch::Body::from(body.to_string())).expect("request");
+    let req = req.body(rmx::fetch::Body::from(body.to_string())).expect("request");
     let res = router.fetch(req).await;
     let (parts, mut body) = res.into_parts();
     let mut text = String::new();
     while let Some(Ok(chunk)) = body.chunk().await {
         text.push_str(&String::from_utf8_lossy(&chunk));
     }
-    (Response::from_parts(parts, rmx_fetch::Body::empty()), text)
+    (Response::from_parts(parts, rmx::fetch::Body::empty()), text)
 }
 
 #[test]

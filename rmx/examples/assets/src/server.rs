@@ -3,12 +3,12 @@ use std::sync::LazyLock;
 
 use http::StatusCode;
 use rmx::{rsx, Component, Handle, Node};
-use rmx_assets::{AssetError, AssetOptions, AssetServer, FileTransform, GlobalTransform, Param, Transformed};
-use rmx_fetch::{response, Response};
-use rmx_middleware::logger::logger;
-use rmx_render::Render;
-use rmx_router::routes::{get, Route};
-use rmx_router::{Context, Router};
+use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, GlobalTransform, Param, Transformed};
+use rmx::fetch::{response, Response};
+use rmx::middleware::logger::logger;
+use rmx::render::Render;
+use rmx::router::routes::{get, Route};
+use rmx::router::{Context, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -20,7 +20,7 @@ pub fn main() {
     println!("assets demo is running on http://{addr}");
     println!("Edit a client file and refresh to verify the client code updates.");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx_serve::listen(&addr, router(assets))).expect("serve");
+    rt.block_on(rmx::serve::listen(&addr, router(assets))).expect("serve");
 }
 
 // app/routes.ts

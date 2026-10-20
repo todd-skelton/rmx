@@ -81,10 +81,17 @@ A proc macro built on `rstml`. Templates live inside `.rs` files; there is no se
 
 ## What Is Implemented
 
-Each Remix 3 package is a crate under `crates/` (about 19,600 lines of Rust, measured
-2026-10-20). The core:
+Each Remix 3 package is a crate under `crates/`, and, like the `remix` package with its
+subpath exports, the `rmx` crate (`crates/rmx`) puts them behind one dependency: the
+component model at the root (`rmx::rsx`, `rmx::Component`), the rest as modules
+(`rmx::router`, `rmx::middleware`, `rmx::auth`, `rmx::session`, `rmx::ui`, ...). Server
+modules exist only in native builds; a wasm build of the same crate gets the component
+runtime plus `ui`, `router`, `fetch`, `spa`, `url`, `headers`, `mime` and
+`route_pattern`. Every example depends on `rmx` alone (unpkg also uses
+`rmx-html-template` directly, since its `html!` macro expands to that crate's path). The
+crates:
 
-1. `rmx` (`crates/component`): components, `rsx!`, streaming SSR with hydration markers,
+1. `rmx-component` (`crates/component`): components, `rsx!`, streaming SSR with hydration markers,
    client entries hydrated by adopting server DOM, keyed reconciliation, `css` mixins,
    host mixins with insert/remove/reclaim lifecycles, `<Frame>` (blocking, non-blocking,
    named, client-mounted, custom resolvers), soft navigation through the Navigation API

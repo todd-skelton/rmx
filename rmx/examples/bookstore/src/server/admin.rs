@@ -2,9 +2,9 @@
 //! `requireAuth()` and `requireAdmin()`.
 
 use rmx::{css, rsx, Mixin, Node};
-use rmx_fetch::{response, Response};
-use rmx_middleware::form_data::FormDataExt;
-use rmx_router::{middleware, Context, Router};
+use rmx::fetch::{response, Response};
+use rmx::middleware::form_data::FormDataExt;
+use rmx::router::{middleware, Context, Router};
 
 use super::account::{order_details, orders_table};
 use super::data::{locale_date, Book, BookInput, Role, User, UserInput, WriteError, PLACEHOLDER_COVER};
@@ -75,7 +75,7 @@ async fn dashboard(ctx: Context) -> Response {
 
 // --- books ------------------------------------------------------------------------------
 
-fn book_href(route: &rmx_router::Route, book: &Book) -> String {
+fn book_href(route: &rmx::router::Route, book: &Book) -> String {
     route.href([("bookId", book.id.to_string())])
 }
 
@@ -280,7 +280,7 @@ async fn destroy_book(ctx: Context) -> Response {
 
 // --- users ------------------------------------------------------------------------------
 
-fn user_href(route: &rmx_router::Route, user: &User) -> String {
+fn user_href(route: &rmx::router::Route, user: &User) -> String {
     route.href([("userId", user.id.to_string())])
 }
 
