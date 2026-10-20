@@ -5,6 +5,7 @@ members = [
     "crates/route-pattern",
     "crates/fetch",
     "crates/router",
+    "crates/serve",
     "crates/component",
     "crates/macros",
     "examples/bench/app",
@@ -24,6 +25,7 @@ rmx-url = { path = "crates/url" }
 rmx-route-pattern = { path = "crates/route-pattern" }
 rmx-fetch = { path = "crates/fetch" }
 rmx-router = { path = "crates/router" }
+rmx-serve = { path = "crates/serve" }
 bytes = "1"
 http = "1"
 http-body = "1"

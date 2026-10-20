@@ -1,0 +1,14 @@
+[package]
+name = "rmx-serve"
+description = "Serve an rmx Router over HTTP/1 and HTTP/2 with hyper and tokio"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
+rmx-fetch.workspace = true
+rmx-router.workspace = true
+tokio.workspace = true
