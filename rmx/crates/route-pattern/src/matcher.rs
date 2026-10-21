@@ -108,6 +108,41 @@ impl IndexNode {
 /// Above this many prefix candidates, the suffix and anchor indexes are tried too.
 const MAX_CANDIDATES_BEFORE_SECONDARY_INDEX: usize = 32;
 
+/// A matcher for many patterns (Remix's `MultiMatcher`). [`Matcher`] is the built-in one; a
+/// router can take another (`Router::with_matcher`), for example one that wraps [`Matcher`] to
+/// record or filter what is added and matched.
+pub trait MultiMatcher<T> {
+    /// Whether pathnames match case-insensitively.
+    fn ignore_case(&self) -> bool;
+
+    /// Add a parsed pattern with the data to return when it matches.
+    fn add(&mut self, pattern: RoutePattern, data: T) -> Result<(), MatcherResourceError>;
+
+    /// The most specific match, or `None` when nothing matches.
+    fn match_url(&self, url: &Url) -> Result<Option<Match<&T>>, MatcherResourceError>;
+
+    /// Every match, most specific first.
+    fn match_all(&self, url: &Url) -> Result<Vec<Match<&T>>, MatcherResourceError>;
+}
+
+impl<T> MultiMatcher<T> for Matcher<T> {
+    fn ignore_case(&self) -> bool {
+        Matcher::ignore_case(self)
+    }
+
+    fn add(&mut self, pattern: RoutePattern, data: T) -> Result<(), MatcherResourceError> {
+        Matcher::add(self, pattern, data)
+    }
+
+    fn match_url(&self, url: &Url) -> Result<Option<Match<&T>>, MatcherResourceError> {
+        Matcher::match_url(self, url)
+    }
+
+    fn match_all(&self, url: &Url) -> Result<Vec<Match<&T>>, MatcherResourceError> {
+        Matcher::match_all(self, url)
+    }
+}
+
 /// Matches URLs against patterns and picks the most specific match (Remix's
 /// `createMultiMatcher`). Patterns are indexed by their static prefix, suffix and longest
 /// static run, so only likely candidates are run.

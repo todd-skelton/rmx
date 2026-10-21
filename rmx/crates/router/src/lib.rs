@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
 use rmx_fetch::{request_url, response, AbortError, AbortSignal, Body, Request, RequestExt, Response};
-use rmx_route_pattern::{specificity, Matcher, Params, RoutePattern};
+use rmx_route_pattern::{specificity, Matcher, MultiMatcher, Params, RoutePattern};
 use rmx_url::Url;
 
 pub mod async_context;
@@ -400,9 +400,17 @@ impl Next {
     /// then races the signal: an aborted request skips the rest of the chain and answers with
     /// [`AbortError::into_response`] (Remix rejects with an `AbortError`), which middleware
     /// can recognise with [`AbortError::of`].
-    pub fn run(mut self, ctx: Context) -> BoxFuture<Response> {
+    ///
+    /// The next step is called when the returned future is first polled, so a middleware or
+    /// handler that panics before returning its future panics inside this one, where
+    /// [`catch_panic`] sees it (Remix's `next()` returns a rejected promise).
+    pub fn run(self, ctx: Context) -> BoxFuture<Response> {
+        Box::pin(self.run_step(ctx))
+    }
+
+    async fn run_step(mut self, ctx: Context) -> Response {
         if ctx.signal.aborted() {
-            return Box::pin(async { AbortError.into_response() });
+            return AbortError.into_response();
         }
         let signal = (!ctx.signal.is_never()).then(|| ctx.signal.clone());
         let fut = if let Some(mw) = self.chain.get(self.index).cloned() {
@@ -418,8 +426,62 @@ impl Next {
             }
         };
         match signal {
-            None => fut,
-            Some(signal) => Box::pin(async move { signal.race(fut).await.unwrap_or_else(AbortError::into_response) }),
+            None => fut.await,
+            Some(signal) => signal.race(fut).await.unwrap_or_else(AbortError::into_response),
+        }
+    }
+}
+
+/// A panic caught by [`catch_panic`], with its message.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Panic(pub String);
+
+impl Panic {
+    /// The panic message (`"unknown panic"` when the payload was not a string).
+    pub fn message(&self) -> &str {
+        &self.0
+    }
+
+    fn from_payload(payload: &(dyn std::any::Any + Send)) -> Panic {
+        let message = payload
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "unknown panic".into());
+        Panic(message)
+    }
+}
+
+impl fmt::Display for Panic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Panic {}
+
+/// Run `future`, turning a panic while it is polled into `Err(Panic)`. A thrown error in
+/// Remix rejects the handler's promise and middleware can `try { await next() } catch`; in
+/// Rust a handler that fails unexpectedly panics, and middleware catches it with
+/// `catch_panic(next.run(ctx)).await`. Expected failures are values (`Result` responses).
+///
+/// In the browser a panic aborts the program (wasm32 has no unwinding), so nothing is caught.
+pub fn catch_panic<F: Future>(future: F) -> CatchPanic<F> {
+    CatchPanic(Box::pin(future))
+}
+
+/// The future returned by [`catch_panic`].
+pub struct CatchPanic<F>(Pin<Box<F>>);
+
+impl<F: Future> Future for CatchPanic<F> {
+    type Output = Result<F::Output, Panic>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        let future = self.0.as_mut();
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| future.poll(cx))) {
+            Ok(std::task::Poll::Pending) => std::task::Poll::Pending,
+            Ok(std::task::Poll::Ready(output)) => std::task::Poll::Ready(Ok(output)),
+            Err(payload) => std::task::Poll::Ready(Err(Panic::from_payload(&*payload))),
         }
     }
 }
@@ -509,24 +571,65 @@ macro_rules! verb_methods {
 // Router
 // ---------------------------------------------------------------------------------------
 
-struct RouteEntry {
+/// A registered route as the router's matcher stores it (Remix's `RouteEntry` / `MatchData`).
+pub struct RouteEntry {
     method: Option<Method>,
     handler: Arc<dyn Handler>,
     middleware: MiddlewareList,
     pattern: RoutePattern,
 }
 
+impl RouteEntry {
+    /// The pattern the route matches, with any mount prefix applied.
+    pub fn pattern(&self) -> &RoutePattern {
+        &self.pattern
+    }
+
+    /// The method the route handles, or `None` for any method.
+    pub fn method(&self) -> Option<&Method> {
+        self.method.as_ref()
+    }
+}
+
+impl fmt::Debug for RouteEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RouteEntry").field("method", &self.method).field("pattern", &self.pattern.source()).finish()
+    }
+}
+
+/// A matcher a [`Router`] can use: a [`MultiMatcher`] of [`RouteEntry`]s.
+pub trait RouteMatcher: MultiMatcher<Arc<RouteEntry>> + MaybeSend + MaybeSync + 'static {}
+
+impl<M: MultiMatcher<Arc<RouteEntry>> + MaybeSend + MaybeSync + 'static> RouteMatcher for M {}
+
 struct Inner {
     middleware: Vec<Arc<dyn Middleware>>,
     chain: MiddlewareList,
-    routes: Matcher<Arc<RouteEntry>>,
+    routes: Box<dyn RouteMatcher>,
+    /// `METHOD pattern` for each route in the order added, for [`Router::routes`].
+    listing: Vec<String>,
     not_found: Arc<dyn Handler>,
 }
 
 /// Maps requests to handlers. Cheap to clone (an `Arc`); register routes before sharing it.
+/// Clones are the same router: they compare equal, like one JavaScript router object.
 #[derive(Clone)]
 pub struct Router {
     inner: Arc<Inner>,
+}
+
+impl PartialEq for Router {
+    fn eq(&self, other: &Router) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for Router {}
+
+impl fmt::Debug for Router {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Router").field("routes", &self.inner.listing).finish()
+    }
 }
 
 impl Default for Router {
@@ -537,6 +640,12 @@ impl Default for Router {
 
 impl Router {
     pub fn new() -> Router {
+        Router::with_matcher(Matcher::new())
+    }
+
+    /// A router that adds its routes to `matcher` and asks it for matches (Remix's `matcher`
+    /// option). Mounted routes are added with their prefixed patterns.
+    pub fn with_matcher(matcher: impl RouteMatcher) -> Router {
         // Remix's default handler: `Not Found: <pathname>`.
         let not_found: Arc<dyn Handler> =
             Arc::new(|ctx: Context| async move { response::status(StatusCode::NOT_FOUND, format!("Not Found: {}", ctx.url().pathname())) });
@@ -544,7 +653,8 @@ impl Router {
             inner: Arc::new(Inner {
                 middleware: Vec::new(),
                 chain: Arc::from(Vec::new()),
-                routes: Matcher::new(),
+                routes: Box::new(matcher),
+                listing: Vec::new(),
                 not_found,
             }),
         }
@@ -622,14 +732,7 @@ impl Router {
 
     /// The registered routes, for debugging.
     pub fn routes(&self) -> Vec<String> {
-        self.inner
-            .routes
-            .entries()
-            .map(|(_, e)| match &e.method {
-                Some(m) => format!("{m} {}", e.pattern),
-                None => format!("ANY {}", e.pattern),
-            })
-            .collect()
+        self.inner.listing.clone()
     }
 
     async fn dispatch(&self, mut ctx: Context) -> Response {
@@ -722,9 +825,15 @@ impl RouteBuilder<'_> {
             middleware: Arc::from(middleware),
             pattern: route.pattern().clone(),
         };
-        if let Err(e) = self.router.inner_mut().routes.add(route.pattern().clone(), Arc::new(entry)) {
+        let listed = match &entry.method {
+            Some(m) => format!("{m} {}", entry.pattern),
+            None => format!("ANY {}", entry.pattern),
+        };
+        let inner = self.router.inner_mut();
+        if let Err(e) = inner.routes.add(route.pattern().clone(), Arc::new(entry)) {
             panic!("route {}: {e}", route.pattern());
         }
+        inner.listing.push(listed);
         self
     }
 

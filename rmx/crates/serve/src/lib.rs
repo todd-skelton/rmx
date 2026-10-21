@@ -24,11 +24,10 @@
 //! This is the only crate that depends on a specific runtime (tokio) and HTTP
 //! implementation (hyper); everything else works with plain `Request` / `Response` values.
 
-use std::any::Any;
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::fmt;
-use std::future::{poll_fn, Future};
+use std::future::poll_fn;
 use std::net::{IpAddr, SocketAddr};
 use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
@@ -476,7 +475,8 @@ async fn handle(router: &Router, options: &ServeOptions, req: Request, remote: S
         Err(error) => return options.error_response(&error),
     };
     let signal = req.signal();
-    match CatchUnwind(Box::pin(router.fetch(req))).await {
+    // A panicking handler answers 500 instead of dropping the connection.
+    match rmx_router::catch_panic(router.fetch(req)).await {
         Ok(res) => res,
         // A handler that fails because the client went away is not a server error, and no
         // one is left to read the response (Remix's `isRequestAbortError`).
@@ -485,32 +485,8 @@ async fn handle(router: &Router, options: &ServeOptions, req: Request, remote: S
             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
             res
         }
-        Err(payload) => options.error_response(&ServeError::Panic(panic_message(&*payload))),
+        Err(panic) => options.error_response(&ServeError::Panic(panic.0)),
     }
-}
-
-/// Polls a future and turns a panic into an error, so one failing handler answers 500
-/// instead of dropping the connection.
-struct CatchUnwind<'a>(Pin<Box<dyn Future<Output = Response> + Send + 'a>>);
-
-impl Future for CatchUnwind<'_> {
-    type Output = Result<Response, Box<dyn Any + Send>>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
-        match std::panic::catch_unwind(AssertUnwindSafe(|| self.0.as_mut().poll(cx))) {
-            Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready(res)) => Poll::Ready(Ok(res)),
-            Err(payload) => Poll::Ready(Err(payload)),
-        }
-    }
-}
-
-fn panic_message(payload: &(dyn Any + Send)) -> String {
-    payload
-        .downcast_ref::<&str>()
-        .map(|s| s.to_string())
-        .or_else(|| payload.downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "unknown panic".into())
 }
 
 /// Prepare an incoming request for the router (`createRequest`): give it an absolute URL

@@ -324,6 +324,48 @@ pub fn resource(base: &str) -> Resource {
 ///     blog: action(|_: Context| async { "Blog" }),
 /// };
 /// ```
+///
+/// ```compile_fail,E0560
+/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # use rmx::router::{action, Context};
+/// #[derive(RouteMap)]
+/// pub struct Routes { pub home: Route }
+/// // error: no field `missing` (Remix: "Unknown action `missing` in controller")
+/// let _ = RoutesActions {
+///     home: action(|_: Context| async { "Home" }),
+///     missing: action(|_: Context| async { "Missing" }),
+/// };
+/// ```
+///
+/// A route map takes a controller (its actions struct), not a handler (Remix: "controllers
+/// must define actions under `actions`"), and a controller's actions must be that struct
+/// (Remix: "Expected a controller with an object `actions` property"):
+///
+/// ```compile_fail,E0277
+/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # use rmx::router::{Context, Router};
+/// #[derive(RouteMap)]
+/// pub struct Routes { pub home: Route }
+/// let mut router = Router::new();
+/// router.map(&Routes { home: get("/") }, |_: Context| async { "OK" });
+/// ```
+///
+/// ```compile_fail,E0308
+/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # use rmx::router::{Controller, Router};
+/// #[derive(RouteMap)]
+/// pub struct Routes { pub home: Route }
+/// let mut router = Router::new();
+/// router.map(&Routes { home: get("/") }, Controller { middleware: Vec::new(), actions: () });
+/// ```
+///
+/// An action needs a handler function (Remix: "Expected a request handler function or action
+/// object with a function `handler` property"):
+///
+/// ```compile_fail,E0277
+/// # use rmx::router::action;
+/// let _ = action(1);
+/// ```
 pub trait RouteMap {
     /// What a controller for this map supplies: an [`Action`](crate::Action) for a single
     /// route, or a struct with one action per direct route.

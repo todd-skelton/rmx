@@ -41,7 +41,7 @@ mod tests;
 
 pub use href::{encode_pathname_variable, encode_pathname_wildcard, HrefError, HrefOptions, HrefParams};
 pub use limits::{MatcherLimit, MatcherLimits, MatcherResourceError};
-pub use matcher::{AddError, Match, MatchParamMeta, Matcher, MatcherOptions, ParamsMeta};
+pub use matcher::{AddError, Match, MatchParamMeta, Matcher, MatcherOptions, MultiMatcher, ParamsMeta};
 pub use parse::{ParseError, ParseErrorType};
 
 /// The protocol constraint of a pattern.
