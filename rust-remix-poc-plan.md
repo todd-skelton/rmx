@@ -380,6 +380,13 @@ Covered since phase 0b:
    cached, so the lazy-parse, cache identity, proxy and stale-value cases have no
    counterpart; an edit that prints empty is not kept for the next edit the way Remix's
    cached object keeps it.
+   `remix/mime` is ported with its five test files (`crates/mime/tests/`): the 1239-entry
+   extension table and compressible list come from Remix's generated mime-db tables
+   (`crates/mime/scripts/codegen.mjs`), with `detect_mime_type`, `detect_content_type`,
+   `mime_type_to_content_type`, `is_compressible_mime_type` and `define_mime_type` (custom
+   types, multi-part extensions, charset and compressibility overrides, `reset_mime_types`).
+   Static files, compression, assets and the unpkg demo use it; `.xml` is now `text/xml`
+   and `.ts` is `video/mp2t`, as in Remix.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
