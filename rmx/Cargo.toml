@@ -98,8 +98,12 @@ web-sys = "0.3"
 [profile.dev.package.rmx-crypto]
 opt-level = 3
 
-# Compression runs per request; unoptimized brotli is several times slower. Its generic
-# encoder is instantiated in rmx-middleware, so that crate is optimized too.
+# Compression runs per request; unoptimized brotli is several times slower (quality 11 on a
+# 450 KB wasm file: about 10 s against 1.6 s). Its generic encoder is instantiated in
+# rmx-fetch (`response::compress`), so that crate is optimized too.
+[profile.dev.package.rmx-fetch]
+opt-level = 3
+
 [profile.dev.package.rmx-middleware]
 opt-level = 3
 
