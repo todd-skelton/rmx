@@ -371,8 +371,9 @@ Remaining gaps:
    module. Errors are reported explicitly (`Handle::report_error`) and reach
    `Root::on_error` / `App::on_error` like Remix error events.
 3. Tooling: hot module replacement (wasm modules cannot be swapped in place), and the
-   `remix` CLI's `completion` and `db` commands. The `rmx` binary (`rmx::cli`, in the `rmx`
-   crate) has `dev` (Remix's `npm run dev` / `hmr` as rebuild, restart and page reload:
+   `remix` CLI's `db` command (data access is out of scope). The `rmx` binary (`rmx::cli`, in
+   the `rmx` crate) has `completion` (Remix's bash/zsh script and `completion -- <index>
+   <words>` protocol; checked in Git Bash), `dev` (Remix's `npm run dev` / `hmr` as rebuild, restart and page reload:
    it polls `src/`, `app/`, `public/` and `Cargo.toml`, builds the client and server, runs
    a copy of the server with `RMX_DEV_LIVE_RELOAD`, and `rmx::middleware::live_reload`
    appends an event-stream script to documents that reloads the page when the build id
