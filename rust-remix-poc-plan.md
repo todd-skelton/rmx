@@ -330,7 +330,7 @@ Covered since phase 0b:
    All examples depend on `rmx` alone.
 
 7. Component runtime behavior is checked against Remix's own test suites, ported test by
-   test: 497 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
+   test: 498 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
    headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
    SSR options and server/client parity), the style manager, diff-dom, document state
    (focus restore), form navigation, navigation interception, nested client entries,
