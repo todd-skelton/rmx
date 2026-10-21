@@ -725,6 +725,19 @@ fn remove(parent: &web_sys::Node, m: Mounted) {
             }
             Mounted::Element(e)
         }
+        // A removed component removes what it rendered one node at a time, so a host at
+        // its top level can still defer its removal (Remix removes component content
+        // before the component).
+        Mounted::Component(c) if c.inst.live().root.borrow().iter().any(persists) => {
+            let live = c.inst.live();
+            let was_alive = live.alive.replace(false);
+            let content = std::mem::take(&mut *live.root.borrow_mut());
+            content.into_iter().for_each(|child| remove(parent, child));
+            if was_alive {
+                c.inst.shared().dispose();
+            }
+            return;
+        }
         other => other,
     };
     unmount(&m);
@@ -815,8 +828,14 @@ pub(super) fn has_inner_html(attrs: &[(&'static str, AttrValue)]) -> bool {
 }
 
 /// Whether removing this node may be deferred by a `beforeRemove` listener.
+/// Whether removing `m` can be deferred: a host whose mixins listen for `beforeRemove`,
+/// directly or at the top level of a component.
 fn persists(m: &Mounted) -> bool {
-    matches!(m, Mounted::Element(e) if persists_element(e))
+    match m {
+        Mounted::Element(e) => persists_element(e),
+        Mounted::Component(c) => c.inst.live().root.borrow().iter().any(persists),
+        _ => false,
+    }
 }
 
 fn persists_element(e: &MElement) -> bool {

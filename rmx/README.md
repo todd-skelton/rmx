@@ -160,8 +160,10 @@ crates:
    already in order stay put, so a custom element is not reconnected when siblings move.
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
-   document-state, form-navigation, navigation and frame request/resolver test suites
-   (`crates/component/tests/browser_*.rs`, 452 tests).
+   document-state, form-navigation, navigation, frame request/resolver and frame css
+   test suites (`crates/component/tests/browser_*.rs`, 460 tests), plus Remix's nested client entry
+   regressions (one listener per nested entry wherever it sits; removal of a component or
+   nested entry waits for a `persist_node` exit at its top level).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
