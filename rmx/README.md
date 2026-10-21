@@ -270,8 +270,10 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
 4. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.
-5. No HMR or `remix/test` runner, and the `rmx` CLI covers `new`, `routes`, `assets`,
-   `test`, `version` and `help` but not `doctor`, `completion` or `db`: native tests use `cargo test`, component tests
+5. No HMR or `remix/test` runner, and the `rmx` CLI covers `new`, `doctor`, `routes`,
+   `assets`, `test`, `version` and `help` but not `completion` or `db` (`doctor` checks the
+   Rust toolchain, the route map and the built client instead of package.json and
+   controller files): native tests use `cargo test`, component tests
    use `wasm-bindgen-test` in Chromium, and e2e checks use Playwright scripts.
 6. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
 7. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`

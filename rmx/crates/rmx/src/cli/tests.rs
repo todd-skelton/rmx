@@ -195,3 +195,115 @@ fn marks_scaffold_generation_as_failed_when_a_file_is_in_the_way() {
     let (result, _) = new_app(&scratch.0, &["new", "file"]);
     assert_eq!(result.unwrap_err().code, "RMX_TARGET_PATH_NOT_DIRECTORY");
 }
+
+// Ports of doctor.test.ts, for rmx's suites (environment, project, client).
+
+struct FakeToolchain {
+    targets: Option<Vec<&'static str>>,
+    wasm_bindgen: Option<&'static str>,
+}
+
+impl doctor::Toolchain for FakeToolchain {
+    fn installed_targets(&self) -> Option<Vec<String>> {
+        self.targets.as_ref().map(|t| t.iter().map(|s| s.to_string()).collect())
+    }
+
+    fn wasm_bindgen_version(&self) -> Option<String> {
+        self.wasm_bindgen.map(str::to_string)
+    }
+}
+
+fn ready() -> FakeToolchain {
+    FakeToolchain { targets: Some(vec!["x86_64-pc-windows-msvc", "wasm32-unknown-unknown"]), wasm_bindgen: Some(doctor::WASM_BINDGEN_VERSION) }
+}
+
+fn scaffold(scratch: &Scratch) -> PathBuf {
+    let (result, _) = new_app(&scratch.0, &["new", "doc-app"]);
+    result.unwrap().target_dir
+}
+
+#[test]
+fn doctor_parses_its_flags() {
+    assert_eq!(parse(&args(&["doctor"])), Ok(Invocation::Doctor { json: false, strict: false }));
+    assert_eq!(parse(&args(&["doctor", "--json", "--strict"])), Ok(Invocation::Doctor { json: true, strict: true }));
+    assert_eq!(parse(&args(&["doctor", "--strict", "--no-strict"])), Ok(Invocation::Doctor { json: false, strict: false }));
+    assert_eq!(parse(&args(&["doctor", "--fix"])).unwrap_err().message, "Unknown argument: --fix");
+    assert_eq!(parse(&args(&["doctor", "--help"])), Ok(Invocation::Print(DOCTOR_HELP.into())));
+    assert!(HELP.contains("doctor            Check project health for the current project"));
+}
+
+#[test]
+fn doctor_finds_no_issues_in_a_new_app_with_a_built_client() {
+    let scratch = Scratch::new("doctor-ok");
+    let app = scaffold(&scratch);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::create_dir_all(app.join("app/actions/public/pkg")).unwrap();
+    std::fs::write(app.join("app/actions/public/pkg/doc_app_bg.wasm"), "\0asm").unwrap();
+    let report = doctor::run_doctor(&app.join("src/server"), &ready());
+    assert_eq!(report.project_root.as_deref(), Some(app.as_path()), "found from a nested directory");
+    assert_eq!(
+        report.render(),
+        "\n\u{2022} Checking environment...\n\u{2713} environment\n\n\u{2022} Checking project...\n\u{2713} project\n\n\u{2022} Checking client...\n\u{2713} client\n\nDoctor found no issues.\nSummary: 0 warnings, 0 advice.\n"
+    );
+}
+
+#[test]
+fn doctor_advises_building_the_client_and_rebuilding_it_when_stale() {
+    let scratch = Scratch::new("doctor-client");
+    let app = scaffold(&scratch);
+    let report = doctor::run_doctor(&app, &ready());
+    let text = report.render();
+    assert!(text.contains("\u{2713} client\n  \u{2022} [ADVICE] The client has not been built: no doc_app_bg.wasm outside target/"), "{text}");
+    assert!(text.ends_with("Summary: 0 warnings, 1 advice.\n"), "{text}");
+
+    std::fs::create_dir_all(app.join("app/actions/public/pkg")).unwrap();
+    std::fs::write(app.join("app/actions/public/pkg/doc_app_bg.wasm"), "\0asm").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(app.join("src/routes.rs"), read(&app, "src/routes.rs") + "\n").unwrap();
+    let text = doctor::run_doctor(&app, &ready()).render();
+    assert!(text.contains("[ADVICE] The built client (app/actions/public/pkg/doc_app_bg.wasm) is older than src/; rebuild it."), "{text}");
+}
+
+#[test]
+fn doctor_skips_later_suites_when_the_environment_warns() {
+    let scratch = Scratch::new("doctor-env");
+    let report = doctor::run_doctor(&scratch.0, &ready());
+    let text = report.render();
+    assert!(text.contains("\u{2717} environment\n  \u{2022} [WARN] Could not find Cargo.toml. Run this command inside an rmx project."), "{text}");
+    assert!(text.contains("\u{2022} project (skipped: Blocked by environment warnings.)"), "{text}");
+    assert!(text.contains("\u{2022} client (skipped: Blocked by environment warnings.)"), "{text}");
+    assert_eq!(report.warnings(), 1);
+
+    let app = scaffold(&scratch);
+    let no_wasm = FakeToolchain { targets: Some(vec!["x86_64-pc-windows-msvc"]), wasm_bindgen: Some("0.2.100") };
+    let text = doctor::run_doctor(&app, &no_wasm).render();
+    assert!(text.contains("[WARN] The wasm32-unknown-unknown target is not installed. Run `rustup target add wasm32-unknown-unknown`."), "{text}");
+    assert!(text.contains("[WARN] wasm-bindgen 0.2.100 is on PATH, but rmx uses 0.2.129."), "{text}");
+    let unknown = FakeToolchain { targets: None, wasm_bindgen: None };
+    let report = doctor::run_doctor(&app, &unknown);
+    assert_eq!(report.warnings(), 0, "missing tools are advice: {}", report.render());
+    assert_eq!(report.findings().count(), 3, "{}", report.render());
+
+    std::fs::write(app.join("Cargo.toml"), read(&app, "Cargo.toml").replace("rmx = {", "other = {")).unwrap();
+    let text = doctor::run_doctor(&app, &ready()).render();
+    assert!(text.contains("[WARN] Cargo.toml does not declare an rmx dependency."), "{text}");
+}
+
+#[test]
+fn doctor_checks_the_route_map_and_the_client_crate_type() {
+    let scratch = Scratch::new("doctor-project");
+    let app = scaffold(&scratch);
+    std::fs::write(app.join("Cargo.toml"), read(&app, "Cargo.toml").replace("[\"cdylib\", \"rlib\"]", "[\"rlib\"]")).unwrap();
+    let text = doctor::run_doctor(&app, &ready()).render();
+    assert!(text.contains("\u{2717} client\n  \u{2022} [WARN] Cargo.toml [lib] crate-type does not include \"cdylib\""), "{text}");
+
+    std::fs::write(app.join("src/routes.rs"), "pub struct Routes;\n").unwrap();
+    let report = doctor::run_doctor(&app, &ready());
+    let text = report.render();
+    assert!(text.contains("\u{2717} project\n  \u{2022} [WARN] Project has no route map"), "{text}");
+    assert!(text.contains("\u{2022} client (skipped: Blocked by project warnings.)"), "{text}");
+    let json = report.to_json();
+    assert!(json.contains(r#""suites":[{"name":"environment","status":"ok","findings":[]}"#), "{json}");
+    assert!(json.contains(r#"{"name":"client","status":"skipped","reason":"Blocked by project warnings.","findings":[]}"#), "{json}");
+    assert!(json.contains(r#""code":"routes-missing","severity":"warn","suite":"project""#), "{json}");
+}

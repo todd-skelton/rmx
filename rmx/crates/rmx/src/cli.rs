@@ -1,5 +1,5 @@
-//! The `rmx` command (Remix's `remix` CLI): `new`, `routes`, `assets`, `test`, `version` and
-//! `help`. Install it with `cargo install --path crates/rmx`.
+//! The `rmx` command (Remix's `remix` CLI): `new`, `doctor`, `routes`, `assets`, `test`,
+//! `version` and `help`. Install it with `cargo install --path crates/rmx`.
 //!
 //! `new` writes the starter app (`examples/template`, Remix's `template`) as a standalone
 //! crate. `routes` and `assets` need the app's own route map and asset server, so they run
@@ -10,6 +10,8 @@
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+pub mod doctor;
+
 /// What a command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Invocation {
@@ -19,6 +21,8 @@ pub enum Invocation {
     Exec(Vec<String>),
     /// Create an app.
     New(NewOptions),
+    /// Check the toolchain and the app (`--json`, `--strict`).
+    Doctor { json: bool, strict: bool },
 }
 
 /// Options for `rmx new`.
@@ -100,6 +104,7 @@ Usage:
 
 Commands:
   assets [command]  List or inspect browser-reachable assets
+  doctor            Check project health for the current project
   help [command]    Show help for rmx commands
   new <name>        Create a new rmx project
   routes            Show the route tree for the current project
@@ -112,6 +117,7 @@ Options:
 
 Examples:
   rmx assets
+  rmx doctor
   rmx help
   rmx new my-rmx-app
   rmx new my-rmx-app --app-name \"My rmx App\"
@@ -158,6 +164,23 @@ Usage:
 List or inspect browser-reachable assets (runs `cargo run --quiet -- assets`).
 ";
 
+const DOCTOR_HELP: &str = "\
+Usage:
+  rmx doctor [--json] [--strict]
+
+Check the toolchain and rmx app conventions for the current project.
+
+Options:
+  --json       Print doctor findings as JSON
+  --strict     Exit with status 1 when warning-level findings are present
+  --no-strict  Do not exit with status 1 when warning-level findings are present
+
+Examples:
+  rmx doctor
+  rmx doctor --json
+  rmx doctor --strict
+";
+
 const TEST_HELP: &str = "\
 Usage:
   rmx test [filter]
@@ -174,6 +197,7 @@ pub fn help_for(command: Option<&str>) -> Result<&'static str, CliError> {
         Some("routes") => ROUTES_HELP,
         Some("assets") => ASSETS_HELP,
         Some("test") => TEST_HELP,
+        Some("doctor") => DOCTOR_HELP,
         Some("help") => HELP,
         Some(other) => return Err(CliError::unknown_command(other)),
     })
@@ -218,6 +242,22 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             let mut argv: Vec<String> = ["cargo", "run", "--quiet", "--", command].map(String::from).to_vec();
             argv.extend(args.iter().map(|a| a.to_string()));
             Ok(Invocation::Exec(argv))
+        }
+        "doctor" => {
+            if wants_help {
+                return Ok(Invocation::Print(DOCTOR_HELP.into()));
+            }
+            let (mut json, mut strict) = (false, false);
+            for arg in &args {
+                match *arg {
+                    "--json" => json = true,
+                    "--strict" => strict = true,
+                    "--no-strict" => strict = false,
+                    other if other.starts_with('-') => return Err(CliError::unknown_argument(other)),
+                    other => return Err(CliError::unexpected_extra_argument(other)),
+                }
+            }
+            Ok(Invocation::Doctor { json, strict })
         }
         "test" => {
             if wants_help {
@@ -306,6 +346,11 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
                     1
                 }
             }
+        }
+        Ok(Invocation::Doctor { json, strict }) => {
+            let report = doctor::run_doctor(cwd, &doctor::SystemToolchain);
+            print!("{}", if json { report.to_json() } else { report.render() });
+            i32::from(strict && report.warnings() > 0)
         }
         Err(e) => {
             eprint!("{}", e.render(help(args)));
