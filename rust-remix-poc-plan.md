@@ -323,13 +323,19 @@ Covered since phase 0b:
    form and JSON body a Remix demo validates with `data-schema` is validated with it in
    the rmx port (timeboxer, bookstore, social-auth, sse), except the bookstore admin book
    form, which keeps accepting `on` for its checkbox.
-6. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
+6. Controllers: `router.map(routes, controller)` from `fetch-router`. `#[derive(RouteMap)]`
+   on a route struct generates `<Name>Actions` with one `Action` per direct route, so a
+   controller that misses a route, names an unknown one or names a nested map fails to
+   compile (Remix throws these at map time); controller and action middleware run in
+   Remix's order. Every demo now maps controllers the way its `router.ts` does, and the
+   `router.map()` tests from `router.test.ts` are ported (`crates/router/tests/map.rs`).
+7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
    the component runtime, `ui`, `router`, `fetch`, `spa` and the platform-neutral crates.
    All examples depend on `rmx` alone.
 
-7. Component runtime behavior is checked against Remix's own test suites, ported test by
+8. Component runtime behavior is checked against Remix's own test suites, ported test by
    test: 515 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
    headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
    SSR options and server/client parity), the style manager, diff-dom, document state
@@ -356,7 +362,10 @@ Remaining gaps:
 2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
    module. Errors are reported explicitly (`Handle::report_error`) and reach
    `Root::on_error` / `App::on_error` like Remix error events.
-3. Tooling: HMR and a CLI. The `remix/component/test` render helper exists as `rmx::test`.
+3. Tooling: HMR and the `remix` CLI (`new`, `doctor`, `test`, `assets`). The
+   `remix/component/test` render helper exists as `rmx::test`, and `remix routes` exists as
+   `rmx::router::routes::routes_command`, which every demo binary runs for `-- routes`
+   (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files).
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
    a document still being parsed (`document.write` splitting a template). Cases that load
