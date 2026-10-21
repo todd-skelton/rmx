@@ -335,8 +335,11 @@ Covered since phase 0b:
    aborts when the client leaves before the response finished, and an aborted request skips
    the rest of the chain and answers 499 with `AbortError` where Remix rejects. The `remix new` starter (`reference/remix/template`)
    is ported as `examples/template` with its controller test and a browser e2e.
-   Route helper options that change a map's shape (`only`, `exclude`, `names`) become a
-   struct you declare with `#[derive(RouteMap)]` (the bookstore's `ReadOnly` and `Users`).
+   The route helper tests (`form`, `resource`, `resources`, method helpers) are ported in
+   `crates/router/tests/route_helpers.rs`; `form_with(pattern, Method)` is Remix's
+   `formMethod` option. Route helper options that change a map's shape (`only`, `exclude`,
+   `names`) become a struct you declare with `#[derive(RouteMap)]` (the bookstore's
+   `ReadOnly` and `Users`).
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
