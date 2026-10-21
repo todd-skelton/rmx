@@ -10,7 +10,9 @@ use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx::render::{Render, ResponseInit};
 use rmx::middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
-use rmx::router::{middleware, Context, Middleware, Router};
+use frame_navigation_demo::routes::{AccountActions, AuthActions, MainActions, SettingsActions, ROUTES};
+use rmx::router::routes::FormActions;
+use rmx::router::{action, Action, Context, Controller, Middleware, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -137,89 +139,135 @@ pub fn router(public: &str) -> Router {
     router.use_middleware(form_data());
     router.use_middleware(load_auth());
 
-    router.get("/auth/login", |ctx: Context| async move {
-        if ctx.auth::<FrameAuthIdentity>().is_ok() {
-            return response::redirect("/");
-        }
-        ctx.render(login_page())
-    });
-    router.post("/auth/login", |_ctx: Context| async move { with_cookie(response::redirect("/"), &AUTH.serialize("1")) });
-    router.post("/auth/logout", |_ctx: Context| async move { with_cookie(response::redirect("/auth/login"), &AUTH.clear()) });
-
-    router.group(vec![middleware(require_auth())], |r| {
-        r.get("/", |ctx: Context| async move {
-            ctx.render(rsx! { <Layout title="Dashboard" active_nav={MainNav::Dashboard}>{dashboard()}</Layout> })
-        });
-        r.get("/calendar", |ctx: Context| async move {
-            ctx.render(rsx! { <Layout title="Calendar" active_nav={MainNav::Calendar}>{calendar()}</Layout> })
-        });
-        r.get("/courses", |ctx: Context| async move {
-            let query = ctx.url().search_params().get("q").unwrap_or_default().trim().to_string();
-            if is_frame_request(&ctx, COURSES_FRAME) {
-                return ctx.render(courses(&query));
-            }
-            let src = ctx.url().href();
-            ctx.render(rsx! {
-                <Layout title="Courses" active_nav={MainNav::Courses}><Frame name={COURSES_FRAME} src={src}/></Layout>
-            })
-        });
-
-        r.get("/account", |ctx: Context| async move {
-            let saved = ctx.url().search_params().has("saved");
-            if is_frame_request(&ctx, ACCOUNT_FRAME) {
-                return ctx.render(account_page(&account(), saved));
-            }
-            ctx.render(account_document("Account", ctx.url().href()))
-        });
-        r.get("/account/edit", |ctx: Context| async move {
-            if is_frame_request(&ctx, ACCOUNT_FRAME) {
-                return ctx.render(account_editor(&account(), &AccountErrors::default()));
-            }
-            ctx.render(account_document("Edit account", ctx.url().href()))
-        });
-        r.post("/account/edit", |ctx: Context| async move {
-            let form = ctx.form_data();
-            let field = |n: &str| form.get(n).unwrap_or_default().trim().to_string();
-            let values = Account {
-                display_name: field("displayName"),
-                program: field("program"),
-                expected_graduation: field("expectedGraduation"),
-            };
-            let errors = validate(&values);
-            if errors.any() {
-                let editor = account_editor(&values, &errors);
-                let init = ResponseInit::status(StatusCode::UNPROCESSABLE_ENTITY);
-                if is_frame_request(&ctx, ACCOUNT_FRAME) {
-                    return ctx.render_with(editor, init);
+    let r = &*ROUTES;
+    router.map(
+        &r.auth,
+        AuthActions {
+            logout: action(|_ctx: Context| async move {
+                with_cookie(response::redirect(&ROUTES.auth.login.index.href(())), &AUTH.clear())
+            }),
+        },
+    );
+    router.map(
+        &r.auth.login,
+        FormActions {
+            index: action(|ctx: Context| async move {
+                if ctx.auth::<FrameAuthIdentity>().is_ok() {
+                    return response::redirect(&ROUTES.main.index.href(()));
                 }
-                return ctx.render_with(rsx! { <Layout title="Account" active_nav={MainNav::Account}>{editor}</Layout> }, init);
-            }
-            *ACCOUNT.lock().expect("account lock") = values;
-            response::redirect_with("/account?saved", StatusCode::SEE_OTHER)
-        });
+                ctx.render(login_page())
+            }),
+            action: action(|_ctx: Context| async move {
+                with_cookie(response::redirect(&ROUTES.main.index.href(())), &AUTH.serialize("1"))
+            }),
+        },
+    );
 
-        r.get("/settings", |_ctx: Context| async move { response::redirect_with("/settings/overview", StatusCode::SEE_OTHER) });
-        for (slug, _) in SETTINGS_ITEMS {
-            r.get(format!("/settings/{slug}"), move |ctx: Context| async move {
-                let page = settings_section(slug);
-                let init = if slug == "privacy" {
-                    // The demo's privacy page fails on purpose, to show error handling.
-                    ResponseInit::status(StatusCode::INTERNAL_SERVER_ERROR)
-                } else {
-                    ResponseInit::default()
-                };
-                if is_frame_request(&ctx, SETTINGS_FRAME) {
-                    return ctx.render_with(settings_layout(slug, page), init);
+    router.map(
+        &r.main,
+        Controller::new(MainActions {
+            index: action(|ctx: Context| async move {
+                ctx.render(rsx! { <Layout title="Dashboard" active_nav={MainNav::Dashboard}>{dashboard()}</Layout> })
+            }),
+            calendar: action(|ctx: Context| async move {
+                ctx.render(rsx! { <Layout title="Calendar" active_nav={MainNav::Calendar}>{calendar()}</Layout> })
+            }),
+            courses: action(|ctx: Context| async move {
+                let query = ctx.url().search_params().get("q").unwrap_or_default().trim().to_string();
+                if is_frame_request(&ctx, COURSES_FRAME) {
+                    return ctx.render(courses(&query));
                 }
                 let src = ctx.url().href();
-                ctx.render_with(
-                    rsx! { <Layout title="Settings" active_nav={MainNav::Settings}><Frame name={SETTINGS_FRAME} src={src}/></Layout> },
-                    init,
-                )
-            });
-        }
-    });
+                ctx.render(rsx! {
+                    <Layout title="Courses" active_nav={MainNav::Courses}><Frame name={COURSES_FRAME} src={src}/></Layout>
+                })
+            }),
+        })
+        .with(require_auth()),
+    );
+    router.map(
+        &r.main.account,
+        Controller::new(AccountActions {
+            index: action(|ctx: Context| async move {
+                let saved = ctx.url().search_params().has("saved");
+                if is_frame_request(&ctx, ACCOUNT_FRAME) {
+                    return ctx.render(account_page(&account(), saved));
+                }
+                ctx.render(account_document("Account", ctx.url().href()))
+            }),
+        })
+        .with(require_auth()),
+    );
+    router.map(
+        &r.main.account.edit,
+        Controller::new(FormActions { index: action(edit_account_page), action: action(update_account) }).with(require_auth()),
+    );
+
+    router.map(
+        &r.settings,
+        Controller::new(SettingsActions {
+            index: action(|_ctx: Context| async move {
+                response::redirect_with(&ROUTES.settings.overview.href(()), StatusCode::SEE_OTHER)
+            }),
+            overview: settings_action("overview"),
+            profile: settings_action("profile"),
+            notifications: settings_action("notifications"),
+            privacy: settings_action("privacy"),
+            grading: settings_action("grading"),
+            integrations: settings_action("integrations"),
+        })
+        .with(require_auth()),
+    );
     router
+}
+
+async fn edit_account_page(ctx: Context) -> Response {
+    if is_frame_request(&ctx, ACCOUNT_FRAME) {
+        return ctx.render(account_editor(&account(), &AccountErrors::default()));
+    }
+    ctx.render(account_document("Edit account", ctx.url().href()))
+}
+
+async fn update_account(ctx: Context) -> Response {
+    let form = ctx.form_data();
+    let field = |n: &str| form.get(n).unwrap_or_default().trim().to_string();
+    let values = Account {
+        display_name: field("displayName"),
+        program: field("program"),
+        expected_graduation: field("expectedGraduation"),
+    };
+    let errors = validate(&values);
+    if errors.any() {
+        let editor = account_editor(&values, &errors);
+        let init = ResponseInit::status(StatusCode::UNPROCESSABLE_ENTITY);
+        if is_frame_request(&ctx, ACCOUNT_FRAME) {
+            return ctx.render_with(editor, init);
+        }
+        return ctx.render_with(rsx! { <Layout title="Account" active_nav={MainNav::Account}>{editor}</Layout> }, init);
+    }
+    *ACCOUNT.lock().expect("account lock") = values;
+    response::redirect_with(&format!("{}?saved", ROUTES.main.account.index.href(())), StatusCode::SEE_OTHER)
+}
+
+/// `actions/settings/controller.tsx`: every section renders the same way.
+fn settings_action(slug: &'static str) -> Action {
+    action(move |ctx: Context| async move {
+        let page = settings_section(slug);
+        let init = if slug == "privacy" {
+            // The demo's privacy page fails on purpose, to show error handling.
+            ResponseInit::status(StatusCode::INTERNAL_SERVER_ERROR)
+        } else {
+            ResponseInit::default()
+        };
+        if is_frame_request(&ctx, SETTINGS_FRAME) {
+            return ctx.render_with(settings_layout(slug, page), init);
+        }
+        let src = ctx.url().href();
+        ctx.render_with(
+            rsx! { <Layout title="Settings" active_nav={MainNav::Settings}><Frame name={SETTINGS_FRAME} src={src}/></Layout> },
+            init,
+        )
+    })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -470,5 +518,66 @@ fn login_page() -> Node {
                 </main>
             </body>
         </html>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmx::fetch::{block_on, Body};
+
+    fn fetch(router: &Router, method: &str, path: &str, headers: &[(&str, &str)]) -> (u16, Option<String>, String) {
+        let mut req = http::Request::builder().method(method).uri(format!("http://localhost{path}"));
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        let res = block_on(router.fetch(req.body(Body::empty()).unwrap()));
+        let status = res.status().as_u16();
+        let location = res.headers().get("location").map(|v| v.to_str().unwrap().to_string());
+        (status, location, block_on(res.into_body().text()).unwrap())
+    }
+
+    const SIGNED_IN: (&str, &str) = ("cookie", "frame-navigation-auth=1");
+
+    #[test]
+    fn controllers_require_auth_except_the_auth_routes() {
+        let router = router("examples/frame-navigation/public");
+        for path in ["/", "/courses", "/calendar", "/account", "/account/edit", "/settings", "/settings/profile"] {
+            let (status, location, _) = fetch(&router, "GET", path, &[]);
+            assert_eq!((status, location.as_deref()), (302, Some("/auth/login")), "{path}");
+        }
+        let (status, _, body) = fetch(&router, "GET", "/auth/login", &[]);
+        assert_eq!(status, 200);
+        assert!(body.contains("<form"), "{body}");
+        let (status, location, _) = fetch(&router, "GET", "/auth/login", &[SIGNED_IN]);
+        assert_eq!((status, location.as_deref()), (302, Some("/")));
+        let (status, location, _) = fetch(&router, "POST", "/auth/logout", &[SIGNED_IN]);
+        assert_eq!((status, location.as_deref()), (302, Some("/auth/login")));
+    }
+
+    #[test]
+    fn settings_index_redirects_and_sections_render_in_their_frame() {
+        let router = router("examples/frame-navigation/public");
+        let (status, location, _) = fetch(&router, "GET", "/settings", &[SIGNED_IN]);
+        assert_eq!((status, location.as_deref()), (303, Some("/settings/overview")));
+        let (status, _, page) = fetch(&router, "GET", "/settings/profile", &[SIGNED_IN]);
+        assert_eq!(status, 200);
+        assert!(page.contains("<html"), "full document");
+        let frame = [SIGNED_IN, ("x-remix-frame", "true"), ("x-remix-target", SETTINGS_FRAME)];
+        let (status, _, partial) = fetch(&router, "GET", "/settings/profile", &frame);
+        assert_eq!(status, 200);
+        assert!(!partial.contains("<html") && partial.contains("Profile"), "{partial}");
+        assert_eq!(fetch(&router, "GET", "/settings/privacy", &frame).0, 500);
+    }
+
+    #[test]
+    fn account_edit_validates_in_the_account_frame() {
+        let router = router("examples/frame-navigation/public");
+        let (status, _, partial) =
+            fetch(&router, "GET", "/account/edit", &[SIGNED_IN, ("x-remix-frame", "true"), ("x-remix-target", ACCOUNT_FRAME)]);
+        assert_eq!(status, 200);
+        assert!(!partial.contains("<html") && partial.contains("displayName"), "{partial}");
+        let (status, _, _) = fetch(&router, "POST", "/account/edit", &[SIGNED_IN, ("x-remix-frame", "true"), ("x-remix-target", ACCOUNT_FRAME)]);
+        assert_eq!(status, 422);
     }
 }

@@ -4,6 +4,8 @@
 use rmx::{css, link, on, rsx, Children, Component, EventHandler, Handle, Mixin, Node};
 use serde::{Deserialize, Serialize};
 
+pub mod routes;
+
 pub const COURSES_FRAME: &str = "courses";
 pub const ACCOUNT_FRAME: &str = "account";
 pub const SETTINGS_FRAME: &str = "settings";

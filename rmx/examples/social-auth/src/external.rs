@@ -10,7 +10,9 @@ use rmx::auth::{
 use rmx::fetch::{response, BoxError, BoxFuture, Request, Response};
 use rmx::middleware::auth::complete_auth;
 use rmx::middleware::session::SessionExt;
-use rmx::router::{Context, Router};
+use rmx::router::{action, Context, Router};
+
+use crate::routes::{External, ExternalActions, ROUTES};
 use serde::Serialize;
 
 use crate::data::{normalize_email, ExternalProfile};
@@ -103,18 +105,24 @@ pub struct ProviderLink {
 
 /// The login and callback routes for every provider.
 pub fn routes(router: &mut Router, providers: &ExternalProviders) {
-    controller(router, "google", providers.google.clone(), google_profile);
-    controller(router, "github", providers.github.clone(), github_profile);
-    controller(router, "x", providers.x.clone(), x_profile);
+    controller(router, &ROUTES.auth.google, "google", providers.google.clone(), google_profile);
+    controller(router, &ROUTES.auth.github, "github", providers.github.clone(), github_profile);
+    controller(router, &ROUTES.auth.x, "x", providers.x.clone(), x_profile);
 }
 
-fn controller<P: OAuthProvider>(router: &mut Router, name: &'static str, provider: Option<Arc<P>>, extract: fn(&P::Profile) -> ExternalProfile)
-where
+/// `actions/auth/<provider>/controller.ts`
+fn controller<P: OAuthProvider>(
+    router: &mut Router,
+    routes: &External,
+    name: &'static str,
+    provider: Option<Arc<P>>,
+    extract: fn(&P::Profile) -> ExternalProfile,
+) where
     P::Profile: Serialize,
 {
     let label = provider_label(name);
     let login = provider.clone();
-    router.get(format!("/auth/{name}/login").as_str(), move |ctx: Context| {
+    let login = action(move |ctx: Context| {
         let provider = login.clone();
         async move {
             let Some(provider) = provider else {
@@ -131,7 +139,7 @@ where
             }
         }
     });
-    router.get(format!("/auth/{name}/callback").as_str(), move |ctx: Context| {
+    let callback = action(move |ctx: Context| {
         let provider = provider.clone();
         async move {
             let Some(provider) = provider else {
@@ -148,6 +156,7 @@ where
             response::redirect(finished.return_to.as_deref().unwrap_or("/account"))
         }
     });
+    router.map(routes, ExternalActions { login, callback });
 }
 
 fn json_of(profile: &impl Serialize) -> String {

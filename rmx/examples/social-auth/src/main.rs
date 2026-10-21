@@ -33,6 +33,7 @@ fn https_fetch() -> impl Fn(Request) -> std::pin::Pin<Box<dyn std::future::Futur
 }
 
 fn main() {
+    rmx::router::routes::routes_command(&*social_auth_demo::routes::ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44106".into());
     let secret = std::env::var("SESSION_SECRET").unwrap_or_else(|_| "social-auth-demo-secret".into());

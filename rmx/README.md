@@ -184,8 +184,12 @@ crates:
    reported to the app's error listeners. Server streaming is checked by ports of `stream.test.tsx`
    (`crates/component/tests/ssr_*.rs`, and `crates/render/src/stream_tests.rs` for frames,
    which resolve through the router).
-2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
-   reading the request context deeper in the call stack), `rmx-route-pattern`,
+2. Server: `rmx-router` (routes, middleware, nested mounts, controllers, and
+   `async_context` for reading the request context deeper in the call stack; route maps
+   derive `RouteMap`, which generates a `<Name>Actions` struct so `router.map(&ROUTES,
+   Controller::new(RoutesActions { .. }).with(require_auth()))` checks at compile time
+   that a controller covers every direct route, and `routes_command` gives an app binary
+   Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
    `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
    `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; plus an

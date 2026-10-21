@@ -6,6 +6,7 @@
 use rmx::{css, on, rsx, Children, Component, Frame, FrameEvent, Handle, Mixin, Node, NodeHandle};
 use serde::{Deserialize, Serialize};
 
+pub mod routes;
 pub mod scroll_reload;
 
 // ---------------------------------------------------------------------------------------

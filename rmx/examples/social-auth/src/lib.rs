@@ -19,6 +19,7 @@
 
 pub mod data;
 pub mod external;
+pub mod routes;
 pub mod ui;
 
 use http::StatusCode;
@@ -32,13 +33,15 @@ use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::session::{session, SessionExt};
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx::render::{Render, ResponseInit};
-use rmx::router::{middleware, Context, IntoResponse, Middleware, Next, Router};
+use rmx::router::routes::FormActions;
+use rmx::router::{action, Context, IntoResponse, Middleware, Next, Router};
 use rmx::session::{Session, SessionStorage};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use data::{hash_password, normalize_email, normalize_optional_text, verify_password, AuthAccount, Db, User};
 use external::{provider_label, ExternalProviders, ProviderLink};
+use routes::{AuthActions, RoutesActions, ROUTES};
 use ui::*;
 
 // ---------------------------------------------------------------------------------------
@@ -58,28 +61,42 @@ pub fn router<S: SessionStorage>(cookie: Cookie, storage: S, db: Db, public: &st
 
     // actions/controller.tsx
     let registry = providers.clone();
-    router.get("/", move |ctx: Context| {
-        let providers = registry.clone();
-        async move { home(ctx, &providers).await }
-    });
-    router.group(vec![middleware(require_login())], |r| {
-        r.get("/account", account);
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            home: action(move |ctx: Context| {
+                let providers = registry.clone();
+                async move { home(ctx, &providers).await }
+            }),
+            account: action(account).with(require_login()),
+        },
+    );
 
     // actions/auth/controller.tsx
-    router.post("/auth/login", login);
-    router.post("/auth/logout", |ctx: Context| async move {
-        ctx.session().unset("auth");
-        ctx.session().regenerate_id(true);
-        response::redirect("/")
-    });
-
-    router.get("/auth/signup", |ctx: Context| async move { ctx.render(signup_page(&ctx, None, None, None)) });
-    router.post("/auth/signup", signup);
-    router.get("/auth/forgot-password", |ctx: Context| async move { ctx.render(forgot_password_page(&ctx, None, None)) });
-    router.post("/auth/forgot-password", forgot_password);
-    router.get("/auth/reset-password/:token", reset_password_form);
-    router.post("/auth/reset-password/:token", reset_password);
+    let r = &ROUTES.auth;
+    router.map(
+        r,
+        AuthActions {
+            login: action(login),
+            logout: action(|ctx: Context| async move {
+                ctx.session().unset("auth");
+                ctx.session().regenerate_id(true);
+                response::redirect(&ROUTES.home.href(()))
+            }),
+        },
+    );
+    router.map(
+        &r.signup,
+        FormActions { index: action(|ctx: Context| async move { ctx.render(signup_page(&ctx, None, None, None)) }), action: action(signup) },
+    );
+    router.map(
+        &r.forgot_password,
+        FormActions {
+            index: action(|ctx: Context| async move { ctx.render(forgot_password_page(&ctx, None, None)) }),
+            action: action(forgot_password),
+        },
+    );
+    router.map(&r.reset_password, FormActions { index: action(reset_password_form), action: action(reset_password) });
 
     // actions/auth/{google,github,x}/controller.ts
     external::routes(&mut router, &providers);
