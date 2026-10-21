@@ -330,7 +330,10 @@ Covered since phase 0b:
    Remix's order. Every demo now maps controllers the way its `router.ts` does, and
    `router.test.ts` is ported (`crates/router/tests/router.rs`: map, verbs with action
    middleware, 404, 405 with Remix's Allow order and body, HEAD falling back to GET by
-   specificity, trailing slashes, mounts). The `remix new` starter (`reference/remix/template`)
+   specificity, trailing slashes, mounts), as are `router-abort.test.ts` and
+   `request-abort.test.ts`: `request.signal` is an `rmx_fetch::AbortSignal` that `rmx-serve`
+   aborts when the client leaves before the response finished, and an aborted request skips
+   the rest of the chain and answers 499 with `AbortError` where Remix rejects. The `remix new` starter (`reference/remix/template`)
    is ported as `examples/template` with its controller test and a browser e2e.
    Route helper options that change a map's shape (`only`, `exclude`, `names`) become a
    struct you declare with `#[derive(RouteMap)]` (the bookstore's `ReadOnly` and `Users`).
