@@ -174,7 +174,7 @@ impl FrameHandle {
         if let Some(f) = &self.frame {
             let f = f.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                f.reload(options).await;
+                let _ = f.reload(options).await;
             });
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -191,14 +191,22 @@ impl FrameHandle {
         let _ = node;
     }
 
-    /// Like [`FrameHandle::reload_with`], resolving once the new content is in the page.
-    pub async fn reload_async(&self, options: ReloadOptions) {
+    /// Like [`FrameHandle::reload_with`], resolving once the new content is in the page
+    /// (Remix's `await frame.reload()`): to the load's signal, which is aborted when a
+    /// newer load of the frame superseded this one, or to the error, which is also reported
+    /// to the app's error listeners. On the server it resolves at once to a signal that
+    /// never aborts.
+    pub async fn reload_async(&self, options: ReloadOptions) -> Result<crate::Signal, crate::AppError> {
         #[cfg(target_arch = "wasm32")]
         if let Some(f) = &self.frame {
-            f.clone().reload(options).await;
+            return match f.clone().reload(options).await {
+                Ok(signal) => Ok(crate::Signal::from(signal)),
+                Err(e) => Err(crate::AppError { message: crate::dom::frames::js_error(&e) }),
+            };
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = options;
+        Ok(crate::Signal::never())
     }
 }
 

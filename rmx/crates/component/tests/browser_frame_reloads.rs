@@ -211,7 +211,7 @@ fn reload_with(frame: FrameHandle, options: ReloadOptions) -> Rc<Cell<bool>> {
     let done = Rc::new(Cell::new(false));
     let flag = done.clone();
     wasm_bindgen_futures::spawn_local(async move {
-        frame.reload_async(options).await;
+        let _ = frame.reload_async(options).await;
         flag.set(true);
     });
     done
@@ -1182,7 +1182,7 @@ async fn looks_up_named_adjacent_frames_from_a_client_entry() {
 
     let h = row();
     assert!(h.frames().get("ra-missing").is_none());
-    h.frames().get("ra-summary").expect("the summary frame").reload_async(ReloadOptions::default()).await;
+    let _ = h.frames().get("ra-summary").expect("the summary frame").reload_async(ReloadOptions::default()).await;
     assert_eq!(text("ra-summary").as_deref(), Some("Summary: 2"));
 }
 
@@ -1286,7 +1286,7 @@ async fn ignores_updates_from_a_client_entry_removed_by_its_frame_reload() {
     rmx::flush();
     assert!(by_id("cart-pending").is_some());
     server.route("/ci-cart", vec![Part::Html(r#"<p id="empty-cart">Your cart is empty.</p>"#.into())]);
-    h.frame().reload_async(ReloadOptions::default()).await;
+    let _ = h.frame().reload_async(ReloadOptions::default()).await;
     CART_PENDING.with(|p| p.set(false));
     h.update();
     rmx::flush();
@@ -1347,4 +1347,54 @@ async fn preserves_application_templates_while_waiting_for_a_streamed_frame() {
     assert!(by_id("pa-row-template").unwrap().is_same_node(Some(&row)), "the application template is untouched");
     let content: &web_sys::DocumentFragment = &row.content();
     assert_eq!(content.query_selector("p").unwrap().and_then(|p| p.text_content()).as_deref(), Some("Application row"));
+}
+
+// frame.test.tsx: what `await frame.reload()` resolves to
+
+#[wasm_bindgen_test]
+async fn a_superseded_reload_resolves_to_an_aborted_signal_without_reporting_an_error() {
+    let server = start().await;
+    server.route("/rs-parent", vec![Part::Html(r#"<p id="rs">Initial</p>"#.into())]);
+    let _m = mount("rs-parent", "/rs-parent", "rs").await;
+    let errors = Rc::new(RefCell::new(Vec::<String>::new()));
+    let seen = errors.clone();
+    let app = APP.with(|a| a.borrow().clone()).expect("app");
+    let listener = app.on_error(move |e| seen.borrow_mut().push(e.message.clone()));
+
+    server.route("/rs-parent", vec![Part::Gate("rs-stale")]);
+    let f = frame("rs-parent");
+    let stale = wasm_bindgen_futures::future_to_promise({
+        let f = f.clone();
+        async move { Ok(JsValue::from_bool(f.reload_async(ReloadOptions::default()).await.expect("no error").aborted())) }
+    });
+    tick().await;
+    server.route("/rs-parent", vec![Part::Html(r#"<p id="rs">Current</p>"#.into())]);
+    let current = f.reload_async(ReloadOptions::default()).await.expect("the current reload");
+    assert!(!current.aborted());
+    assert_eq!(text("rs").as_deref(), Some("Current"));
+    let stale_aborted = JsFuture::from(stale).await.unwrap().as_bool().unwrap();
+    assert!(stale_aborted, "the superseded reload's signal is aborted");
+    server.release("rs-stale", r#"<p id="rs">Stale</p>"#);
+    tick().await;
+    assert_eq!(text("rs").as_deref(), Some("Current"));
+    app.remove_error_listener(listener);
+    assert_eq!(*errors.borrow(), Vec::<String>::new());
+}
+
+#[wasm_bindgen_test]
+async fn a_failed_reload_resolves_to_its_error_and_reports_it() {
+    let server = start().await;
+    server.route("/rj-parent", vec![Part::Html(r#"<p id="rj">Initial</p>"#.into())]);
+    let _m = mount("rj-parent", "/rj-parent", "rj").await;
+    let errors = Rc::new(RefCell::new(Vec::<String>::new()));
+    let seen = errors.clone();
+    let app = APP.with(|a| a.borrow().clone()).expect("app");
+    let listener = app.on_error(move |e| seen.borrow_mut().push(e.message.clone()));
+
+    server.fail("/rj-parent");
+    let caught = frame("rj-parent").reload_async(ReloadOptions::default()).await.expect_err("the reload fails");
+    app.remove_error_listener(listener);
+    assert!(caught.message.contains("Failed to reload entry frame"), "{caught:?}");
+    assert_eq!(*errors.borrow(), std::slice::from_ref(&caught.message), "the same error reaches the app");
+    assert_eq!(text("rj").as_deref(), Some("Initial"));
 }

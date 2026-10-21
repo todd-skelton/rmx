@@ -266,7 +266,9 @@ impl FrameState {
 
     /// `FrameHandle::reload_with`: optional new src, method, encoding and form fields.
     /// Methods other than POST are GET, which puts the fields in the query.
-    pub(crate) async fn reload(self: Rc<Self>, options: ReloadOptions) {
+    /// Resolves to the load's signal (aborted when a newer load superseded it), or the
+    /// error, which is also reported to the app.
+    pub(crate) async fn reload(self: Rc<Self>, options: ReloadOptions) -> Result<web_sys::AbortSignal, JsValue> {
         if let Some(src) = &options.src {
             self.set_src(src);
         }
@@ -288,29 +290,35 @@ impl FrameState {
         if post {
             submission.method = Some("POST".into());
         }
-        if let Err(e) = self.load(submission).await {
-            crate::report_error(js_error(&e));
+        match self.load_following(submission, None).await {
+            Ok((_, signal)) => Ok(signal),
+            Err(e) => {
+                crate::report_error(js_error(&e));
+                Err(e)
+            }
         }
     }
 
     /// Fetch the frame's `src` and reconcile the response into the page. Resolves to the
     /// final URL when the server redirected. A newer load of the same frame aborts this one.
     pub(crate) async fn load(self: &Rc<Self>, submission: Submission) -> Result<Option<String>, JsValue> {
-        self.load_following(submission, None).await
+        self.load_following(submission, None).await.map(|(redirected, _)| redirected)
     }
 
     /// [`load`](Self::load), aborted as well when `ancestor` aborts: the signal of the
     /// frame load whose render started this one. A newer load of that frame then cancels it.
+    /// Also returns the load's signal.
     async fn load_following(
         self: &Rc<Self>,
         submission: Submission,
         ancestor: Option<web_sys::AbortSignal>,
-    ) -> Result<Option<String>, JsValue> {
+    ) -> Result<(Option<String>, web_sys::AbortSignal), JsValue> {
         self.queued.set(false);
-        if self.disposed.get() {
-            return Ok(None);
-        }
         let controller = web_sys::AbortController::new()?;
+        if self.disposed.get() {
+            controller.abort();
+            return Ok((None, controller.signal()));
+        }
         if let Some(previous) = self.reload.replace(Some(controller.clone())) {
             previous.abort();
         }
@@ -351,7 +359,7 @@ impl FrameState {
             if current && !self.disposed.get() {
                 self.emit("reloadComplete");
             }
-            return Ok(None);
+            return Ok((None, signal));
         }
         // Frames inside that got their content with this load are done; ones waiting for a
         // streamed template finish when it arrives.
@@ -361,7 +369,7 @@ impl FrameState {
             }
         }
         self.emit("reloadComplete");
-        result
+        result.map(|redirected| (redirected, signal))
     }
 
     async fn fetch_and_apply(self: &Rc<Self>, submission: Submission, signal: &web_sys::AbortSignal) -> Result<Option<String>, JsValue> {

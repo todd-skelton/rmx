@@ -200,7 +200,7 @@ async fn sends_frame_headers_and_the_target_when_reloading_a_named_frame() {
     let m = mount(&stub, Some("details")).await;
     stub.clear();
 
-    frame("details").reload_async(ReloadOptions::default()).await;
+    let _ = frame("details").reload_async(ReloadOptions::default()).await;
 
     assert_eq!(stub.count(), 1);
     assert_eq!(stub.input(0), "/frame");
@@ -234,8 +234,8 @@ async fn retains_the_requested_source_without_retaining_the_previous_method_or_b
     stub.clear();
 
     let f = frame("body-retain");
-    f.reload_async(ReloadOptions { src: Some("/save".into()), method: Some("post".into()), body: fields(&[("name", "Ada")]), ..Default::default() }).await;
-    f.reload_async(ReloadOptions::default()).await;
+    let _ = f.reload_async(ReloadOptions { src: Some("/save".into()), method: Some("post".into()), body: fields(&[("name", "Ada")]), ..Default::default() }).await;
+    let _ = f.reload_async(ReloadOptions::default()).await;
 
     assert_eq!(stub.count(), 2);
     assert_eq!(stub.request(0).method(), "POST");
@@ -251,7 +251,7 @@ async fn reloads_with_multipart_form_data_and_lets_fetch_generate_its_boundary()
     let _m = mount(&stub, Some("multipart")).await;
     stub.clear();
 
-    frame("multipart")
+    let _ = frame("multipart")
         .reload_async(ReloadOptions { method: Some("post".into()), enc_type: Some("multipart/form-data".into()), body: fields(&[("name", "Ada")]), ..Default::default() })
         .await;
 
@@ -268,7 +268,7 @@ async fn reloads_with_text_plain_form_data_and_normalizes_line_breaks() {
     let _m = mount(&stub, Some("plain")).await;
     stub.clear();
 
-    frame("plain")
+    let _ = frame("plain")
         .reload_async(ReloadOptions { method: Some("post".into()), enc_type: Some("text/plain".into()), body: fields(&[("name", "Ada\nLovelace")]), ..Default::default() })
         .await;
 
@@ -285,7 +285,7 @@ async fn defaults_reloads_with_fields_to_get_and_replaces_the_source_query_witho
     stub.clear();
 
     let f = frame("get-fields");
-    f.reload_async(ReloadOptions {
+    let _ = f.reload_async(ReloadOptions {
         src: Some("/search?old=1#results".into()),
         enc_type: Some("multipart/form-data".into()),
         body: fields(&[("name", "Ada Lovelace"), ("name", "Grace")]),
@@ -309,7 +309,7 @@ async fn defaults_post_fields_to_url_encoding_with_normalized_line_breaks() {
     let _m = mount(&stub, Some("urlencoded")).await;
     stub.clear();
 
-    frame("urlencoded").reload_async(ReloadOptions { method: Some("post".into()), body: fields(&[("name\nline", "Ada\nLovelace")]), ..Default::default() }).await;
+    let _ = frame("urlencoded").reload_async(ReloadOptions { method: Some("post".into()), body: fields(&[("name\nline", "Ada\nLovelace")]), ..Default::default() }).await;
 
     assert_eq!(stub.count(), 1);
     let request = stub.request(0);
@@ -323,7 +323,7 @@ async fn defaults_an_invalid_form_method_to_get_and_encodes_its_fields_in_the_qu
     let _m = mount(&stub, Some("invalid-method")).await;
     stub.clear();
 
-    frame("invalid-method")
+    let _ = frame("invalid-method")
         .reload_async(ReloadOptions { src: Some("/search?old=1".into()), method: Some("PATCH".into()), body: fields(&[("name", "Ada")]), ..Default::default() })
         .await;
 
@@ -341,7 +341,7 @@ async fn accepts_case_insensitive_form_methods_and_encodings() {
     let _m = mount(&stub, Some("case")).await;
     stub.clear();
 
-    frame("case")
+    let _ = frame("case")
         .reload_async(ReloadOptions { method: Some("PoSt".into()), enc_type: Some("TEXT/PLAIN".into()), body: fields(&[("name", "Ada")]), ..Default::default() })
         .await;
 
@@ -358,7 +358,7 @@ async fn falls_back_to_url_encoding_for_an_invalid_encoding() {
     let _m = mount(&stub, Some("invalid-enc")).await;
     stub.clear();
 
-    frame("invalid-enc")
+    let _ = frame("invalid-enc")
         .reload_async(ReloadOptions { method: Some("post".into()), enc_type: Some("invalid".into()), body: fields(&[("name", "Ada")]), ..Default::default() })
         .await;
 
@@ -377,7 +377,7 @@ async fn submits_fields_through_one_default_fetch_and_renders_the_returned_html_
     let initial_url = window.location().href().unwrap();
     let initial_entries = window.history().unwrap().length().unwrap();
 
-    frame("submit")
+    let _ = frame("submit")
         .reload_async(ReloadOptions {
             src: Some("/account/save".into()),
             method: Some("post".into()),
@@ -403,7 +403,7 @@ async fn uses_same_origin_requests_for_explicitly_cross_origin_frame_sources() {
     let _m = mount(&stub, Some("cross-origin")).await;
     stub.clear();
 
-    frame("cross-origin").reload_async(ReloadOptions { src: Some("https://frames.example/partial".into()), ..Default::default() }).await;
+    let _ = frame("cross-origin").reload_async(ReloadOptions { src: Some("https://frames.example/partial".into()), ..Default::default() }).await;
 
     assert_eq!(stub.input(0), "https://frames.example/partial");
     assert_eq!(get(&stub.init(0), "mode").as_string().as_deref(), Some("same-origin"));
@@ -416,7 +416,7 @@ async fn renders_3xx_html_responses_from_the_default_resolver() {
     drop(stub);
     let stub = FetchStub::new(r#"<main id="choices">Multiple choices</main>"#, 300, "Multiple Choices", Some("text/html"));
 
-    frame("three").reload_async(ReloadOptions::default()).await;
+    let _ = frame("three").reload_async(ReloadOptions::default()).await;
 
     assert_eq!(stub.count(), 1);
     assert_eq!(m.text_of("#choices").as_deref(), Some("Multiple choices"));
@@ -430,7 +430,7 @@ async fn rejects_non_html_3xx_responses_from_the_default_resolver() {
     let stub = FetchStub::new(r#"{"next":"/account"}"#, 300, "Multiple Choices", Some("application/json"));
     let (seen, _guard) = errors();
 
-    frame("three-json").reload_async(ReloadOptions::default()).await;
+    let _ = frame("three-json").reload_async(ReloadOptions::default()).await;
 
     assert_eq!(stub.count(), 1);
     assert_eq!(*seen.borrow(), ["Failed to resolve frame: 300 Multiple Choices"]);
@@ -444,7 +444,7 @@ async fn renders_4xx_html_responses_from_the_default_resolver() {
     drop(stub);
     let stub = FetchStub::new(r#"<p role="alert">Name is required</p>"#, 422, "Unprocessable Content", Some("Text/HTML; charset=utf-8"));
 
-    frame("four").reload_async(ReloadOptions { method: Some("post".into()), body: fields(&[]), ..Default::default() }).await;
+    let _ = frame("four").reload_async(ReloadOptions { method: Some("post".into()), body: fields(&[]), ..Default::default() }).await;
 
     assert_eq!(stub.count(), 1);
     assert_eq!(m.text_of("[role=alert]").as_deref(), Some("Name is required"));
@@ -458,7 +458,7 @@ async fn rejects_non_html_4xx_responses_from_the_default_resolver() {
     let stub = FetchStub::new("Not Found", 404, "Not Found", Some("text/plain"));
     let (seen, _guard) = errors();
 
-    frame("four-text").reload_async(ReloadOptions::default()).await;
+    let _ = frame("four-text").reload_async(ReloadOptions::default()).await;
 
     assert_eq!(stub.count(), 1);
     assert_eq!(*seen.borrow(), ["Failed to resolve frame: 404 Not Found"]);
@@ -473,7 +473,7 @@ async fn rejects_5xx_html_responses_from_the_default_resolver() {
     let stub = FetchStub::new(r#"<main id="error">Internal Server Error</main>"#, 500, "Internal Server Error", Some("text/html"));
     let (seen, _guard) = errors();
 
-    frame("five").reload_async(ReloadOptions::default()).await;
+    let _ = frame("five").reload_async(ReloadOptions::default()).await;
 
     assert_eq!(stub.count(), 1);
     assert_eq!(*seen.borrow(), ["Failed to resolve frame: 500 Internal Server Error"]);
@@ -490,7 +490,7 @@ async fn renders_a_redirected_reload_response_while_retaining_its_requested_sour
     let initial_url = web_sys::window().unwrap().location().href().unwrap();
 
     let f = frame("redirected");
-    f.reload_async(ReloadOptions { src: Some("https://example.com/save".into()), method: Some("post".into()), body: fields(&[]), ..Default::default() }).await;
+    let _ = f.reload_async(ReloadOptions { src: Some("https://example.com/save".into()), method: Some("post".into()), body: fields(&[]), ..Default::default() }).await;
 
     assert_eq!(m.text_of("p").as_deref(), Some("Saved"));
     assert_eq!(f.src(), "https://example.com/save");

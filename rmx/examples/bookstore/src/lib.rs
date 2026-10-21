@@ -60,7 +60,7 @@ impl Component for CartButton {
             let (h, signal, fields) = (h.clone(), event.signal(), fields.clone());
             h.clone().spawn(async move {
                 let _ = browser::fetch_form("POST", &ROUTES.api.cart_toggle.href(()), &fields, Some(&signal)).await;
-                h.frame().reload_async(ReloadOptions::default()).await;
+                let _ = h.frame().reload_async(ReloadOptions::default()).await;
                 browser::sleep(500).await;
                 if signal.aborted() {
                     return;
@@ -124,7 +124,7 @@ impl CartItems {
             h.clone().spawn(async move {
                 let posted = browser::fetch_form("POST", &url, &fields, Some(&signal)).await;
                 if posted.is_ok() && !signal.aborted() {
-                    h.frame().reload_async(ReloadOptions::default()).await;
+                    let _ = h.frame().reload_async(ReloadOptions::default()).await;
                 }
                 h.with(|this, h| {
                     this.pending = None;

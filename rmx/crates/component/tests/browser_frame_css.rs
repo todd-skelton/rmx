@@ -106,7 +106,7 @@ async fn keeps_a_sibling_frame_styled_after_the_first_frame_reloads_away_from_a_
     assert_eq!(color("a-shared"), "rgb(11, 22, 33)", "initial a");
     assert_eq!(color("b-shared"), "rgb(11, 22, 33)", "initial b");
 
-    Frames.get("a").unwrap().reload_async(ReloadOptions { src: Some("/a2".into()), ..Default::default() }).await;
+    let _ = Frames.get("a").unwrap().reload_async(ReloadOptions { src: Some("/a2".into()), ..Default::default() }).await;
 
     assert!(document().get_element_by_id("a-plain").is_some());
     assert!(document().get_element_by_id("a-shared").is_none());
@@ -119,10 +119,10 @@ async fn does_not_accumulate_rules_when_a_frame_reloads_with_unchanged_styles() 
     let frame = Frames.get("stable").unwrap();
     assert_eq!(frame.src(), "/stable");
 
-    frame.reload_async(ReloadOptions::default()).await;
+    let _ = frame.reload_async(ReloadOptions::default()).await;
     let after_first = count_rules();
-    frame.reload_async(ReloadOptions::default()).await;
-    frame.reload_async(ReloadOptions::default()).await;
+    let _ = frame.reload_async(ReloadOptions::default()).await;
+    let _ = frame.reload_async(ReloadOptions::default()).await;
 
     assert_eq!(count_rules(), after_first);
     assert_eq!(color("stable"), "rgb(44, 55, 66)");

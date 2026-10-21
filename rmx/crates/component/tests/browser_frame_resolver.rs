@@ -144,7 +144,7 @@ async fn passes_form_submission_options_to_the_resolver() {
     let _m = mount("submit").await;
     clear();
 
-    frame("submit")
+    let _ = frame("submit")
         .reload_async(ReloadOptions {
             src: Some("/save".into()),
             method: Some("post".into()),
@@ -166,7 +166,7 @@ async fn normalizes_an_invalid_encoding_for_the_resolver() {
     let _m = mount("encoding").await;
     clear();
 
-    frame("encoding").reload_async(ReloadOptions { method: Some("post".into()), enc_type: Some("invalid".into()), body: fields(&[("a", "1")]), ..Default::default() }).await;
+    let _ = frame("encoding").reload_async(ReloadOptions { method: Some("post".into()), enc_type: Some("invalid".into()), body: fields(&[("a", "1")]), ..Default::default() }).await;
 
     assert_eq!(requests()[0].enc_type.as_deref(), Some("application/x-www-form-urlencoded"));
 }
@@ -176,7 +176,7 @@ async fn omits_submission_options_from_plain_reloads() {
     let _m = mount("plain").await;
     clear();
 
-    frame("plain").reload_async(ReloadOptions::default()).await;
+    let _ = frame("plain").reload_async(ReloadOptions::default()).await;
 
     let request = &requests()[0];
     assert_eq!(request.method, "GET");
@@ -189,7 +189,7 @@ async fn reloads_a_get_source_with_query_parameters_without_body_metadata() {
     let _m = mount("get").await;
     clear();
 
-    frame("get").reload_async(ReloadOptions { src: Some("/search".into()), body: fields(&[("q", "rust")]), ..Default::default() }).await;
+    let _ = frame("get").reload_async(ReloadOptions { src: Some("/search".into()), body: fields(&[("q", "rust")]), ..Default::default() }).await;
 
     let request = &requests()[0];
     assert_eq!(request.url, absolute("/search?q=rust"));
@@ -204,7 +204,7 @@ async fn renders_a_redirected_response_without_changing_the_frame_source() {
     answer(Answer::Html(r#"<main id="result">Settings overview</main>"#.into(), Some("https://example.com/settings/overview".into())));
 
     let f = frame("redirect");
-    f.reload_async(ReloadOptions { src: Some("https://example.com/settings".into()), ..Default::default() }).await;
+    let _ = f.reload_async(ReloadOptions { src: Some("https://example.com/settings".into()), ..Default::default() }).await;
 
     assert_eq!(m.text_of("#result").as_deref(), Some("Settings overview"));
     assert_eq!(f.src(), "https://example.com/settings");
@@ -215,7 +215,7 @@ async fn renders_node_results_from_the_resolver() {
     let m = mount("node").await;
     answer(Answer::Node);
 
-    frame("node").reload_async(ReloadOptions::default()).await;
+    let _ = frame("node").reload_async(ReloadOptions::default()).await;
 
     assert_eq!(m.text_of("#node").as_deref(), Some("From a node"));
     assert_eq!(m.text_of("#content"), None);
