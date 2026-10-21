@@ -192,6 +192,42 @@ fn next_chunk(mut rest: Body) -> Work {
     })
 }
 
+/// Every frame in the page, including frames inside other frames' fallbacks, in document
+/// order.
+fn collect_frames<'a>(segments: &'a [Segment], out: &mut Vec<&'a ssr::FrameSegment>) {
+    for seg in segments {
+        if let Segment::Frame(f) = seg {
+            out.push(f);
+            if let Some(fallback) = &f.fallback {
+                collect_frames(fallback, out);
+            }
+        }
+    }
+}
+
+/// Write the page: blocking frames inlined, non-blocking ones showing their fallback
+/// (whose own frames are written the same way). Non-blocking frame ids go to `streamed`.
+fn write_page(segments: &[Segment], contents: &mut std::collections::HashMap<String, String>, html: &mut String, streamed: &mut Vec<String>) {
+    for seg in segments {
+        match seg {
+            Segment::Html(h) => html.push_str(h),
+            Segment::Frame(f) => {
+                html.push_str("<!--rmx:f:");
+                html.push_str(&f.id);
+                html.push_str("-->");
+                match &f.fallback {
+                    None => html.push_str(contents.get(&f.id).map_or("", String::as_str)),
+                    Some(fallback) => {
+                        write_page(fallback, contents, html, streamed);
+                        streamed.push(f.id.clone());
+                    }
+                }
+                html.push_str("<!--/rmx:f-->");
+            }
+        }
+    }
+}
+
 async fn stream_with_frames(
     router: Router,
     base: Url,
@@ -200,93 +236,73 @@ async fn stream_with_frames(
     mut send: impl FnMut(String) -> bool,
 ) {
     let ssr::Rendered { segments, mut data, styles } = rendered;
-    let blocking = |i: usize| matches!(&segments[i], Segment::Frame(f) if f.fallback.is_none());
+    let mut frames = Vec::new();
+    collect_frames(&segments, &mut frames);
+    let blocking = |i: usize| frames[i].fallback.is_none();
 
     // Start every frame at once; blocking ones must finish before the first byte.
     let mut work: Vec<Work> = Vec::new();
-    for (index, seg) in segments.iter().enumerate() {
-        if let Segment::Frame(f) = seg {
-            let fut = fetch_frame(router.clone(), base.clone(), f.src.clone(), f.name.clone(), forward.clone());
-            work.push(Box::pin(async move {
-                let (head, rest) = fut.await;
-                Done::Frame { index, head, rest }
-            }));
-        }
+    for (index, f) in frames.iter().enumerate() {
+        let fut = fetch_frame(router.clone(), base.clone(), f.src.clone(), f.name.clone(), forward.clone());
+        work.push(Box::pin(async move {
+            let (head, rest) = fut.await;
+            Done::Frame { index, head, rest }
+        }));
     }
-    let mut contents: Vec<Option<String>> = vec![None; segments.len()];
+    let mut contents = std::collections::HashMap::new();
     // Template streams of frames whose content went out already.
     let mut early_rests: Vec<Body> = Vec::new();
-    let mut blocking_left = (0..segments.len()).filter(|&i| blocking(i)).count();
+    let mut blocking_left = (0..frames.len()).filter(|&i| blocking(i)).count();
     while blocking_left > 0 {
         let Some(done) = next_done(&mut work).await else { break };
         if let Done::Frame { index, head, rest } = done {
             if blocking(index) {
                 blocking_left -= 1;
             }
-            contents[index] = Some(head);
+            contents.insert(frames[index].id.clone(), head);
             early_rests.extend(rest);
         }
     }
     // Inlined frame content brings its own styles and hydration data; they belong to the
     // page (head and the one rmx-data script), not inside the frame region.
     let mut styles = styles;
-    for (i, content) in contents.iter_mut().enumerate() {
-        let inline = blocking(i) || matches!(&segments[i], Segment::Frame(f) if f.fallback.is_some());
-        if let (true, Some(html)) = (inline, content.as_mut()) {
-            let (body, frame_styles, frame_data) = split_frame_html(std::mem::take(html));
-            *html = body;
-            for (class, css) in frame_styles {
-                if !styles.iter().any(|(c, _)| *c == class) {
-                    styles.push((class, css));
-                }
+    for html in contents.values_mut() {
+        let (body, frame_styles, frame_data) = split_frame_html(std::mem::take(html));
+        *html = body;
+        for (class, css) in frame_styles {
+            if !styles.iter().any(|(c, _)| *c == class) {
+                styles.push((class, css));
             }
-            if let Some(d) = frame_data {
-                data.merge(d);
-            }
+        }
+        if let Some(d) = frame_data {
+            data.merge(d);
         }
     }
 
-    // The page: blocking frames inlined, non-blocking ones showing their fallback.
     let mut html = String::new();
     let mut streamed = Vec::new();
-    for (i, seg) in segments.iter().enumerate() {
-        match seg {
-            Segment::Html(h) => html.push_str(h),
-            Segment::Frame(f) => {
-                html.push_str("<!--rmx:f:");
-                html.push_str(&f.id);
-                html.push_str("-->");
-                match (&f.fallback, contents[i].take()) {
-                    (None, Some(content)) => html.push_str(&content),
-                    (Some(fallback), done) => {
-                        html.push_str(fallback);
-                        streamed.push((f.id.clone(), done));
-                    }
-                    (None, None) => {}
-                }
-                html.push_str("<!--/rmx:f-->");
-            }
-        }
-    }
-    for (id, _, _, status) in &mut data.frames {
-        if !streamed.iter().any(|(sid, _)| sid == id) {
-            *status = "resolved";
-        }
-    }
+    // Statuses stand as rendered: blocking frames are resolved, frames with a fallback
+    // (here or inside inlined frame content) are pending until their template arrives.
+    write_page(&segments, &mut contents, &mut html, &mut streamed);
     let html = with_doctype(ssr::finalize_html(html, &styles, &data));
     let document = html.starts_with("<!DOCTYPE");
     let (mut head, tail) = split_body_end(html);
     let more = !streamed.is_empty() || !early_rests.is_empty() || !work.is_empty();
-    if more {
-        head.push_str(ssr::flush_marker(document));
+    if !more {
+        // Nothing streams: the page is one chunk.
+        head.push_str(&tail);
+        send(head);
+        return;
     }
+    head.push_str(ssr::flush_marker(document));
     if !send(head) {
         return;
     }
 
-    // Templates for non-blocking frames (and nested frames' templates), as they finish.
-    for (id, done) in &streamed {
-        if let Some(content) = done {
+    // Templates for non-blocking frames that finished early (and nested frames'
+    // templates), then the rest as they finish.
+    for id in &streamed {
+        if let Some(content) = contents.get(id) {
             if !send(template(id, content)) {
                 return;
             }
@@ -296,11 +312,7 @@ async fn stream_with_frames(
     while let Some(done) = next_done(&mut work).await {
         match done {
             Done::Frame { index, head, rest } => {
-                let id = match &segments[index] {
-                    Segment::Frame(f) => f.id.clone(),
-                    Segment::Html(_) => String::new(),
-                };
-                if !send(template(&id, &head)) {
+                if !send(template(&frames[index].id, &head)) {
                     return;
                 }
                 if let Some(rest) = rest {
@@ -316,7 +328,9 @@ async fn stream_with_frames(
             Done::Chunk { chunk: None, .. } => {}
         }
     }
-    send(tail);
+    if !tail.is_empty() {
+        send(tail);
+    }
 }
 
 /// Take the leading `<style data-rmx-style>` tags and the `rmx-data` script out of a
@@ -345,7 +359,7 @@ fn split_frame_html(html: String) -> (String, Vec<(String, String)>, Option<ssr:
 }
 
 fn template(id: &str, content: &str) -> String {
-    format!("<template id=\"{id}\">{content}<!--{}--></template>", ssr::TEMPLATE_END)
+    format!("<template id=\"{id}\">{}<!--{}--></template>", ssr::escape_template_content(content), ssr::TEMPLATE_END)
 }
 
 /// Split before the last `</body>` so streamed templates land inside the body.
@@ -362,8 +376,9 @@ fn split_body_end(mut html: String) -> (String, String) {
 /// GET a frame through the router, following redirects. Error responses are used as-is,
 /// so an application's error UI shows up inside the frame.
 ///
-/// Returns the frame's content up to its flush marker, plus the rest of its body (the
-/// templates of its own non-blocking frames) when it streams.
+/// Returns the frame's content up to its flush marker (without doctype markup, since it
+/// goes inside a page), plus the rest of its body (the templates of its own non-blocking
+/// frames) when it streams.
 async fn fetch_frame(router: Router, base: Url, src: String, name: Option<String>, mut forward: HeaderMap) -> (String, Option<Body>) {
     // Named frames tell the handler which frame they are, like browser frame requests.
     if let Some(v) = name.as_deref().and_then(|n| HeaderValue::from_str(n).ok()) {
@@ -390,10 +405,10 @@ async fn fetch_frame(router: Router, base: Url, src: String, name: Option<String
             head.push_str(&String::from_utf8_lossy(&bytes));
             if let Some((start, _)) = ssr::find_flush_marker(&head) {
                 head.truncate(start);
-                return (head, Some(body));
+                return (ssr::strip_doctype(&head).into_owned(), Some(body));
             }
         }
-        return (head, None);
+        return (ssr::strip_doctype(&head).into_owned(), None);
     }
     (String::new(), None)
 }
@@ -413,5 +428,7 @@ fn next_done(pending: &mut Vec<Work>) -> impl Future<Output = Option<Done>> + '_
         Poll::Pending
     })
 }
+#[cfg(test)]
+mod stream_tests;
 #[cfg(test)]
 mod tests;

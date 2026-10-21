@@ -66,8 +66,9 @@ pub struct FrameSegment {
     pub id: String,
     pub src: String,
     pub name: Option<String>,
-    /// Rendered fallback HTML; `Some` means the frame is non-blocking.
-    pub fallback: Option<String>,
+    /// The rendered fallback; `Some` means the frame is non-blocking. A fallback can hold
+    /// frames of its own, which resolve like any other frame.
+    pub fallback: Option<Vec<Segment>>,
 }
 
 /// Client entries and frames found while rendering.
@@ -205,17 +206,71 @@ pub fn render(node: &Node) -> Rendered {
 pub fn render_to_string(node: &Node) -> String {
     let rendered = render(node);
     let mut html = String::new();
-    for seg in &rendered.segments {
+    write_fallbacks(&rendered.segments, &mut html);
+    finalize_html(html, &rendered.styles, &rendered.data)
+}
+
+/// Segments as HTML, every frame showing its fallback (or nothing).
+fn write_fallbacks(segments: &[Segment], html: &mut String) {
+    for seg in segments {
         match seg {
             Segment::Html(s) => html.push_str(s),
             Segment::Frame(f) => {
                 let _ = write!(html, "<!--rmx:f:{}-->", f.id);
-                html.push_str(f.fallback.as_deref().unwrap_or(""));
+                write_fallbacks(f.fallback.as_deref().unwrap_or_default(), html);
                 html.push_str("<!--/rmx:f-->");
             }
         }
     }
-    finalize_html(html, &rendered.styles, &rendered.data)
+}
+
+/// Remove `<!doctype>` markup (any case) from frame content, which goes inside a page.
+pub fn strip_doctype(html: &str) -> std::borrow::Cow<'_, str> {
+    let lower = html.to_ascii_lowercase();
+    if !lower.contains("<!doctype") {
+        return html.into();
+    }
+    let mut out = String::with_capacity(html.len());
+    let mut last = 0;
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<!doctype").map(|i| i + from) {
+        let after = i + "<!doctype".len();
+        let next = lower.as_bytes().get(after).copied();
+        // `<!doctype>` or `<!doctype` + whitespace + anything up to `>`.
+        let end = match next {
+            Some(b'>') => Some(after + 1),
+            Some(b) if b.is_ascii_whitespace() => lower[after..].find('>').map(|j| after + j + 1),
+            _ => None,
+        };
+        match end {
+            Some(end) => {
+                out.push_str(&html[last..i]);
+                last = end;
+                from = end;
+            }
+            None => from = after,
+        }
+    }
+    out.push_str(&html[last..]);
+    out.into()
+}
+
+/// Keep streamed frame content from closing its `<template>` early: `</template` (any
+/// case) becomes `<\/template`.
+pub fn escape_template_content(html: &str) -> std::borrow::Cow<'_, str> {
+    let lower = html.to_ascii_lowercase();
+    if !lower.contains("</template") {
+        return html.into();
+    }
+    let mut out = String::with_capacity(html.len() + 8);
+    let mut last = 0;
+    for (i, _) in lower.match_indices("</template") {
+        out.push_str(&html[last..i + 1]);
+        out.push('\\');
+        last = i + 1;
+    }
+    out.push_str(&html[last..]);
+    out.into()
 }
 
 /// Insert style tags and the hydration data script into assembled HTML.
@@ -289,12 +344,6 @@ impl Ssr {
                 self.add_style(class, css);
             }
             r.segments
-                .into_iter()
-                .map(|s| match s {
-                    Segment::Html(h) => h,
-                    Segment::Frame(_) => String::new(),
-                })
-                .collect::<String>()
         });
         let status = if fallback.is_some() { "pending" } else { "resolved" };
         self.data.frames.push((id.clone(), f.src.clone(), f.name.clone(), status));
