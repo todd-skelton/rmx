@@ -52,6 +52,8 @@ async fn start() -> Server {
             rmx::entry::<MountedFrame>(),
             rmx::entry::<FragmentFrame>(),
             rmx::entry::<Card>(),
+            rmx::entry::<ContextProvider>(),
+            rmx::entry::<FrameEntry>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -1940,4 +1942,84 @@ async fn renders_frame_semantics_from_entry_children_during_initial_hydration() 
     insert_template("ccf", &format!(r#"<span id="cc-frame">Loaded child frame</span><!--{TEMPLATE_END}-->"#));
     until("the child frame", || text("cc-frame").as_deref() == Some("Loaded child frame")).await;
     assert_eq!(loads(&server, "/cc-frame"), 0, "the frame came from the stream");
+}
+
+// frame.test.tsx: client entries rendered by a frame keep their parent's context
+
+thread_local! {
+    static CONTEXT_EVENTS: Cell<u32> = const { Cell::new(0) };
+}
+
+/// The context `ContextProvider` sets: counts actions dispatched to it.
+struct ActionContext;
+
+impl ActionContext {
+    fn dispatch(&self) {
+        CONTEXT_EVENTS.with(|c| c.set(c.get() + 1));
+    }
+}
+
+/// A client entry that provides a context and renders the frame `cp-frame`.
+struct ContextProvider;
+
+impl Component for ContextProvider {
+    type Props = EntryProps;
+    rmx::client_entry!("ContextProvider");
+    fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
+        h.set_context(ActionContext);
+        ContextProvider
+    }
+    fn render(&self, _: &EntryProps, _: &Handle<Self>) -> Node {
+        rsx! { <Frame name="cp-frame" src="/cp-frame"/> }
+    }
+}
+
+/// A client entry in the frame whose button dispatches to the provider's context.
+struct FrameEntry;
+
+impl Component for FrameEntry {
+    type Props = EntryProps;
+    rmx::client_entry!("FrameEntry");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        FrameEntry
+    }
+    fn render(&self, _: &EntryProps, h: &Handle<Self>) -> Node {
+        let click = h.on(|_, h| {
+            if let Some(context) = h.context::<ActionContext>() {
+                context.dispatch();
+            }
+        });
+        rsx! { <button id="cp-action" mix={on("click", click)}>"Dispatch context event"</button> }
+    }
+}
+
+fn frame_entry(entry_id: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "FrameEntry".into(), r#"{"label":""}"#.into()));
+    format!(r#"<!--rmx:h:{entry_id}--><button id="cp-action">Dispatch context event</button><!--/rmx:h-->{}"#, d.to_script())
+}
+
+#[wasm_bindgen_test]
+async fn preserves_parent_context_for_client_entries_rendered_by_a_frame() {
+    let server = start().await;
+    let mut d = HydrationData::default();
+    d.entries.push(("cph".into(), "ContextProvider".into(), r#"{"label":""}"#.into()));
+    d.entries.push(("cpe1".into(), "FrameEntry".into(), r#"{"label":""}"#.into()));
+    d.frames.push(("cpf".into(), "/cp-frame".into(), Some("cp-frame".into()), "resolved"));
+    let page = format!(
+        r#"<!--rmx:h:cph-->{}<!--/rmx:h-->{}"#,
+        region("cpf", r#"<!--rmx:h:cpe1--><button id="cp-action">Dispatch context event</button><!--/rmx:h-->"#),
+        d.to_script()
+    );
+    server.route("/cpp", vec![Part::Html(page)]);
+    let _m = mount("cpp", "/cpp", "cp-action").await;
+    CONTEXT_EVENTS.with(|c| c.set(0));
+
+    input("cp-action").click();
+    assert_eq!(CONTEXT_EVENTS.with(Cell::get), 1, "the hydrated entry reads the provider's context");
+
+    server.route("/cp-frame", vec![Part::Html(frame_entry("cpe2"))]);
+    let _ = frame("cp-frame").reload_async(ReloadOptions::default()).await;
+    input("cp-action").click();
+    assert_eq!(CONTEXT_EVENTS.with(Cell::get), 2, "the reloaded entry reads it too");
 }

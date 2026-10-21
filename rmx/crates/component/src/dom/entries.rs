@@ -126,7 +126,9 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
     };
     let parent = start_node.parent_node()?;
     let mut cursor = start_node.next_sibling();
-    let scope = Scope { parent: None, frame, depth: 0, errors: None, svg: false };
+    // An entry in a frame reads context through the component rendering the frame.
+    let owner = frame.as_ref().and_then(|f| f.owner());
+    let scope = Scope { parent: owner, frame, depth: 0, errors: None, svg: false };
     match hydrate(&props, &parent, &mut cursor, &end, &scope) {
         Ok(inst) => {
             // Drop server DOM the client render did not claim, up to the end marker.

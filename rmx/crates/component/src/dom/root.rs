@@ -159,7 +159,9 @@ impl Root {
                 if self.0.errors.is_some() {
                     self.attach_error_forwarding();
                 }
-                let scope = Scope { frame: self.0.frame.clone(), errors: self.0.errors.clone(), ..Scope::default() };
+                // Node content in a frame reads context through the component rendering it.
+                let parent = self.0.frame.as_ref().and_then(|f| f.owner());
+                let scope = Scope { parent, frame: self.0.frame.clone(), errors: self.0.errors.clone(), ..Scope::default() };
                 let inst = super::new_instance::<RootHost>(children, &scope);
                 let state = &self.0;
                 let mut cursor = match &state.start {

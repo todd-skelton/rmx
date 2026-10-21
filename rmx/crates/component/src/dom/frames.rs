@@ -46,6 +46,9 @@ pub(crate) struct FrameState {
     inherited: Cell<bool>,
     /// A load was spawned and has not started yet; it finishes the inherited reload.
     queued: Cell<bool>,
+    /// The component that renders this `<Frame>`: client entries and node content in the
+    /// frame read context through it, like Remix's frame `getContext`.
+    owner: RefCell<Option<std::rc::Weak<dyn super::AnyInstance>>>,
 }
 
 /// Loads a frame load waits for before it finishes (Remix's reconciliation tracker): a
@@ -183,7 +186,18 @@ impl FrameState {
             tracker: RefCell::new(None),
             inherited: Cell::new(false),
             queued: Cell::new(false),
+            owner: RefCell::new(None),
         }
+    }
+
+    /// Record the component rendering this frame (see `owner`).
+    pub(crate) fn set_owner(&self, owner: Option<std::rc::Weak<dyn super::AnyInstance>>) {
+        *self.owner.borrow_mut() = owner;
+    }
+
+    /// The component rendering this frame, if a component renders it.
+    pub(crate) fn owner(&self) -> Option<std::rc::Weak<dyn super::AnyInstance>> {
+        self.owner.borrow().clone()
     }
 
     /// The live frames directly inside this frame's content (frames inside them excluded).

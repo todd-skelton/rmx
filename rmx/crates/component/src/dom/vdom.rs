@@ -1201,6 +1201,7 @@ fn is_svg(tag: &str) -> bool {
 fn create_frame(f: &FrameNode, scope: &Scope) -> Mounted {
     let fallback = f.fallback.as_ref().map(crate::ssr::render_to_string).unwrap_or_default();
     let state = frames::create_client_frame(&f.src, f.name.clone(), scope.frame.clone(), &fallback);
+    state.set_owner(scope.parent.clone());
     Mounted::Frame(Box::new(MFrame { src: f.src.clone(), name: f.name.clone(), state }))
 }
 
@@ -1645,6 +1646,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
                 return create_at(Node::Frame(f), parent, &cursor.clone().or_else(|| end.cloned()), scope);
             };
             *cursor = state.end().next_sibling();
+            state.set_owner(scope.parent.clone());
             // The region's own client entries and frames hydrate with it, as when the
             // region is in the page outside any entry.
             frames::hydrate_region(&state);

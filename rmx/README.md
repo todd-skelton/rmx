@@ -163,7 +163,7 @@ crates:
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
    document-state, form-navigation, navigation, frame request/resolver, frame css and
-   child frame reload test suites (`crates/component/tests/browser_*.rs`, 505 tests), plus
+   child frame reload test suites (`crates/component/tests/browser_*.rs`, 506 tests), plus
    Remix's nested client entry regressions (one listener per nested entry wherever it sits;
    removal of a component or nested entry waits for a `persist_node` exit at its top level).
    Frames inside a reloading frame get `reloadStart` with it and `reloadComplete` once
@@ -174,7 +174,8 @@ crates:
    ancestor load: its next reload cancels them if they are still running.
    A server frame rendered by a client entry hydrates its own entries and frames with
    it, at any depth, and every preserved entry's frames reload on the client with the
-   ancestor load, including frames that share a src.
+   ancestor load, including frames that share a src. Entries and node content inside a
+   frame read context through the component that renders the `<Frame>`, across reloads.
    `FrameHandle::reload_async` resolves like Remix's `await frame.reload()`: to the load's
    `Signal`, aborted when a newer load superseded it, or to the `AppError`, which is also
    reported to the app's error listeners. Server streaming is checked by ports of `stream.test.tsx`
