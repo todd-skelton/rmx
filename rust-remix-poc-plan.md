@@ -321,9 +321,25 @@ Covered since phase 0b:
    the component runtime, `ui`, `router`, `fetch`, `spa` and the platform-neutral crates.
    All examples depend on `rmx` alone.
 
+6. Component runtime behavior is checked against Remix's own test suites, ported test by
+   test: 415 browser tests in 25 files (`rmx/crates/component/tests/browser_*.rs`, run in
+   headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
+   SSR options and server/client parity), the style manager, diff-dom, document state
+   (focus restore), form navigation, and frame requests and resolvers; native ports cover
+   server streaming (`ssr_stream.rs`, `ssr_mixins.rs`). Porting found and fixed real
+   gaps: host-element listeners, the constructed stylesheet, link mixin options, focus
+   restore, detached form submitters, submitter encodings and `text/plain` bodies, frame
+   sources after redirects, and runaway mixin expansion.
+
 Remaining gaps:
 
-1. Import maps and per-entry module loading: rmx ships one wasm bundle per app.
-2. Component-level error events: Rust does not throw, so errors are reported explicitly.
-3. Tooling: HMR, CLI, the `remix/test` harness and `remix/component/test`'s `render` helper.
+1. Import maps and per-entry module loading: rmx ships one wasm bundle per app, so the
+   Remix import map and module preloader tests do not apply.
+2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
+   module. Errors are reported explicitly (`Handle::report_error`) and reach
+   `Root::on_error` / `App::on_error` like Remix error events.
+3. Tooling: HMR and a CLI. The `remix/component/test` render helper exists as `rmx::test`.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
+5. Not yet ported: the rest of Remix's `frame.test.tsx` (client entry and nested frame
+   reload cases), `navigation.test.ts` and the remaining `stream.test.tsx` sections. The
+   behavior they cover is exercised by the demo e2e scripts.
