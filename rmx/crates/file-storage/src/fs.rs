@@ -20,7 +20,7 @@ impl FsFileStorage {
         let root = std::path::absolute(dir.as_ref())?;
         match std::fs::metadata(&root) {
             Ok(meta) if !meta.is_dir() => {
-                return Err(std::io::Error::other(format!("{} is not a directory", root.display())));
+                return Err(std::io::Error::other(format!("Path \"{}\" is not a directory", root.display())));
             }
             Ok(_) => {}
             Err(e) if e.kind() == ErrorKind::NotFound => std::fs::create_dir_all(&root)?,
