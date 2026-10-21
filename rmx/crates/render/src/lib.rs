@@ -23,7 +23,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 
-use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use http::{header, HeaderMap, HeaderName, HeaderValue, Method};
 use rmx::ssr::{self, Segment};
 use rmx::Node;
 use rmx_fetch::{Body, Response};
@@ -40,46 +40,8 @@ pub const TARGET_HEADER: &str = "x-remix-target";
 /// The top frame URL, passed to internal frame subrequests.
 pub const TOP_HEADER: &str = "x-remix-top-frame";
 
-/// Status and headers for [`Render::render_with`].
-#[derive(Clone, Debug)]
-pub struct ResponseInit {
-    pub status: StatusCode,
-    pub headers: HeaderMap,
-}
-
-impl Default for ResponseInit {
-    fn default() -> Self {
-        ResponseInit { status: StatusCode::OK, headers: HeaderMap::new() }
-    }
-}
-
-impl ResponseInit {
-    pub fn status(status: StatusCode) -> ResponseInit {
-        ResponseInit { status, ..ResponseInit::default() }
-    }
-
-    pub fn header(mut self, name: &'static str, value: &str) -> ResponseInit {
-        if let Ok(v) = HeaderValue::from_str(value) {
-            self.headers.append(HeaderName::from_static(name), v);
-        }
-        self
-    }
-
-    /// Set this status on `res` and add these headers, replacing ones it already has.
-    pub fn apply(self, mut res: Response) -> Response {
-        *res.status_mut() = self.status;
-        let mut last = None;
-        for (name, value) in self.headers {
-            let name = name.or(last.clone()).expect("the first header has a name");
-            if last.as_ref() != Some(&name) {
-                res.headers_mut().remove(&name);
-            }
-            res.headers_mut().append(name.clone(), value);
-            last = Some(name);
-        }
-        res
-    }
-}
+/// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
+pub use rmx_fetch::response::ResponseInit;
 
 /// `ctx.render(node)` for rmx-router handlers.
 pub trait Render {
@@ -136,12 +98,8 @@ fn forwarded_headers(headers: &HeaderMap, top: &str) -> HeaderMap {
 
 fn html_response(body: Body, init: ResponseInit) -> Response {
     let mut res = Response::new(body);
-    *res.status_mut() = init.status;
     res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/html; charset=UTF-8"));
-    for (name, value) in &init.headers {
-        res.headers_mut().append(name.clone(), value.clone());
-    }
-    res
+    init.apply(res)
 }
 
 /// A full document gets a doctype; fragments (frame content) are sent as-is.

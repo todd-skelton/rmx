@@ -15,23 +15,13 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
-use http::{header, HeaderValue, StatusCode};
+use http::header;
 use rmx::Node;
 use rmx_fetch::{Body, Response};
 use rmx_router::Context;
 
-/// Status and headers for [`Render::render_with`].
-#[derive(Clone, Debug, Default)]
-pub struct ResponseInit {
-    pub status: Option<StatusCode>,
-    pub headers: Vec<(header::HeaderName, HeaderValue)>,
-}
-
-impl ResponseInit {
-    pub fn status(status: StatusCode) -> ResponseInit {
-        ResponseInit { status: Some(status), ..ResponseInit::default() }
-    }
-}
+/// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
+pub use rmx_fetch::response::ResponseInit;
 
 /// `ctx.render(node)` for routes running in the browser.
 pub trait Render {
@@ -67,11 +57,7 @@ pub fn spa_response(node: Node, init: ResponseInit) -> Response {
         n.get()
     });
     NODES.with(|nodes| nodes.borrow_mut().insert(id, node));
-    let mut res = Response::new(Body::empty());
-    *res.status_mut() = init.status.unwrap_or(StatusCode::OK);
-    for (name, value) in init.headers {
-        res.headers_mut().append(name, value);
-    }
+    let mut res = init.apply(Response::new(Body::empty()));
     res.extensions_mut().insert(SpaNode(id));
     res
 }
@@ -173,6 +159,7 @@ pub fn run(router: rmx_router::Router, options: RunOptions) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http::StatusCode;
     use rmx::rsx;
     use rmx_router::Router;
 
@@ -223,7 +210,7 @@ mod tests {
     fn status_and_headers_carry_through() {
         let res = spa_response(
             rsx! { <p>"Missing"</p> },
-            ResponseInit { status: Some(StatusCode::NOT_FOUND), headers: vec![(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))] },
+            ResponseInit::status(StatusCode::NOT_FOUND).header("cache-control", "no-store"),
         );
         assert_eq!(res.status(), 404);
         assert_eq!(res.headers()[header::CACHE_CONTROL], "no-store");

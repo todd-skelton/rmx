@@ -192,7 +192,9 @@ crates:
    `formMethod`), `resource`, `resources` and the method verbs build the route shapes;
    `routes_command` gives an app binary
    Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern`,
-   `rmx-fetch` (Request, Response, FormData, and `AbortController` / `AbortSignal` for
+   `rmx-fetch` (Request, Response, FormData, the `remix/response` constructors, where `html_with` and
+   `redirect_with` take the same `ResponseInit` that render and spa use, an init `Location`
+   winning as in Remix, and `AbortController` / `AbortSignal` for
    `request.signal`: the router checks it before each middleware step and races it like
    Remix's `raceRequestAbort`, answering an aborted request with a 499 that carries
    `AbortError`), `rmx-serve` (hyper server with
