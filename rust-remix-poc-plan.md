@@ -359,9 +359,13 @@ Remaining gaps:
 3. Tooling: HMR and a CLI. The `remix/component/test` render helper exists as `rmx::test`.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
-   a document still being parsed (`document.write` splitting a template). Reload results
-   (`reload_async` resolves to the load's signal or its error) and frame streams that
-   send more HTML after the first flush marker are ported. The client entry and
-   client-created frame reload cases are ported. The `stream.test.tsx` cases that apply
-   are ported; import map, module preload and `resolveClientEntry` cases do not apply. The
-   behavior they cover is exercised by the demo e2e scripts.
+   a document still being parsed (`document.write` splitting a template). Cases that load
+   entry modules asynchronously (a provider module arriving after its consumer, cached
+   modules, `loadModule` errors) do not apply: one wasm bundle holds every entry. Top
+   frame reload cases replace the whole page, so the browser tests run them on a named
+   parent frame and the demo e2e scripts cover the document itself. Ported this round:
+   reload results (`reload_async` resolves to the load's signal or its error), HTML after
+   the first flush marker, the resolver's `signal` and streamed content, context through
+   frames, and the preserved client entry, shared src, nested and blocking frame reload
+   cases. The `stream.test.tsx` cases that apply are ported; import map, module preload
+   and `resolveClientEntry` cases do not apply.
