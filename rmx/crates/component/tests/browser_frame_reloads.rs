@@ -1300,3 +1300,51 @@ async fn ignores_updates_from_a_client_entry_removed_by_its_frame_reload() {
     assert!(by_id("cart-pending").is_none());
     assert_eq!(*errors.borrow(), Vec::<String>::new());
 }
+
+// frame.test.tsx: streamed templates
+
+/// Insert `<template id>` with `html` as its content at the end of the body.
+fn insert_template(id: &str, html: &str) -> web_sys::HtmlTemplateElement {
+    let template: web_sys::HtmlTemplateElement = document().create_element("template").unwrap().unchecked_into();
+    template.set_id(id);
+    template.set_inner_html(html);
+    document().body().unwrap().append_child(&template).unwrap();
+    template
+}
+
+#[wasm_bindgen_test]
+async fn applies_a_frame_template_without_an_end_marker_once_the_document_is_parsed() {
+    // Remix's "waits for document parsing to finish when a frame template has no end
+    // marker", after `document.close()`: this page has finished parsing.
+    let server = start().await;
+    let parent = format!(r#"{}{}{}"#, region("nm1", r#"<p id="nm-fallback">Loading...</p>"#), data(&[("nm1", "/nm-child", "nm-child", true)]), flush());
+    server.route("/nm-parent", vec![Part::Html(parent)]);
+    let _m = mount("nm-parent", "/nm-parent", "nm-fallback").await;
+    assert_eq!(document().ready_state(), "complete");
+
+    insert_template("nm1", r#"<p id="nm-loaded">Loaded</p>"#);
+    until("the template's content", || by_id("nm-loaded").is_some()).await;
+    assert_eq!(text("nm-loaded").as_deref(), Some("Loaded"));
+    assert!(by_id("nm-fallback").is_none());
+    assert!(by_id("nm1").is_none(), "the template is consumed");
+}
+
+#[wasm_bindgen_test]
+async fn preserves_application_templates_while_waiting_for_a_streamed_frame() {
+    let server = start().await;
+    let parent = format!(
+        r#"<template id="pa-row-template"><p>Application row</p></template>{}{}{}"#,
+        region("pa1", r#"<p id="pa-fallback">Loading...</p>"#),
+        data(&[("pa1", "/pa-child", "pa-child", true)]),
+        flush()
+    );
+    server.route("/pa-parent", vec![Part::Html(parent)]);
+    let _m = mount("pa-parent", "/pa-parent", "pa-fallback").await;
+    let row: web_sys::HtmlTemplateElement = by_id("pa-row-template").expect("the application template").unchecked_into();
+
+    insert_template("pa1", &format!(r#"<p id="pa-loaded">Loaded</p><!--{TEMPLATE_END}-->"#));
+    until("the frame's content", || by_id("pa-loaded").is_some()).await;
+    assert!(by_id("pa-row-template").unwrap().is_same_node(Some(&row)), "the application template is untouched");
+    let content: &web_sys::DocumentFragment = &row.content();
+    assert_eq!(content.query_selector("p").unwrap().and_then(|p| p.text_content()).as_deref(), Some("Application row"));
+}

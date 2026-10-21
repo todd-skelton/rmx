@@ -1069,14 +1069,19 @@ pub(crate) fn spawn_reload(frame: Rc<FrameState>, blocking: bool) {
 // Streamed templates
 // ---------------------------------------------------------------------------------------
 
+/// A streamed template's content once it is complete: its end marker arrived, or the
+/// document finished parsing (a template cut short by an aborted stream).
 fn template_content(template: &web_sys::HtmlTemplateElement) -> Option<web_sys::DocumentFragment> {
     let content = template.content();
-    let last = content.last_child()?;
-    let complete = last.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data() == TEMPLATE_END);
-    if !complete {
-        return None;
+    let end = content.last_child().filter(|last| last.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data() == TEMPLATE_END));
+    let parsed = template.owner_document().is_some_and(|doc| doc.ready_state() != "loading");
+    match end {
+        Some(end) => {
+            let _ = content.remove_child(&end);
+        }
+        None if parsed => {}
+        None => return None,
     }
-    let _ = content.remove_child(&last);
     Some(content)
 }
 
