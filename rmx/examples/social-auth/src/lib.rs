@@ -24,6 +24,8 @@ pub mod ui;
 use http::StatusCode;
 use rmx::{css, rsx, Node};
 use rmx::cookie::Cookie;
+use rmx::data_schema::checks::{email, min_length};
+use rmx::data_schema::{self as s, form_data as f, Schema};
 use rmx::fetch::{response, Response};
 use rmx::middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
 use rmx::middleware::form_data::{form_data, FormDataExt};
@@ -232,9 +234,14 @@ fn login_page(ctx: &Context, error: Option<&str>, success: Option<&str>, links: 
     }
 }
 
+/// `loginSchema`: email and password, both defaulting to "".
+fn login_schema() -> impl Schema<Output = (String, String)> {
+    f::object(|o| (o.field("email", s::defaulted(s::string(), String::new())), o.field("password", s::defaulted(s::string(), String::new()))))
+}
+
 async fn login(ctx: Context) -> Response {
-    let email = normalize_email(ctx.form_data().get("email").unwrap_or_default());
-    let password = ctx.form_data().get("password").unwrap_or_default().to_string();
+    let (email, password) = s::parse(&login_schema(), ctx.form_data()).unwrap_or_default();
+    let email = normalize_email(&email);
     let user = db(&ctx).find_user_by_email(&email).filter(|u| u.password_hash.as_deref().is_some_and(|h| verify_password(&password, h)));
     let Some(user) = user else {
         ctx.session().flash("error", "Invalid email or password. Please try again.");
@@ -289,23 +296,36 @@ async fn account(ctx: Context) -> Response {
 // Signup (actions/auth/signup/*)
 // ---------------------------------------------------------------------------------------
 
-/// The first problem with a field, worded like remix/data-schema's checks.
-fn check_min_length(value: Option<&str>, min: usize) -> Option<String> {
-    match value {
-        None => Some("Expected string".into()),
-        Some(v) if v.chars().count() < min => Some(format!("Expected at least {min} characters")),
-        Some(_) => None,
-    }
+// actions/auth/schemas.ts
+
+struct Signup {
+    name: String,
+    email: String,
+    password: String,
 }
 
-fn check_email(value: Option<&str>) -> Option<String> {
-    let v = value?;
-    // /^[^\s@]+@[^\s@]+\.[^\s@]+$/: one @, no whitespace, and a dot inside the domain.
-    let valid = !v.chars().any(char::is_whitespace)
-        && v.split_once('@').is_some_and(|(local, domain)| {
-            !local.is_empty() && !domain.contains('@') && domain.char_indices().any(|(i, c)| c == '.' && i > 0 && i + 1 < domain.len())
-        });
-    (!valid).then(|| "Expected valid email".into())
+/// `signupSchema`
+fn signup_schema() -> impl Schema<Output = Signup> {
+    f::object(|o| Signup {
+        name: o.field("name", s::string().pipe(min_length(1))),
+        email: o.field("email", s::string().pipe(email())),
+        password: o.field("password", s::string().pipe(min_length(8))),
+    })
+}
+
+/// `forgotPasswordSchema`
+fn forgot_password_schema() -> impl Schema<Output = String> {
+    f::object(|o| o.field("email", s::string().pipe(email())))
+}
+
+/// `resetPasswordSchema`: `(password, confirmPassword)`
+fn reset_password_schema() -> impl Schema<Output = (String, String)> {
+    f::object(|o| (o.field("password", s::string().pipe(min_length(8))), o.field("confirmPassword", s::string().pipe(min_length(8)))))
+}
+
+/// `getIssueMessage`: the first issue's message.
+fn issue_message(error: &s::ValidationError) -> String {
+    error.issues.first().map_or_else(|| "Please review the form and try again.".into(), |issue| issue.message.clone())
 }
 
 fn signup_page(ctx: &Context, error: Option<&str>, name: Option<String>, email: Option<String>) -> Node {
@@ -326,15 +346,17 @@ fn signup_page(ctx: &Context, error: Option<&str>, name: Option<String>, email: 
 }
 
 async fn signup(ctx: Context) -> Response {
-    let form = ctx.form_data();
-    let (name, email, password) = (form.get("name"), form.get("email"), form.get("password"));
-    let issue = check_min_length(name, 1).or_else(|| check_min_length(email, 0)).or_else(|| check_email(email)).or_else(|| check_min_length(password, 8));
     let bad_request = ResponseInit::status(StatusCode::BAD_REQUEST);
-    if let Some(issue) = issue {
-        let page = signup_page(&ctx, Some(&issue), name.and_then(normalize_optional_text), email.and_then(normalize_optional_text));
-        return ctx.render_with(page, bad_request);
-    }
-    let (name, email, password) = (name.unwrap_or_default().trim().to_string(), normalize_email(email.unwrap_or_default()), password.unwrap_or_default());
+    let signup = match s::parse(&signup_schema(), ctx.form_data()) {
+        Ok(signup) => signup,
+        Err(error) => {
+            // `readSignupValues`
+            let form = ctx.form_data();
+            let (name, email) = (form.get("name").and_then(normalize_optional_text), form.get("email").and_then(normalize_optional_text));
+            return ctx.render_with(signup_page(&ctx, Some(&issue_message(&error)), name, email), bad_request);
+        }
+    };
+    let (name, email, password) = (signup.name.trim().to_string(), normalize_email(&signup.email), signup.password.as_str());
     if db(&ctx).find_user_by_email(&email).is_some() {
         let page = signup_page(&ctx, Some("An account with that email already exists."), Some(name), Some(email));
         return ctx.render_with(page, bad_request);
@@ -365,12 +387,13 @@ fn forgot_password_page(ctx: &Context, error: Option<&str>, email: Option<String
 }
 
 async fn forgot_password(ctx: Context) -> Response {
-    let email = ctx.form_data().get("email");
-    if let Some(issue) = check_min_length(email, 0).or_else(|| check_email(email)) {
-        let page = forgot_password_page(&ctx, Some(&issue), email.map(str::to_string));
-        return ctx.render_with(page, ResponseInit::status(StatusCode::BAD_REQUEST));
-    }
-    let email = normalize_email(email.unwrap_or_default());
+    let email = match s::parse(&forgot_password_schema(), ctx.form_data()) {
+        Ok(email) => normalize_email(&email),
+        Err(error) => {
+            let page = forgot_password_page(&ctx, Some(&issue_message(&error)), ctx.form_data().get("email").map(str::to_string));
+            return ctx.render_with(page, ResponseInit::status(StatusCode::BAD_REQUEST));
+        }
+    };
     let reset_href = db(&ctx).find_user_by_email(&email).map(|user| {
         let token = db(&ctx).create_reset_token(user.id);
         format!("{}/auth/reset-password/{token}", ctx.url().origin())
@@ -439,9 +462,11 @@ async fn reset_password(ctx: Context) -> Response {
     let Some(token) = db(&ctx).load_reset_token(ctx.param("token").unwrap_or_default()) else {
         return error_page(&ctx, EXPIRED.0, EXPIRED.1);
     };
-    let (password, confirm) = (ctx.form_data().get("password"), ctx.form_data().get("confirmPassword"));
-    let issue = check_min_length(password, 8).or_else(|| check_min_length(confirm, 8));
-    let issue = issue.or_else(|| (password != confirm).then(|| "Passwords must match.".to_string()));
+    let issue = match s::parse(&reset_password_schema(), ctx.form_data()) {
+        Err(error) => Some(issue_message(&error)),
+        Ok((password, confirm)) if password != confirm => Some("Passwords must match.".to_string()),
+        Ok(_) => None,
+    };
     if let Some(issue) = issue {
         return ctx.render_with(reset_password_page(&ctx, Some(&issue)), ResponseInit::status(StatusCode::BAD_REQUEST));
     }
@@ -449,7 +474,7 @@ async fn reset_password(ctx: Context) -> Response {
         db(&ctx).delete_reset_token(&token.token);
         return error_page(&ctx, "Account Not Found", "The account for that reset link no longer exists.");
     };
-    db(&ctx).update_password(user.id, hash_password(password.unwrap_or_default()));
+    db(&ctx).update_password(user.id, hash_password(ctx.form_data().get("password").unwrap_or_default()));
     db(&ctx).delete_reset_token(&token.token);
     ctx.session().flash("success", "Password updated. You can sign in now.");
     let login_href = with_return_to("/", &ctx);

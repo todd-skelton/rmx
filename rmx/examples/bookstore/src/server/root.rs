@@ -5,13 +5,13 @@ use http::{Method, StatusCode};
 use rmx::{css, rsx, IntoNode, Node};
 use rmx::fetch::{response, Response};
 use rmx::file_storage::FileStorage;
-use rmx::middleware::form_data::FormDataExt;
 use rmx::middleware::session::SessionExt;
 use rmx::middleware::static_files::{file_response_for, StaticOptions};
 use rmx::render::ResponseInit;
 use rmx::router::{Context, Router};
 
 use super::data::Book;
+use super::schemas::book_id;
 use super::ui::{book_card, Layout};
 use super::{current_cart, current_user, db, parse_id, render, render_with};
 use crate::routes::ROUTES;
@@ -198,7 +198,8 @@ async fn cart_items(ctx: Context) -> Response {
 // ---------------------------------------------------------------------------------------
 
 async fn cart_toggle(ctx: Context) -> Response {
-    let Some(book) = parse_id(ctx.form_data().get("bookId")).and_then(|id| db(&ctx).find_book(id)) else {
+    // `bookIdSchema`
+    let Some(book) = parse_id(book_id(&ctx).as_deref()).and_then(|id| db(&ctx).find_book(id)) else {
         return response::status(StatusCode::NOT_FOUND, "Book not found");
     };
     let mut cart = current_cart(&ctx);

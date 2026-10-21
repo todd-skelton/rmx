@@ -7,6 +7,7 @@ mod books;
 mod cart;
 pub mod data;
 mod root;
+mod schemas;
 #[cfg(test)]
 mod tests;
 pub mod ui;

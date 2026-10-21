@@ -6,7 +6,10 @@ use rmx::fetch::{response, Response};
 use rmx::middleware::form_data::FormDataExt;
 use rmx::router::{middleware, Context, Router};
 
+use rmx::data_schema::{self as s, form_data as f};
+
 use super::account::{order_details, orders_table};
+use super::schemas::{parse_form, text_field};
 use super::data::{locale_date, Book, BookInput, Role, User, UserInput, WriteError, PLACEHOLDER_COVER};
 use super::ui::{Layout, RestfulForm};
 use super::{bad_request, db, not_found_page, parse_id, render, require_admin, require_auth, user};
@@ -387,14 +390,18 @@ async fn edit_user(ctx: Context) -> Response {
 }
 
 async fn update_user(ctx: Context) -> Response {
-    let form = ctx.form_data();
-    let Some(role) = Role::parse(form.get("role").unwrap_or("customer")) else {
-        return bad_request("role must be customer or admin");
+    // `userSchema`
+    let role = s::defaulted(s::enum_(["customer", "admin"]), "customer");
+    let schema = f::object(|o| (o.field("name", text_field()), o.field("email", text_field()), o.try_field("role", &role)));
+    let (name, email, role) = match parse_form(&ctx, schema) {
+        Ok(input) => input,
+        Err(issues) => return bad_request(issues),
     };
+    let role = role.and_then(Role::parse).expect("a validated role");
     if let Some(u) = find_user(&ctx) {
         let update = UserInput {
-            name: Some(form.get("name").unwrap_or_default().into()),
-            email: Some(form.get("email").unwrap_or_default().into()),
+            name: Some(name),
+            email: Some(email),
             role: Some(role),
             password_hash: None,
         };

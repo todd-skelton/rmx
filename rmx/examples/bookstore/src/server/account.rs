@@ -3,11 +3,14 @@
 
 use rmx::{css, rsx, Node};
 use rmx::fetch::{response, Response};
-use rmx::middleware::form_data::FormDataExt;
 use rmx::middleware::session::SessionExt;
 use rmx::router::{middleware, Context, Router};
 
+use rmx::data_schema::checks::min_length;
+use rmx::data_schema::{self as s, form_data as f, Schema};
+
 use super::data::{hash_password, locale_date, Order, ShippingAddress, UserInput};
+use super::schemas::{parse_form, text_field};
 use super::ui::{Layout, RestfulForm};
 use super::{bad_request, current_cart, db, not_found_page, parse_id, render, require_auth, user};
 use crate::cart::{money, Cart};
@@ -82,16 +85,17 @@ async fn settings(ctx: Context) -> Response {
 }
 
 async fn update_settings(ctx: Context) -> Response {
-    let form = ctx.form_data();
-    // s.union([s.literal(''), s.string().pipe(minLength(8))])
-    let password = form.get("password").unwrap_or_default();
-    if !password.is_empty() && password.chars().count() < 8 {
-        return bad_request("password must be empty or at least 8 characters");
-    }
+    // `accountSettingsSchema`; `passwordField` is empty (unchanged) or at least 8 characters.
+    let password = s::union([s::literal(String::new()).boxed(), s::string().pipe(min_length(8)).boxed()]);
+    let schema = f::object(|o| (o.field("name", text_field()), o.field("email", text_field()), o.field("password", s::defaulted(&password, String::new()))));
+    let (name, email, password) = match parse_form(&ctx, schema) {
+        Ok(input) => input,
+        Err(issues) => return bad_request(issues),
+    };
     let update = UserInput {
-        name: Some(form.get("name").unwrap_or_default().into()),
-        email: Some(form.get("email").unwrap_or_default().into()),
-        password_hash: (!password.is_empty()).then(|| hash_password(password)),
+        name: Some(name),
+        email: Some(email),
+        password_hash: (!password.is_empty()).then(|| hash_password(&password)),
         role: None,
     };
     if let Err(e) = db(&ctx).update_user(user(&ctx).id, update) {
@@ -293,9 +297,17 @@ async fn place_order(ctx: Context) -> Response {
     if cart.items.is_empty() {
         return response::redirect(&ROUTES.cart.index.href(()));
     }
-    let form = ctx.form_data();
-    let field = |name| form.get(name).unwrap_or_default().to_string();
-    let address = ShippingAddress { street: field("street"), city: field("city"), state: field("state"), zip: field("zip") };
+    // `shippingAddressSchema`
+    let schema = f::object(|o| ShippingAddress {
+        street: o.field("street", text_field()),
+        city: o.field("city", text_field()),
+        state: o.field("state", text_field()),
+        zip: o.field("zip", text_field()),
+    });
+    let address = match parse_form(&ctx, schema) {
+        Ok(address) => address,
+        Err(issues) => return bad_request(issues),
+    };
     let order = match db(&ctx).create_order(user(&ctx).id, &cart.items, address) {
         Ok(order) => order,
         Err(e) => return bad_request(e.to_string()),

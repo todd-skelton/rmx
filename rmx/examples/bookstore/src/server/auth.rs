@@ -3,7 +3,6 @@
 use rmx::{css, rsx, Mixin, Node};
 use rmx::fetch::{response, Response};
 use rmx::middleware::auth::{complete_auth, credentials_provider, verify_credentials};
-use rmx::middleware::form_data::FormDataExt;
 use rmx::middleware::session::SessionExt;
 use rmx::render::ResponseInit;
 use rmx::router::{Context, Router};
@@ -43,11 +42,6 @@ fn error_alert(error: Option<String>) -> Option<Node> {
 
 // --- schemas.ts -------------------------------------------------------------------------
 
-/// `textField`: `f.field(s.defaulted(s.string(), ''))`
-fn text_field() -> impl Schema<Output = String> {
-    s::defaulted(s::string(), String::new())
-}
-
 /// `s.string().pipe(minLength(8))`
 fn password_field() -> impl Schema<Output = String> {
     s::string().pipe(min_length(8))
@@ -73,17 +67,7 @@ fn reset_password_schema() -> impl Schema<Output = (String, String)> {
     f::object(|o| (o.field("password", password_field()), o.field("confirmPassword", password_field())))
 }
 
-/// Parse the request's form data. The error lists the issues, one per line, for a 400
-/// response (Remix's `s.parse` throws a `ValidationError`).
-fn parse_form<S: Schema>(ctx: &Context, schema: S) -> Result<S::Output, String> {
-    s::parse(&schema, ctx.form_data()).map_err(|e| e.issues.iter().map(ToString::to_string).collect::<Vec<_>>().join("
-"))
-}
-
-/// A text field (`f.field(s.defaulted(s.string(), ''))`).
-fn field(ctx: &Context, name: &str) -> String {
-    s::parse(&f::object(|o| o.field(name, text_field())), ctx.form_data()).unwrap_or_default()
-}
+use super::schemas::{parse_form, text as field, text_field};
 
 // --- login ------------------------------------------------------------------------------
 
