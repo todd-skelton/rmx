@@ -443,6 +443,23 @@ Covered since phase 0b:
    parsing as `FormDataError::Upload` (the middleware answers 500, or an empty form with
    `suppress_errors`, as Remix's rethrow would); and `File::new` lowercases its type like
    the web `File`. Where Remix's middleware throws, rmx answers 413, 400 or 500.
+   The parsers and the proxy run their Remix tests one per case: `multipart-parser` (28 of
+   29 `multipart.test.ts` cases; the Web Encoding globals case has no Rust counterpart, plus
+   39 request, 6 Node and 6 buffer-search cases; an empty body is now reported before a
+   missing boundary), `tar-parser` (21 `tar.test.ts` cases with the lodash and npm fixtures,
+   49 name and 70 of 73 size cases; the other three need values the types rule out; bodies
+   grow from received bytes, and `TarParser::parse` reuses one parser across archives) and
+   `fetch-proxy` (42 cases against real `rmx_serve` servers; a new `redirect` option,
+   `Manual` by default, follows redirects with fetch's rules when set to `Follow`).
+   `remix/auth` runs all 17 test files (50 cases, `crates/auth/tests/`), including the
+   browser OIDC flow against a fake provider on a loopback port. They forced:
+   `OAuthProvider::Tokens` so a custom provider keeps its own token fields through callback
+   and refresh; `authorization_url` taking the transaction mutably so a provider can store
+   `provider_state`; `OidcProvider::map_profile` (Remix's `mapProfile`, given the callback URL
+   where Remix gives the context); `expiresAt` serialized as an ISO string; GitHub profiles
+   that tell `null` from a missing `name` or `email`; and credentials `verify` receiving the
+   context and free to return a `Result`. A discovery failure that rejects Remix's
+   `router.fetch` is an `AuthError` the route turns into a response.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
