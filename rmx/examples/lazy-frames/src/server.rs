@@ -127,7 +127,7 @@ pub fn router(config: Config) -> Router {
                     let Some(file) = ctx.param("id").and_then(html_frame_file) else { return not_found() };
                     let options = StaticOptions { cache_control: Some(frame_cache_control(&config).into()), ..Default::default() };
                     let path = config.root.join("frames-html").join(file);
-                    file_response(&path, ctx.headers(), false, &options).unwrap_or_else(|_| not_found())
+                    file_response(&path, ctx.method(), ctx.headers(), &options).unwrap_or_else(|_| not_found())
                 }
             }),
             ui: action(move |ctx: Context| {

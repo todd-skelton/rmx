@@ -21,7 +21,7 @@ pub enum ETag {
     /// `W/"<size>-<lastModified ms>"`, computed without reading the file (the default).
     #[default]
     Weak,
-    /// A quoted digest of the content: SHA-256 hex unless [`StaticOptions::digest`] is set.
+    /// A quoted hex digest of the content, by [`StaticOptions::digest`] (SHA-256 by default).
     Strong,
 }
 
@@ -52,6 +52,26 @@ pub enum AcceptRanges {
 /// Computes a strong `ETag` value (without quotes) from the file content.
 pub type DigestFn = Arc<dyn Fn(&[u8]) -> String + Send + Sync>;
 
+/// How [`ETag::Strong`] digests a file (Remix's `digest` option): a Web Crypto algorithm,
+/// hex encoded, or a function.
+#[derive(Clone)]
+pub enum Digest {
+    Algorithm(rmx_crypto::DigestAlgorithm),
+    With(DigestFn),
+}
+
+impl Default for Digest {
+    fn default() -> Self {
+        Digest::Algorithm(rmx_crypto::DigestAlgorithm::Sha256)
+    }
+}
+
+impl From<rmx_crypto::DigestAlgorithm> for Digest {
+    fn from(algorithm: rmx_crypto::DigestAlgorithm) -> Digest {
+        Digest::Algorithm(algorithm)
+    }
+}
+
 /// Decides whether a relative path may be served.
 pub type PathFilter = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
@@ -62,8 +82,8 @@ pub struct StaticOptions {
     pub cache_control: Option<String>,
     /// Default [`ETag::Weak`].
     pub etag: ETag,
-    /// The digest for [`ETag::Strong`]; SHA-256 hex when `None`.
-    pub digest: Option<DigestFn>,
+    /// The digest for [`ETag::Strong`] (default: SHA-256).
+    pub digest: Digest,
     /// Send `Last-Modified` and honor `If-Modified-Since`/`If-Unmodified-Since` (default: true).
     pub last_modified: bool,
     pub accept_ranges: AcceptRanges,
@@ -81,7 +101,7 @@ impl Default for StaticOptions {
         StaticOptions {
             cache_control: None,
             etag: ETag::Weak,
-            digest: None,
+            digest: Digest::default(),
             last_modified: true,
             accept_ranges: AcceptRanges::Auto,
             index: vec!["index.html".into(), "index.htm".into()],
@@ -109,11 +129,10 @@ pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Mi
             if options.filter.as_ref().is_some_and(|filter| !filter(&rel)) {
                 return next.run(ctx).await;
             }
-            let head = ctx.method() == Method::HEAD;
             let Some(requested) = join(&root, &rel) else { return next.run(ctx).await };
             let Some(real) = contained(&root, &requested) else { return next.run(ctx).await };
             if real.is_file() {
-                if let Ok(res) = path_response(&real, &rel, ctx.headers(), head, &options) {
+                if let Ok(res) = path_response(&real, &rel, ctx.method(), ctx.headers(), &options) {
                     return res;
                 }
             } else if real.is_dir() {
@@ -121,7 +140,7 @@ pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Mi
                     let Some(index_real) = contained(&root, &requested.join(index)) else { continue };
                     if index_real.is_file() {
                         let name = if rel.is_empty() { index.clone() } else { format!("{}/{index}", rel.trim_end_matches('/')) };
-                        if let Ok(res) = path_response(&index_real, &name, ctx.headers(), head, &options) {
+                        if let Ok(res) = path_response(&index_real, &name, ctx.method(), ctx.headers(), &options) {
                             return res;
                         }
                     }
@@ -146,7 +165,7 @@ fn contained(root: &Path, path: &Path) -> Option<PathBuf> {
     path.canonicalize().ok().filter(|real| real.starts_with(root))
 }
 
-fn path_response(real: &Path, name: &str, req_headers: &HeaderMap, head: bool, options: &StaticOptions) -> io::Result<Response> {
+fn path_response(real: &Path, name: &str, method: &Method, req_headers: &HeaderMap, options: &StaticOptions) -> io::Result<Response> {
     let meta = std::fs::metadata(real)?;
     let mime_type = rmx_mime::detect_mime_type(name).unwrap_or_default();
     let info = FileInfo { name, mime_type, size: meta.len(), last_modified: meta.modified().ok() };
@@ -156,40 +175,42 @@ fn path_response(real: &Path, name: &str, req_headers: &HeaderMap, head: bool, o
         Ok(Body::from_reader(file.take(len)))
     };
     let contents = || std::fs::read(real).map(Bytes::from);
-    respond_with_file(&info, read, contents, req_headers, head, options)
+    respond_with_file(&info, read, contents, method, req_headers, options)
 }
 
 /// A file response with Remix's `createFileResponse` semantics: content type and `nosniff`,
 /// an `ETag` and `Last-Modified`, `If-Match`/`If-Unmodified-Since` (412),
 /// `If-None-Match`/`If-Modified-Since` (304), and single byte ranges with `If-Range` (206,
-/// 400 for malformed ranges, 416 for unsatisfiable or multipart ones). The body is read from
-/// disk as it is sent. The type comes from the path's extension; unknown types get no
-/// `Content-Type`.
-pub fn file_response(path: &Path, req_headers: &HeaderMap, head: bool, options: &StaticOptions) -> io::Result<Response> {
+/// 400 for malformed ranges, 416 for unsatisfiable or multipart ones). Ranges apply to `GET`
+/// only and `HEAD` gets no body, as in Remix, which reads both from the request. The body
+/// is read from disk as it is sent. The type comes from the path's extension; unknown types
+/// get no `Content-Type`.
+pub fn file_response(path: &Path, method: &Method, req_headers: &HeaderMap, options: &StaticOptions) -> io::Result<Response> {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    path_response(path, &name, req_headers, head, options)
+    path_response(path, &name, method, req_headers, options)
 }
 
 /// [`file_response`] for a [`File`] held in memory, such as one from file storage
-/// (`createFileResponse(file, request)`). The type comes from the file, or its name when
-/// it has none.
-pub fn file_response_for(file: &File, req_headers: &HeaderMap, head: bool, options: &StaticOptions) -> Response {
-    let mime_type = if file.content_type.is_empty() { rmx_mime::detect_mime_type(&file.name).unwrap_or_default() } else { file.content_type.as_str() };
+/// (`createFileResponse(file, request)`). The type is the file's own (`File.type`); a file
+/// without one gets no `Content-Type`.
+pub fn file_response_for(file: &File, method: &Method, req_headers: &HeaderMap, options: &StaticOptions) -> Response {
+    let mime_type = file.content_type.as_str();
     let last_modified = UNIX_EPOCH.checked_add(Duration::from_millis(file.last_modified));
     let info = FileInfo { name: &file.name, mime_type, size: file.size() as u64, last_modified };
     let read = |start: u64, len: u64| Ok(Body::from(file.bytes.slice(start as usize..(start + len) as usize)));
     let contents = || Ok(file.bytes.clone());
-    respond_with_file(&info, read, contents, req_headers, head, options).expect("reading memory cannot fail")
+    respond_with_file(&info, read, contents, method, req_headers, options).expect("reading memory cannot fail")
 }
 
 fn respond_with_file(
     file: &FileInfo,
     read_range: impl Fn(u64, u64) -> io::Result<Body>,
     contents: impl Fn() -> io::Result<Bytes>,
+    method: &Method,
     req_headers: &HeaderMap,
-    head: bool,
     options: &StaticOptions,
 ) -> io::Result<Response> {
+    let head = method == Method::HEAD;
     let size = file.size;
     let content_type = (!file.mime_type.is_empty()).then(|| rmx_mime::to_content_type(file.mime_type));
     let modified = file.last_modified.filter(|_| options.last_modified);
@@ -202,8 +223,8 @@ fn respond_with_file(
         ETag::Strong => {
             let bytes = contents()?;
             let digest = match &options.digest {
-                Some(digest) => digest(&bytes),
-                None => rmx_crypto::hex(&rmx_crypto::sha256(&bytes)),
+                Digest::Algorithm(algorithm) => rmx_crypto::hex(&algorithm.digest(&bytes)),
+                Digest::With(digest) => digest(&bytes),
             };
             Some(format!("\"{digest}\""))
         }
@@ -270,7 +291,7 @@ fn respond_with_file(
         }
         read_range(start, len)
     };
-    if accept_ranges && !head && req_headers.contains_key(header::RANGE) {
+    if accept_ranges && method == Method::GET && req_headers.contains_key(header::RANGE) {
         let range = Range::parse(get(header::RANGE));
         if range.ranges.is_empty() {
             return Ok(respond(StatusCode::BAD_REQUEST, Body::from("Bad Request"), false, false));
@@ -416,5 +437,7 @@ tr:last-child td { border-bottom: none; } \
 .name-cell a, .size-cell, .type-cell { padding: 0.375rem 0.75rem; } .type-cell { display: none; } .name-cell { width: 60%; } .size-cell { width: 40%; text-align: right; } } \
 @media (max-width: 480px) { body { font-size: 13px; } .name-cell a, .size-cell, .type-cell { padding: 0.375rem 0.5rem; } h1 { font-size: 1rem; } .icon { width: 12px; height: 12px; } }";
 
+#[cfg(test)]
+mod file_tests;
 #[cfg(test)]
 mod tests;

@@ -22,7 +22,7 @@ fn main() {
     let index = public.join("index.html");
     router.not_found(move |ctx: Context| {
         let (index, options) = (index.clone(), options.clone());
-        async move { file_response(&index, ctx.headers(), false, &options).unwrap_or_else(|_| rmx::fetch::response::not_found()) }
+        async move { file_response(&index, ctx.method(), ctx.headers(), &options).unwrap_or_else(|_| rmx::fetch::response::not_found()) }
     });
     let addr = format!("{host}:{port}");
     println!("spa demo on http://{addr}");

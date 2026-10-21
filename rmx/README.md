@@ -202,14 +202,16 @@ crates:
    `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; each
    request's signal aborts when the client leaves before the response finished; plus an
    HTTP/1 `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression with
-   br/gzip/deflate negotiation, static files with strong ETags, ranges and directory
+   br/gzip/deflate negotiation, static files with strong ETags (any Web Crypto digest or a
+   function), ranges for `GET` only, `file_response_for` with Remix's `File.type` rule, and directory
    listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
    override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer).
 3. Supporting crates: `rmx-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
    error maps and typed `FormData` / `URLSearchParams` parsing, used by the timeboxer,
    bookstore, social-auth and sse ports wherever the Remix demos use it), `rmx-assets` (with Remix's asset inspection, `assets()` and `asset_details()`, and its
-   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie`, `rmx-crypto`, `rmx-session`,
+   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie`, `rmx-crypto` (SHA-1/256/384/512 by Web Crypto name, HMAC, PBKDF2, scrypt; no
+   dependencies), `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
    `rmx-headers`, `rmx-mime`, `rmx-spa`, `rmx-url`.
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,

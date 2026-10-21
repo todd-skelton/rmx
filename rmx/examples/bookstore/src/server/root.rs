@@ -26,8 +26,8 @@ pub fn routes<U: FileStorage + Clone>(router: &mut Router, uploads: U) {
                 let uploads = uploads.clone();
                 let key = ctx.param("key").unwrap_or_default().to_string();
                 let headers = ctx.headers().clone();
-                let head = ctx.method() == Method::HEAD;
-                async move { serve_upload(key, headers, head, uploads).await }
+                let method = ctx.method().clone();
+                async move { serve_upload(key, method, headers, uploads).await }
             }),
             home: action(home),
             about: action(|ctx: Context| async move { render(&ctx, about_page()) }),
@@ -45,11 +45,11 @@ pub fn routes<U: FileStorage + Clone>(router: &mut Router, uploads: U) {
     router.map(&ROUTES.api, ApiActions { cart_toggle: action(cart_toggle) });
 }
 
-async fn serve_upload<U: FileStorage>(key: String, headers: http::HeaderMap, head: bool, uploads: U) -> Response {
+async fn serve_upload<U: FileStorage>(key: String, method: Method, headers: http::HeaderMap, uploads: U) -> Response {
     match uploads.get(&key).await {
         Ok(Some(file)) => {
             let options = StaticOptions { cache_control: Some("public, max-age=31536000".into()), ..Default::default() };
-            file_response_for(&file, &headers, head, &options)
+            file_response_for(&file, &method, &headers, &options)
         }
         _ => response::status(StatusCode::NOT_FOUND, "File not found"),
     }

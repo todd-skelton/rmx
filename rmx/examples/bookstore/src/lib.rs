@@ -6,7 +6,7 @@
 //! | --- | --- |
 //! | `route({ ... })` with `form()` and `resources()` | [`routes::ROUTES`] with `form()` and `resources_with_param()` |
 //! | `formData({ uploadHandler })` + `createFsFileStorage` | `form_data().upload_handler(..)` + `FsFileStorage` |
-//! | `createFileResponse(file, request)` | `file_response_for(&file, headers, head, &options)` |
+//! | `createFileResponse(file, request)` | `file_response_for(&file, method, headers, &options)` |
 //! | `methodOverride()` and `RestfulForm` | `method_override()` and [`server::ui::RestfulForm`] |
 //! | `createCredentialsAuthProvider` / `verifyCredentials` | `credentials_provider` / `verify_credentials` |
 //! | `asyncContext()` + `getContext()` in the layout | a `Viewer` provided to the tree by `server::render` |

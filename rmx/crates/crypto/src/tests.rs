@@ -16,6 +16,79 @@ fn sha256_vectors() {
 }
 
 #[test]
+fn sha1_vectors() {
+    assert_eq!(hex(&sha1(b"")), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
+    assert_eq!(hex(&sha1(b"abc")), "a9993e364706816aba3e25717850c26c9cd0d89d");
+    assert_eq!(
+        hex(&sha1(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+        "84983e441c3bd26ebaae4aa1f95129e5e54670f1"
+    );
+    assert_eq!(
+        hex(&sha1(b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu")),
+        "a49b2446a02c645bf419f995b67091253a04a259"
+    );
+    let mut h = Sha1::new();
+    for _ in 0..1000 {
+        h.update(&[b'a'; 1000]);
+    }
+    assert_eq!(hex(&h.finish()), "34aa973cd4c4daa4f61eeb2bdbad27316534016f");
+}
+
+#[test]
+fn sha384_vectors() {
+    assert_eq!(hex(&sha384(b"")), "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b");
+    assert_eq!(hex(&sha384(b"abc")), "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7");
+    assert_eq!(
+        hex(&sha384(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+        "3391fdddfc8dc7393707a65b1b4709397cf8b1d162af05abfe8f450de5f36bc6b0455a8520bc4e6f5fe95b1fe3c8452b"
+    );
+    assert_eq!(
+        hex(&sha384(b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu")),
+        "09330c33f71147e83d192fc782cd1b4753111b173b3b05d22fa08086e3b0f712fcc7c71a557e2db966c3e9fa91746039"
+    );
+    let mut h = Sha512::sha384();
+    for _ in 0..1000 {
+        h.update(&[b'a'; 1000]);
+    }
+    assert_eq!(hex(&h.finish()), "9d0e1809716474cb086e834e310a4a1ced149e9c00f248527972cec5704c2a5b07b8b3dc38ecc4ebae97ddd87f3d8985");
+}
+
+#[test]
+fn sha512_vectors() {
+    assert_eq!(hex(&sha512(b"")), "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e");
+    assert_eq!(hex(&sha512(b"abc")), "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f");
+    assert_eq!(
+        hex(&sha512(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+        "204a8fc6dda82f0a0ced7beb8e08a41657c16ef468b228a8279be331a703c33596fd15c13b1b07f9aa1d3bea57789ca031ad85c7a71dd70354ec631238ca3445"
+    );
+    assert_eq!(
+        hex(&sha512(b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu")),
+        "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909"
+    );
+    let mut h = Sha512::new();
+    for _ in 0..1000 {
+        h.update(&[b'a'; 1000]);
+    }
+    assert_eq!(hex(&h.finish()), "e718483d0ce769644e2e42c7bc15b4638e1f98b13b2044285632a803afa973ebde0ff244877ea60a4cb0432ce577c31beb009c5c2c49aa2e4eadb217ad8cc09b");
+}
+
+#[test]
+fn digest_algorithms_by_web_crypto_name() {
+    let data = b"Hello, World!";
+    let lengths: Vec<(String, usize)> = ["SHA-1", "sha-256", "SHA-384", "SHA-512"]
+        .iter()
+        .map(|name| {
+            let alg: DigestAlgorithm = name.parse().unwrap();
+            (alg.name().to_string(), alg.digest(data).len())
+        })
+        .collect();
+    assert_eq!(lengths, [("SHA-1".into(), 20), ("SHA-256".into(), 32), ("SHA-384".into(), 48), ("SHA-512".into(), 64)]);
+    assert_eq!(hex(&DigestAlgorithm::Sha512.digest(data)), "374d794a95cdcfd8b35993185fef9ba368f160d8daf432d08ba9f1ed1e5abe6cc69291e0fa2fe0006a52570ef18c19def4e617c33ce52ef0a6e5fbe318cb0387");
+    assert!("MD5".parse::<DigestAlgorithm>().unwrap_err().starts_with("NotSupportedError"));
+    assert_eq!(DigestAlgorithm::default(), DigestAlgorithm::Sha256);
+}
+
+#[test]
 fn hmac_vectors() {
     // RFC 4231 test cases 1, 2 and 6.
     assert_eq!(

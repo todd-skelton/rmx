@@ -211,7 +211,7 @@ fn strong_etags() {
     assert_eq!(get(&r, "/test.txt", &[("if-match", &etag)]).status(), 200, "strong tags satisfy If-Match");
     assert_eq!(get(&r, "/test.txt", &[("if-none-match", &etag)]).status(), 304);
 
-    let custom = router(&dir.0, StaticOptions { etag: ETag::Strong, digest: Some(Arc::new(|_: &[u8]| "custom-hash-12345".into())), ..Default::default() });
+    let custom = router(&dir.0, StaticOptions { etag: ETag::Strong, digest: Digest::With(Arc::new(|_: &[u8]| "custom-hash-12345".into())), ..Default::default() });
     assert_eq!(get(&custom, "/test.txt", &[]).headers()["etag"], "\"custom-hash-12345\"");
     let weak = get(&router(&dir.0, StaticOptions::default()), "/test.txt", &[]).headers()["etag"].to_str().unwrap().to_string();
     let weak_router = router(&dir.0, StaticOptions::default());
@@ -252,22 +252,22 @@ fn symlinks_stay_inside_the_root() {
 fn nosniff_on_every_response() {
     let file = File { name: "example.bin".into(), content_type: "application/octet-stream".into(), bytes: b"hello".to_vec().into(), last_modified: 1_000_000 };
     let opts = StaticOptions { accept_ranges: AcceptRanges::Always, ..Default::default() };
-    type Case<'a> = (&'a [(&'a str, &'a str)], bool, u16);
+    type Case<'a> = (&'a [(&'a str, &'a str)], Method, u16);
     let cases: [Case; 7] = [
-        (&[], false, 200),
-        (&[], true, 200),
-        (&[("range", "bytes=0-1")], false, 206),
-        (&[("if-none-match", "W/\"5-1000000\"")], false, 304),
-        (&[("if-match", "\"other\"")], false, 412),
-        (&[("range", "bytes=10-20")], false, 416),
-        (&[("range", "bytes=invalid")], false, 400),
+        (&[], Method::GET, 200),
+        (&[], Method::HEAD, 200),
+        (&[("range", "bytes=0-1")], Method::GET, 206),
+        (&[("if-none-match", "W/\"5-1000000\"")], Method::GET, 304),
+        (&[("if-match", "\"other\"")], Method::GET, 412),
+        (&[("range", "bytes=10-20")], Method::GET, 416),
+        (&[("range", "bytes=invalid")], Method::GET, 400),
     ];
-    for (headers, head, status) in cases {
+    for (headers, method, status) in cases {
         let mut map = HeaderMap::new();
         for (k, v) in headers {
             map.insert(header::HeaderName::from_static(k), HeaderValue::from_str(v).unwrap());
         }
-        let res = file_response_for(&file, &map, head, &opts);
+        let res = file_response_for(&file, &method, &map, &opts);
         assert_eq!(res.status(), status, "{headers:?}");
         assert_eq!(res.headers()["x-content-type-options"], "nosniff");
     }
@@ -275,9 +275,9 @@ fn nosniff_on_every_response() {
 
 #[test]
 fn responds_with_files_from_memory() {
-    let file = File { name: "cover.png".into(), content_type: String::new(), bytes: b"0123456789".to_vec().into(), last_modified: 1_700_000_000_000 };
+    let file = File { name: "cover.png".into(), content_type: "image/png".into(), bytes: b"0123456789".to_vec().into(), last_modified: 1_700_000_000_000 };
     let opts = StaticOptions { cache_control: Some("public, max-age=31536000".into()), ..Default::default() };
-    let res = file_response_for(&file, &HeaderMap::new(), false, &opts);
+    let res = file_response_for(&file, &Method::GET, &HeaderMap::new(), &opts);
     let h = res.headers();
     assert_eq!(h["content-type"], "image/png");
     assert_eq!(h["etag"], "W/\"10-1700000000000\"");
@@ -285,12 +285,12 @@ fn responds_with_files_from_memory() {
     assert_eq!(h["cache-control"], "public, max-age=31536000");
     let mut range = HeaderMap::new();
     range.insert(header::RANGE, HeaderValue::from_static("bytes=2-4"));
-    let partial = file_response_for(&file, &range, false, &opts);
+    let partial = file_response_for(&file, &Method::GET, &range, &opts);
     assert_eq!(partial.status(), 206);
     assert_eq!(text(partial), "234");
     let mut cached = HeaderMap::new();
     cached.insert(header::IF_NONE_MATCH, HeaderValue::from_static("W/\"10-1700000000000\""));
-    assert_eq!(file_response_for(&file, &cached, false, &opts).status(), 304);
+    assert_eq!(file_response_for(&file, &Method::GET, &cached, &opts).status(), 304);
 }
 
 #[test]
