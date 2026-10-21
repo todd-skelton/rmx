@@ -16,6 +16,7 @@ use std::rc::Rc;
 
 use rmx::ssr::{flush_marker, HydrationData, TEMPLATE_END};
 use rmx::{create_root, rsx, Component, Frame, FrameEvent, FrameHandle, Frames, Handle, Node, ReloadOptions, Root, RunOptions};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -34,7 +35,8 @@ thread_local! {
 async fn start() -> Server {
     let server = SERVER.with(|s| s.borrow_mut().get_or_insert_with(Server::new).clone());
     if APP.with(|a| a.borrow().is_none()) {
-        APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions::default())));
+        let entries = vec![rmx::entry::<EntryWithFrame>(), rmx::entry::<EntryWithBlockingFrame>()];
+        APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
     app.ready().await;
@@ -632,4 +634,151 @@ async fn restores_the_previous_named_frame_when_the_latest_duplicate_unmounts() 
     root.dispose();
     el.remove();
     assert!(Frames.get("dup").is_none());
+}
+
+// frame.test.tsx: frames rendered by client entries
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct EntryProps {
+    label: String,
+}
+
+/// A client entry that renders a named frame.
+struct EntryWithFrame;
+
+impl Component for EntryWithFrame {
+    type Props = EntryProps;
+    rmx::client_entry!("EntryWithFrame");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        EntryWithFrame
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        let fallback = rsx! { <span id="ef-frame">"Loading entry frame..."</span> };
+        rsx! { <section><p id="ef-label">{p.label.clone()}</p><Frame name="ef-frame" src="/ef-frame" fallback={fallback}/></section> }
+    }
+}
+
+/// Server markup for the entry with its frame resolved to `frame_html`.
+fn entry_page(entry_id: &str, frame_id: &str, label: &str, frame_html: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "EntryWithFrame".into(), format!(r#"{{"label":"{label}"}}"#)));
+    d.frames.push((frame_id.into(), "/ef-frame".into(), Some("ef-frame".into()), "resolved"));
+    format!(
+        r#"<!--rmx:h:{entry_id}--><section><p id="ef-label">{label}</p>{}</section><!--/rmx:h-->{}"#,
+        region(frame_id, frame_html),
+        d.to_script()
+    )
+}
+
+#[wasm_bindgen_test]
+async fn reloads_frames_inside_preserved_client_entries_after_server_driven_rerenders() {
+    let server = start().await;
+    server.route("/ef-parent", vec![Part::Html(entry_page("efh1", "eff1", "Initial entry", r#"<span id="ef-frame">Initial entry frame</span>"#))]);
+    let mut m = mount("ef-parent", "/ef-parent", "ef-label").await;
+    assert_eq!(text("ef-frame").as_deref(), Some("Initial entry frame"));
+    let label = by_id("ef-label").unwrap();
+    watch(&mut m, "ef-frame");
+    let frame_loads = || server.calls().iter().filter(|c| *c == "/ef-frame").count();
+    assert_eq!(frame_loads(), 0, "the entry's frame came with the server HTML");
+
+    server.route(
+        "/ef-parent",
+        vec![Part::Html(entry_page("efh2", "eff2", "Reloaded entry", r#"<span id="ef-frame">Unused server entry frame</span>"#))],
+    );
+    server.route("/ef-frame", vec![Part::Html(r#"<span id="ef-frame">Reloaded entry frame</span>"#.into())]);
+    let done = reload(frame("ef-parent"));
+    until("the parent reload", || done.get()).await;
+    until("the entry frame reload", || text("ef-frame").as_deref() == Some("Reloaded entry frame")).await;
+    assert_eq!(text("ef-label").as_deref(), Some("Reloaded entry"), "the entry got its new props");
+    assert!(by_id("ef-label").unwrap().is_same_node(Some(&label)), "the entry was kept");
+    assert_eq!(frame_loads(), 1, "the entry's frame reloads once, on the client");
+    until("the entry frame's events", || events() == (1, 1)).await;
+}
+
+#[wasm_bindgen_test]
+async fn does_not_reload_client_frames_on_ordinary_client_updates() {
+    let server = start().await;
+    server.route("/cu-frame", vec![Part::Html(r#"<p id="cu-content">Client frame</p>"#.into())]);
+    let el: web_sys::HtmlElement = document().create_element("div").unwrap().unchecked_into();
+    document().body().unwrap().append_child(&el).unwrap();
+    let root = create_root(&el);
+    let page = |label: &str| rsx! { <div><p id="cu-label">{label.to_string()}</p><Frame name="cu-frame" src="/cu-frame"/></div> };
+    root.render(page("one"));
+    root.flush();
+    until("the client frame", || by_id("cu-content").is_some()).await;
+    let loads = || server.calls().iter().filter(|c| *c == "/cu-frame").count();
+    assert_eq!(loads(), 1);
+    root.render(page("two"));
+    root.flush();
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("cu-label").as_deref(), Some("two"));
+    assert_eq!(loads(), 1, "a client re-render keeps the frame's content");
+    root.dispose();
+    el.remove();
+}
+
+#[wasm_bindgen_test]
+async fn does_not_wait_for_non_blocking_frames_inside_preserved_client_entries() {
+    let server = start().await;
+    server.route("/ew-parent", vec![Part::Html(entry_page("ewh1", "ewf1", "Initial entry", r#"<span id="ef-frame">Initial entry frame</span>"#))]);
+    let mut m = mount("ew-parent", "/ew-parent", "ef-label").await;
+    watch(&mut m, "ef-frame");
+
+    server.route("/ew-parent", vec![Part::Html(entry_page("ewh2", "ewf2", "Reloaded entry", r#"<span id="ef-frame">Unused</span>"#))]);
+    server.route("/ef-frame", vec![Part::Gate("ew-frame")]);
+    let done = reload(frame("ew-parent"));
+    until("the parent reload", || done.get()).await;
+    assert_eq!(text("ef-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!(text("ef-frame").as_deref(), Some("Initial entry frame"), "the entry's frame keeps its content while it reloads");
+    assert_eq!(events(), (1, 0), "the parent finished without waiting for the entry's frame");
+
+    server.release("ew-frame", r#"<span id="ef-frame">Reloaded entry frame</span>"#);
+    until("the entry frame reload", || text("ef-frame").as_deref() == Some("Reloaded entry frame")).await;
+    until("reloadComplete", || events() == (1, 1)).await;
+}
+
+/// A client entry that renders a blocking frame (no fallback).
+struct EntryWithBlockingFrame;
+
+impl Component for EntryWithBlockingFrame {
+    type Props = EntryProps;
+    rmx::client_entry!("EntryWithBlockingFrame");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        EntryWithBlockingFrame
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        rsx! { <section><p id="eb-label">{p.label.clone()}</p><Frame name="eb-frame" src="/eb-frame"/></section> }
+    }
+}
+
+fn blocking_entry_page(entry_id: &str, frame_id: &str, label: &str, frame_html: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "EntryWithBlockingFrame".into(), format!(r#"{{"label":"{label}"}}"#)));
+    d.frames.push((frame_id.into(), "/eb-frame".into(), Some("eb-frame".into()), "resolved"));
+    format!(
+        r#"<!--rmx:h:{entry_id}--><section><p id="eb-label">{label}</p>{}</section><!--/rmx:h-->{}"#,
+        region(frame_id, frame_html),
+        d.to_script()
+    )
+}
+
+#[wasm_bindgen_test]
+async fn waits_for_blocking_frames_inside_preserved_client_entries() {
+    let server = start().await;
+    server.route("/eb-parent", vec![Part::Html(blocking_entry_page("ebh1", "ebf1", "Initial entry", r#"<span id="eb-frame">Initial</span>"#))]);
+    let _m = mount("eb-parent", "/eb-parent", "eb-label").await;
+
+    server.route("/eb-parent", vec![Part::Html(blocking_entry_page("ebh2", "ebf2", "Reloaded entry", r#"<span id="eb-frame">Unused</span>"#))]);
+    server.route("/eb-frame", vec![Part::Gate("eb-frame")]);
+    let done = reload(frame("eb-parent"));
+    until("the entry update", || text("eb-label").as_deref() == Some("Reloaded entry")).await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert!(!done.get(), "the parent reload waits for the entry's blocking frame");
+    server.release("eb-frame", r#"<span id="eb-frame">Reloaded</span>"#);
+    until("the parent reload", || done.get()).await;
+    assert_eq!(text("eb-frame").as_deref(), Some("Reloaded"));
 }

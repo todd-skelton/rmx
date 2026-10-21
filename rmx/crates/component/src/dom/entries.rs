@@ -58,9 +58,9 @@ where
     let props: C::Props = serde_json::from_str(props_json).map_err(|e| e.to_string())?;
     let inst = inst.as_any().downcast_ref::<Instance<C>>().ok_or("entry type changed")?;
     *inst.props.borrow_mut() = props;
-    if let Some(rc) = inst.handle.inst.upgrade() {
-        super::schedule_update(rc);
-    }
+    // Re-render now, as part of the frame load that brought the props, so client frames the
+    // entry renders reload with it.
+    frames::server_reload(|| super::rerender(inst));
     Ok(())
 }
 

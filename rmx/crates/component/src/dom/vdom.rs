@@ -1227,6 +1227,10 @@ fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
                 m.src = f.src.clone();
                 m.state.set_src(&f.src);
                 frames::spawn_reload(m.state.clone(), f.fallback.is_none());
+            } else if frames::in_server_reload() {
+                // Re-rendered by a frame load (a client entry got new server props, or node
+                // content was replaced): reload along with the ancestor, like Remix.
+                frames::spawn_reload(m.state.clone(), f.fallback.is_none());
             }
         }
         (_, new) => {

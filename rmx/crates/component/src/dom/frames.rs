@@ -42,6 +42,8 @@ pub(crate) struct FrameState {
     /// Reloading because a frame it is in reloads (Remix's inherited reload): it sent
     /// `reloadStart` and sends `reloadComplete` once its new content is in the page.
     inherited: Cell<bool>,
+    /// A load was spawned and has not started yet; it finishes the inherited reload.
+    queued: Cell<bool>,
 }
 
 /// Loads a frame load waits for before it finishes (Remix's reconciliation tracker): a
@@ -171,6 +173,7 @@ impl FrameState {
             root: RefCell::new(None),
             tracker: RefCell::new(None),
             inherited: Cell::new(false),
+            queued: Cell::new(false),
         }
     }
 
@@ -220,7 +223,7 @@ impl FrameState {
     /// The new content of an inherited reload is in the page: send `reloadComplete`, and
     /// finish frames inside that are not waiting for a streamed template.
     fn complete_inherited(&self) {
-        if !self.inherited.replace(false) || self.disposed.get() {
+        if self.queued.get() || !self.inherited.replace(false) || self.disposed.get() {
             return;
         }
         for child in self.child_frames() {
@@ -284,6 +287,7 @@ impl FrameState {
     /// Fetch the frame's `src` and reconcile the response into the page. Resolves to the
     /// final URL when the server redirected. A newer load of the same frame aborts this one.
     pub(crate) async fn load(self: &Rc<Self>, submission: Submission) -> Result<Option<String>, JsValue> {
+        self.queued.set(false);
         if self.disposed.get() {
             return Ok(None);
         }
@@ -468,7 +472,8 @@ impl FrameState {
         let response = result.map_err(|e| JsValue::from_str(&e))?;
         match response.content {
             FrameContent::Html(html) => self.tracked(|| self.apply_html(&html)),
-            FrameContent::Node(node) => self.tracked(|| self.apply_node(node)),
+            // Node content from a load re-renders like a frame load's server content.
+            FrameContent::Node(node) => self.tracked(|| server_reload(|| self.apply_node(node))),
         }
         Ok(response.url)
     }
@@ -977,9 +982,29 @@ pub(crate) fn create_client_frame(
     frame
 }
 
+thread_local! {
+    /// Depth of renders driven by a frame load (Remix's `serverFrameReload`).
+    static SERVER_RELOAD: Cell<u32> = const { Cell::new(0) };
+}
+
+/// Run `f` as a render driven by a frame load: a client entry getting new server props, or
+/// a frame's node content being replaced. Client frames it re-renders reload with it.
+pub(crate) fn server_reload<T>(f: impl FnOnce() -> T) -> T {
+    SERVER_RELOAD.with(|d| d.set(d.get() + 1));
+    let out = f();
+    SERVER_RELOAD.with(|d| d.set(d.get() - 1));
+    out
+}
+
+/// Whether a render driven by a frame load is running (see [`server_reload`]).
+pub(crate) fn in_server_reload() -> bool {
+    SERVER_RELOAD.with(|d| d.get() > 0)
+}
+
 /// Load a frame in the background. A blocking frame (no fallback) created or retargeted
 /// while a frame load applies its content joins that load's tracker.
 pub(crate) fn spawn_reload(frame: Rc<FrameState>, blocking: bool) {
+    frame.queued.set(true);
     let tracker = blocking.then(|| APPLYING.with(|a| a.borrow().last().cloned())).flatten();
     let mut done: Option<js_sys::Function> = None;
     if let Some(tracker) = &tracker {
