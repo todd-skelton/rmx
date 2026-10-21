@@ -322,7 +322,7 @@ Covered since phase 0b:
    All examples depend on `rmx` alone.
 
 6. Component runtime behavior is checked against Remix's own test suites, ported test by
-   test: 479 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
+   test: 488 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
    headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
    SSR options and server/client parity), the style manager, diff-dom, document state
    (focus restore), form navigation, navigation interception, nested client entries,
@@ -337,7 +337,8 @@ Covered since phase 0b:
    frame statuses forced to resolved, missing reload events for frames inside a reloading
    frame, stale templates applied after a reload, and superseded response streams left
    open until their next chunk, and client frames inside client entries that kept stale
-   content when an ancestor reload re-rendered the entry.
+   content when an ancestor reload re-rendered the entry, and client frame reloads started
+   by a superseded ancestor reload that were left running.
 
 Remaining gaps:
 
@@ -348,7 +349,8 @@ Remaining gaps:
    `Root::on_error` / `App::on_error` like Remix error events.
 3. Tooling: HMR and a CLI. The `remix/component/test` render helper exists as `rmx::test`.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
-5. Not yet ported: the rest of Remix's `frame.test.tsx` (more client entry and nested
-   frame combinations during reloads, streamed template parsing edge cases). The `stream.test.tsx` cases that apply
+5. Not yet ported: a few `frame.test.tsx` cases (reload events through a client entry's
+   own frame handle, streamed template parsing edge cases). The client entry and
+   client-created frame reload cases are ported. The `stream.test.tsx` cases that apply
    are ported; import map, module preload and `resolveClientEntry` cases do not apply. The
    behavior they cover is exercised by the demo e2e scripts.
