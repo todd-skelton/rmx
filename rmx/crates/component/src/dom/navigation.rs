@@ -21,6 +21,7 @@ use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
+use super::form_navigation::{FormNavigationResolver, PendingSubmission};
 use super::frames::{self, Submission};
 use super::js::{call, get, object};
 use super::{warn, window};
@@ -105,12 +106,14 @@ type NavigateListener = Closure<dyn Fn(JsValue)>;
 
 thread_local! {
     static LISTENER: std::cell::RefCell<Option<NavigateListener>> = const { std::cell::RefCell::new(None) };
+    static FORMS: std::cell::RefCell<Option<FormNavigationResolver>> = const { std::cell::RefCell::new(None) };
 }
 
 pub(crate) fn start() {
     let Some(nav) = navigation() else { return };
     let href = window().location().href().unwrap_or_default();
     let _ = call(&nav, "updateCurrentEntry", &[&object(&[("state", state(None, &href, true, true))])]);
+    FORMS.with(|f| *f.borrow_mut() = Some(FormNavigationResolver::new()));
     // `Fn`, not `FnMut`: a navigation can start another one synchronously (re-entry).
     let listener = Closure::<dyn Fn(JsValue)>::new(on_navigate);
     let _ = call(&nav, "addEventListener", &[&JsValue::from_str("navigate"), listener.as_ref()]);
@@ -119,6 +122,7 @@ pub(crate) fn start() {
 
 /// Stop intercepting navigations (`App::dispose`).
 pub(crate) fn stop() {
+    FORMS.with(|f| f.borrow_mut().take());
     let Some(listener) = LISTENER.with(|l| l.borrow_mut().take()) else { return };
     if let Some(nav) = navigation() {
         let _ = call(&nav, "removeEventListener", &[&JsValue::from_str("navigate"), listener.as_ref()]);
@@ -138,7 +142,8 @@ struct Plan {
     replace: bool,
     reset_scroll: bool,
     reset_focus: bool,
-    submission: Option<Submission>,
+    /// A non-GET form submission; its data is read when the navigation handler runs.
+    submission: Option<PendingSubmission>,
 }
 
 fn on_navigate(event: JsValue) {
@@ -215,7 +220,11 @@ fn on_navigate(event: JsValue) {
             if !Rc::ptr_eq(&frame, &top) {
                 frame.set_src(&plan.src);
             }
-            match frame.load(plan.submission.unwrap_or_default()).await {
+            let submission = plan.submission.map(|pending| {
+                let s = pending.get();
+                Submission { method: Some(s.method.to_ascii_uppercase()), form_data: s.form_data, enc_type: Some(s.enc_type) }
+            });
+            match frame.load(submission.unwrap_or_default()).await {
                 Ok(Some(redirected)) if Rc::ptr_eq(&frame, &top) => {
                     let opts = object(&[
                         ("state", state(None, &redirected, reset_scroll, reset_focus)),
@@ -405,57 +414,25 @@ fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> O
     }
 
     // A form submission: the source is the form or its submit button.
-    let tag = source.tag_name();
-    let submitter = (tag == "BUTTON" || tag == "INPUT").then(|| source.clone());
-    let form: web_sys::Element = if tag == "FORM" {
-        source.clone()
-    } else {
-        get(source, "form").dyn_into().ok()?
-    };
-    let attr = |name: &str, submitter_name: &str| {
-        submitter
-            .as_ref()
-            .filter(|s| s.has_attribute(submitter_name))
-            .and_then(|s| s.get_attribute(submitter_name))
-            .or_else(|| form.get_attribute(name))
-    };
-    let has = |name: &str| form.has_attribute(name) || submitter.as_ref().is_some_and(|s| s.has_attribute(name));
-    if has("data-rmx-document") {
+    let form = FORMS.with(|f| f.borrow().as_ref().and_then(|r| r.resolve(event)))?;
+    let attr = |name: &str| form.get_attribute(name, None);
+    if form.has_attribute("data-rmx-document") {
         return None;
     }
-    let method = attr("method", "formmethod").unwrap_or_else(|| "get".into()).to_ascii_lowercase();
-    let target_attr = attr("target", "formtarget").unwrap_or_default().to_ascii_lowercase();
-    if method == "dialog" || target_attr == "_blank" {
-        return None;
-    }
-    let submission = if method == "get" {
-        None
-    } else {
-        let form_data = get(event, "formData");
-        let enctype = attr("enctype", "formenctype").unwrap_or_default().to_ascii_lowercase();
-        let (body, content_type) = if form_data.is_null() || form_data.is_undefined() {
-            (None, None)
-        } else if enctype == "multipart/form-data" {
-            (Some(form_data), None)
-        } else {
-            let params = web_sys::UrlSearchParams::new_with_str_sequence_sequence(&form_data).ok()?;
-            (Some(params.into()), Some("application/x-www-form-urlencoded".to_string()))
-        };
-        Some(Submission { method: Some(method.to_ascii_uppercase()), body, content_type })
-    };
+    let submission = form.submission();
     // Submitting a form back to the current URL replaces the entry unless told otherwise.
     let same_url = window().location().href().ok().as_deref() == Some(dest);
-    let replace = match attr("data-rmx-history", "data-rmx-history").as_deref() {
+    let replace = match attr("data-rmx-history").as_deref() {
         Some("replace") => true,
         Some("push") => false,
         _ => submission.is_some() && same_url,
     };
     Some(Plan {
-        target: attr("data-rmx-target", "data-rmx-target"),
-        src: attr("data-rmx-src", "data-rmx-src").unwrap_or_else(|| dest.to_string()),
+        target: attr("data-rmx-target"),
+        src: attr("data-rmx-src").unwrap_or_else(|| dest.to_string()),
         replace,
-        reset_scroll: reset_attr(attr("data-rmx-reset-scroll", "data-rmx-reset-scroll")),
-        reset_focus: reset_attr(attr("data-rmx-reset-focus", "data-rmx-reset-focus")),
+        reset_scroll: reset_attr(attr("data-rmx-reset-scroll")),
+        reset_focus: reset_attr(attr("data-rmx-reset-focus")),
         submission,
     })
 }

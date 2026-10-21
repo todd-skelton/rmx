@@ -23,6 +23,10 @@ use super::{create_root, document, Root};
 /// Focus and selection capture around DOM moves (Remix's `createDocumentState`), for tests.
 #[doc(hidden)]
 pub use super::document_state::DocumentState;
+/// Form submissions behind `navigate` events (Remix's `createFormNavigationResolver`),
+/// for tests.
+#[doc(hidden)]
+pub use super::form_navigation::{FormNavigation, FormNavigationResolver, FormSubmission, PendingSubmission};
 use crate::node::IntoNode;
 
 /// Options for [`render_with`].

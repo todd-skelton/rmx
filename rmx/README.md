@@ -133,13 +133,21 @@ crates:
    and no navigation while `disabled` or `aria-disabled`.
    An update that moves the focused element (a keyed reorder) puts focus, the text
    selection and ancestor scroll positions back, as Remix's scheduler does.
+   Form navigations follow Remix's form navigation resolver: the effective method,
+   encoding and target include submitter overrides (`formmethod`, `formenctype`,
+   `formtarget`), `data-rmx-*` attributes are read from the submitter first, and a
+   capture-phase `submit` listener records each submission, so a submit button removed
+   or moved to another form before `navigate` fires still resolves to the right form and
+   the browser's own form data. POST bodies are URL encoded, `multipart/form-data` or
+   `text/plain` (CRLF lines), and custom resolvers get the encoding as
+   `FrameRequest::enc_type`; `ReloadOptions::enc_type` does the same for reloads.
    Navigations and frame reloads diff the server HTML into the live DOM: keyed elements
    match by `data-rmx-key`, live state wins (typed values, checked, selected, open,
    popovers), `data-rmx-preserve-dom` / `data-rmx-preserve-attrs` opt out, and nodes
    already in order stay put, so a custom element is not reconnected when siblings move.
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
-   css, link), stylesheet, diff-dom and document-state test suites
-   (`crates/component/tests/browser_*.rs`, 369 tests).
+   css, link), stylesheet, diff-dom, document-state and form-navigation test suites
+   (`crates/component/tests/browser_*.rs`, 379 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

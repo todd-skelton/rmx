@@ -11,6 +11,7 @@
 
 pub(crate) mod diff;
 pub(crate) mod entries;
+pub(crate) mod form_navigation;
 pub(crate) mod frames;
 pub(crate) mod navigation;
 mod mixin_host;

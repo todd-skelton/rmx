@@ -63,8 +63,11 @@ impl FrameEvent {
 pub struct ReloadOptions {
     /// Load this URL instead (it becomes the frame's `src`).
     pub src: Option<String>,
-    /// `"get"` (default) or `"post"`.
+    /// `"get"` (default) or `"post"`, case-insensitive; other values are GET.
     pub method: Option<String>,
+    /// POST body encoding: `application/x-www-form-urlencoded` (default),
+    /// `multipart/form-data` or `text/plain`. Ignored for GET.
+    pub enc_type: Option<String>,
     /// Form fields to send. For GET they replace the URL query.
     pub body: Option<Vec<(String, String)>>,
 }
@@ -76,8 +79,11 @@ pub struct FrameRequest {
     pub url: String,
     /// `GET`, or the method of the form being submitted.
     pub method: String,
-    /// Submitted form fields (URL-encoded on the wire).
+    /// Submitted form fields of a non-GET request (GET fields are in `url`).
     pub form: Option<Vec<(String, String)>>,
+    /// How `form` is encoded on the wire: `application/x-www-form-urlencoded`,
+    /// `multipart/form-data` or `text/plain`. `None` without a form.
+    pub enc_type: Option<String>,
     /// The name of the frame asking, if it has one.
     pub target: Option<String>,
 }

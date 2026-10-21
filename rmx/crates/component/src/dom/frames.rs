@@ -64,9 +64,57 @@ pub(crate) fn set_resolver(resolver: Option<ResolveFrame>) {
 /// A request for new frame content: a reload, a link navigation or a form submission.
 #[derive(Default)]
 pub(crate) struct Submission {
+    /// `POST` for a form submission; `None` (GET) otherwise.
     pub(crate) method: Option<String>,
-    pub(crate) body: Option<JsValue>,
-    pub(crate) content_type: Option<String>,
+    pub(crate) form_data: Option<web_sys::FormData>,
+    /// `multipart/form-data`, `text/plain` or (anything else) URL encoding.
+    pub(crate) enc_type: Option<String>,
+}
+
+impl Submission {
+    fn is_get(&self) -> bool {
+        self.method.as_deref().is_none_or(|m| m.eq_ignore_ascii_case("get") || m.eq_ignore_ascii_case("head"))
+    }
+
+    /// The normalized encoding of a body-carrying submission (Remix `getRequestBody`).
+    fn enc_type(&self) -> Option<&'static str> {
+        if self.form_data.is_none() || self.is_get() {
+            return None;
+        }
+        Some(match self.enc_type.as_deref().map(str::to_ascii_lowercase).as_deref() {
+            Some("multipart/form-data") => "multipart/form-data",
+            Some("text/plain") => "text/plain",
+            _ => "application/x-www-form-urlencoded",
+        })
+    }
+
+    /// The request body and its `Content-Type` (`None` lets fetch set the multipart
+    /// boundary). Files contribute their names outside multipart bodies.
+    fn body(&self) -> Option<(JsValue, Option<&'static str>)> {
+        let enc_type = self.enc_type()?;
+        let form_data = self.form_data.as_ref()?;
+        Some(match enc_type {
+            "multipart/form-data" => (form_data.clone().into(), None),
+            "text/plain" => {
+                let body: String = entries(form_data).iter().map(|(k, v)| format!("{}={}\r\n", crlf(k), crlf(v))).collect();
+                (JsValue::from_str(&body), Some("text/plain"))
+            }
+            _ => (url_encoded(&entries(form_data)).into(), Some(enc_type)),
+        })
+    }
+}
+
+/// Line breaks as CRLF, as browsers encode form entries.
+fn crlf(value: &str) -> String {
+    value.replace("\r\n", "\n").replace('\r', "\n").replace('\n', "\r\n")
+}
+
+fn url_encoded(fields: &[(String, String)]) -> web_sys::UrlSearchParams {
+    let params = web_sys::UrlSearchParams::new().expect("URLSearchParams");
+    for (k, v) in fields {
+        params.append(&crlf(k), &crlf(v));
+    }
+    params
 }
 
 impl FrameState {
@@ -138,30 +186,29 @@ impl FrameState {
         }
     }
 
-    /// `FrameHandle::reload_with`: optional new src, method and form fields.
+    /// `FrameHandle::reload_with`: optional new src, method, encoding and form fields.
+    /// Methods other than POST are GET, which puts the fields in the query.
     pub(crate) async fn reload(self: Rc<Self>, options: ReloadOptions) {
         if let Some(src) = &options.src {
             self.set_src(src);
         }
-        let method = options.method.as_deref().unwrap_or("get").to_ascii_lowercase();
+        let post = options.method.as_deref().is_some_and(|m| m.eq_ignore_ascii_case("post"));
         let mut submission = Submission::default();
         if let Some(fields) = &options.body {
-            let params = web_sys::UrlSearchParams::new().expect("URLSearchParams");
-            for (k, v) in fields {
-                params.append(k, v);
-            }
-            if method == "get" {
-                if let Ok(url) = web_sys::Url::new_with_base(&self.src(), &window().location().href().unwrap_or_default()) {
-                    url.set_search(&params.to_string().as_string().unwrap_or_default());
-                    self.set_src(&url.href());
+            if post {
+                let form_data = web_sys::FormData::new().expect("FormData");
+                for (k, v) in fields {
+                    let _ = form_data.append_with_str(k, v);
                 }
-            } else {
-                submission.body = Some(params.into());
-                submission.content_type = Some("application/x-www-form-urlencoded".into());
+                submission.form_data = Some(form_data);
+                submission.enc_type = options.enc_type.clone();
+            } else if let Ok(url) = web_sys::Url::new_with_base(&self.src(), &window().location().href().unwrap_or_default()) {
+                url.set_search(&url_encoded(fields).to_string().as_string().unwrap_or_default());
+                self.set_src(&url.href());
             }
         }
-        if method != "get" {
-            submission.method = Some(method.to_ascii_uppercase());
+        if post {
+            submission.method = Some("POST".into());
         }
         if let Err(e) = self.load(submission).await {
             crate::report_error(js_error(&e));
@@ -219,7 +266,8 @@ impl FrameState {
         if let Some(name) = self.name() {
             headers.set("X-Remix-Target", &name)?;
         }
-        if let Some(ct) = &submission.content_type {
+        let body = submission.body();
+        if let Some((_, Some(ct))) = &body {
             headers.set("Content-Type", ct)?;
         }
         let init = web_sys::RequestInit::new();
@@ -227,7 +275,7 @@ impl FrameState {
         init.set_headers(&headers);
         init.set_mode(web_sys::RequestMode::SameOrigin);
         init.set_signal(Some(signal));
-        if let Some(body) = &submission.body {
+        if let Some((body, _)) = &body {
             init.set_body(body);
         }
         let response: web_sys::Response = JsFuture::from(window().fetch_with_str_and_init(&self.src(), &init)).await?.dyn_into()?;
@@ -330,7 +378,8 @@ impl FrameState {
         let request = FrameRequest {
             url,
             method: submission.method.clone().unwrap_or_else(|| "GET".into()),
-            form: submission.body.as_ref().map(form_pairs),
+            enc_type: submission.enc_type().map(String::from),
+            form: submission.form_data.as_ref().filter(|_| !submission.is_get()).map(entries),
             target: self.name(),
         };
         let Some(result) = until_aborted(resolve(request), signal).await else { return Ok(None) };
@@ -462,8 +511,8 @@ async fn until_aborted<T>(fut: impl std::future::Future<Output = T>, signal: &we
     .await
 }
 
-/// The text fields of a `URLSearchParams` or `FormData` body (files contribute their name).
-fn form_pairs(body: &JsValue) -> Vec<(String, String)> {
+/// The entries of a `FormData` (files contribute their name).
+fn entries(body: &web_sys::FormData) -> Vec<(String, String)> {
     let mut out = Vec::new();
     if let Ok(Some(iter)) = js_sys::try_iter(body) {
         for pair in iter.flatten() {
