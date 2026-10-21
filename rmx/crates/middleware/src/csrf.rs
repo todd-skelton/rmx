@@ -118,7 +118,7 @@ impl Csrf {
     }
 
     fn check(&self, ctx: &Context) -> Result<(), CsrfFailure> {
-        let session = ctx.get::<Session>().expect("csrf() needs the session() middleware to run before it");
+        let session = ctx.get::<Session>().expect("csrf middleware requires session() middleware to run before it");
         let expected = token_in(session, &self.token_key);
         if self.safe_methods.contains(ctx.original_method()) {
             return Ok(());
@@ -185,7 +185,7 @@ pub fn csrf_token(ctx: &Context) -> String {
 
 /// [`csrf_token`] for a custom [`Csrf::token_key`].
 pub fn csrf_token_with_key(ctx: &Context, key: &str) -> String {
-    token_in(ctx.get::<Session>().expect("csrf_token() needs the session() middleware"), key)
+    token_in(ctx.get::<Session>().expect("Session is not started. Use session() middleware before csrf()."), key)
 }
 
 fn token_in(session: &Session, key: &str) -> String {
