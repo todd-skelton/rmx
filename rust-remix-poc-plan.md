@@ -319,9 +319,10 @@ Covered since phase 0b:
    schema combinators, `pipe`/`refine`/`transform`, checks, coercion, `abortEarly`, error
    maps with locale, and the form-data reader, checked by ports of its test files (31 unit
    tests). Objects build Rust values through a closure instead of returning plain
-   objects; JavaScript-only schemas (bigint, symbol, Map, Set, Date) are left out. The
-   timeboxer schedule API and signup, the bookstore auth forms and the sse message limit
-   now validate with it, as their Remix originals do.
+   objects; JavaScript-only schemas (bigint, symbol, Map, Set, Date) are left out. Every
+   form and JSON body a Remix demo validates with `data-schema` is validated with it in
+   the rmx port (timeboxer, bookstore, social-auth, sse), except the bookstore admin book
+   form, which keeps accepting `on` for its checkbox.
 6. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
