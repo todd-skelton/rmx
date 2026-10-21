@@ -370,7 +370,11 @@ Remaining gaps:
 2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
    module. Errors are reported explicitly (`Handle::report_error`) and reach
    `Root::on_error` / `App::on_error` like Remix error events.
-3. Tooling: HMR and the `remix` CLI (`new`, `doctor`, `test`). The
+3. Tooling: HMR, and the `remix` CLI's `doctor`, `completion` and `db` commands. The `rmx`
+   binary (`rmx::cli`, in the `rmx` crate) has `new` (writes `examples/template` as a
+   standalone crate with the app's name, Remix's error codes and progress lines; an app made
+   this way passed `cargo test` and the template's 10 browser checks outside the workspace),
+   `version`, `help`, and `routes`, `assets` and `test`, which run the app through cargo. The
    `remix/component/test` render helper exists as `rmx::test`; `remix routes` exists as
    `rmx::router::routes::routes_command`, which every demo binary runs for `-- routes`
    (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files);
