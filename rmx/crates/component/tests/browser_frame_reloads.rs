@@ -49,6 +49,9 @@ async fn start() -> Server {
             rmx::entry::<MiddleEntry>(),
             rmx::entry::<ClientOnlyEntry>(),
             rmx::entry::<BlockingOuterEntry>(),
+            rmx::entry::<MountedFrame>(),
+            rmx::entry::<FragmentFrame>(),
+            rmx::entry::<Card>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -1792,4 +1795,149 @@ async fn reloads_nested_frames_inside_blocking_frames_rendered_by_preserved_clie
         tick().await;
     }
     assert_eq!(counts(), (1, 2));
+}
+
+// frame.test.tsx: a client entry's initially mounted frame hydrates once
+
+/// A client entry whose pending frame streams in a nested pending frame.
+struct MountedFrame;
+
+impl Component for MountedFrame {
+    type Props = EntryProps;
+    rmx::client_entry!("MountedFrame");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        MountedFrame
+    }
+    fn render(&self, _: &EntryProps, _: &Handle<Self>) -> Node {
+        let fallback = rsx! { <p id="mf-outer-fallback">"Loading outer..."</p> };
+        rsx! { <section><Frame src="/mf-outer" fallback={fallback}/></section> }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn does_not_duplicate_initially_mounted_frame_hydration_in_a_client_entry() {
+    let server = start().await;
+    let mut d = HydrationData::default();
+    d.entries.push(("mfh".into(), "MountedFrame".into(), r#"{"label":""}"#.into()));
+    d.frames.push(("mfo".into(), "/mf-outer".into(), None, "pending"));
+    let page = format!(
+        r#"<!--rmx:h:mfh--><section>{}</section><!--/rmx:h-->{}"#,
+        region("mfo", r#"<p id="mf-outer-fallback">Loading outer...</p>"#),
+        d.to_script()
+    );
+    server.route("/mfp", vec![Part::Html(page)]);
+    let _m = mount("mfp", "/mfp", "mf-outer-fallback").await;
+    let frame_loads = || server.calls().iter().filter(|c| c.starts_with("/mf-")).count();
+    let count = |selector: &str| document().query_selector_all(selector).unwrap().length();
+    assert_eq!(count("#mf-outer-fallback"), 1);
+
+    let outer = format!(
+        r#"<div id="mf-outer-root">{}</div>{}"#,
+        region("mfn", r#"<span id="mf-nested-fallback">Loading nested...</span>"#),
+        data(&[("mfn", "/mf-nested", "mf-nested", true)])
+    );
+    insert_template("mfo", &format!("{outer}<!--{TEMPLATE_END}-->"));
+    until("the outer frame", || by_id("mf-outer-root").is_some()).await;
+    tick().await;
+    tick().await;
+    assert_eq!(frame_loads(), 0, "the frames are not fetched on the client");
+    assert_eq!(count("#mf-outer-root"), 1);
+    assert_eq!(count("#mf-nested-fallback"), 1);
+
+    insert_template("mfn", &format!(r#"<span id="mf-nested-loaded">Nested loaded</span><!--{TEMPLATE_END}-->"#));
+    until("the nested frame", || by_id("mf-nested-loaded").is_some()).await;
+    tick().await;
+    tick().await;
+    assert_eq!(frame_loads(), 0);
+    assert_eq!(count("#mf-nested-loaded"), 1);
+    assert_eq!(count("#mf-nested-fallback"), 0);
+}
+
+// frame.test.tsx: a Frame that is the first child of a client entry's fragment
+
+struct FragmentFrame;
+
+impl Component for FragmentFrame {
+    type Props = EntryProps;
+    rmx::client_entry!("FragmentFrame");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        FragmentFrame
+    }
+    fn render(&self, _: &EntryProps, _: &Handle<Self>) -> Node {
+        let fallback = rsx! { <p id="ff-fallback">"Loading frag..."</p> };
+        rsx! {
+            <>
+                <Frame name="ff-frag" src="/ff-frag" fallback={fallback}/>
+                <span id="ff-sibling">"sibling"</span>
+            </>
+        }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn adopts_a_fragment_nested_frame_hydration_marker_at_a_client_entry_boundary() {
+    let server = start().await;
+    let mut d = HydrationData::default();
+    d.entries.push(("ffh".into(), "FragmentFrame".into(), r#"{"label":""}"#.into()));
+    d.frames.push(("fff".into(), "/ff-frag".into(), Some("ff-frag".into()), "pending"));
+    let page = format!(
+        r#"<!--rmx:h:ffh-->{}<span id="ff-sibling">sibling</span><!--/rmx:h-->{}"#,
+        region("fff", r#"<p id="ff-fallback">Loading frag...</p>"#),
+        d.to_script()
+    );
+    server.route("/ffp", vec![Part::Html(page)]);
+    let _m = mount("ffp", "/ffp", "ff-sibling").await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    let count = |selector: &str| document().query_selector_all(selector).unwrap().length();
+    assert_eq!(loads(&server, "/ff-frag"), 0, "the marker is adopted, not fetched again");
+    assert_eq!(count("#ff-fallback"), 1);
+    assert_eq!(count("#ff-sibling"), 1);
+    assert!(Frames.get("ff-frag").is_some());
+}
+
+// frame.test.tsx: Frame semantics from entry children during initial hydration
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct CardProps {
+    children: rmx::Children,
+}
+
+/// A client entry that renders its children in a section.
+struct Card;
+
+impl Component for Card {
+    type Props = CardProps;
+    rmx::client_entry!("Card");
+    fn setup(_: &CardProps, _: &Handle<Self>) -> Self {
+        Card
+    }
+    fn render(&self, p: &CardProps, _: &Handle<Self>) -> Node {
+        rsx! { <section>{&p.children}</section> }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn renders_frame_semantics_from_entry_children_during_initial_hydration() {
+    let server = start().await;
+    let fallback = rsx! { <span id="cc-frame">"Loading child frame..."</span> };
+    let children = rsx! { <Frame src="/cc-frame" fallback={fallback}/> };
+    let props = serde_json::to_string(&CardProps { children: children.into() }).unwrap();
+    let mut d = HydrationData::default();
+    d.entries.push(("cch".into(), "Card".into(), props));
+    d.frames.push(("ccf".into(), "/cc-frame".into(), None, "pending"));
+    let page = format!(
+        r#"<!--rmx:h:cch--><section>{}</section><!--/rmx:h-->{}"#,
+        region("ccf", r#"<span id="cc-frame">Loading child frame...</span>"#),
+        d.to_script()
+    );
+    server.route("/ccp", vec![Part::Html(page)]);
+    let _m = mount("ccp", "/ccp", "cc-frame").await;
+    tick().await;
+    assert_eq!(text("cc-frame").as_deref(), Some("Loading child frame..."));
+
+    insert_template("ccf", &format!(r#"<span id="cc-frame">Loaded child frame</span><!--{TEMPLATE_END}-->"#));
+    until("the child frame", || text("cc-frame").as_deref() == Some("Loaded child frame")).await;
+    assert_eq!(loads(&server, "/cc-frame"), 0, "the frame came from the stream");
 }
