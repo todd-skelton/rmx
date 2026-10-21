@@ -425,6 +425,24 @@ Covered since phase 0b:
    stores the session with `Context::set_sealed` instead, and a later `set` or `get_mut`
    of `Session` panics with the same message. Logging the `httpOnly: false` warning is
    checked through the message builder, since tests cannot capture stderr in-process.
+   The middleware packages run their Remix tests as integration tests under
+   `crates/middleware/tests/`: `cors` (21 cases, RegExp and boolean origin resolvers written
+   as `origin_fn` closures), `csrf` (14), `cop` (15, every configuration message checked),
+   `auth` (32 across `auth`, `requireAuth` and the bearer, API key and session schemes;
+   `auth-types.test.ts` is TypeScript inference, which `Auth<I>` gives for free) and
+   `form_data` (21); `logger` (10) and `html-template` (17) are one test per Remix case in
+   place. Changes they forced: Remix's error text throughout, the bearer and API key schemes
+   default to `Authorization` and `X-Api-Key` and read the header trimmed as fetch `Headers`
+   does, `SchemeResult::failure()` is Remix's empty `{ status: 'failure' }`, and the file
+   storage directory error reads `Path ".." is not a directory`. `remix/file-storage` runs
+   `memory.test.ts` and `fs.test.ts` (15 cases, with the form-data-parser upload
+   integration). `form-data-parser` (31 cases, `crates/fetch/tests/form_data.rs`) changed
+   `FormData::parse`: media types other than URL-encoded and multipart (and a missing
+   `Content-Type`) are a `FormDataError::Parse` before the body is read, so `text/plain`
+   bodies are no longer parsed; upload handlers may return a `Result`, whose error ends
+   parsing as `FormDataError::Upload` (the middleware answers 500, or an empty form with
+   `suppress_errors`, as Remix's rethrow would); and `File::new` lowercases its type like
+   the web `File`. Where Remix's middleware throws, rmx answers 413, 400 or 500.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
