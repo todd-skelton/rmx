@@ -407,3 +407,32 @@ fn completion_offers_commands_subcommands_flags_and_files() {
     assert_eq!(complete(&["rmx", "test", ""]), "mode:values\n");
     assert_eq!(complete(&["rmx", "routes", "--help", ""]), "mode:values\n");
 }
+
+#[test]
+fn progress_lines_use_the_reporter_colors() {
+    let on = Styles::new(true);
+    assert_eq!(style_progress("\u{2022} Generate scaffold files...", &on), "\x1b[90m\u{2022} Generate scaffold files...\x1b[39m");
+    assert_eq!(style_progress("\u{2713} Generate scaffold files", &on), "\x1b[92m\u{2713}\x1b[39m \x1b[90mGenerate scaffold files\x1b[39m");
+    assert_eq!(style_progress("\u{2717} Finalize Cargo.toml", &on), "\x1b[91m\u{2717}\x1b[39m \x1b[90mFinalize Cargo.toml\x1b[39m");
+    assert_eq!(style_progress("Created App", &on), "Created App");
+    let off = Styles::new(false);
+    assert_eq!(style_progress("\u{2713} Generate scaffold files", &off), "\u{2713} Generate scaffold files");
+}
+
+#[test]
+fn doctor_colors_marks_and_warnings_only_when_enabled() {
+    use doctor::{Finding, Report, Severity, Suite, SuiteStatus};
+    let report = Report {
+        project_root: None,
+        suites: vec![Suite {
+            name: "environment",
+            status: SuiteStatus::Issues,
+            findings: vec![Finding { code: "x", severity: Severity::Warn, message: "Missing target".into() }, Finding { code: "y", severity: Severity::Advice, message: "Consider it".into() }],
+        }],
+    };
+    let colored = report.render_styled(&Styles::new(true));
+    assert!(colored.contains("\x1b[91m\u{2717}\x1b[39m \x1b[90menvironment\x1b[39m"), "{colored:?}");
+    assert!(colored.contains("  \u{2022} \x1b[93m[WARN] Missing target\x1b[39m\n"), "{colored:?}");
+    assert!(colored.contains("  \u{2022} [ADVICE] Consider it\n"), "{colored:?}");
+    assert_eq!(rmx_terminal::strip_ansi(&colored), report.render());
+}

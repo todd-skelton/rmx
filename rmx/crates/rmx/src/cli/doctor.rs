@@ -15,6 +15,8 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use rmx_terminal::Styles;
+
 /// The `wasm-bindgen` version rmx builds against (the `=0.2.129` pin).
 pub const WASM_BINDGEN_VERSION: &str = "0.2.129";
 
@@ -72,17 +74,26 @@ impl Report {
 
     /// The text report: each suite's result and findings, then a summary.
     pub fn render(&self) -> String {
+        self.render_styled(&Styles::new(false))
+    }
+
+    /// [`Report::render`] with Remix's colors: gray progress, a green `✓` or red `✗`, and
+    /// warnings in yellow.
+    pub fn render_styled(&self, styles: &Styles) -> String {
         let mut out = String::from("\n");
         for suite in &self.suites {
             match &suite.status {
-                SuiteStatus::Skipped(reason) => out.push_str(&format!("\u{2022} {} (skipped: {reason})\n", suite.name)),
+                SuiteStatus::Skipped(reason) => out.push_str(&format!("{}\n", styles.gray(&format!("\u{2022} {} (skipped: {reason})", suite.name)))),
                 status => {
+                    out.push_str(&format!("{}\n", super::style_progress(&format!("\u{2022} Checking {}...", suite.name), styles)));
                     let mark = if *status == SuiteStatus::Ok { '\u{2713}' } else { '\u{2717}' };
-                    out.push_str(&format!("\u{2022} Checking {}...\n{mark} {}\n", suite.name, suite.name));
+                    out.push_str(&format!("{}\n", super::style_progress(&format!("{mark} {}", suite.name), styles)));
                 }
             }
             for finding in &suite.findings {
-                out.push_str(&format!("  \u{2022} [{}] {}\n", finding.severity.as_str().to_uppercase(), finding.message));
+                let label = format!("[{}] {}", finding.severity.as_str().to_uppercase(), finding.message);
+                let label = if finding.severity == Severity::Warn { styles.yellow_bright(&label) } else { label };
+                out.push_str(&format!("  \u{2022} {label}\n"));
             }
             out.push('\n');
         }

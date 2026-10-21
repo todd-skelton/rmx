@@ -8,7 +8,10 @@
 //! [`assets_command`](crate::assets::assets_command). `test` runs `cargo test`.
 
 use std::fmt;
+use std::io::IsTerminal;
 use std::path::{Component, Path, PathBuf};
+
+use rmx_terminal::Styles;
 
 pub mod completion;
 pub mod dev;
@@ -399,7 +402,8 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
             }
         },
         Ok(Invocation::New(options)) => {
-            let mut progress = |line: &str| eprintln!("{line}");
+            let styles = Styles::new(rmx_terminal::should_use_colors(|name| std::env::var(name).ok(), std::io::stderr().is_terminal()));
+            let mut progress = |line: &str| eprintln!("{}", style_progress(line, &styles));
             match new_project(&options, cwd, &mut progress) {
                 Ok(app) => {
                     eprintln!();
@@ -422,7 +426,7 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
         },
         Ok(Invocation::Doctor { json, strict }) => {
             let report = doctor::run_doctor(cwd, &doctor::SystemToolchain);
-            print!("{}", if json { report.to_json() } else { report.render() });
+            print!("{}", if json { report.to_json() } else { report.render_styled(&Styles::detect()) });
             i32::from(strict && report.warnings() > 0)
         }
         Err(e) => {
@@ -492,6 +496,18 @@ pub fn new_project(options: &NewOptions, cwd: &Path, progress: &mut dyn FnMut(&s
     })?;
     step(progress, "Finalize Cargo.toml", || write_file(&target_dir.join("Cargo.toml"), &cargo_toml(&package_name, &dependency)))?;
     Ok(NewApp { display_name, package_name, target_dir })
+}
+
+/// A progress line in Remix's reporter colors: `• Step...` in gray, and `✓` green or `✗`
+/// red before a gray label. Other lines are left alone.
+pub(crate) fn style_progress(line: &str, styles: &Styles) -> String {
+    let mut chars = line.chars();
+    match (chars.next(), chars.as_str().strip_prefix(' ')) {
+        (Some('\u{2022}'), Some(_)) => styles.gray(line),
+        (Some('\u{2713}'), Some(label)) => format!("{} {}", styles.green_bright("\u{2713}"), styles.gray(label)),
+        (Some('\u{2717}'), Some(label)) => format!("{} {}", styles.red_bright("\u{2717}"), styles.gray(label)),
+        _ => line.to_string(),
+    }
 }
 
 fn step(progress: &mut dyn FnMut(&str), label: &str, run: impl FnOnce() -> Result<(), CliError>) -> Result<(), CliError> {
