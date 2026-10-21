@@ -12,6 +12,7 @@
 //! | [`cop`] | `remix/middleware/cop` |
 //! | [`cors`] | `remix/middleware/cors` |
 //! | [`auth`] | `remix/middleware/auth` (and `completeAuth` from `remix/auth`) |
+//! | [`live_reload`] | the browser side of `npm run hmr` (page reloads under `rmx dev`) |
 
 #[cfg(feature = "auth")]
 pub mod auth;
@@ -25,6 +26,8 @@ pub mod cors;
 pub mod csrf;
 #[cfg(feature = "form-data")]
 pub mod form_data;
+#[cfg(feature = "live-reload")]
+pub mod live_reload;
 #[cfg(feature = "logger")]
 pub mod logger;
 #[cfg(feature = "method-override")]

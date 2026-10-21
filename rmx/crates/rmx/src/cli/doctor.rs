@@ -239,10 +239,7 @@ fn client(root: &Path, manifest: &str) -> Vec<Finding> {
     if !crate_types.is_some_and(|line| line.contains("\"cdylib\"")) {
         findings.push(warn("cdylib-missing", "Cargo.toml [lib] crate-type does not include \"cdylib\", so the client cannot build to wasm."));
     }
-    let name = section_lines(manifest, "package")
-        .find_map(|line| line.trim().strip_prefix("name").map(|rest| rest.trim_start().trim_start_matches('=').trim().trim_matches('"').to_string()))
-        .unwrap_or_default()
-        .replace('-', "_");
+    let name = package_name(manifest).replace('-', "_");
     let wasm_name = format!("{name}_bg.wasm");
     match find_file(root, &wasm_name) {
         None => findings.push(advice("client-not-built", format!("The client has not been built: no {wasm_name} outside target/ (see the README)."))),
@@ -260,7 +257,7 @@ fn client(root: &Path, manifest: &str) -> Vec<Finding> {
     findings
 }
 
-fn read(path: &Path) -> String {
+pub(crate) fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
@@ -269,9 +266,19 @@ fn modified(path: &Path) -> Option<SystemTime> {
 }
 
 /// The lines of a `[section]` of a TOML file (up to the next header).
-fn section_lines<'a>(toml: &'a str, section: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+pub(crate) fn section_lines<'a>(toml: &'a str, section: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     let header = format!("[{section}]");
     toml.lines().skip_while(move |line| line.trim() != header).skip(1).take_while(|line| !line.trim_start().starts_with('['))
+}
+
+/// The `[package]` name in a manifest.
+pub(crate) fn package_name(manifest: &str) -> String {
+    section_lines(manifest, "package")
+        .find_map(|line| {
+            let rest = line.trim().strip_prefix("name")?.trim_start().strip_prefix('=')?;
+            Some(rest.trim().trim_matches('"').to_string())
+        })
+        .unwrap_or_default()
 }
 
 /// `rmx = ...`, `rmx.workspace = true` and `rmx = { ... }` all name `rmx`.
@@ -284,7 +291,7 @@ fn dependency_name(line: &str) -> Option<&str> {
     (!key.is_empty()).then_some(key.trim_matches('"'))
 }
 
-fn rust_sources(dir: &Path) -> Vec<(PathBuf, String)> {
+pub(crate) fn rust_sources(dir: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else { return out };
     for entry in entries.flatten() {
@@ -300,7 +307,7 @@ fn rust_sources(dir: &Path) -> Vec<(PathBuf, String)> {
 }
 
 /// The first file called `name` below `dir`, skipping `target/` and hidden directories.
-fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
     let entries = std::fs::read_dir(dir).ok()?;
     let mut dirs = Vec::new();
     for entry in entries.flatten() {

@@ -43,6 +43,7 @@ const firstButton = () =>
 
 const html = await (await fetch(BASE + '/')).text()
 check('server renders the document with the client entry script', html.startsWith('<!DOCTYPE html>') && html.includes(`<title>${TITLE}</title>`) && html.includes('/assets/app/actions/public/entry.js'))
+check('no live reload script outside rmx dev', !html.includes('/__rmx/live-reload'))
 check('server renders four prompt buttons', (html.match(/<button type="button"/g) ?? []).length === 4)
 check('favicon is served from public/', (await fetch(BASE + '/favicon.svg')).headers.get('content-type') === 'image/svg+xml')
 

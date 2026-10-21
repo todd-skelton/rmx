@@ -1,4 +1,4 @@
-//! The `rmx` command (Remix's `remix` CLI): `new`, `doctor`, `routes`, `assets`, `test`,
+//! The `rmx` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `routes`, `assets`, `test`,
 //! `version` and `help`. Install it with `cargo install --path crates/rmx`.
 //!
 //! `new` writes the starter app (`examples/template`, Remix's `template`) as a standalone
@@ -10,6 +10,7 @@
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+pub mod dev;
 pub mod doctor;
 
 /// What a command line asks for.
@@ -23,6 +24,8 @@ pub enum Invocation {
     New(NewOptions),
     /// Check the toolchain and the app (`--json`, `--strict`).
     Doctor { json: bool, strict: bool },
+    /// Build, run and rebuild the app on changes; the arguments go to the app.
+    Dev(Vec<String>),
 }
 
 /// Options for `rmx new`.
@@ -104,6 +107,7 @@ Usage:
 
 Commands:
   assets [command]  List or inspect browser-reachable assets
+  dev [-- args]     Build and run the app, rebuilding and reloading on changes
   doctor            Check project health for the current project
   help [command]    Show help for rmx commands
   new <name>        Create a new rmx project
@@ -117,6 +121,7 @@ Options:
 
 Examples:
   rmx assets
+  rmx dev
   rmx doctor
   rmx help
   rmx new my-rmx-app
@@ -181,6 +186,19 @@ Examples:
   rmx doctor --strict
 ";
 
+const DEV_HELP: &str = "\
+Usage:
+  rmx dev [-- <app args>]
+
+Build the client and the server, run the app, and rebuild and restart it when src/, app/,
+public/ or Cargo.toml change. Pages reload when the app installs
+rmx::middleware::live_reload. Set RMX_WASM_BINDGEN to use a wasm-bindgen that is not on PATH.
+
+Examples:
+  rmx dev
+  rmx dev -- --port 4000
+";
+
 const TEST_HELP: &str = "\
 Usage:
   rmx test [filter]
@@ -198,6 +216,7 @@ pub fn help_for(command: Option<&str>) -> Result<&'static str, CliError> {
         Some("assets") => ASSETS_HELP,
         Some("test") => TEST_HELP,
         Some("doctor") => DOCTOR_HELP,
+        Some("dev") => DEV_HELP,
         Some("help") => HELP,
         Some(other) => return Err(CliError::unknown_command(other)),
     })
@@ -242,6 +261,19 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             let mut argv: Vec<String> = ["cargo", "run", "--quiet", "--", command].map(String::from).to_vec();
             argv.extend(args.iter().map(|a| a.to_string()));
             Ok(Invocation::Exec(argv))
+        }
+        "dev" => {
+            let (before, after) = match args.iter().position(|a| *a == "--") {
+                Some(i) => (&args[..i], &args[i + 1..]),
+                None => (&args[..], &[][..]),
+            };
+            if before.iter().any(|a| matches!(*a, "-h" | "--help")) {
+                return Ok(Invocation::Print(DEV_HELP.into()));
+            }
+            if let Some(arg) = before.first() {
+                return Err(if arg.starts_with('-') { CliError::unknown_argument(arg) } else { CliError::unexpected_extra_argument(arg) });
+            }
+            Ok(Invocation::Dev(after.iter().map(|a| a.to_string()).collect()))
         }
         "doctor" => {
             if wants_help {
@@ -347,6 +379,13 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
                 }
             }
         }
+        Ok(Invocation::Dev(app_args)) => match dev::run_dev(cwd, &app_args) {
+            Ok(()) => 0,
+            Err(e) => {
+                eprint!("{}", e.render(DEV_HELP));
+                1
+            }
+        },
         Ok(Invocation::Doctor { json, strict }) => {
             let report = doctor::run_doctor(cwd, &doctor::SystemToolchain);
             print!("{}", if json { report.to_json() } else { report.render() });

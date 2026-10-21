@@ -9,6 +9,7 @@ use std::path::Path;
 use http::StatusCode;
 use rmx::assets::{AssetError, AssetOptions, AssetServer};
 use rmx::fetch::response;
+use rmx::middleware::live_reload::live_reload;
 use rmx::middleware::static_files::{static_files, StaticOptions};
 use rmx::render::Render;
 use rmx::router::{action, Context, Router};
@@ -32,10 +33,12 @@ pub fn asset_server(root: &Path, production: bool) -> Result<AssetServer, AssetE
     })
 }
 
-/// `app/router.ts`: root `public/` files served unchanged, then the root controller.
+/// `app/router.ts`: root `public/` files served unchanged, then the root controller. Under
+/// `rmx dev`, open pages reload when the server restarts (`live_reload`).
 pub fn router(root: &Path, production: bool) -> Result<Router, AssetError> {
     let assets = asset_server(root, production)?;
     let mut router = Router::new();
+    router.use_middleware(live_reload());
     router.use_middleware(static_files(root.join("public"), StaticOptions { index: vec![], ..Default::default() }));
 
     // app/actions/controller.tsx

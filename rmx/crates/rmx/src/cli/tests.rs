@@ -307,3 +307,57 @@ fn doctor_checks_the_route_map_and_the_client_crate_type() {
     assert!(json.contains(r#"{"name":"client","status":"skipped","reason":"Blocked by project warnings.","findings":[]}"#), "{json}");
     assert!(json.contains(r#""code":"routes-missing","severity":"warn","suite":"project""#), "{json}");
 }
+
+// rmx dev
+
+#[test]
+fn dev_parses_app_arguments_after_a_separator() {
+    assert_eq!(parse(&args(&["dev"])), Ok(Invocation::Dev(vec![])));
+    assert_eq!(parse(&args(&["dev", "--", "--port", "4000"])), Ok(Invocation::Dev(args(&["--port", "4000"]))));
+    assert_eq!(parse(&args(&["dev", "--help"])), Ok(Invocation::Print(DEV_HELP.into())));
+    assert_eq!(parse(&args(&["dev", "--", "--help"])), Ok(Invocation::Dev(args(&["--help"]))), "after -- it is the app's");
+    assert_eq!(parse(&args(&["dev", "--watch"])).unwrap_err().message, "Unknown argument: --watch");
+    assert_eq!(parse(&args(&["dev", "extra"])).unwrap_err().message, "Unexpected extra argument: extra");
+}
+
+#[test]
+fn dev_plans_the_client_and_server_builds() {
+    let scratch = Scratch::new("dev-plan");
+    let app = scaffold(&scratch);
+    let plan = dev::DevPlan::for_app(&app.join("src")).unwrap();
+    assert_eq!(plan.root, app);
+    assert_eq!(plan.package, "doc-app");
+    assert_eq!(plan.client_out, Some(app.join("app/actions/public/pkg")));
+    let commands: Vec<String> = plan.build_commands("wb").iter().map(|c| c.join(" ")).collect();
+    assert_eq!(commands[0], "cargo build --lib --target wasm32-unknown-unknown");
+    assert!(commands[1].starts_with("wb --target web --no-typescript --out-dir "), "{}", commands[1]);
+    assert!(commands[1].ends_with("doc_app.wasm"), "{}", commands[1]);
+    assert_eq!(commands[2], "cargo build --bins");
+    assert_ne!(plan.server_binary(), plan.running_binary(), "the server runs from a copy so rebuilds can replace it");
+
+    // An existing client build decides the output directory.
+    std::fs::create_dir_all(app.join("public/pkg")).unwrap();
+    std::fs::write(app.join("public/pkg/doc_app_bg.wasm"), "").unwrap();
+    assert_eq!(dev::DevPlan::for_app(&app).unwrap().client_out, Some(app.join("public/pkg")));
+
+    // A server-only app builds only the server.
+    std::fs::write(app.join("src/lib.rs"), "pub mod routes;\n").unwrap();
+    let plan = dev::DevPlan::for_app(&app).unwrap();
+    assert_eq!(plan.client_out, None);
+    assert_eq!(plan.build_commands("wb").len(), 1);
+    assert!(dev::DevPlan::for_app(&std::env::temp_dir().join("rmx-cli-no-such-app")).is_err());
+}
+
+#[test]
+fn dev_sees_source_changes_but_not_its_own_client_output() {
+    let scratch = Scratch::new("dev-watch");
+    let app = scaffold(&scratch);
+    let plan = dev::DevPlan::for_app(&app).unwrap();
+    let before = plan.snapshot();
+    assert!(before.contains_key(&app.join("src/routes.rs")) && before.contains_key(&app.join("Cargo.toml")));
+    std::fs::create_dir_all(app.join("app/actions/public/pkg")).unwrap();
+    std::fs::write(app.join("app/actions/public/pkg/doc_app_bg.wasm"), "").unwrap();
+    assert_eq!(plan.snapshot(), before, "client output is not a change");
+    std::fs::write(app.join("src/new_module.rs"), "").unwrap();
+    assert_ne!(plan.snapshot(), before);
+}

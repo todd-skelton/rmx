@@ -21,9 +21,10 @@ rmx-session = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 [features]
-default = ["static", "logger", "form-data", "method-override", "compression", "session", "csrf", "auth", "cop", "cors"]
+default = ["static", "live-reload", "logger", "form-data", "method-override", "compression", "session", "csrf", "auth", "cop", "cors"]
 static = ["dep:rmx-crypto", "dep:rmx-html-template"]
 logger = []
+live-reload = []
 form-data = []
 method-override = ["form-data"]
 compression = ["dep:flate2", "dep:brotli"]
