@@ -33,12 +33,13 @@ impl ContentType {
 
 impl fmt::Display for ContentType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Some(media_type) = &self.media_type else { return Ok(()) };
+        let Some(media_type) = self.media_type.as_deref().filter(|m| !m.is_empty()) else { return Ok(()) };
         f.write_str(media_type)?;
-        if let Some(c) = &self.charset {
+        // Empty values are left out, like Remix's truthiness checks.
+        if let Some(c) = self.charset.as_deref().filter(|c| !c.is_empty()) {
             write!(f, "; charset={}", quote(c))?;
         }
-        if let Some(b) = &self.boundary {
+        if let Some(b) = self.boundary.as_deref().filter(|b| !b.is_empty()) {
             write!(f, "; boundary={}", quote(b))?;
         }
         Ok(())
