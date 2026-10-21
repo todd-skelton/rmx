@@ -75,7 +75,7 @@ impl fmt::Display for QualityList {
 }
 
 macro_rules! quality_header {
-    ($name:ident, $what:literal, $items:ident) => {
+    ($name:ident, $what:literal, $items:ident, $always:expr) => {
         impl $name {
             /// Parse a header value; `None` (no header) is empty.
             pub fn parse(value: Option<&str>) -> $name {
@@ -90,6 +90,15 @@ macro_rules! quality_header {
             /// `(value, weight)` pairs, most preferred first.
             pub fn iter(&self) -> impl Iterator<Item = (&str, f64)> {
                 self.0 .0.iter().map(|(k, w)| (k.as_str(), *w))
+            }
+
+            /// The weights, most preferred first.
+            pub fn weights(&self) -> impl Iterator<Item = f64> + '_ {
+                self.0 .0.iter().map(|(_, w)| *w)
+            }
+
+            pub fn clear(&mut self) {
+                self.0 .0.clear();
             }
 
             pub fn len(&self) -> usize {
@@ -117,8 +126,10 @@ macro_rules! quality_header {
                 self.0.delete(key)
             }
 
+            /// Whether `key` has a weight above zero (wildcards count).
             pub fn accepts(&self, key: &str) -> bool {
-                self.weight(key) > 0.0
+                let always: fn(&str) -> bool = $always;
+                always(key) || self.weight(key) > 0.0
             }
 
             /// The candidate with the highest weight above zero (ties keep candidate order).
@@ -132,13 +143,34 @@ macro_rules! quality_header {
                 self.0.fmt(f)
             }
         }
+
+        /// `(value, weight)` pairs (Remix's array and object inits), sorted by weight.
+        impl<S: AsRef<str>> FromIterator<(S, f64)> for $name {
+            fn from_iter<I: IntoIterator<Item = (S, f64)>>(entries: I) -> $name {
+                let mut list = QualityList::default();
+                for (key, weight) in entries {
+                    list.insert(key.as_ref().to_lowercase(), weight);
+                }
+                list.sort();
+                $name(list)
+            }
+        }
+
+        impl<'a> IntoIterator for &'a $name {
+            type Item = (&'a str, f64);
+            type IntoIter = std::iter::Map<std::slice::Iter<'a, (String, f64)>, fn(&'a (String, f64)) -> (&'a str, f64)>;
+
+            fn into_iter(self) -> Self::IntoIter {
+                self.0 .0.iter().map(|(k, w)| (k.as_str(), *w))
+            }
+        }
     };
 }
 
 /// `Accept`: media types with wildcards (`text/*`, `*/*`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Accept(QualityList);
-quality_header!(Accept, "media type", media_types);
+quality_header!(Accept, "media type", media_types, |_| false);
 
 impl Accept {
     /// The weight of the first entry matching `media_type`, wildcards on either side.
@@ -152,27 +184,22 @@ impl Accept {
     }
 }
 
-/// `Accept-Encoding`. `identity` is always acceptable.
+/// `Accept-Encoding`. [`AcceptEncoding::accepts`] always passes `identity`, like Remix.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AcceptEncoding(QualityList);
-quality_header!(AcceptEncoding, "encoding", encodings);
+quality_header!(AcceptEncoding, "encoding", encodings, |key| key.eq_ignore_ascii_case("identity"));
 
 impl AcceptEncoding {
     pub fn weight(&self, encoding: &str) -> f64 {
         let lower = encoding.to_lowercase();
         self.0.weight(|key| key == lower || key == "*" || lower == "*")
     }
-
-    /// Like [`AcceptEncoding::accepts`] but `identity` always passes.
-    pub fn accepts_encoding(&self, encoding: &str) -> bool {
-        encoding.eq_ignore_ascii_case("identity") || self.accepts(encoding)
-    }
 }
 
 /// `Accept-Language`: `en` matches `en-US` and the reverse, `*` matches all.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AcceptLanguage(QualityList);
-quality_header!(AcceptLanguage, "language tag", languages);
+quality_header!(AcceptLanguage, "language tag", languages, |_| false);
 
 impl AcceptLanguage {
     pub fn weight(&self, language: &str) -> f64 {
@@ -226,7 +253,7 @@ mod tests {
     fn accept_encoding() {
         let h = AcceptEncoding::parse(Some("gzip;q=0.5, br, identity;q=0"));
         assert_eq!(h.preferred(&["gzip", "br"]), Some("br"));
-        assert!(h.accepts_encoding("identity"));
+        assert!(h.accepts("identity"), "identity always passes, even with q=0");
         assert!(!h.accepts("deflate"));
         assert!(AcceptEncoding::parse(Some("*")).accepts("zstd"));
     }
