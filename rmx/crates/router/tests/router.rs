@@ -1,6 +1,10 @@
-//! Ports of fetch-router's `router.map()` tests (router.test.ts) and route map listing.
-//! Remix's runtime rejections of malformed controllers (missing, unknown or nested action
-//! keys) are compile errors here; see the `compile_fail` examples on `RouteMap`.
+//! Ports of fetch-router's router.test.ts, plus route map listing (`remix routes`).
+//!
+//! Not ported: Remix's runtime rejections of malformed controllers (missing, unknown or
+//! nested action keys), which are compile errors here (see the `compile_fail` examples on
+//! `RouteMap`); thrown-error propagation, since Rust handlers return errors as values
+//! (`Result` responses) and the server answers panics with 500; and custom matchers, which
+//! rmx-router does not take (`Router::routes` lists the registered patterns instead).
 
 use std::sync::{Arc, Mutex};
 
@@ -708,4 +712,134 @@ fn head_request_handling() {
     let res = fetch_res(&router, "HEAD", "https://remix.run/submit");
     assert_eq!(res.status(), 405);
     assert_eq!(res.headers()["allow"], "POST");
+}
+
+// --- trailing slash handling -------------------------------------------------------------
+
+#[test]
+fn trailing_slashes_must_match_exactly() {
+    let mut router = Router::new();
+    router.get("/about", |_: Context| async { "About" });
+    router.get("/contact/", |_: Context| async { "Contact" });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/about"), (200, "About".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/about/").0, 404);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/contact/"), (200, "Contact".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/contact").0, 404);
+
+    let api = prefix("api");
+    let mut router = Router::new();
+    router.get(api.get("/users"), |_: Context| async { "Users" });
+    router.get(api.get("/posts/"), |_: Context| async { "Posts" });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/users"), (200, "Users".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/users/").0, 404);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/posts/"), (200, "Posts".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/posts").0, 404);
+}
+
+#[test]
+fn root_path_matches_with_and_without_a_trailing_slash() {
+    let mut router = Router::new();
+    router.get("/", |_: Context| async { "Home" });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/"), (200, "Home".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run"), (200, "Home".into()));
+}
+
+#[test]
+fn nested_route_maps_keep_trailing_slashes_exact() {
+    let admin = prefix("admin");
+    let users = admin.prefix("users");
+    let mut router = Router::new();
+    router.get(admin.get("/"), |_: Context| async { "Admin Dashboard" });
+    router.get(users.get("/"), |_: Context| async { "Users List" });
+    router.get(users.get(":id"), |ctx: Context| async move { format!("User {}", ctx.param("id").unwrap()) });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin"), (200, "Admin Dashboard".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/").0, 404);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/users"), (200, "Users List".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/users/").0, 404);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/users/123"), (200, "User 123".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/users/123/").0, 404);
+}
+
+// --- router.mount() --------------------------------------------------------------------
+
+#[test]
+fn mounts_routes_below_static_and_param_prefixes() {
+    let mut router = Router::new();
+    router.mount("/admin", |admin| {
+        admin.get("/", |_: Context| async { "Admin" });
+        admin.get("/users/:id", |ctx: Context| async move { format!("User {}", ctx.param("id").unwrap()) });
+    });
+    router.mount("/orgs/:orgId", |org| {
+        org.get("/", |ctx: Context| async move { format!("Org {}", ctx.param("orgId").unwrap()) });
+        org.get("/users/:userId", |ctx: Context| async move {
+            format!("Org {} User {}", ctx.param("orgId").unwrap(), ctx.param("userId").unwrap())
+        });
+    });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin"), (200, "Admin".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/users/123"), (200, "User 123".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/users/123").0, 404);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/orgs/acme"), (200, "Org acme".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/orgs/acme/users/123"), (200, "Org acme User 123".into()));
+}
+
+#[test]
+fn mounted_patterns_use_route_pattern_semantics() {
+    let mut router = Router::new();
+    router.mount("/files/*path?download=true", |files| {
+        files.get("/raw/:id", |ctx: Context| async move {
+            format!("Path {} File {}", ctx.param("path").unwrap(), ctx.param("id").unwrap())
+        });
+    });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/files/a/b/raw/123?download=true"), (200, "Path a/b File 123".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/files/a/b/raw/123").0, 404);
+}
+
+#[test]
+fn the_right_most_param_wins_when_mounted_and_child_routes_share_a_name() {
+    let mut router = Router::new();
+    router.mount("/orgs/:id", |org| {
+        org.get("/users/:id", |ctx: Context| async move { format!("User {}", ctx.param("id").unwrap()) });
+    });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/orgs/acme/users/123"), (200, "User 123".into()));
+}
+
+#[test]
+fn composes_nested_mount_prefixes_and_shares_specificity_with_the_parent() {
+    let mut router = Router::new();
+    router.mount("/api", |api| {
+        api.mount("/v1", |v1| {
+            v1.get("/status", |_: Context| async { "ok" });
+        });
+        api.get("/:id", |ctx: Context| async move { format!("Mounted {}", ctx.param("id").unwrap()) });
+    });
+    router.get("/api/health", |_: Context| async { "Parent health" });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/v1/status"), (200, "ok".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/health"), (200, "Parent health".into()));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/api/users"), (200, "Mounted users".into()));
+}
+
+#[test]
+fn mounted_paths_use_the_parent_not_found_handler() {
+    let mut router = Router::new();
+    router.not_found(|ctx: Context| {
+        let path = ctx.url().pathname().to_string();
+        async move { (http::StatusCode::NOT_FOUND, format!("Missing {path}")) }
+    });
+    router.mount("/admin", |admin| {
+        admin.get("/", |_: Context| async { "Admin" });
+    });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/missing"), (404, "Missing /admin/missing".into()));
+}
+
+#[test]
+fn registers_mounted_routes_with_their_prefixed_patterns() {
+    let mut router = Router::new();
+    router.mount("/admin/:adminId", |admin| {
+        admin.get("/", |_: Context| async { "Admin" });
+        admin.get("/users/:id", |_: Context| async { "User" });
+        admin.mount("/settings", |settings| {
+            settings.get("/profile", |_: Context| async { "Profile" });
+        });
+    });
+    assert_eq!(router.routes(), ["GET /admin/:adminId", "GET /admin/:adminId/users/:id", "GET /admin/:adminId/settings/profile"]);
 }
