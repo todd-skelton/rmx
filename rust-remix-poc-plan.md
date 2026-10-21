@@ -417,6 +417,14 @@ Covered since phase 0b:
    theirs do (`serialize('', { maxAge: 0 })`). Session middleware now honors an `Expires`
    cookie as an absolute expiry rounded to the second, as Remix's does. Lowercase
    `sameSite` strings have no counterpart: `SameSite` is an enum.
+   `remix/session` and `remix/session-middleware` run their Remix tests (41 session and
+   storage cases in `crates/session/tests/`, 23 middleware cases in
+   `crates/middleware/src/session_remix_tests.rs`, with `Date.now` mocked by a test-only
+   clock). Errors and warnings use Remix's text. Remix checks after `next()` that the
+   context still holds its session; rmx contexts move down the chain, so the middleware
+   stores the session with `Context::set_sealed` instead, and a later `set` or `get_mut`
+   of `Session` panics with the same message. Logging the `httpOnly: false` warning is
+   checked through the message builder, since tests cannot capture stderr in-process.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
