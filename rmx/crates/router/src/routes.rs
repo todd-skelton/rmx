@@ -170,6 +170,9 @@ impl Prefix {
     pub fn put(&self, pattern: &str) -> Route {
         self.route(Some(Method::PUT), pattern)
     }
+    pub fn patch(&self, pattern: &str) -> Route {
+        self.route(Some(Method::PATCH), pattern)
+    }
     pub fn delete(&self, pattern: &str) -> Route {
         self.route(Some(Method::DELETE), pattern)
     }
@@ -177,8 +180,12 @@ impl Prefix {
         Prefix(self.0.join(&RoutePattern::parse(pattern).unwrap_or_else(|e| panic!("{e}"))))
     }
     pub fn form(&self, pattern: &str) -> Form {
+        self.form_with(pattern, Method::POST)
+    }
+    /// [`Prefix::form`] submitted with another method (Remix's `formMethod` option).
+    pub fn form_with(&self, pattern: &str, method: Method) -> Form {
         let p = self.prefix(pattern);
-        Form { index: p.get("/"), action: p.post("/") }
+        Form { index: p.get("/"), action: p.route(Some(method), "/") }
     }
     pub fn pattern(&self) -> &RoutePattern {
         &self.0
@@ -193,7 +200,13 @@ pub struct Form {
 }
 
 pub fn form(pattern: &str) -> Form {
-    Form { index: get(pattern), action: post(pattern) }
+    form_with(pattern, Method::POST)
+}
+
+/// A [`Form`] whose action uses `method` (Remix's `form(pattern, { formMethod })`), such as
+/// `PUT` for a settings form sent through method override.
+pub fn form_with(pattern: &str, method: Method) -> Form {
+    Form { index: get(pattern), action: Route::new(Some(method), pattern) }
 }
 
 /// The seven RESTful routes for a collection (`resources('books')`).

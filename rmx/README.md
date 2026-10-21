@@ -188,7 +188,9 @@ crates:
    `async_context` for reading the request context deeper in the call stack; route maps
    derive `RouteMap`, which generates a `<Name>Actions` struct so `router.map(&ROUTES,
    Controller::new(RoutesActions { .. }).with(require_auth()))` checks at compile time
-   that a controller covers every direct route, and `routes_command` gives an app binary
+   that a controller covers every direct route; the helpers `form`, `form_with` (Remix's
+   `formMethod`), `resource`, `resources` and the method verbs build the route shapes;
+   `routes_command` gives an app binary
    Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData, and `AbortController` / `AbortSignal` for
    `request.signal`: the router checks it before each middleware step and races it like
