@@ -67,6 +67,20 @@ impl Cookie {
         self.0.iter().map(|(n, v)| (n.as_str(), v.as_str()))
     }
 
+    /// Every cookie name in order, repeats included.
+    pub fn names(&self) -> Vec<&str> {
+        self.0.iter().map(|(n, _)| n.as_str()).collect()
+    }
+
+    /// Every cookie value in order.
+    pub fn values(&self) -> Vec<&str> {
+        self.0.iter().map(|(_, v)| v.as_str()).collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -105,6 +119,15 @@ fn unescape(s: &str) -> String {
 impl<K: Into<String>, V: Into<String>> FromIterator<(K, V)> for Cookie {
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Cookie {
         Cookie(iter.into_iter().map(|(k, v)| (k.into(), v.into())).collect())
+    }
+}
+
+impl IntoIterator for Cookie {
+    type Item = (String, String);
+    type IntoIter = std::vec::IntoIter<(String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -147,7 +170,7 @@ impl SetCookie {
                 "domain" => h.domain = val,
                 "expires" => h.expires = val.as_deref().and_then(parse_http_date),
                 "httponly" => h.http_only = true,
-                "max-age" => h.max_age = val.as_deref().and_then(|v| v.parse().ok()),
+                "max-age" => h.max_age = val.as_deref().and_then(parse_int).or(h.max_age),
                 "partitioned" => h.partitioned = true,
                 "path" => h.path = val,
                 "samesite" => {
@@ -166,13 +189,31 @@ impl SetCookie {
     }
 }
 
+/// JavaScript's `parseInt(text, 10)`: leading whitespace, an optional sign, then as many
+/// digits as there are (`"60s"` is 60, `"1.5"` is 1); `None` without digits.
+fn parse_int(text: &str) -> Option<i64> {
+    let text = text.trim_start();
+    let (negative, digits) = match text.as_bytes().first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    let end = digits.bytes().position(|b| !b.is_ascii_digit()).unwrap_or(digits.len());
+    let magnitude = digits[..end].bytes().try_fold(0i64, |n, b| n.checked_mul(10)?.checked_add(i64::from(b - b'0')));
+    if end == 0 {
+        return None;
+    }
+    let magnitude = magnitude.unwrap_or(i64::MAX);
+    Some(if negative { -magnitude } else { magnitude })
+}
+
 impl fmt::Display for SetCookie {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.name.is_empty() {
             return Ok(());
         }
         write!(f, "{}={}", self.name, quote(&self.value))?;
-        if let Some(d) = &self.domain {
+        if let Some(d) = self.domain.as_deref().filter(|d| !d.is_empty()) {
             write!(f, "; Domain={d}")?;
         }
         if let Some(e) = self.expires {
@@ -187,7 +228,7 @@ impl fmt::Display for SetCookie {
         if self.partitioned {
             f.write_str("; Partitioned")?;
         }
-        if let Some(p) = &self.path {
+        if let Some(p) = self.path.as_deref().filter(|p| !p.is_empty()) {
             write!(f, "; Path={p}")?;
         }
         if let Some(s) = self.same_site {
