@@ -327,8 +327,13 @@ Covered since phase 0b:
    on a route struct generates `<Name>Actions` with one `Action` per direct route, so a
    controller that misses a route, names an unknown one or names a nested map fails to
    compile (Remix throws these at map time); controller and action middleware run in
-   Remix's order. Every demo now maps controllers the way its `router.ts` does, and the
-   `router.map()` tests from `router.test.ts` are ported (`crates/router/tests/map.rs`).
+   Remix's order. Every demo now maps controllers the way its `router.ts` does, and
+   `router.test.ts` is ported (`crates/router/tests/router.rs`: map, verbs with action
+   middleware, 404, 405 with Remix's Allow order and body, HEAD falling back to GET by
+   specificity, trailing slashes, mounts). The `remix new` starter (`reference/remix/template`)
+   is ported as `examples/template` with its controller test and a browser e2e.
+   Route helper options that change a map's shape (`only`, `exclude`, `names`) become a
+   struct you declare with `#[derive(RouteMap)]` (the bookstore's `ReadOnly` and `Users`).
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
