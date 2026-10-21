@@ -434,3 +434,34 @@ impl fmt::Debug for LazyFile {
         f.debug_struct("LazyFile").field("name", &self.name).field("size", &self.size()).field("type", &self.content_type()).field("last_modified", &self.last_modified).finish()
     }
 }
+
+impl rmx_fetch::response::FileLike for LazyFile {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn size(&self) -> u64 {
+        self.content.size()
+    }
+
+    fn content_type(&self) -> &str {
+        &self.content.content_type
+    }
+
+    fn last_modified(&self) -> u64 {
+        self.last_modified
+    }
+
+    fn stream(&self) -> Body {
+        self.content.stream()
+    }
+
+    /// Reads only the range.
+    fn stream_range(&self, start: u64, end: u64) -> Body {
+        self.slice(start as i64, end as i64).stream()
+    }
+
+    fn bytes(&self) -> impl std::future::Future<Output = Result<Bytes, BoxError>> + Send {
+        self.content.bytes()
+    }
+}

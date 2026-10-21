@@ -9,6 +9,10 @@ license.workspace = true
 bytes.workspace = true
 http.workspace = true
 http-body.workspace = true
+rmx-crypto.workspace = true
+rmx-headers.workspace = true
+rmx-html-template.workspace = true
+rmx-mime.workspace = true
 rmx-multipart-parser.workspace = true
 rmx-url.workspace = true
 serde = { workspace = true, optional = true }
@@ -22,4 +26,5 @@ default = ["json"]
 json = ["dep:serde", "dep:serde_json"]
 
 [dev-dependencies]
+rmx-lazy-file.workspace = true
 tokio = { workspace = true }

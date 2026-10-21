@@ -197,9 +197,13 @@ crates:
    `rmx-fetch` (Request, Response, FormData with Remix's `parseFormData`: URL-encoded and
    multipart only, other media types an error before the body is read, upload handlers that
    may return a `Result`, and `File::new` lowercasing the type like the web `File`; the
-   `remix/response` constructors, where `html_with` and
+   `remix/response` constructors, where `html` and `html_with` take strings, `SafeHtml`,
+   bytes, files or streams (a doctype prepended unless present; a stream error aborts the
+   body), `html_with` and
    `redirect_with` take the same `ResponseInit` that render and spa use, an init `Location`
-   winning as in Remix, and `AbortController` / `AbortSignal` for
+   winning as in Remix, and `response::file` is Remix's `createFileResponse` for any
+   `FileLike` (an in-memory `File`, or a `LazyFile`, which streams only the requested range)
+   with `html.test.ts`, `redirect.test.ts` and `file.test.ts` ported one per case; and `AbortController` / `AbortSignal` for
    `request.signal`: the router checks it before each middleware step and races it like
    Remix's `raceRequestAbort`, answering an aborted request with a 499 that carries
    `AbortError`), `rmx-serve` (hyper server with

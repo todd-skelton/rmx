@@ -2,7 +2,13 @@
 
 use http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
 
-use crate::{Body, Response};
+use bytes::Bytes;
+
+use crate::{Body, File, Response};
+
+mod file;
+
+pub use file::{file, Digest, DigestFn, ETag, FileLike, FileResponseOptions};
 
 const DOCTYPE: &str = "<!DOCTYPE html>";
 /// How much of a streamed body's first chunk is decoded to look for a doctype (Remix's
@@ -58,29 +64,114 @@ impl From<StatusCode> for ResponseInit {
     }
 }
 
-/// A `text/html` response. Adds `<!DOCTYPE html>` when the body does not start with one.
-pub fn html(body: impl Into<String>) -> Response {
-    let mut body = body.into();
-    if !starts_with_doctype(&body) {
-        body.insert_str(0, DOCTYPE);
+/// What [html] accepts (Remix's `string | SafeHtml | Blob | BufferSource | ReadableStream`):
+/// text, escaped markup, bytes (decoded as UTF-8, invalid sequences replaced), an in-memory
+/// [File] or a streamed [Body].
+pub enum HtmlBody {
+    Text(String),
+    Bytes(Bytes),
+    Stream(Body),
+}
+
+impl From<String> for HtmlBody {
+    fn from(text: String) -> HtmlBody {
+        HtmlBody::Text(text)
     }
-    with_type(Body::from(body), "text/html; charset=UTF-8")
+}
+
+impl From<&str> for HtmlBody {
+    fn from(text: &str) -> HtmlBody {
+        HtmlBody::Text(text.to_string())
+    }
+}
+
+impl From<&String> for HtmlBody {
+    fn from(text: &String) -> HtmlBody {
+        HtmlBody::Text(text.clone())
+    }
+}
+
+impl From<std::borrow::Cow<'_, str>> for HtmlBody {
+    fn from(text: std::borrow::Cow<'_, str>) -> HtmlBody {
+        HtmlBody::Text(text.into_owned())
+    }
+}
+
+impl From<rmx_html_template::SafeHtml> for HtmlBody {
+    fn from(html: rmx_html_template::SafeHtml) -> HtmlBody {
+        HtmlBody::Text(html.into_string())
+    }
+}
+
+impl From<Bytes> for HtmlBody {
+    fn from(bytes: Bytes) -> HtmlBody {
+        HtmlBody::Bytes(bytes)
+    }
+}
+
+impl From<Vec<u8>> for HtmlBody {
+    fn from(bytes: Vec<u8>) -> HtmlBody {
+        HtmlBody::Bytes(bytes.into())
+    }
+}
+
+impl From<&[u8]> for HtmlBody {
+    fn from(bytes: &[u8]) -> HtmlBody {
+        HtmlBody::Bytes(Bytes::copy_from_slice(bytes))
+    }
+}
+
+/// A file's bytes, streamed like a `Blob` body.
+impl From<File> for HtmlBody {
+    fn from(file: File) -> HtmlBody {
+        HtmlBody::Stream(Body::from(file.bytes))
+    }
+}
+
+impl From<Body> for HtmlBody {
+    fn from(body: Body) -> HtmlBody {
+        HtmlBody::Stream(body)
+    }
+}
+
+/// A `text/html` response (Remix's `createHtmlResponse`). Adds `<!DOCTYPE html>` when the
+/// body does not start with one (case-insensitive, after leading whitespace). A stream is
+/// checked by its first chunk, and an empty stream becomes just the doctype.
+pub fn html(body: impl Into<HtmlBody>) -> Response {
+    let body = match body.into() {
+        HtmlBody::Text(text) => Body::from(with_doctype(text)),
+        HtmlBody::Bytes(bytes) => Body::from(with_doctype(String::from_utf8_lossy(&bytes).into_owned())),
+        HtmlBody::Stream(body) => prepend_doctype(body),
+    };
+    with_type(body, "text/html; charset=UTF-8")
+}
+
+fn with_doctype(mut text: String) -> String {
+    if !starts_with_doctype(&text) {
+        text.insert_str(0, DOCTYPE);
+    }
+    text
 }
 
 /// [`html`] with a status and headers (Remix's `createHtmlResponse(body, init)`). A
 /// `Content-Type` in `init` replaces the HTML one.
-pub fn html_with(body: impl Into<String>, init: impl Into<ResponseInit>) -> Response {
+pub fn html_with(body: impl Into<HtmlBody>, init: impl Into<ResponseInit>) -> Response {
     init.into().apply(html(body))
 }
 
-/// A `text/html` response streamed from `body`. Adds `<!DOCTYPE html>` when the first chunk
-/// does not start with one (an empty stream becomes just the doctype).
+/// [`html`] for a streamed body.
 pub fn html_stream(body: Body) -> Response {
-    let body = Body::from_task(move |tx| async move {
+    html(body)
+}
+
+/// `body` with `<!DOCTYPE html>` in front unless its first chunk starts with one. A stream
+/// error is passed on.
+fn prepend_doctype(body: Body) -> Body {
+    Body::from_task(move |tx| async move {
         let mut body = body;
         let first = match body.chunk().await {
             Some(Ok(chunk)) => chunk,
-            Some(Err(_)) => return,
+            Some(Err(error)) => return tx.abort(error),
             None => {
                 tx.send(DOCTYPE);
                 return;
@@ -92,13 +183,17 @@ pub fn html_stream(body: Body) -> Response {
         if !tx.send(first) {
             return;
         }
-        while let Some(Ok(chunk)) = body.chunk().await {
-            if !tx.send(chunk) {
-                return;
+        while let Some(chunk) = body.chunk().await {
+            match chunk {
+                Ok(chunk) => {
+                    if !tx.send(chunk) {
+                        return;
+                    }
+                }
+                Err(error) => return tx.abort(error),
             }
         }
-    });
-    with_type(body, "text/html; charset=UTF-8")
+    })
 }
 
 /// A `text/plain` response.
@@ -169,134 +264,5 @@ fn starts_with_doctype_bytes(bytes: &[u8]) -> bool {
             return starts_with_doctype(prefix);
         }
         len = (len * 2).min(bytes.len());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::block_on;
-
-    #[test]
-    fn html_adds_doctype_once() {
-        let res = html("<p>x</p>");
-        assert_eq!(res.headers()["content-type"], "text/html; charset=UTF-8");
-        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html><p>x</p>");
-        assert_eq!(block_on(html("<!doctype html><p/>").into_body().text()).unwrap(), "<!doctype html><p/>");
-    }
-
-    fn chunked(parts: &'static [&'static str]) -> Body {
-        Body::from_task(move |tx| async move {
-            for part in parts {
-                tx.send(*part);
-            }
-        })
-    }
-
-    #[test]
-    fn html_stream_adds_doctype_once() {
-        let res = html_stream(chunked(&["<p>", "x</p>"]));
-        assert_eq!(res.headers()["content-type"], "text/html; charset=UTF-8");
-        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html><p>x</p>");
-        let res = html_stream(chunked(&["<!doctype html>", "<p/>"]));
-        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!doctype html><p/>");
-        let res = html_stream(chunked(&[]));
-        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html>");
-    }
-
-    #[test]
-    fn redirects() {
-        let res = redirect_with("/x", StatusCode::SEE_OTHER);
-        assert_eq!(res.status(), 303);
-        assert_eq!(res.headers()["location"], "/x");
-    }
-
-    // Ports of response/src/lib/redirect.test.ts.
-
-    #[test]
-    fn redirect_defaults_to_302() {
-        let res = redirect("/home");
-        assert_eq!((res.status(), res.headers()["location"].to_str().unwrap()), (StatusCode::FOUND, "/home"));
-    }
-
-    #[test]
-    fn redirect_keeps_relative_urls_and_takes_a_url() {
-        let res = redirect_with("../parent", StatusCode::SEE_OTHER);
-        assert_eq!((res.status().as_u16(), res.headers()["location"].to_str().unwrap()), (303, "../parent"));
-        let url = crate::Url::parse("https://example.com/login").unwrap();
-        let res = redirect_with(&url.href(), StatusCode::MOVED_PERMANENTLY);
-        assert_eq!((res.status().as_u16(), res.headers()["location"].to_str().unwrap()), (301, "https://example.com/login"));
-    }
-
-    #[test]
-    fn redirect_accepts_a_response_init() {
-        let res = redirect_with("/dashboard", ResponseInit::status(StatusCode::TEMPORARY_REDIRECT).header("X-Redirect-Reason", "authentication"));
-        assert_eq!(res.status(), 307);
-        assert_eq!(res.headers()["location"], "/dashboard");
-        assert_eq!(res.headers()["x-redirect-reason"], "authentication");
-    }
-
-    #[test]
-    fn redirect_init_location_overrides_the_argument() {
-        let res = redirect_with("/default", ResponseInit::default().header("Location", "/override"));
-        assert_eq!((res.status(), res.headers()["location"].to_str().unwrap()), (StatusCode::FOUND, "/override"));
-        let mut headers = HeaderMap::new();
-        headers.insert(header::LOCATION, HeaderValue::from_static("/custom-location"));
-        headers.insert("x-custom", HeaderValue::from_static("value"));
-        let res = redirect_with("/default", ResponseInit { status: None, headers });
-        assert_eq!(res.headers().get_all(header::LOCATION).iter().count(), 1);
-        assert_eq!(res.headers()["location"], "/custom-location");
-        assert_eq!(res.headers()["x-custom"], "value");
-    }
-
-    // Ports of response/src/lib/html.test.ts (init and stream sniffing).
-
-    #[test]
-    fn html_keeps_init_headers_and_status() {
-        let res = html_with("<h1>Hello</h1>", ResponseInit::status(StatusCode::CREATED).header("X-Custom", "a"));
-        assert_eq!(res.status(), 201);
-        assert_eq!(res.headers()["content-type"], "text/html; charset=UTF-8");
-        assert_eq!(res.headers()["x-custom"], "a");
-        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html><h1>Hello</h1>");
-    }
-
-    #[test]
-    fn html_body_starting_with_multibyte_text_gets_a_doctype() {
-        let res = html("日本語🙂<p>x</p>");
-        assert_eq!(block_on(res.into_body().text()).unwrap(), "<!DOCTYPE html>日本語🙂<p>x</p>");
-    }
-
-    #[test]
-    fn html_init_overrides_content_type() {
-        let res = html_with("<h1>Hello</h1>", ResponseInit::default().header("Content-Type", "text/plain"));
-        assert_eq!(res.headers().get_all(header::CONTENT_TYPE).iter().count(), 1);
-        assert_eq!(res.headers()["content-type"], "text/plain");
-    }
-
-    fn one_chunk(content: String) -> Body {
-        Body::from_task(move |tx| async move {
-            tx.send(content);
-        })
-    }
-
-    #[test]
-    fn html_stream_sniffs_a_large_first_chunk_unchanged() {
-        let content = format!("<!DOCTYPE html><p>{}</p>", "日本語🙂".repeat(5000));
-        assert!(starts_with_doctype_bytes(content.as_bytes()));
-        assert_eq!(block_on(html_stream(one_chunk(content.clone())).into_body().text()).unwrap(), content);
-    }
-
-    #[test]
-    fn html_stream_finds_a_doctype_across_the_sniff_prefix() {
-        let content = format!("{}<!doctype html><p>日本語🙂</p>", " ".repeat(60));
-        assert_eq!(block_on(html_stream(one_chunk(content.clone())).into_body().text()).unwrap(), content);
-        let content = format!("{}\u{2003}<!DOCTYPE html><p>日本語🙂</p>", " ".repeat(63));
-        assert_eq!(block_on(html_stream(one_chunk(content.clone())).into_body().text()).unwrap(), content);
-    }
-
-    #[test]
-    fn html_stream_adds_a_doctype_after_long_whitespace() {
-        let content = format!("{}<p>日本語🙂</p>", "\u{2003}".repeat(50));
-        assert_eq!(block_on(html_stream(one_chunk(content.clone())).into_body().text()).unwrap(), format!("<!DOCTYPE html>{content}"));
     }
 }
