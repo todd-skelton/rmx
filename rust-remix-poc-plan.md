@@ -370,8 +370,14 @@ Remaining gaps:
 2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
    module. Errors are reported explicitly (`Handle::report_error`) and reach
    `Root::on_error` / `App::on_error` like Remix error events.
-3. Tooling: HMR, and the `remix` CLI's `completion` and `db` commands. The `rmx`
-   binary (`rmx::cli`, in the `rmx` crate) has `doctor` (Remix's suites and output with rmx
+3. Tooling: hot module replacement (wasm modules cannot be swapped in place), and the
+   `remix` CLI's `completion` and `db` commands. The `rmx` binary (`rmx::cli`, in the `rmx`
+   crate) has `dev` (Remix's `npm run dev` / `hmr` as rebuild, restart and page reload:
+   it polls `src/`, `app/`, `public/` and `Cargo.toml`, builds the client and server, runs
+   a copy of the server with `RMX_DEV_LIVE_RELOAD`, and `rmx::middleware::live_reload`
+   appends an event-stream script to documents that reloads the page when the build id
+   changes; measured on a new app: an edit to the home page showed in the open page 20 s
+   later, 17 s of it the server rebuild), `doctor` (Remix's suites and output with rmx
    checks: environment for the `rmx` dependency, the wasm32 target and the pinned
    wasm-bindgen; project for a `RouteMap`; client for `cdylib` and a built, current wasm;
    `--json`, `--strict`; no `--fix`, and no actions suite since controllers are checked at
