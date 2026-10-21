@@ -1,0 +1,23 @@
+[package]
+name = "template-demo"
+description = "The `remix new` starter app (reference/remix/template), in rmx"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rmx.workspace = true
+serde.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["Clipboard", "Navigator", "Window"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+http.workspace = true
+tokio.workspace = true

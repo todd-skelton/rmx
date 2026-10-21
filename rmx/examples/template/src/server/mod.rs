@@ -1,0 +1,57 @@
+//! `app/router.ts`, `app/assets.ts` and `app/actions/controller.tsx`.
+
+pub mod home_page;
+#[cfg(test)]
+mod tests;
+
+use std::path::Path;
+
+use http::StatusCode;
+use rmx::assets::{AssetError, AssetOptions, AssetServer};
+use rmx::fetch::response;
+use rmx::middleware::static_files::{static_files, StaticOptions};
+use rmx::render::Render;
+use rmx::router::{action, Context, Router};
+
+use crate::routes::{RoutesActions, ROUTES};
+
+/// The browser entry, served through the asset server.
+pub const ENTRY_FILE: &str = "app/actions/public/entry.js";
+
+/// `app/assets.ts`: `/assets` serves `app/**/public/**` (never tests); production
+/// fingerprints the URLs.
+pub fn asset_server(root: &Path, production: bool) -> Result<AssetServer, AssetError> {
+    AssetServer::new(AssetOptions {
+        root_dir: root.to_path_buf(),
+        base_path: "/assets".into(),
+        mounts: vec![("app".into(), "app".into())],
+        allow_files: vec!["app/**/public/**".into()],
+        deny_files: vec!["app/**/*.test.*".into()],
+        fingerprint: production,
+        ..Default::default()
+    })
+}
+
+/// `app/router.ts`: root `public/` files served unchanged, then the root controller.
+pub fn router(root: &Path, production: bool) -> Result<Router, AssetError> {
+    let assets = asset_server(root, production)?;
+    let mut router = Router::new();
+    router.use_middleware(static_files(root.join("public"), StaticOptions { index: vec![], ..Default::default() }));
+
+    // app/actions/controller.tsx
+    let home_assets = assets.clone();
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            assets: action(move |ctx: Context| {
+                let assets = assets.clone();
+                async move { assets.fetch(&ctx).unwrap_or_else(|| response::status(StatusCode::NOT_FOUND, "Not Found")) }
+            }),
+            home: action(move |ctx: Context| {
+                let script = home_assets.script_entry(ENTRY_FILE).ok();
+                async move { ctx.render(home_page::home_page(script.as_ref())) }
+            }),
+        },
+    );
+    Ok(router)
+}

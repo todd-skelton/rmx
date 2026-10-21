@@ -213,8 +213,11 @@ crates:
 
 Every Remix 3 demo has a port under `examples/`, each with a Playwright e2e script
 (`examples/<name>/e2e.mjs`): assets, bookstore, frame-navigation, frames, i18n,
-lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `examples/bench` is the
-benchmark app used in `../bench/README.md`.
+lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `examples/template` ports the
+`remix new` starter app (`reference/remix/template`): the home page, the copy-to-clipboard
+`PromptButton` client entry, the asset server and the controller test. Every demo binary lists
+its route map with `-- routes`. `examples/bench` is the benchmark app used in
+`../bench/README.md`.
 
 ## Build and Run
 

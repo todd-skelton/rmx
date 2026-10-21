@@ -3,4 +3,5 @@
 /examples/*/public/pkg
 /examples/assets/app/actions/public/pkg
 /examples/timeboxer/app/actions/public/pkg
+/examples/template/app/actions/public/pkg
 /examples/*/tmp

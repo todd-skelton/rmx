@@ -41,6 +41,7 @@ members = [
     "examples/bookstore",
     "examples/unpkg",
     "examples/timeboxer",
+    "examples/template",
 ]
 
 [workspace.package]
