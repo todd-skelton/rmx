@@ -370,10 +370,14 @@ Remaining gaps:
 2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
    module. Errors are reported explicitly (`Handle::report_error`) and reach
    `Root::on_error` / `App::on_error` like Remix error events.
-3. Tooling: HMR and the `remix` CLI (`new`, `doctor`, `test`, `assets`). The
-   `remix/component/test` render helper exists as `rmx::test`, and `remix routes` exists as
+3. Tooling: HMR and the `remix` CLI (`new`, `doctor`, `test`). The
+   `remix/component/test` render helper exists as `rmx::test`; `remix routes` exists as
    `rmx::router::routes::routes_command`, which every demo binary runs for `-- routes`
-   (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files).
+   (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files);
+   and `remix assets` exists as `rmx::assets::assets_command` over the asset server's
+   `assets()` / `asset_details()` inspection (list, `inspect <url-or-file>`, with statuses
+   reachable, denied, not-allowed, missing and unmapped), run by the assets and template
+   demos for `-- assets`.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
    a document still being parsed (`document.write` splitting a template). Cases that load
