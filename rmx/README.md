@@ -124,6 +124,11 @@ crates:
    are moved into it and pinned, rules added on the client are reference counted and
    deleted when the last element using them goes, and `@keyframes`/`@font-face` blocks
    are hoisted out of the class rule.
+   `mixin_with::<M>(args, MixinOptions { ssr })` is Remix's `createMixin(setup, { ssr })`:
+   the option overrides `HostMixin::SSR` for one `mix` value, so the same mixin type can
+   be browser-only in one place and server rendered in another. A host runs at most 1024
+   mixins, so a mixin that adds itself on every render stops, on the server and in the
+   browser alike.
    Event handlers are listeners on the host element, as in Remix (no document-level
    delegation), so `stopPropagation` and capture order match the DOM; `on_capture(..)`
    registers a capture-phase handler.
@@ -146,8 +151,9 @@ crates:
    popovers), `data-rmx-preserve-dom` / `data-rmx-preserve-attrs` opt out, and nodes
    already in order stay put, so a custom element is not reconnected when siblings move.
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
-   css, link), stylesheet, diff-dom, document-state and form-navigation test suites
-   (`crates/component/tests/browser_*.rs`, 379 tests).
+   css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
+   document-state and form-navigation test suites (`crates/component/tests/browser_*.rs`,
+   390 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

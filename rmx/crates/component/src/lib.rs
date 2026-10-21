@@ -36,7 +36,7 @@ pub use frame::{
     Frame, FrameContent, FrameEvent, FrameHandle, FrameProps, FrameRequest, FrameResponse, Frames, ReloadOptions, ResolveFrame,
     ResolveFuture,
 };
-pub use host_mixin::{mixin, BeforeRemoveEvent, HostMixin, InsertEvent, MixinHandle};
+pub use host_mixin::{mixin, mixin_with, BeforeRemoveEvent, HostMixin, InsertEvent, MixinHandle, MixinOptions};
 pub use mixin::{attrs, css, node_ref, on, on_capture, IntoMixins, Mixin, NodeHandle, NodeRef};
 pub use navigation::{link, link_with, navigate, navigate_async, History, NavigateOptions, Reset};
 pub use node::{

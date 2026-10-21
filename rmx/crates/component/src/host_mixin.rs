@@ -65,7 +65,25 @@ pub trait HostMixin: Sized + 'static {
 
 /// A `mix={...}` value for a [`HostMixin`] with these arguments.
 pub fn mixin<M: HostMixin>(args: M::Args) -> Mixin {
-    Mixin::stateful(Rc::new(Descriptor::<M>(args)))
+    mixin_with::<M>(args, MixinOptions::default())
+}
+
+/// Options for [`mixin_with`] (Remix's `createMixin(setup, options)`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MixinOptions {
+    /// Run during server rendering. `None` uses [`HostMixin::SSR`]; `Some(false)` makes
+    /// this use browser-only and `Some(true)` enables the server for a mixin whose type
+    /// is browser-only.
+    pub ssr: Option<bool>,
+}
+
+/// [`mixin`] with options. They are read here, when the `mix` value is created.
+///
+/// ```ignore
+/// let tooltip = mixin_with::<Tooltip>("Save", MixinOptions { ssr: Some(false) });
+/// ```
+pub fn mixin_with<M: HostMixin>(args: M::Args, options: MixinOptions) -> Mixin {
+    Mixin::stateful(Rc::new(Descriptor::<M> { args, ssr: options.ssr.unwrap_or(M::SSR) }))
 }
 
 /// The element a lifecycle event concerns.
@@ -164,7 +182,10 @@ pub(crate) trait AnySlot {
     fn dispose(&self);
 }
 
-struct Descriptor<M: HostMixin>(M::Args);
+struct Descriptor<M: HostMixin> {
+    args: M::Args,
+    ssr: bool,
+}
 
 impl<M: HostMixin> ErasedMixin for Descriptor<M> {
     fn mixin_type(&self) -> TypeId {
@@ -172,7 +193,7 @@ impl<M: HostMixin> ErasedMixin for Descriptor<M> {
     }
 
     fn ssr(&self) -> bool {
-        M::SSR
+        self.ssr
     }
 
     fn setup(&self, ctx: &SlotContext) -> Rc<dyn AnySlot> {
@@ -182,7 +203,7 @@ impl<M: HostMixin> ErasedMixin for Descriptor<M> {
     fn render(&self, slot: &dyn AnySlot, host: &mut Element) {
         let slot = slot.as_any().downcast_ref::<Slot<M>>().expect("mixin slot type checked before render");
         let mut state = slot.state.borrow_mut();
-        state.render(&self.0, host, &slot.handle);
+        state.render(&self.args, host, &slot.handle);
     }
 }
 
@@ -478,6 +499,10 @@ impl<M: HostMixin> MixinHandle<M> {
     }
 }
 
+/// Mixins applied to one host at most, so a mixin that adds itself on every render stops
+/// (Remix's `MAX_MIX_DESCRIPTORS`).
+pub(crate) const MAX_MIX_DESCRIPTORS: usize = 1024;
+
 /// Take the stateful mixins queued on an element by `mix`.
 pub(crate) fn take_mixins(el: &mut Element) -> Vec<Rc<dyn ErasedMixin>> {
     el.extra.as_mut().map(|x| std::mem::take(&mut x.mixins)).unwrap_or_default()
@@ -512,7 +537,7 @@ pub(crate) fn resolve_server(mut el: Element) -> Element {
     let mut queue = take_mixins(&mut el);
     let held = crate::mixin::withhold(&mut el);
     let mut i = 0;
-    while i < queue.len() {
+    while i < queue.len().min(MAX_MIX_DESCRIPTORS) {
         let d = queue[i].clone();
         if d.ssr() {
             let slot = d.setup(&ctx);

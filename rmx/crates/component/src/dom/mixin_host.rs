@@ -10,7 +10,7 @@ use std::rc::{Rc, Weak};
 
 use super::vdom::{apply_styles, attach_events, has_inner_html, hydrate_attrs, patch_props, queue_commit, schedule_host_update, set_attr, Applied};
 use super::Scope;
-use crate::host_mixin::{take_mixins, AnySlot, BeforeRemoveEvent, InsertEvent, Lifecycle, LifecycleEvent, SlotContext};
+use crate::host_mixin::{take_mixins, AnySlot, MAX_MIX_DESCRIPTORS, BeforeRemoveEvent, InsertEvent, Lifecycle, LifecycleEvent, SlotContext};
 use crate::mixin::NodeHandle;
 use crate::node::{Element, Key};
 
@@ -97,7 +97,7 @@ impl MixinHost {
         let mut slots: Vec<(TypeId, Rc<dyn AnySlot>)> = Vec::with_capacity(queue.len());
         let mut inserted = Vec::new();
         let mut i = 0;
-        while i < queue.len() {
+        while i < queue.len().min(MAX_MIX_DESCRIPTORS) {
             let d = queue[i].clone();
             let ty = d.mixin_type();
             let slot = match old.get(i) {
