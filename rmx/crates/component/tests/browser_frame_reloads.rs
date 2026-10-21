@@ -35,7 +35,12 @@ thread_local! {
 async fn start() -> Server {
     let server = SERVER.with(|s| s.borrow_mut().get_or_insert_with(Server::new).clone());
     if APP.with(|a| a.borrow().is_none()) {
-        let entries = vec![rmx::entry::<EntryWithFrame>(), rmx::entry::<EntryWithBlockingFrame>()];
+        let entries = vec![
+            rmx::entry::<EntryWithFrame>(),
+            rmx::entry::<EntryWithBlockingFrame>(),
+            rmx::entry::<EntryWithSrc>(),
+            rmx::entry::<EntryWithLateFrame>(),
+        ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
@@ -93,6 +98,7 @@ impl Server {
                const url = new URL(typeof input === 'string' ? input : input.url, document.baseURI);
                calls.push(url.pathname);
                const parts = routes[url.pathname] || [];
+               if (parts === 'fail') throw new TypeError('Failed to reload entry frame');
                const encoder = new TextEncoder();
                const body = new ReadableStream({
                  async start(controller) {
@@ -110,6 +116,7 @@ impl Server {
                calls,
                cancels,
                route(path, parts) { routes[path] = parts },
+               fail(path) { routes[path] = 'fail' },
                release(name, html) { gate(name).release(html) },
              };",
         );
@@ -130,6 +137,12 @@ impl Server {
         }
         let route: js_sys::Function = get(&self.stub, "route").unchecked_into();
         route.call2(&self.stub, &path.into(), &list).unwrap();
+    }
+
+    /// Make `fetch` of `path` reject with a `TypeError`, like a network failure.
+    fn fail(&self, path: &str) {
+        let fail: js_sys::Function = get(&self.stub, "fail").unchecked_into();
+        fail.call1(&self.stub, &path.into()).unwrap();
     }
 
     fn release(&self, gate: &str, html: &str) {
@@ -525,7 +538,8 @@ async fn a_newer_reload_or_submission_supersedes_and_cancels_a_stale_one() {
         tick().await;
     }
     assert_eq!(text("sr").as_deref(), Some("Submitted"), "stale content is not applied");
-    assert_eq!(server.cancels(), ["/sr-parent"], "the stale response stream is cancelled");
+    let parent_cancels = || server.cancels().iter().filter(|c| *c == "/sr-parent").count();
+    assert_eq!(parent_cancels(), 1, "the stale response stream is cancelled");
 
     // A submission superseded by a reload.
     server.route("/sr-parent", vec![Part::Gate("sr-stale-2")]);
@@ -541,7 +555,7 @@ async fn a_newer_reload_or_submission_supersedes_and_cancels_a_stale_one() {
         tick().await;
     }
     assert_eq!(text("sr").as_deref(), Some("Reloaded"));
-    assert_eq!(server.cancels().len(), 2);
+    assert_eq!(parent_cancels(), 2);
 }
 
 // frame.test.tsx: what a reload keeps and replaces
@@ -781,4 +795,336 @@ async fn waits_for_blocking_frames_inside_preserved_client_entries() {
     server.release("eb-frame", r#"<span id="eb-frame">Reloaded</span>"#);
     until("the parent reload", || done.get()).await;
     assert_eq!(text("eb-frame").as_deref(), Some("Reloaded"));
+}
+
+// frame.test.tsx: client entries whose frames the client updates
+
+thread_local! {
+    /// The src \`EntryWithSrc\` renders its frame with.
+    static ENTRY_SRC: RefCell<String> = const { RefCell::new(String::new()) };
+    /// Re-renders the latest \`EntryWithSrc\` (its \`handle.update()\`).
+    static ENTRY_UPDATE: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
+    static ENTRY_RENDERS: Cell<u32> = const { Cell::new(0) };
+    /// Whether \`EntryWithLateFrame\` renders its frame; set by its first task.
+    static LATE_FRAME: Cell<bool> = const { Cell::new(false) };
+}
+
+/// A client entry rendering a named frame whose src comes from \`ENTRY_SRC\`, like Remix's
+/// entries that read a variable outside the component.
+struct EntryWithSrc;
+
+impl Component for EntryWithSrc {
+    type Props = EntryProps;
+    rmx::client_entry!("EntryWithSrc");
+    fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
+        let h = h.clone();
+        ENTRY_UPDATE.with(|u| *u.borrow_mut() = Some(Rc::new(move || h.update())));
+        EntryWithSrc
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        let renders = ENTRY_RENDERS.with(|r| {
+            r.set(r.get() + 1);
+            r.get()
+        });
+        let src = ENTRY_SRC.with(|s| s.borrow().clone());
+        let fallback = rsx! { <span id="es-frame">"Loading entry frame..."</span> };
+        rsx! {
+            <section>
+                <p id="es-label">{p.label.clone()}</p>
+                <p id="es-renders">{renders.to_string()}</p>
+                <Frame name="es-frame" src={src} fallback={fallback}/>
+            </section>
+        }
+    }
+}
+
+/// Server markup for \`EntryWithSrc\` with its frame (src \`ENTRY_SRC\`) resolved to \`frame_html\`.
+fn src_entry_page(entry_id: &str, frame_id: &str, label: &str, frame_html: &str) -> String {
+    let src = ENTRY_SRC.with(|s| s.borrow().clone());
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "EntryWithSrc".into(), format!(r#"{{"label":"{label}"}}"#)));
+    d.frames.push((frame_id.into(), src, Some("es-frame".into()), "resolved"));
+    format!(
+        r#"<!--rmx:h:{entry_id}--><section><p id="es-label">{label}</p><p id="es-renders">0</p>{}</section><!--/rmx:h-->{}"#,
+        region(frame_id, frame_html),
+        d.to_script()
+    )
+}
+
+fn set_entry_src(src: &str) {
+    ENTRY_SRC.with(|s| *s.borrow_mut() = src.to_string());
+}
+
+fn update_entry() {
+    let update = ENTRY_UPDATE.with(|u| u.borrow().clone()).expect("a mounted EntryWithSrc");
+    update();
+    rmx::flush();
+}
+
+fn loads(server: &Server, path: &str) -> usize {
+    server.calls().iter().filter(|c| *c == path).count()
+}
+
+fn cancelled(server: &Server, path: &str) -> bool {
+    server.cancels().iter().any(|c| c == path)
+}
+
+#[wasm_bindgen_test]
+async fn does_not_reload_frames_inside_client_entries_on_ordinary_entry_updates() {
+    let server = start().await;
+    set_entry_src("/eu-frame");
+    server.route("/eu-parent", vec![Part::Html(src_entry_page("euh1", "euf1", "Entry", r#"<span id="es-frame">Initial entry frame</span>"#))]);
+    let _m = mount("eu-parent", "/eu-parent", "es-label").await;
+    let renders: u32 = text("es-renders").unwrap().parse().unwrap();
+    assert_eq!(text("es-frame").as_deref(), Some("Initial entry frame"));
+
+    update_entry();
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("es-renders"), Some((renders + 1).to_string()), "the entry re-rendered");
+    assert_eq!(text("es-frame").as_deref(), Some("Initial entry frame"));
+    assert_eq!(loads(&server, "/eu-frame"), 0, "an ordinary client update keeps the frame's content");
+}
+
+#[wasm_bindgen_test]
+async fn loads_new_frame_src_values_during_server_driven_entry_rerenders() {
+    let server = start().await;
+    set_entry_src("/es-a");
+    server.route("/es-parent", vec![Part::Html(src_entry_page("esh1", "esf1", "Initial entry", r#"<span id="es-frame">Initial entry frame</span>"#))]);
+    let mut m = mount("es-parent", "/es-parent", "es-label").await;
+    watch(&mut m, "es-frame");
+
+    set_entry_src("/es-b");
+    server.route("/es-parent", vec![Part::Html(src_entry_page("esh2", "esf2", "Reloaded entry", r#"<span id="es-frame">Unused</span>"#))]);
+    server.route("/es-b", vec![Part::Html(r#"<span id="es-frame">Reloaded entry frame</span>"#.into())]);
+    let done = reload(frame("es-parent"));
+    until("the first parent reload", || done.get()).await;
+    until("the new frame src", || text("es-frame").as_deref() == Some("Reloaded entry frame")).await;
+    assert_eq!(text("es-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!((loads(&server, "/es-a"), loads(&server, "/es-b")), (0, 1));
+    until("the first reload's events", || events() == (1, 1)).await;
+
+    set_entry_src("/es-c");
+    server.route("/es-parent", vec![Part::Html(src_entry_page("esh3", "esf3", "Reloaded again", r#"<span id="es-frame">Unused</span>"#))]);
+    server.route("/es-c", vec![Part::Html(r#"<span id="es-frame">Reloaded again frame</span>"#.into())]);
+    let done = reload(frame("es-parent"));
+    until("the second parent reload", || done.get()).await;
+    until("the second frame src", || text("es-frame").as_deref() == Some("Reloaded again frame")).await;
+    assert_eq!((loads(&server, "/es-b"), loads(&server, "/es-c")), (1, 1));
+    until("the second reload's events", || events() == (2, 2)).await;
+}
+
+#[wasm_bindgen_test]
+async fn cancels_an_inherited_frame_reload_when_a_client_update_changes_its_src() {
+    let server = start().await;
+    set_entry_src("/ci-a");
+    server.route("/ci-parent", vec![Part::Html(src_entry_page("cih1", "cif1", "Initial entry", r#"<span id="es-frame">Initial entry frame</span>"#))]);
+    let _m = mount("ci-parent", "/ci-parent", "es-label").await;
+
+    server.route("/ci-parent", vec![Part::Html(src_entry_page("cih2", "cif2", "Reloaded entry", r#"<span id="es-frame">Unused</span>"#))]);
+    server.route("/ci-a", vec![Part::Gate("ci-a")]);
+    let done = reload(frame("ci-parent"));
+    until("the parent reload", || done.get()).await;
+    until("the inherited frame reload", || loads(&server, "/ci-a") == 1).await;
+    assert!(!cancelled(&server, "/ci-a"));
+
+    set_entry_src("/ci-b");
+    server.route("/ci-b", vec![Part::Html(r#"<span id="es-frame">Updated entry frame</span>"#.into())]);
+    update_entry();
+    until("the updated frame", || text("es-frame").as_deref() == Some("Updated entry frame")).await;
+    until("the inherited reload's cancellation", || cancelled(&server, "/ci-a")).await;
+
+    server.release("ci-a", r#"<span id="es-frame">Stale inherited frame</span>"#);
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("es-frame").as_deref(), Some("Updated entry frame"));
+}
+
+#[wasm_bindgen_test]
+async fn ignores_stale_frame_reloads_from_superseded_entry_rerenders() {
+    let server = start().await;
+    set_entry_src("/ss-frame");
+    server.route("/ss-parent", vec![Part::Html(src_entry_page("ssh1", "ssf1", "Initial entry", r#"<span id="es-frame">Initial entry frame</span>"#))]);
+    let _m = mount("ss-parent", "/ss-parent", "es-label").await;
+
+    server.route("/ss-parent", vec![Part::Html(src_entry_page("ssh2", "ssf2", "First reload", r#"<span id="es-frame">Unused</span>"#))]);
+    server.route("/ss-frame", vec![Part::Gate("ss-1")]);
+    let done = reload(frame("ss-parent"));
+    until("the first parent reload", || done.get()).await;
+    assert_eq!(text("es-label").as_deref(), Some("First reload"));
+    assert_eq!(text("es-frame").as_deref(), Some("Initial entry frame"));
+    until("the entry frame's first reload", || loads(&server, "/ss-frame") == 1).await;
+
+    server.route("/ss-parent", vec![Part::Gate("ss-top")]);
+    server.route("/ss-frame", vec![Part::Gate("ss-2")]);
+    let second = reload(frame("ss-parent"));
+    until("the superseded entry frame reload's cancellation", || cancelled(&server, "/ss-frame")).await;
+    server.release("ss-1", r#"<span id="es-frame">Stale entry frame</span>"#);
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("es-label").as_deref(), Some("First reload"));
+    assert_eq!(text("es-frame").as_deref(), Some("Initial entry frame"), "the stale reload is ignored");
+
+    server.release("ss-top", &src_entry_page("ssh3", "ssf3", "Second reload", r#"<span id="es-frame">Unused</span>"#));
+    until("the second parent reload", || second.get()).await;
+    assert_eq!(text("es-label").as_deref(), Some("Second reload"));
+    assert_eq!(text("es-frame").as_deref(), Some("Initial entry frame"));
+    until("the entry frame's second reload", || loads(&server, "/ss-frame") == 2).await;
+
+    server.release("ss-2", r#"<span id="es-frame">Second entry frame</span>"#);
+    until("the second entry frame", || text("es-frame").as_deref() == Some("Second entry frame")).await;
+}
+
+#[wasm_bindgen_test]
+async fn reports_reload_failures_for_frames_inside_preserved_client_entries() {
+    let server = start().await;
+    set_entry_src("/rf-frame");
+    server.route("/rf-parent", vec![Part::Html(src_entry_page("rfh1", "rff1", "Initial entry", r#"<span id="es-frame">Initial entry frame</span>"#))]);
+    let mut m = mount("rf-parent", "/rf-parent", "es-label").await;
+    watch(&mut m, "es-frame");
+    let errors = Rc::new(RefCell::new(Vec::<String>::new()));
+    let seen = errors.clone();
+    let app = APP.with(|a| a.borrow_mut().take()).expect("app");
+    let listener = app.on_error(move |e| seen.borrow_mut().push(e.message.clone()));
+
+    server.route("/rf-parent", vec![Part::Html(src_entry_page("rfh2", "rff2", "Reloaded entry", r#"<span id="es-frame">Unused</span>"#))]);
+    server.fail("/rf-frame");
+    let done = reload(frame("rf-parent"));
+    until("the parent reload", || done.get()).await;
+    until("the reported failure", || !errors.borrow().is_empty()).await;
+    app.remove_error_listener(listener);
+    APP.with(|a| *a.borrow_mut() = Some(app));
+
+    assert!(errors.borrow()[0].contains("Failed to reload entry frame"), "{:?}", errors.borrow());
+    assert_eq!(text("es-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!(text("es-frame").as_deref(), Some("Initial entry frame"), "the frame keeps its content");
+    until("the entry frame's events", || events() == (1, 1)).await;
+}
+
+/// A client entry that renders its frame only after its first task asks for an update, so
+/// the frame is created on the client and still loading when its parent reloads.
+struct EntryWithLateFrame;
+
+impl Component for EntryWithLateFrame {
+    type Props = EntryProps;
+    rmx::client_entry!("EntryWithLateFrame");
+    fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
+        h.queue_task(|_, h| {
+            if !LATE_FRAME.with(|l| l.replace(true)) {
+                h.update();
+            }
+        });
+        EntryWithLateFrame
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        let frame = LATE_FRAME.with(Cell::get).then(|| {
+            let fallback = rsx! { <span id="lf-frame">"Loading entry frame..."</span> };
+            rsx! { <Frame name="lf-frame" src="/lf-frame" fallback={fallback}/> }
+        });
+        rsx! { <section><p id="lf-label">{p.label.clone()}</p>{frame.unwrap_or(Node::Empty)}</section> }
+    }
+}
+
+fn late_entry_page(entry_id: &str, label: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "EntryWithLateFrame".into(), format!(r#"{{"label":"{label}"}}"#)));
+    format!(r#"<!--rmx:h:{entry_id}--><section><p id="lf-label">{label}</p></section><!--/rmx:h-->{}"#, d.to_script())
+}
+
+#[wasm_bindgen_test]
+async fn restarts_pending_frames_inside_preserved_client_entries_during_ancestor_reloads() {
+    let server = start().await;
+    LATE_FRAME.with(|l| l.set(false));
+    server.route("/lf-parent", vec![Part::Html(late_entry_page("lfh1", "Initial entry"))]);
+    server.route("/lf-frame", vec![Part::Gate("lf-1")]);
+    let _m = mount("lf-parent", "/lf-parent", "lf-label").await;
+    until("the client-created frame's load", || loads(&server, "/lf-frame") == 1).await;
+    assert_eq!(text("lf-frame").as_deref(), Some("Loading entry frame..."));
+
+    server.route("/lf-parent", vec![Part::Html(late_entry_page("lfh2", "Reloaded entry"))]);
+    server.route("/lf-frame", vec![Part::Gate("lf-2")]);
+    let done = reload(frame("lf-parent"));
+    until("the parent reload", || done.get()).await;
+    until("the restarted frame load", || loads(&server, "/lf-frame") == 2).await;
+    assert!(cancelled(&server, "/lf-frame"), "the first load was cancelled");
+
+    server.release("lf-1", r#"<span id="lf-frame">Stale entry frame</span>"#);
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("lf-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!(text("lf-frame").as_deref(), Some("Loading entry frame..."));
+
+    server.release("lf-2", r#"<span id="lf-frame">Reloaded entry frame</span>"#);
+    until("the restarted frame's content", || text("lf-frame").as_deref() == Some("Reloaded entry frame")).await;
+}
+
+// frame.test.tsx: client-created frames re-rendered while they load
+
+/// A container in the page with its own root.
+fn container() -> (web_sys::HtmlElement, Root) {
+    let el: web_sys::HtmlElement = document().create_element("div").unwrap().unchecked_into();
+    document().body().unwrap().append_child(&el).unwrap();
+    let root = create_root(&el);
+    (el, root)
+}
+
+#[wasm_bindgen_test]
+async fn keeps_resolved_client_frame_content_after_rerendering_while_resolution_is_pending() {
+    let server = start().await;
+    server.route("/kr", vec![Part::Gate("kr")]);
+    let (el, root) = container();
+    let page = |label: &str| {
+        let fallback = rsx! { <p id="kr-fallback">{label.to_string()}</p> };
+        rsx! { <Frame src="/kr" fallback={fallback}/> }
+    };
+    root.render(page("Loading first..."));
+    root.flush();
+    root.render(page("Loading second..."));
+    root.flush();
+
+    server.release("kr", r#"<p id="kr-result">Resolved content</p>"#);
+    until("the resolved content", || by_id("kr-result").is_some()).await;
+    assert_eq!(text("kr-result").as_deref(), Some("Resolved content"));
+    assert!(by_id("kr-fallback").is_none());
+
+    root.render(page("Loading third..."));
+    root.flush();
+    assert_eq!(text("kr-result").as_deref(), Some("Resolved content"));
+    assert!(by_id("kr-fallback").is_none());
+    assert_eq!(loads(&server, "/kr"), 1);
+    root.dispose();
+    el.remove();
+}
+
+#[wasm_bindgen_test]
+async fn cancels_stale_client_frame_streams_when_src_changes() {
+    let server = start().await;
+    server.route("/cs-slow", vec![Part::Gate("cs-slow")]);
+    server.route("/cs-fast", vec![Part::Html(r#"<p id="cs-result">Fast result</p>"#.into())]);
+    let (el, root) = container();
+    let page = |src: &str| {
+        let fallback = rsx! { <p id="cs-fallback">"Loading..."</p> };
+        rsx! { <main><Frame src={src.to_string()} fallback={fallback}/></main> }
+    };
+    root.render(page("/cs-slow"));
+    root.flush();
+    assert_eq!(text("cs-fallback").as_deref(), Some("Loading..."));
+    until("the slow load", || loads(&server, "/cs-slow") == 1).await;
+
+    root.render(page("/cs-fast"));
+    root.flush();
+    until("the fast result", || text("cs-result").as_deref() == Some("Fast result")).await;
+    until("the slow stream's cancellation", || cancelled(&server, "/cs-slow")).await;
+
+    server.release("cs-slow", r#"<p id="cs-result">Slow result</p>"#);
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("cs-result").as_deref(), Some("Fast result"));
+    root.dispose();
+    el.remove();
 }

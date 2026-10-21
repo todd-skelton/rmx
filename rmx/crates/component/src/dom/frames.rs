@@ -29,6 +29,8 @@ pub(crate) struct FrameState {
     name: RefCell<Option<String>>,
     /// Start and end comments; `None` for the top frame (the whole document).
     range: Option<(web_sys::Comment, web_sys::Comment)>,
+    /// The latest load's controller, kept after it finishes: the next load aborts it, and
+    /// with it the client frame loads that load started.
     reload: RefCell<Option<web_sys::AbortController>>,
     disposed: Cell<bool>,
     /// Showing fallback content while waiting for a streamed template.
@@ -52,9 +54,16 @@ pub(crate) struct FrameState {
 /// resets scroll) only once that content is in the page.
 type Tracker = Rc<RefCell<Vec<js_sys::Promise>>>;
 
+/// A frame load whose content is being applied: its tracker, and its abort signal, which
+/// the client frame loads it starts follow (Remix's `serverFrameReload.signal`).
+struct Applying {
+    tracker: Tracker,
+    signal: Option<web_sys::AbortSignal>,
+}
+
 thread_local! {
-    /// Trackers of the frame loads whose content is being applied right now (innermost last).
-    static APPLYING: RefCell<Vec<Tracker>> = const { RefCell::new(Vec::new()) };
+    /// The frame loads whose content is being applied right now (innermost last).
+    static APPLYING: RefCell<Vec<Applying>> = const { RefCell::new(Vec::new()) };
 }
 
 thread_local! {
@@ -287,6 +296,16 @@ impl FrameState {
     /// Fetch the frame's `src` and reconcile the response into the page. Resolves to the
     /// final URL when the server redirected. A newer load of the same frame aborts this one.
     pub(crate) async fn load(self: &Rc<Self>, submission: Submission) -> Result<Option<String>, JsValue> {
+        self.load_following(submission, None).await
+    }
+
+    /// [`load`](Self::load), aborted as well when `ancestor` aborts: the signal of the
+    /// frame load whose render started this one. A newer load of that frame then cancels it.
+    async fn load_following(
+        self: &Rc<Self>,
+        submission: Submission,
+        ancestor: Option<web_sys::AbortSignal>,
+    ) -> Result<Option<String>, JsValue> {
         self.queued.set(false);
         if self.disposed.get() {
             return Ok(None);
@@ -296,6 +315,9 @@ impl FrameState {
             previous.abort();
         }
         let signal = controller.signal();
+        if let Some(ancestor) = ancestor {
+            follow(&ancestor, &controller);
+        }
         // A load that takes over an inherited reload reuses its `reloadStart`.
         if !self.inherited.replace(false) {
             self.emit("reloadStart");
@@ -323,10 +345,14 @@ impl FrameState {
             self.tracker.replace(None);
         }
         if signal.aborted() {
-            // Superseded by a newer load of this frame (or the frame went away).
+            // Superseded by a newer load of this frame: that load reports. Cancelled by the
+            // ancestor load it followed: this reload is over, as in Remix.
+            let current = self.reload.borrow().as_ref().is_some_and(|c| c == &controller);
+            if current && !self.disposed.get() {
+                self.emit("reloadComplete");
+            }
             return Ok(None);
         }
-        self.reload.replace(None);
         // Frames inside that got their content with this load are done; ones waiting for a
         // streamed template finish when it arrives.
         for child in self.child_frames() {
@@ -500,7 +526,8 @@ impl FrameState {
     /// blocking frames it creates join the load's tracker.
     fn tracked(&self, apply: impl FnOnce()) {
         let Some(tracker) = self.tracker.borrow().clone() else { return apply() };
-        APPLYING.with(|a| a.borrow_mut().push(tracker));
+        let signal = self.reload.borrow().as_ref().map(web_sys::AbortController::signal);
+        APPLYING.with(|a| a.borrow_mut().push(Applying { tracker, signal }));
         apply();
         super::flush();
         APPLYING.with(|a| a.borrow_mut().pop());
@@ -606,6 +633,20 @@ async fn until_aborted<T>(fut: impl std::future::Future<Output = T>, signal: &we
         Poll::Pending
     })
     .await
+}
+
+/// Abort `controller` when `ancestor` aborts. The listener goes away with either.
+fn follow(ancestor: &web_sys::AbortSignal, controller: &web_sys::AbortController) {
+    if ancestor.aborted() {
+        controller.abort();
+        return;
+    }
+    let abort: js_sys::Function = js::get(controller.as_ref(), "abort").unchecked_into();
+    let abort = abort.bind0(controller.as_ref());
+    let options = web_sys::AddEventListenerOptions::new();
+    options.set_once(true);
+    options.set_signal(&controller.signal());
+    let _ = ancestor.add_event_listener_with_callback_and_add_event_listener_options("abort", abort.unchecked_ref(), &options);
 }
 
 /// The entries of a `FormData` (files contribute their name).
@@ -1005,14 +1046,17 @@ pub(crate) fn in_server_reload() -> bool {
 /// while a frame load applies its content joins that load's tracker.
 pub(crate) fn spawn_reload(frame: Rc<FrameState>, blocking: bool) {
     frame.queued.set(true);
-    let tracker = blocking.then(|| APPLYING.with(|a| a.borrow().last().cloned())).flatten();
+    let (tracker, ancestor) = APPLYING.with(|a| match a.borrow().last() {
+        Some(applying) => (blocking.then(|| applying.tracker.clone()), applying.signal.clone()),
+        None => (None, None),
+    });
     let mut done: Option<js_sys::Function> = None;
     if let Some(tracker) = &tracker {
         let promise = js_sys::Promise::new(&mut |resolve, _| done = Some(resolve));
         tracker.borrow_mut().push(promise);
     }
     wasm_bindgen_futures::spawn_local(async move {
-        if let Err(e) = frame.load(Submission::default()).await {
+        if let Err(e) = frame.load_following(Submission::default(), ancestor).await {
             crate::report_error(js_error(&e));
         }
         if let Some(done) = done {

@@ -34,9 +34,16 @@ fn answer(next: Answer) {
 }
 
 fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
+    let by_src = request.url.ends_with("/error-node");
     REQUESTS.with(|r| r.borrow_mut().push(request));
     let next = NEXT.with(|n| n.borrow().clone());
     Box::pin(async move {
+        if by_src {
+            return Ok(FrameResponse {
+                content: FrameContent::Node(rsx! { <section id="frame-error"><h2>"Frame Error"</h2><p>"Retry the page."</p></section> }),
+                url: None,
+            });
+        }
         Ok(match next {
             Answer::Html(html, url) => FrameResponse { content: FrameContent::Html(html), url },
             Answer::Node => FrameResponse { content: FrameContent::Node(rsx! { <p id="node">"From a node"</p> }), url: None },
@@ -212,4 +219,37 @@ async fn renders_node_results_from_the_resolver() {
 
     assert_eq!(m.text_of("#node").as_deref(), Some("From a node"));
     assert_eq!(m.text_of("#content"), None);
+}
+
+#[wasm_bindgen_test]
+async fn renders_node_results_when_a_client_frame_src_changes() {
+    start().await;
+    answer(Answer::Html(r#"<div id="stale">Stale content</div>"#.into(), None));
+    let document = web_sys::window().unwrap().document().unwrap();
+    let el: web_sys::HtmlElement = document.create_element("div").unwrap().unchecked_into();
+    document.body().unwrap().append_child(&el).unwrap();
+    let root = create_root(&el);
+    let m = Mounted { el, root };
+    let page = |src: &str| rsx! { <Frame src={src.to_string()} fallback={rsx! { <p id="fallback">"Loading..."</p> }}/> };
+    m.root.render(page("/html"));
+    m.root.flush();
+    for _ in 0..200 {
+        if m.text_of("#stale").is_some() {
+            break;
+        }
+        tick().await;
+    }
+    assert_eq!(m.text_of("#stale").as_deref(), Some("Stale content"));
+
+    m.root.render(page("/error-node"));
+    m.root.flush();
+    for _ in 0..200 {
+        if m.text_of("#frame-error h2").is_some() {
+            break;
+        }
+        tick().await;
+    }
+    assert_eq!(m.text_of("#frame-error h2").as_deref(), Some("Frame Error"));
+    assert_eq!(m.text_of("#frame-error p").as_deref(), Some("Retry the page."));
+    assert_eq!(m.text_of("#stale"), None);
 }
