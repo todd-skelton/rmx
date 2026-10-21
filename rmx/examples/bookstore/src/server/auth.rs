@@ -7,6 +7,8 @@ use rmx::middleware::form_data::FormDataExt;
 use rmx::middleware::session::SessionExt;
 use rmx::render::ResponseInit;
 use rmx::router::{Context, Router};
+use rmx::data_schema::checks::min_length;
+use rmx::data_schema::{self as s, form_data as f, Schema};
 
 use super::data::{hash_password, normalize_email, now_ms, verify_password, PasswordResetToken, UserInput};
 use super::ui::Document;
@@ -39,18 +41,48 @@ fn error_alert(error: Option<String>) -> Option<Node> {
     error.map(|e| rsx! { <div class="alert alert-error" mix={css("margin-bottom: 1.5rem;")}>{e}</div> })
 }
 
-/// A text field (`f.field(s.defaulted(s.string(), ''))`).
-fn field<'a>(ctx: &'a Context, name: &str) -> &'a str {
-    ctx.form_data().get(name).unwrap_or_default()
+// --- schemas.ts -------------------------------------------------------------------------
+
+/// `textField`: `f.field(s.defaulted(s.string(), ''))`
+fn text_field() -> impl Schema<Output = String> {
+    s::defaulted(s::string(), String::new())
 }
 
 /// `s.string().pipe(minLength(8))`
-/// The error is the validation message for a 400 response.
-fn password_field<'a>(ctx: &'a Context, name: &str) -> Result<&'a str, String> {
-    match ctx.form_data().get(name) {
-        Some(p) if p.chars().count() >= 8 => Ok(p),
-        _ => Err(format!("{name} must be at least 8 characters")),
-    }
+fn password_field() -> impl Schema<Output = String> {
+    s::string().pipe(min_length(8))
+}
+
+struct Registration {
+    name: String,
+    email: String,
+    password: String,
+}
+
+/// `registrationSchema`
+fn registration_schema() -> impl Schema<Output = Registration> {
+    f::object(|o| Registration {
+        name: o.field("name", text_field()),
+        email: o.field("email", text_field()),
+        password: o.field("password", password_field()),
+    })
+}
+
+/// `resetPasswordSchema`: `(password, confirmPassword)`
+fn reset_password_schema() -> impl Schema<Output = (String, String)> {
+    f::object(|o| (o.field("password", password_field()), o.field("confirmPassword", password_field())))
+}
+
+/// Parse the request's form data. The error lists the issues, one per line, for a 400
+/// response (Remix's `s.parse` throws a `ValidationError`).
+fn parse_form<S: Schema>(ctx: &Context, schema: S) -> Result<S::Output, String> {
+    s::parse(&schema, ctx.form_data()).map_err(|e| e.issues.iter().map(ToString::to_string).collect::<Vec<_>>().join("
+"))
+}
+
+/// A text field (`f.field(s.defaulted(s.string(), ''))`).
+fn field(ctx: &Context, name: &str) -> String {
+    s::parse(&f::object(|o| o.field(name, text_field())), ctx.form_data()).unwrap_or_default()
 }
 
 // --- login ------------------------------------------------------------------------------
@@ -93,7 +125,7 @@ async fn login(ctx: Context) -> Response {
     // middleware/auth.ts passwordProvider
     let db = db(&ctx).clone();
     let password = credentials_provider(
-        |ctx: &Context| (normalize_email(field(ctx, "email")), field(ctx, "password").to_string()),
+        |ctx: &Context| (normalize_email(&field(ctx, "email")), field(ctx, "password")),
         move |(email, password): (String, String)| {
             let user = db.find_user_by_email(&email).filter(|u| verify_password(&password, &u.password_hash));
             async move { user }
@@ -138,11 +170,11 @@ fn register_page() -> Node {
 }
 
 async fn register(ctx: Context) -> Response {
-    let password = match password_field(&ctx, "password") {
-        Ok(p) => p,
-        Err(message) => return bad_request(message),
+    let Registration { name, email, password } = match parse_form(&ctx, registration_schema()) {
+        Ok(input) => input,
+        Err(issues) => return bad_request(issues),
     };
-    let email = normalize_email(field(&ctx, "email"));
+    let email = normalize_email(&email);
     if db(&ctx).find_user_by_email(&email).is_some() {
         let page = rsx! {
             <Document>
@@ -159,8 +191,8 @@ async fn register(ctx: Context) -> Response {
     }
     let created = db(&ctx).create_user(UserInput {
         email: Some(email),
-        password_hash: Some(hash_password(password)),
-        name: Some(field(&ctx, "name").to_string()),
+        password_hash: Some(hash_password(&password)),
+        name: Some(name),
         role: None,
     });
     let user = match created {
@@ -194,7 +226,8 @@ fn forgot_password_page() -> Node {
 }
 
 async fn forgot_password(ctx: Context) -> Response {
-    let token = db(&ctx).find_user_by_email(field(&ctx, "email")).map(|user| {
+    // `forgotPasswordSchema`
+    let token = db(&ctx).find_user_by_email(&field(&ctx, "email")).map(|user| {
         let token = rmx::crypto::random_hex(13);
         db(&ctx).create_reset_token(PasswordResetToken { token: token.clone(), user_id: user.id, expires_at: now_ms() + 3_600_000 });
         token
@@ -248,9 +281,9 @@ async fn reset_password_page(ctx: Context) -> Response {
 }
 
 async fn reset_password(ctx: Context) -> Response {
-    let (password, confirm) = match (password_field(&ctx, "password"), password_field(&ctx, "confirmPassword")) {
-        (Ok(p), Ok(c)) => (p, c),
-        (Err(message), _) | (_, Err(message)) => return bad_request(message),
+    let (password, confirm) = match parse_form(&ctx, reset_password_schema()) {
+        Ok(input) => input,
+        Err(issues) => return bad_request(issues),
     };
     let token = ctx.param("token").unwrap_or_default().to_string();
     let back = |message: &str| {
@@ -262,7 +295,7 @@ async fn reset_password(ctx: Context) -> Response {
     }
     let user = db(&ctx).find_reset_token(&token).filter(|t| t.expires_at >= now_ms()).and_then(|t| db(&ctx).find_user(t.user_id));
     let Some(user) = user else { return back("Invalid or expired reset token.") };
-    let update = UserInput { password_hash: Some(hash_password(password)), ..Default::default() };
+    let update = UserInput { password_hash: Some(hash_password(&password)), ..Default::default() };
     if let Err(e) = db(&ctx).update_user(user.id, update) {
         return bad_request(e.to_string());
     }

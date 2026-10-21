@@ -1,0 +1,16 @@
+[package]
+name = "rmx-data-schema"
+description = "Small, sync data validation for rmx (Remix's data-schema): schemas, checks, coercion and FormData parsing"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+rmx-fetch.workspace = true
+rmx-url.workspace = true
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["json"]
+# Convert `serde_json::Value` input into a schema `Value`.
+json = ["dep:serde_json"]

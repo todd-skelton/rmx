@@ -1157,6 +1157,7 @@ dependencies = [
  "rmx-component",
  "rmx-cookie",
  "rmx-crypto",
+ "rmx-data-schema",
  "rmx-fetch",
  "rmx-fetch-proxy",
  "rmx-file-storage",
@@ -1228,6 +1229,15 @@ dependencies = [
 [[package]]
 name = "rmx-crypto"
 version = "0.1.0"
+
+[[package]]
+name = "rmx-data-schema"
+version = "0.1.0"
+dependencies = [
+ "rmx-fetch",
+ "rmx-url",
+ "serde_json",
+]
 
 [[package]]
 name = "rmx-fetch"

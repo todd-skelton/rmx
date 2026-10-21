@@ -12,6 +12,7 @@ ui = ["dep:rmx-ui"]
 
 [dependencies]
 rmx-component.workspace = true
+rmx-data-schema.workspace = true
 rmx-fetch.workspace = true
 rmx-headers.workspace = true
 rmx-mime.workspace = true

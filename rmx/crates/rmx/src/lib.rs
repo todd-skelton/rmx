@@ -9,6 +9,7 @@
 //! | `remix/component` | `rmx` | browser and server |
 //! | `remix/ui` | [`rmx::ui`](ui) | browser and server, feature `ui` (default) |
 //! | `remix/route-pattern` | [`rmx::route_pattern`](route_pattern) | browser and server |
+//! | `remix/data-schema` | [`rmx::data_schema`](data_schema) | browser and server |
 //! | `remix/headers` | [`rmx::headers`](headers) | browser and server |
 //! | `remix/mime` | [`rmx::mime`](mime) | browser and server |
 //! | `URL`, `URLSearchParams` | [`rmx::url`](url) | browser and server |
@@ -50,6 +51,7 @@
 
 pub use rmx_component::*;
 
+pub use rmx_data_schema as data_schema;
 pub use rmx_fetch as fetch;
 pub use rmx_headers as headers;
 pub use rmx_mime as mime;

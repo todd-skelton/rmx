@@ -802,16 +802,16 @@ async fn waits_for_blocking_frames_inside_preserved_client_entries() {
 // frame.test.tsx: client entries whose frames the client updates
 
 thread_local! {
-    /// The src \`EntryWithSrc\` renders its frame with.
+    /// The src `EntryWithSrc` renders its frame with.
     static ENTRY_SRC: RefCell<String> = const { RefCell::new(String::new()) };
-    /// Re-renders the latest \`EntryWithSrc\` (its \`handle.update()\`).
+    /// Re-renders the latest `EntryWithSrc` (its `handle.update()`).
     static ENTRY_UPDATE: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
     static ENTRY_RENDERS: Cell<u32> = const { Cell::new(0) };
-    /// Whether \`EntryWithLateFrame\` renders its frame; set by its first task.
+    /// Whether `EntryWithLateFrame` renders its frame; set by its first task.
     static LATE_FRAME: Cell<bool> = const { Cell::new(false) };
 }
 
-/// A client entry rendering a named frame whose src comes from \`ENTRY_SRC\`, like Remix's
+/// A client entry rendering a named frame whose src comes from `ENTRY_SRC`, like Remix's
 /// entries that read a variable outside the component.
 struct EntryWithSrc;
 
@@ -840,7 +840,7 @@ impl Component for EntryWithSrc {
     }
 }
 
-/// Server markup for \`EntryWithSrc\` with its frame (src \`ENTRY_SRC\`) resolved to \`frame_html\`.
+/// Server markup for `EntryWithSrc` with its frame (src `ENTRY_SRC`) resolved to `frame_html`.
 fn src_entry_page(entry_id: &str, frame_id: &str, label: &str, frame_html: &str) -> String {
     let src = ENTRY_SRC.with(|s| s.borrow().clone());
     let mut d = HydrationData::default();
@@ -1139,7 +1139,7 @@ thread_local! {
     static ROW_EVENTS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
 }
 
-/// A client entry rendered inside an unnamed frame next to a frame named \`ra-summary\`.
+/// A client entry rendered inside an unnamed frame next to a frame named `ra-summary`.
 struct RowAction;
 
 impl Component for RowAction {
@@ -1158,7 +1158,7 @@ fn row() -> Handle<RowAction> {
     ROW.with(|r| r.borrow().clone()).expect("a hydrated RowAction")
 }
 
-/// Server markup for a named summary frame and an unnamed row frame holding \`RowAction\`.
+/// Server markup for a named summary frame and an unnamed row frame holding `RowAction`.
 fn row_page(prefix: &str, summary: u32) -> String {
     let mut d = HydrationData::default();
     d.entries.push((format!("{prefix}h"), "RowAction".into(), r#"{"label":""}"#.into()));

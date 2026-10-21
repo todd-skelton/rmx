@@ -182,7 +182,9 @@ crates:
    listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
    override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer).
-3. Supporting crates: `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
+3. Supporting crates: `rmx-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
+   error maps and typed `FormData` / `URLSearchParams` parsing, used by the timeboxer,
+   bookstore and sse ports where the Remix demos use it), `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
    `rmx-headers`, `rmx-mime`, `rmx-spa`, `rmx-url`.
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,

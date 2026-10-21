@@ -10,6 +10,7 @@ use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx::render::Render;
 use rmx::router::routes::{get, Route};
 use rmx::router::{Context, Router};
+use rmx::data_schema::{self as s, coerce, form_data as f};
 use rmx::url::Url;
 use sse_demo::*;
 
@@ -79,7 +80,10 @@ pub fn router(public: &str, interval: Duration) -> Router {
 
 /// `utils/message-limit.ts`: a positive `?limit=`, or none.
 pub fn message_limit(url: &Url) -> Option<u32> {
-    url.search_params().get("limit")?.trim().parse().ok().filter(|n| *n > 0)
+    let schema = f::object(|o| o.field("limit", s::optional(coerce::number())));
+    let limit = s::parse(&schema, url.search_params()).ok().flatten()?;
+    // A limit counts messages: a positive whole number.
+    (limit >= 1.0 && limit.fract() == 0.0 && limit <= f64::from(u32::MAX)).then_some(limit as u32)
 }
 
 /// `toLocaleTimeString()` for the current UTC time.

@@ -8,6 +8,8 @@ use rmx::middleware::form_data::FormDataExt;
 use rmx::middleware::session::SessionExt;
 use rmx::render::ResponseInit;
 use rmx::router::{Context, Router};
+use rmx::data_schema::checks::{max_length, min_length};
+use rmx::data_schema::{self as s, form_data as f, Issue, PathSegment, Schema};
 
 use super::passwords::{hash_password, verify_password};
 use super::ui::Layout;
@@ -56,8 +58,11 @@ async fn login_page(ctx: Context) -> Response {
 
 /// `credentialsSchema`: a trimmed username and a password, both defaulting to "".
 fn credentials(ctx: &Context) -> (String, String) {
-    let form = ctx.form_data();
-    (form.get("username").unwrap_or_default().trim().to_string(), form.get("password").unwrap_or_default().to_string())
+    let schema = f::object(|o| {
+        let username = o.field("username", s::defaulted(s::string(), String::new()).transform(|v| v.trim().to_string()));
+        (username, o.field("password", s::defaulted(s::string(), String::new())))
+    });
+    s::parse(&schema, ctx.form_data()).unwrap_or_default()
 }
 
 async fn login(ctx: Context) -> Response {
@@ -87,35 +92,30 @@ async fn signup_page(ctx: Context) -> Response {
     render(&ctx, rsx! { <SignupPage csrf_token={token(&ctx)}/> })
 }
 
-/// `signupSchema`, with `remix/data-schema`'s messages.
+/// `signupSchema`
 fn parse_signup(ctx: &Context) -> Result<(String, String), AuthFormErrors> {
-    let form = ctx.form_data();
-    let username = form.get("username").unwrap_or_default().trim().to_string();
-    let password = form.get("password").unwrap_or_default().to_string();
-    let errors = AuthFormErrors {
-        form: None,
-        username: length_issue(&username, 3, 32).or_else(|| {
-            (!username.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
-                .then(|| "Use only letters, numbers, underscores, and dashes.".to_string())
-        }),
-        password: length_issue(&password, 8, 128),
-    };
-    if errors.username.is_some() || errors.password.is_some() {
-        return Err(errors);
-    }
-    Ok((username, password))
+    let username = s::defaulted(s::string(), String::new())
+        .transform(|v| v.trim().to_string())
+        .pipe(min_length(3))
+        .pipe(max_length(32))
+        .refine_with(|v| v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'), "Use only letters, numbers, underscores, and dashes.");
+    let password = s::defaulted(s::string(), String::new()).pipe(min_length(8)).pipe(max_length(128));
+    let schema = f::object(|o| (o.field("username", &username), o.field("password", &password)));
+    s::parse(&schema, ctx.form_data()).map_err(|e| issues_to_errors(&e.issues))
 }
 
-/// `minLength(min)` and `maxLength(max)`, counting UTF-16 code units as JavaScript does.
-pub fn length_issue(value: &str, min: usize, max: usize) -> Option<String> {
-    let length = value.encode_utf16().count();
-    if length < min {
-        Some(format!("Expected at least {min} characters"))
-    } else if length > max {
-        Some(format!("Expected at most {max} characters"))
-    } else {
-        None
+/// `issuesToErrors`: the last issue for each field, others for the form.
+fn issues_to_errors(issues: &[Issue]) -> AuthFormErrors {
+    let mut errors = AuthFormErrors::default();
+    for issue in issues {
+        let slot = match issue.path.first() {
+            Some(PathSegment::Key(k)) if k == "username" => &mut errors.username,
+            Some(PathSegment::Key(k)) if k == "password" => &mut errors.password,
+            _ => &mut errors.form,
+        };
+        *slot = Some(issue.message.clone());
     }
+    errors
 }
 
 async fn signup(ctx: Context) -> Response {

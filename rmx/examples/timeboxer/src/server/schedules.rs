@@ -5,7 +5,8 @@ use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Handle, Node};
 use rmx::fetch::{response, Body, Response};
 use rmx::router::{Context, Router};
-use serde::Serialize;
+use rmx::data_schema::checks::{max_length, min_length};
+use rmx::data_schema::{self as s, Issue, PathSegment, Schema};
 use serde_json::{json, Map, Value};
 
 use super::data::{ReplaceInput, Schedule, ScheduleDataError};
@@ -73,7 +74,7 @@ async fn index(ctx: Context) -> Response {
 
 async fn create(mut ctx: Context) -> Response {
     let Some(user_id) = current_user(&ctx).map(|u| u.id) else { return unauthorized() };
-    let name = match parse_json_request(&mut ctx, parse_create).await {
+    let name = match parse_json_request(&mut ctx, create_schedule()).await {
         Ok(name) => name,
         Err(issues) => return validation_error(issues),
     };
@@ -128,7 +129,7 @@ async fn show(ctx: Context) -> Response {
 async fn update(mut ctx: Context) -> Response {
     let Some(user_id) = current_user(&ctx).map(|u| u.id) else { return unauthorized() };
     let Some(id) = schedule_id(&ctx) else { return invalid_schedule_id() };
-    let input = match parse_json_request(&mut ctx, parse_replace).await {
+    let input = match parse_json_request(&mut ctx, replace_schedule()).await {
         Ok(input) => input,
         Err(issues) => return validation_error(issues),
     };
@@ -157,39 +158,72 @@ fn download_filename(name: &str) -> String {
 // Request validation (remix/data-schema)
 // ---------------------------------------------------------------------------------------
 
-/// A validation issue: a message and where in the input it applies.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct Issue {
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<Vec<Value>>,
+/// `scheduleNameSchema`: trimmed, 1 to 80 characters.
+fn schedule_name() -> impl Schema<Output = String> {
+    s::string().transform(|v| v.trim().to_string()).pipe(min_length(1)).pipe(max_length(80))
 }
 
-fn issue(message: impl Into<String>, path: &[Value]) -> Issue {
-    Issue { message: message.into(), path: Some(path.to_vec()) }
+/// `s.number().refine(Number.isInteger, '<name> must be an integer.')`
+fn integer(name: &str) -> impl Schema<Output = i64> {
+    s::number().refine_with(|n| n.fract() == 0.0, format!("{name} must be an integer.")).transform(|n| n as i64)
 }
 
-fn at(path: &[Value], key: impl Into<Value>) -> Vec<Value> {
-    let mut p = path.to_vec();
-    p.push(key.into());
-    p
+/// `scheduleBlockSchema`
+fn schedule_block() -> impl Schema<Output = Block> {
+    s::object(|o| Block {
+        id: o.field("id", s::string().pipe(min_length(1)).pipe(max_length(80))),
+        color: o.field("color", s::optional(s::nullable(s::string().pipe(max_length(64))))).flatten(),
+        day_of_week: o.field("dayOfWeek", integer("dayOfWeek")),
+        end_minute: o.field("endMinute", integer("endMinute")),
+        name: o.field("name", schedule_name()),
+        start_minute: o.field("startMinute", integer("startMinute")),
+    })
+}
+
+/// `createScheduleSchema`
+fn create_schedule() -> impl Schema<Output = String> {
+    s::object(|o| o.field("name", schedule_name()))
+}
+
+/// `replaceScheduleSchema`
+fn replace_schedule() -> impl Schema<Output = ReplaceInput> {
+    s::object(|o| ReplaceInput {
+        base_revision: o.field("baseRevision", integer("baseRevision")),
+        blocks: o.field("blocks", s::array(schedule_block())),
+        name: o.field("name", schedule_name()),
+    })
 }
 
 /// `parseJsonRequest(schema, request)`
-async fn parse_json_request<T>(ctx: &mut Context, schema: fn(&Value) -> Result<T, Vec<Issue>>) -> Result<T, Vec<Issue>> {
+async fn parse_json_request<S: Schema>(ctx: &mut Context, schema: S) -> Result<S::Output, Vec<Issue>> {
     let text = ctx.take_body().text().await.unwrap_or_default();
-    let value: Value = serde_json::from_str(&text).map_err(|_| vec![Issue { message: "Expected a valid JSON request body.".into(), path: None }])?;
-    schema(&value)
+    let value: Value = serde_json::from_str(&text).map_err(|_| vec![Issue::new("Expected a valid JSON request body.", Vec::new())])?;
+    s::parse(&schema, value).map_err(|e| e.issues)
+}
+
+/// An issue as JSON: `{ message, path? }`.
+fn issue_json(issue: &Issue) -> Value {
+    let mut out = Map::new();
+    out.insert("message".into(), Value::String(issue.message.clone()));
+    if !issue.path.is_empty() {
+        let path = issue.path.iter().map(|segment| match segment {
+            PathSegment::Key(k) => Value::String(k.clone()),
+            PathSegment::Index(i) => json!(i),
+        });
+        out.insert("path".into(), Value::Array(path.collect()));
+    }
+    Value::Object(out)
 }
 
 fn validation_error(issues: Vec<Issue>) -> Response {
     let mut field_errors = Map::new();
     for issue in &issues {
-        let Some(Value::String(field)) = issue.path.as_ref().and_then(|p| p.first()) else { continue };
+        let Some(PathSegment::Key(field)) = issue.path.first() else { continue };
         if !field_errors.contains_key(field) {
             field_errors.insert(field.clone(), Value::String(field_message(field, &issue.message)));
         }
     }
+    let issues: Vec<Value> = issues.iter().map(issue_json).collect();
     json_with(StatusCode::BAD_REQUEST, &json!({ "error": "Validation failed.", "fieldErrors": field_errors, "issues": issues }))
 }
 
@@ -206,84 +240,6 @@ fn field_message(field: &str, message: &str) -> String {
         return "Name is required.".into();
     }
     message.into()
-}
-
-fn object<'a>(value: &'a Value, path: &[Value]) -> Result<&'a Map<String, Value>, Vec<Issue>> {
-    value.as_object().ok_or_else(|| vec![issue("Expected object", path)])
-}
-
-/// `s.string()`, optionally trimmed, then `minLength` and `maxLength`.
-fn string(value: Option<&Value>, path: &[Value], trim: bool, min: usize, max: usize) -> Result<String, Issue> {
-    let Some(Value::String(s)) = value else { return Err(issue("Expected string", path)) };
-    let s = if trim { s.trim().to_string() } else { s.clone() };
-    match super::auth::length_issue(&s, min, max) {
-        Some(message) => Err(issue(message, path)),
-        None => Ok(s),
-    }
-}
-
-/// `s.number().refine(Number.isInteger, '<name> must be an integer.')`
-fn integer(value: Option<&Value>, path: &[Value], name: &str) -> Result<i64, Issue> {
-    let Some(n) = value.and_then(Value::as_f64) else { return Err(issue("Expected number", path)) };
-    if n.fract() != 0.0 || !n.is_finite() {
-        return Err(issue(format!("{name} must be an integer."), path));
-    }
-    Ok(n as i64)
-}
-
-fn collect<T>(issues: &mut Vec<Issue>, result: Result<T, Issue>) -> Option<T> {
-    result.map_err(|e| issues.push(e)).ok()
-}
-
-/// `scheduleNameSchema` in `{ name }`
-fn parse_create(value: &Value) -> Result<String, Vec<Issue>> {
-    let fields = object(value, &[])?;
-    string(fields.get("name"), &["name".into()], true, 1, 80).map_err(|e| vec![e])
-}
-
-/// `replaceScheduleSchema`
-fn parse_replace(value: &Value) -> Result<ReplaceInput, Vec<Issue>> {
-    let fields = object(value, &[])?;
-    let mut issues = Vec::new();
-    let base_revision = collect(&mut issues, integer(fields.get("baseRevision"), &["baseRevision".into()], "baseRevision"));
-    let blocks = match fields.get("blocks") {
-        Some(Value::Array(items)) => {
-            let mut blocks = Vec::new();
-            for (i, item) in items.iter().enumerate() {
-                if let Some(block) = parse_block(item, &["blocks".into(), i.into()], &mut issues) {
-                    blocks.push(block);
-                }
-            }
-            Some(blocks)
-        }
-        _ => {
-            issues.push(issue("Expected array", &["blocks".into()]));
-            None
-        }
-    };
-    let name = collect(&mut issues, string(fields.get("name"), &["name".into()], true, 1, 80));
-    match (base_revision, blocks, name) {
-        (Some(base_revision), Some(blocks), Some(name)) if issues.is_empty() => Ok(ReplaceInput { base_revision, blocks, name }),
-        _ => Err(issues),
-    }
-}
-
-/// `scheduleBlockSchema`
-fn parse_block(value: &Value, path: &[Value], issues: &mut Vec<Issue>) -> Option<Block> {
-    let Some(fields) = value.as_object() else {
-        issues.push(issue("Expected object", path));
-        return None;
-    };
-    let id = collect(issues, string(fields.get("id"), &at(path, "id"), false, 1, 80));
-    let color = match fields.get("color") {
-        None | Some(Value::Null) => Some(None),
-        other => collect(issues, string(other, &at(path, "color"), false, 0, 64)).map(Some),
-    };
-    let day_of_week = collect(issues, integer(fields.get("dayOfWeek"), &at(path, "dayOfWeek"), "dayOfWeek"));
-    let end_minute = collect(issues, integer(fields.get("endMinute"), &at(path, "endMinute"), "endMinute"));
-    let name = collect(issues, string(fields.get("name"), &at(path, "name"), true, 1, 80));
-    let start_minute = collect(issues, integer(fields.get("startMinute"), &at(path, "startMinute"), "startMinute"));
-    Some(Block { id: id?, color: color?, day_of_week: day_of_week?, end_minute: end_minute?, name: name?, start_minute: start_minute? })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -360,8 +316,9 @@ mod tests {
 
     #[test]
     fn reports_issues_with_paths() {
-        let issues = parse_replace(&json!({ "baseRevision": 1.5, "blocks": [{ "id": "", "dayOfWeek": 0, "startMinute": 0, "endMinute": 15, "name": " " }] })).unwrap_err();
-        let summary: Vec<(String, Value)> = issues.iter().map(|i| (i.message.clone(), json!(i.path))).collect();
+        let input = json!({ "baseRevision": 1.5, "blocks": [{ "id": "", "dayOfWeek": 0, "startMinute": 0, "endMinute": 15, "name": " " }] });
+        let issues = s::parse(&replace_schedule(), input).unwrap_err().issues;
+        let summary: Vec<(String, Value)> = issues.iter().map(|i| (i.message.clone(), issue_json(i)["path"].clone())).collect();
         assert_eq!(
             summary,
             [
