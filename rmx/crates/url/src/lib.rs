@@ -5,6 +5,7 @@
 //! It does not implement IDNA, IPv6 zone ids, or every WHATWG edge case.
 
 use std::fmt;
+use std::net::Ipv6Addr;
 
 mod encode;
 mod search;
@@ -245,22 +246,60 @@ fn default_port(scheme: &str) -> Option<u16> {
     }
 }
 
-fn split_host_port(authority: &str) -> Result<(&str, Option<u16>), ParseError> {
-    if authority.starts_with('[') {
-        // IPv6 literal
-        let end = authority.find(']').ok_or_else(|| ParseError(format!("bad IPv6 host {authority:?}")))?;
-        let host = &authority[..=end];
-        let port = match &authority[end + 1..] {
+fn split_host_port(authority: &str) -> Result<(String, Option<u16>), ParseError> {
+    if let Some(rest) = authority.strip_prefix('[') {
+        let bad = || ParseError(format!("bad IPv6 host {authority:?}"));
+        let (address, after) = rest.split_once(']').ok_or_else(bad)?;
+        let address: Ipv6Addr = address.parse().map_err(|_| bad())?;
+        let port = match after {
             "" => None,
-            p => Some(parse_port(p.trim_start_matches(':'))?),
+            p => Some(parse_port(p.strip_prefix(':').ok_or_else(bad)?)?),
         };
-        return Ok((host, port));
+        return Ok((serialize_ipv6(address), port));
     }
     match authority.rsplit_once(':') {
-        Some((host, "")) => Ok((host, None)),
-        Some((host, port)) => Ok((host, Some(parse_port(port)?))),
-        None => Ok((authority, None)),
+        Some((host, "")) => Ok((host.to_string(), None)),
+        Some((host, port)) => Ok((host.to_string(), Some(parse_port(port)?))),
+        None => Ok((authority.to_string(), None)),
     }
+}
+
+/// The WHATWG URL serialization of an IPv6 host: bracketed lowercase hex pieces without
+/// leading zeros, with the first longest run of two or more zero pieces written as `::`.
+fn serialize_ipv6(address: Ipv6Addr) -> String {
+    let pieces = address.segments();
+    // The start and length of the first longest run of zero pieces, and of the current run.
+    let mut longest: Option<(usize, usize)> = None;
+    let (mut start, mut len) = (0, 0);
+    for (i, piece) in pieces.iter().enumerate() {
+        if *piece != 0 {
+            len = 0;
+            continue;
+        }
+        if len == 0 {
+            start = i;
+        }
+        len += 1;
+        if len >= 2 && longest.is_none_or(|(_, best)| len > best) {
+            longest = Some((start, len));
+        }
+    }
+    let mut out = String::from("[");
+    let mut i = 0;
+    while i < pieces.len() {
+        if let Some((_, len)) = longest.filter(|(start, _)| *start == i) {
+            out.push_str(if i == 0 { "::" } else { ":" });
+            i += len;
+            continue;
+        }
+        out.push_str(&format!("{:x}", pieces[i]));
+        if i + 1 < pieces.len() {
+            out.push(':');
+        }
+        i += 1;
+    }
+    out.push(']');
+    out
 }
 
 fn parse_port(p: &str) -> Result<u16, ParseError> {
@@ -331,5 +370,22 @@ mod tests {
         assert_eq!(Url::parse("http://x/a b").unwrap().pathname(), "/a%20b");
         assert_eq!(Url::parse("http://x/caf%C3%A9").unwrap().pathname(), "/caf%C3%A9");
         assert_eq!(Url::parse("http://x/café").unwrap().pathname(), "/caf%C3%A9");
+    }
+
+    #[test]
+    fn serializes_ipv6_hosts_like_whatwg() {
+        let host = |input: &str| Url::parse(input).map(|u| u.host());
+        assert_eq!(host("http://[2001:0DB8:0:0:0:0:0:1]:8080/"), Ok("[2001:db8::1]:8080".to_string()));
+        assert_eq!(host("http://[::]/"), Ok("[::]".to_string()));
+        assert_eq!(host("http://[::1]/"), Ok("[::1]".to_string()));
+        assert_eq!(host("http://[1:0:0:0:0:0:0:0]/"), Ok("[1::]".to_string()));
+        // The first of two equally long zero runs is compressed; a single zero is not.
+        assert_eq!(host("http://[1:0:0:2:0:0:3:4]/"), Ok("[1::2:0:0:3:4]".to_string()));
+        assert_eq!(host("http://[1:0:2:3:4:5:6:7]/"), Ok("[1:0:2:3:4:5:6:7]".to_string()));
+        assert_eq!(host("http://[1:0:0:2:0:0:0:3]/"), Ok("[1:0:0:2::3]".to_string()));
+        // Embedded IPv4 is written as hex pieces.
+        assert_eq!(host("http://[::ffff:192.0.2.1]/"), Ok("[::ffff:c000:201]".to_string()));
+        assert!(Url::parse("http://[2001:db8::g]/").is_err());
+        assert!(Url::parse("http://[::1]x/").is_err());
     }
 }

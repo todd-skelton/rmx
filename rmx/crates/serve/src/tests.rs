@@ -305,3 +305,47 @@ async fn finished_responses_do_not_abort_the_request_signal() {
     let got = tokio::time::timeout(std::time::Duration::from_millis(300), aborted.recv()).await;
     assert!(got.is_err(), "a finished response aborted the signal: {got:?}");
 }
+
+/// An endless request body of 1 KiB chunks that counts the chunks taken and whether it was
+/// dropped.
+struct Endless {
+    taken: Arc<std::sync::atomic::AtomicUsize>,
+    dropped: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl http_body::Body for Endless {
+    type Data = rmx_fetch::Bytes;
+    type Error = std::convert::Infallible;
+
+    fn poll_frame(self: Pin<&mut Self>, _: &mut TaskContext<'_>) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        self.taken.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Poll::Ready(Some(Ok(http_body::Frame::data(rmx_fetch::Bytes::from(vec![0u8; 1024])))))
+    }
+}
+
+impl Drop for Endless {
+    fn drop(&mut self) {
+        self.dropped.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[tokio::test]
+async fn request_bodies_read_at_most_the_high_water_mark_ahead_and_stop_when_dropped() {
+    use std::sync::atomic::Ordering;
+    let (taken, dropped) = (Arc::new(std::sync::atomic::AtomicUsize::new(0)), Arc::new(std::sync::atomic::AtomicBool::new(false)));
+    let source = Endless { taken: taken.clone(), dropped: dropped.clone() };
+    let mut body = Body::wrap(RequestBody::new(source, Arc::new(AbortController::new())));
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let ahead = REQUEST_BODY_HIGH_WATER_MARK / 1024;
+    assert_eq!(taken.load(Ordering::SeqCst), ahead);
+
+    // Reading a chunk lets the server read one more.
+    assert_eq!(body.chunk().await.unwrap().unwrap().len(), 1024);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert_eq!(taken.load(Ordering::SeqCst), ahead + 1);
+
+    // Dropping the body stops the read-ahead and drops the source.
+    drop(body);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(dropped.load(Ordering::SeqCst));
+}

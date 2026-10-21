@@ -209,8 +209,11 @@ crates:
    `AbortError`), `rmx-serve` (hyper server with
    `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
    `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; each
-   request's signal aborts when the client leaves before the response finished; plus an
-   HTTP/1 `fetch` client), `rmx-fetch-proxy` (Remix's `fetch-proxy.test.ts` ported one per case, including real
+   request's signal aborts when the client leaves before the response finished, request
+   bodies are read at most 16 KiB ahead of the handler and fail with `AbortError` once the
+   client went away, and a handler failing after the abort is not reported to `on_error`;
+   `request-listener.test.ts` and its HTTP/2 file ported one test per case, 64, against real
+   loopback servers; plus an HTTP/1 `fetch` client), `rmx-fetch-proxy` (Remix's `fetch-proxy.test.ts` ported one per case, including real
    servers for streamed bodies, redirects and a trusted development proxy; a `redirect`
    option, overridable per request, returns redirects by default or follows them with
    fetch's rules), `rmx-render`, `rmx-middleware` (compression with

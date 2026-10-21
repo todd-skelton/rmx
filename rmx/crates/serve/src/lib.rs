@@ -25,14 +25,15 @@
 //! implementation (hyper); everything else works with plain `Request` / `Response` values.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::fmt;
-use std::future::Future;
+use std::future::{poll_fn, Future};
 use std::net::{IpAddr, SocketAddr};
 use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context as TaskContext, Poll};
+use std::sync::{Arc, Mutex};
+use std::task::{Context as TaskContext, Poll, Waker};
 
 use http::{header, StatusCode, Version};
 use http_body::Body as _;
@@ -40,7 +41,7 @@ use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
-use rmx_fetch::{AbortController, Body, Request, RequestExt, Response};
+use rmx_fetch::{AbortController, AbortError, Body, Request, RequestExt, Response};
 use rmx_router::Router;
 use rmx_url::Url;
 use tokio::net::TcpListener;
@@ -79,6 +80,9 @@ pub enum ServeError {
     InvalidUrl(String),
     /// The handler panicked, with the panic message.
     Panic(String),
+    /// The response body failed after the status and headers were sent. The connection is
+    /// closed; a response [`ServeOptions::on_error`] returns is not used.
+    ResponseBody(String),
 }
 
 impl fmt::Display for ServeError {
@@ -87,6 +91,7 @@ impl fmt::Display for ServeError {
             ServeError::ConflictingAuthority => f.write_str("Host header does not match :authority"),
             ServeError::InvalidUrl(url) => write!(f, "Invalid URL: {url}"),
             ServeError::Panic(message) => write!(f, "request handler panicked: {message}"),
+            ServeError::ResponseBody(message) => f.write_str(message),
         }
     }
 }
@@ -198,11 +203,12 @@ pub async fn serve_with(listener: TcpListener, router: Router, options: ServeOpt
             let service = service_fn(move |req: hyper::Request<Incoming>| {
                 let (router, options) = (router.clone(), options.clone());
                 async move {
-                    let mut req = req.map(Body::wrap);
                     let lifecycle = Lifecycle::new();
+                    let controller = lifecycle.controller.clone();
+                    let mut req = req.map(|body| Body::wrap(RequestBody::new(body, controller)));
                     req.set_signal(lifecycle.controller.signal());
                     let res = handle(&router, &options, req, remote).await;
-                    Ok::<_, Infallible>(res.map(|body| ServedBody::new(body, lifecycle)))
+                    Ok::<_, Infallible>(res.map(|body| ServedBody::new(body, lifecycle, options)))
                 }
             });
             let _ = auto::Builder::new(TokioExecutor::new())
@@ -215,13 +221,13 @@ pub async fn serve_with(listener: TcpListener, router: Router, options: ServeOpt
 /// A request's lifecycle (Remix's `createRequestLifecycle`): aborts the request signal when
 /// dropped before the response finished, that is when the connection closed first.
 struct Lifecycle {
-    controller: AbortController,
+    controller: Arc<AbortController>,
     finished: bool,
 }
 
 impl Lifecycle {
     fn new() -> Lifecycle {
-        Lifecycle { controller: AbortController::new(), finished: false }
+        Lifecycle { controller: Arc::new(AbortController::new()), finished: false }
     }
 }
 
@@ -233,16 +239,192 @@ impl Drop for Lifecycle {
     }
 }
 
+/// How much of a request body the server reads ahead of the handler (Node's default
+/// `highWaterMark` for a request stream). Reading ahead lets the server notice a client that
+/// goes away mid-upload while the handler is not reading; past it the upload waits for the
+/// handler, so an unread body is not buffered whole.
+const REQUEST_BODY_HIGH_WATER_MARK: usize = 16 * 1024;
+
+/// A request body that aborts the request signal when the upload fails or the client goes
+/// away before it ended (Remix's `createRequestBodyStream`). A task reads the connection up
+/// to [`REQUEST_BODY_HIGH_WATER_MARK`] ahead of the handler. Reads fail with [`AbortError`]
+/// once the signal aborted, or once with the body's own error when it is not a disconnect.
+struct RequestBody {
+    queue: Arc<Mutex<BodyQueue>>,
+    controller: Arc<AbortController>,
+    remaining: Option<u64>,
+}
+
+#[derive(Default)]
+struct BodyQueue {
+    frames: VecDeque<http_body::Frame<rmx_fetch::Bytes>>,
+    queued: usize,
+    ended: bool,
+    error: Option<rmx_fetch::BoxError>,
+    reader: Option<Waker>,
+    pump: Option<Waker>,
+    reader_gone: bool,
+}
+
+impl BodyQueue {
+    fn wake_reader(&mut self) {
+        if let Some(waker) = self.reader.take() {
+            waker.wake();
+        }
+    }
+}
+
+impl RequestBody {
+    fn new<B>(body: B, controller: Arc<AbortController>) -> RequestBody
+    where
+        B: http_body::Body<Data = rmx_fetch::Bytes> + Send + Unpin + 'static,
+        B::Error: Into<rmx_fetch::BoxError>,
+    {
+        let hint = body.size_hint();
+        let remaining = hint.exact();
+        let queue = Arc::new(Mutex::new(BodyQueue::default()));
+        if body.is_end_stream() {
+            queue.lock().expect("request body lock").ended = true;
+        } else {
+            tokio::spawn(read_ahead(body, queue.clone(), controller.clone()));
+        }
+        RequestBody { queue, controller, remaining }
+    }
+}
+
+/// Read `body` into `queue` until it ends, fails or the reader is dropped, staying at most
+/// [`REQUEST_BODY_HIGH_WATER_MARK`] bytes ahead of the reader.
+async fn read_ahead<B>(mut body: B, queue: Arc<Mutex<BodyQueue>>, controller: Arc<AbortController>)
+where
+    B: http_body::Body<Data = rmx_fetch::Bytes> + Unpin,
+    B::Error: Into<rmx_fetch::BoxError>,
+{
+    loop {
+        let polled = poll_fn(|cx| {
+            {
+                let mut queue = queue.lock().expect("request body lock");
+                if queue.reader_gone {
+                    return Poll::Ready(None);
+                }
+                queue.pump = Some(cx.waker().clone());
+                if queue.queued >= REQUEST_BODY_HIGH_WATER_MARK {
+                    return Poll::Pending;
+                }
+            }
+            Pin::new(&mut body).poll_frame(cx).map(Some)
+        })
+        .await;
+        let Some(frame) = polled else { return };
+        let error = match frame {
+            Some(Ok(frame)) => {
+                let mut queue = queue.lock().expect("request body lock");
+                queue.queued += frame.data_ref().map_or(0, |data| data.len());
+                queue.frames.push_back(frame);
+                queue.wake_reader();
+                continue;
+            }
+            Some(Err(error)) => error,
+            None => {
+                let mut queue = queue.lock().expect("request body lock");
+                queue.ended = true;
+                queue.wake_reader();
+                return;
+            }
+        };
+        let error: rmx_fetch::BoxError = error.into();
+        let error = if error.downcast_ref::<hyper::Error>().is_some_and(is_disconnect) { AbortError.into() } else { error };
+        controller.abort();
+        let mut queue = queue.lock().expect("request body lock");
+        queue.error = Some(error);
+        queue.ended = true;
+        queue.wake_reader();
+        return;
+    }
+}
+
+/// Whether a request body error means the client went away (closed, reset or half-closed the
+/// connection before the body ended) rather than sent a malformed body.
+fn is_disconnect(error: &hyper::Error) -> bool {
+    if error.is_incomplete_message() || error.is_canceled() || error.is_closed() {
+        return true;
+    }
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+            use std::io::ErrorKind::*;
+            return matches!(io.kind(), UnexpectedEof | ConnectionReset | ConnectionAborted | BrokenPipe);
+        }
+        source = cause.source();
+    }
+    false
+}
+
+impl http_body::Body for RequestBody {
+    type Data = rmx_fetch::Bytes;
+    type Error = rmx_fetch::BoxError;
+
+    fn poll_frame(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let this = &mut *self;
+        let mut queue = this.queue.lock().expect("request body lock");
+        if let Some(error) = queue.error.take() {
+            return Poll::Ready(Some(Err(error)));
+        }
+        if this.controller.signal().aborted() {
+            return Poll::Ready(Some(Err(AbortError.into())));
+        }
+        if let Some(frame) = queue.frames.pop_front() {
+            let len = frame.data_ref().map_or(0, |data| data.len());
+            queue.queued -= len;
+            if let Some(waker) = queue.pump.take() {
+                waker.wake();
+            }
+            drop(queue);
+            this.remaining = this.remaining.map(|remaining| remaining.saturating_sub(len as u64));
+            return Poll::Ready(Some(Ok(frame)));
+        }
+        if queue.ended {
+            return Poll::Ready(None);
+        }
+        queue.reader = Some(cx.waker().clone());
+        Poll::Pending
+    }
+
+    fn is_end_stream(&self) -> bool {
+        let queue = self.queue.lock().expect("request body lock");
+        queue.ended && queue.frames.is_empty() && queue.error.is_none()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.remaining.map_or_else(http_body::SizeHint::default, http_body::SizeHint::with_exact)
+    }
+}
+
+impl Drop for RequestBody {
+    fn drop(&mut self) {
+        let mut queue = self.queue.lock().expect("request body lock");
+        queue.reader_gone = true;
+        if let Some(waker) = queue.pump.take() {
+            waker.wake();
+        }
+    }
+}
+
 /// A response body that holds its request's [`Lifecycle`] until the last frame is written.
-/// hyper drops it early when the client goes away, which aborts the request signal.
+/// hyper drops it early when the client goes away, which aborts the request signal. A body
+/// that fails after the response started closes the connection and is reported to
+/// [`ServeOptions::on_error`] on a blocking task, so a slow handler does not hold the
+/// connection open; aborts are not reported.
 struct ServedBody {
     body: Body,
     lifecycle: Option<Lifecycle>,
+    signal: rmx_fetch::AbortSignal,
+    options: Arc<ServeOptions>,
 }
 
 impl ServedBody {
-    fn new(body: Body, lifecycle: Lifecycle) -> ServedBody {
-        let mut served = ServedBody { body, lifecycle: Some(lifecycle) };
+    fn new(body: Body, lifecycle: Lifecycle, options: Arc<ServeOptions>) -> ServedBody {
+        let signal = lifecycle.controller.signal();
+        let mut served = ServedBody { body, lifecycle: Some(lifecycle), signal, options };
         served.finish_if_ended();
         served
     }
@@ -270,6 +452,10 @@ impl http_body::Body for ServedBody {
                 }
             }
             Poll::Ready(Some(Ok(_))) => this.finish_if_ended(),
+            Poll::Ready(Some(Err(error))) if !this.signal.aborted() && !error.is::<AbortError>() => {
+                let (options, error) = (this.options.clone(), ServeError::ResponseBody(error.to_string()));
+                tokio::task::spawn_blocking(move || options.error_response(&error));
+            }
             _ => {}
         }
         polled
@@ -289,8 +475,16 @@ async fn handle(router: &Router, options: &ServeOptions, req: Request, remote: S
         Ok(req) => req,
         Err(error) => return options.error_response(&error),
     };
+    let signal = req.signal();
     match CatchUnwind(Box::pin(router.fetch(req))).await {
         Ok(res) => res,
+        // A handler that fails because the client went away is not a server error, and no
+        // one is left to read the response (Remix's `isRequestAbortError`).
+        Err(_) if signal.aborted() => {
+            let mut res = Response::new(Body::empty());
+            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            res
+        }
         Err(payload) => options.error_response(&ServeError::Panic(panic_message(&*payload))),
     }
 }
