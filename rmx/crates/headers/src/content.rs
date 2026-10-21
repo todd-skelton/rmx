@@ -76,56 +76,51 @@ impl ContentDisposition {
         h
     }
 
-    /// The decoded `filename*` when it is UTF-8 (or Latin-1), else `filename`.
+    /// The decoded `filename*`, else `filename` (RFC 6266). Labels a `TextDecoder` knows
+    /// are decoded in that charset; for other labels the percent-decoded text is used as is,
+    /// where Remix also warns. Values from clients are untrusted: never use them as paths.
     pub fn preferred_filename(&self) -> Option<String> {
-        if let Some(decoded) = self.filename_ext.as_deref().and_then(decode_ext_value) {
-            return Some(decoded);
-        }
-        self.filename.clone()
+        let decoded = self.filename_ext.as_deref().filter(|v| !v.is_empty()).and_then(decode_ext_value);
+        decoded.filter(|d| !d.is_empty()).or_else(|| self.filename.clone())
     }
 }
 
-/// `charset'lang'percent-encoded` (RFC 8187).
+/// `charset'lang'percent-encoded` (RFC 8187), read like Remix's `decodeFilenameSplat`.
 fn decode_ext_value(value: &str) -> Option<String> {
     let (charset, rest) = value.split_once('\'')?;
     let (_, encoded) = rest.split_once('\'')?;
-    if charset.is_empty() || encoded.is_empty() || !charset.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+    let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'-';
+    if charset.is_empty() || encoded.is_empty() || !charset.bytes().all(word) {
         return None;
     }
-    let mut bytes = Vec::with_capacity(encoded.len());
-    let raw = encoded.as_bytes();
-    let mut i = 0;
-    while i < raw.len() {
-        let hex = |b: u8| (b as char).to_digit(16);
-        if raw[i] == b'%' && i + 2 < raw.len() {
-            if let (Some(h), Some(l)) = (hex(raw[i + 1]), hex(raw[i + 2])) {
-                bytes.push((h * 16 + l) as u8);
-                i += 3;
+    // Percent escapes become the code points 0 to 255; like `charCodeAt` into a
+    // `Uint8Array`, each UTF-16 unit of any other text keeps only its low byte.
+    let mut text = String::with_capacity(encoded.len());
+    let mut chars = encoded.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let mut ahead = chars.clone();
+            if let (Some(h), Some(l)) = (ahead.next().and_then(|d| d.to_digit(16)), ahead.next().and_then(|d| d.to_digit(16))) {
+                text.push(char::from((h * 16 + l) as u8));
+                chars = ahead;
                 continue;
             }
         }
-        bytes.push(raw[i]);
-        i += 1;
+        text.push(c);
     }
-    match charset.to_ascii_lowercase().as_str() {
-        "utf-8" | "utf8" => Some(String::from_utf8_lossy(&bytes).into_owned()),
-        "iso-8859-1" | "latin1" => Some(bytes.iter().map(|&b| b as char).collect()),
-        _ => None,
-    }
+    let bytes: Vec<u8> = text.encode_utf16().map(|unit| unit as u8).collect();
+    Some(crate::charset::decode(charset, &bytes).unwrap_or(text))
 }
 
 impl fmt::Display for ContentDisposition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Some(ty) = &self.disposition else { return Ok(()) };
+        let Some(ty) = self.disposition.as_deref().filter(|t| !t.is_empty()) else { return Ok(()) };
         f.write_str(ty)?;
-        if let Some(n) = &self.name {
-            write!(f, "; name={}", quote(n))?;
-        }
-        if let Some(n) = &self.filename {
-            write!(f, "; filename={}", quote(n))?;
-        }
-        if let Some(n) = &self.filename_ext {
-            write!(f, "; filename*={}", quote(n))?;
+        let params = [("name", &self.name), ("filename", &self.filename), ("filename*", &self.filename_ext)];
+        for (key, value) in params {
+            if let Some(v) = value.as_deref().filter(|v| !v.is_empty()) {
+                write!(f, "; {key}={}", quote(v))?;
+            }
         }
         Ok(())
     }
