@@ -44,6 +44,11 @@ async fn start() -> Server {
             rmx::entry::<CartItems>(),
             rmx::entry::<ReloadButton>(),
             rmx::entry::<KeyedIsland>(),
+            rmx::entry::<EntryWithSharedFrame>(),
+            rmx::entry::<OuterEntry>(),
+            rmx::entry::<MiddleEntry>(),
+            rmx::entry::<ClientOnlyEntry>(),
+            rmx::entry::<BlockingOuterEntry>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -1516,4 +1521,275 @@ async fn re_resolves_a_keyed_client_entry_frame_with_its_target_on_an_ancestor_r
     }
     assert_eq!(island_loads(), vec!["/ki-comments/b island".to_string()], "one client re-resolve, targeted at the island");
     assert_eq!(text("ki-content").as_deref(), Some("island b (client)"));
+}
+
+// frame.test.tsx: frames of a preserved client entry that share a src
+
+thread_local! {
+    /// Whether `EntryWithSharedFrame` renders its client-only frame; set by its first task.
+    static SHARED_CLIENT_FRAME: Cell<bool> = const { Cell::new(false) };
+}
+
+/// A client entry with a server-rendered frame and, after its first render, a client-only
+/// frame with the same src.
+struct EntryWithSharedFrame;
+
+impl Component for EntryWithSharedFrame {
+    type Props = EntryProps;
+    rmx::client_entry!("EntryWithSharedFrame");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        EntryWithSharedFrame
+    }
+    fn render(&self, p: &EntryProps, h: &Handle<Self>) -> Node {
+        h.queue_task(|_, h| {
+            if !SHARED_CLIENT_FRAME.with(|f| f.replace(true)) {
+                h.update();
+            }
+        });
+        let server_fallback = rsx! { <span id="sf-server">"Loading server frame..."</span> };
+        let client = SHARED_CLIENT_FRAME.with(Cell::get).then(|| {
+            let fallback = rsx! { <span id="sf-client">"Loading client frame..."</span> };
+            rsx! { <Frame src="/sf-shared" fallback={fallback}/> }
+        });
+        rsx! {
+            <section>
+                <p id="sf-label">{p.label.clone()}</p>
+                <Frame src="/sf-shared" fallback={server_fallback}/>
+                {client.unwrap_or(Node::Empty)}
+            </section>
+        }
+    }
+}
+
+fn shared_page(entry_id: &str, frame_id: &str, label: &str, frame_label: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "EntryWithSharedFrame".into(), format!(r#"{{"label":"{label}"}}"#)));
+    d.frames.push((frame_id.into(), "/sf-shared".into(), None, "resolved"));
+    format!(
+        r#"<!--rmx:h:{entry_id}--><section><p id="sf-label">{label}</p>{}</section><!--/rmx:h-->{}"#,
+        region(frame_id, &format!(r#"<span id="sf-server">{frame_label}</span>"#)),
+        d.to_script()
+    )
+}
+
+fn shared_frames() -> Vec<String> {
+    let found = document().query_selector_all("[data-shared-frame]").unwrap();
+    (0..found.length()).filter_map(|i| found.item(i)?.text_content()).collect()
+}
+
+#[wasm_bindgen_test]
+async fn reloads_all_frames_rendered_by_preserved_client_entries_when_they_share_a_src() {
+    let server = start().await;
+    SHARED_CLIENT_FRAME.with(|f| f.set(false));
+    server.route("/sf-parent", vec![Part::Html(shared_page("sfh1", "sff1", "Initial entry", "Initial server frame"))]);
+    server.route("/sf-shared", vec![Part::Html(r#"<span data-shared-frame="client">Client shared frame 1</span>"#.into())]);
+    let _m = mount("sf-parent", "/sf-parent", "sf-label").await;
+    until("the client-only frame", || shared_frames().len() == 1).await;
+    let shared_loads = || loads(&server, "/sf-shared");
+    assert_eq!(text("sf-server").as_deref(), Some("Initial server frame"));
+    assert_eq!(shared_frames(), ["Client shared frame 1"]);
+    assert_eq!(shared_loads(), 1);
+
+    server.route("/sf-parent", vec![Part::Html(shared_page("sfh2", "sff2", "Reloaded entry", "Reloaded server frame"))]);
+    server.route("/sf-shared", vec![Part::Html(r#"<span data-shared-frame="client">Client shared frame 2</span>"#.into())]);
+    let _ = frame("sf-parent").reload_async(ReloadOptions::default()).await;
+    until("both shared frames", || shared_frames().len() == 2).await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("sf-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!(shared_frames(), ["Client shared frame 2", "Client shared frame 2"], "both frames reloaded on the client");
+    assert_eq!(shared_loads(), 3, "one load for each frame with the shared src");
+}
+
+// frame.test.tsx: frames inside nested frames rendered by preserved client entries
+
+thread_local! {
+    /// Whether `ClientOnlyEntry` renders its frame; set by its first task.
+    static NF_CLIENT_ONLY: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The outermost entry: a label and the `nf-outer` frame.
+struct OuterEntry;
+
+impl Component for OuterEntry {
+    type Props = EntryProps;
+    rmx::client_entry!("OuterEntry");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        OuterEntry
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        let fallback = rsx! { <span id="nf-outer">"Loading outer frame..."</span> };
+        rsx! { <section><p id="nf-entry-label">{p.label.clone()}</p><Frame name="nf-outer" src="/nf-outer" fallback={fallback}/></section> }
+    }
+}
+
+/// Rendered by the outer frame: a label and the `nf-middle` frame.
+struct MiddleEntry;
+
+impl Component for MiddleEntry {
+    type Props = EntryProps;
+    rmx::client_entry!("MiddleEntry");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        MiddleEntry
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        let fallback = rsx! { <span id="nf-middle">"Loading middle frame..."</span> };
+        rsx! { <section><p id="nf-nested-label">{p.label.clone()}</p><Frame name="nf-middle" src="/nf-middle" fallback={fallback}/></section> }
+    }
+}
+
+/// Rendered by the middle frame: a label, then a client-only frame after its first task.
+struct ClientOnlyEntry;
+
+impl Component for ClientOnlyEntry {
+    type Props = EntryProps;
+    rmx::client_entry!("ClientOnlyEntry");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        ClientOnlyEntry
+    }
+    fn render(&self, p: &EntryProps, h: &Handle<Self>) -> Node {
+        h.queue_task(|_, h| {
+            if !NF_CLIENT_ONLY.with(|f| f.replace(true)) {
+                h.update();
+            }
+        });
+        let frame = NF_CLIENT_ONLY.with(Cell::get).then(|| {
+            let fallback = rsx! { <span id="nf-client-only">"Loading client-only frame..."</span> };
+            rsx! { <Frame name="nf-client-only" src="/nf-client-only" fallback={fallback}/> }
+        });
+        rsx! { <section><p id="nf-middle-label">{p.label.clone()}</p>{frame.unwrap_or(Node::Empty)}</section> }
+    }
+}
+
+/// Server markup for an entry (`(id, component, label)`), its frame region (`(id, src,
+/// name)`) holding `inner`, and the data for both. Without a frame, just the entry.
+fn nested_entry(d: &mut HydrationData, entry: (&str, &str, &str), frame: Option<(&str, &str, &str)>, inner: &str) -> String {
+    let (eid, component, label) = entry;
+    d.entries.push((eid.into(), component.into(), format!(r#"{{"label":"{label}"}}"#)));
+    let (label_id, content) = match (component, frame) {
+        ("OuterEntry", Some((fid, src, name))) => {
+            d.frames.push((fid.into(), src.into(), Some(name.into()), "resolved"));
+            ("nf-entry-label", region(fid, inner))
+        }
+        ("MiddleEntry", Some((fid, src, name))) => {
+            d.frames.push((fid.into(), src.into(), Some(name.into()), "resolved"));
+            ("nf-nested-label", region(fid, inner))
+        }
+        _ => ("nf-middle-label", String::new()),
+    };
+    format!(r#"<!--rmx:h:{eid}--><section><p id="{label_id}">{label}</p>{content}</section><!--/rmx:h-->"#)
+}
+
+/// The middle frame's content: `ClientOnlyEntry` with `label`.
+fn middle_content(prefix: &str, label: &str) -> String {
+    let mut d = HydrationData::default();
+    let html = nested_entry(&mut d, (&format!("{prefix}c"), "ClientOnlyEntry", label), None, "");
+    format!("{html}{}", d.to_script())
+}
+
+/// The outer frame's content: `MiddleEntry` with `nested`, its frame holding `ClientOnlyEntry`.
+fn outer_content(prefix: &str, nested: &str, middle: &str) -> String {
+    let mut d = HydrationData::default();
+    let inner = nested_entry(&mut d, (&format!("{prefix}c"), "ClientOnlyEntry", middle), None, "");
+    let html = nested_entry(&mut d, (&format!("{prefix}m"), "MiddleEntry", nested), Some((&format!("{prefix}mf"), "/nf-middle", "nf-middle")), &inner);
+    format!("{html}{}", d.to_script())
+}
+
+fn nested_page(prefix: &str, label: &str, nested: &str, middle: &str) -> String {
+    let mut d = HydrationData::default();
+    let inner = nested_entry(&mut d, (&format!("{prefix}c"), "ClientOnlyEntry", middle), None, "");
+    let mid = nested_entry(&mut d, (&format!("{prefix}m"), "MiddleEntry", nested), Some((&format!("{prefix}mf"), "/nf-middle", "nf-middle")), &inner);
+    let html = nested_entry(&mut d, (&format!("{prefix}o"), "OuterEntry", label), Some((&format!("{prefix}of"), "/nf-outer", "nf-outer")), &mid);
+    format!("<main>{html}</main>{}", d.to_script())
+}
+
+#[wasm_bindgen_test]
+async fn reloads_frames_inside_nested_frames_rendered_by_preserved_client_entries() {
+    let server = start().await;
+    NF_CLIENT_ONLY.with(|f| f.set(false));
+    let base = (loads(&server, "/nf-outer"), loads(&server, "/nf-middle"), loads(&server, "/nf-client-only"));
+    server.route("/nf-parent", vec![Part::Html(nested_page("nf1", "Initial entry", "Initial nested entry", "Initial middle entry"))]);
+    server.route("/nf-client-only", vec![Part::Html(r#"<span id="nf-client-only">Client-only inner frame 1</span>"#.into())]);
+    let _m = mount("nf-parent", "/nf-parent", "nf-middle-label").await;
+    until("the client-only frame", || text("nf-client-only").as_deref() == Some("Client-only inner frame 1")).await;
+    let counts = || (loads(&server, "/nf-outer") - base.0, loads(&server, "/nf-middle") - base.1, loads(&server, "/nf-client-only") - base.2);
+    assert_eq!(text("nf-entry-label").as_deref(), Some("Initial entry"));
+    assert_eq!(text("nf-nested-label").as_deref(), Some("Initial nested entry"));
+    assert_eq!(text("nf-middle-label").as_deref(), Some("Initial middle entry"));
+    assert_eq!(counts(), (0, 0, 1));
+
+    server.route("/nf-parent", vec![Part::Html(nested_page("nf2", "Reloaded entry", "Reloaded nested entry", "Reloaded middle entry"))]);
+    server.route("/nf-outer", vec![Part::Html(outer_content("nf3", "Reloaded nested entry from browser", "Reloaded middle entry from browser"))]);
+    server.route("/nf-middle", vec![Part::Html(middle_content("nf4", "Reloaded middle entry from browser"))]);
+    server.route("/nf-client-only", vec![Part::Html(r#"<span id="nf-client-only">Client-only inner frame 2</span>"#.into())]);
+    let _ = frame("nf-parent").reload_async(ReloadOptions::default()).await;
+    until("the client-only frame reload", || text("nf-client-only").as_deref() == Some("Client-only inner frame 2")).await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(text("nf-entry-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!(text("nf-nested-label").as_deref(), Some("Reloaded nested entry from browser"));
+    assert_eq!(text("nf-middle-label").as_deref(), Some("Reloaded middle entry from browser"));
+    assert_eq!(counts(), (1, 1, 2), "each preserved entry's frame reloads once on the client");
+}
+
+// frame.test.tsx: nested frames inside blocking frames rendered by preserved client entries
+
+/// An entry rendering the blocking (no fallback) frame `nf-blocking`.
+struct BlockingOuterEntry;
+
+impl Component for BlockingOuterEntry {
+    type Props = EntryProps;
+    rmx::client_entry!("BlockingOuterEntry");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        BlockingOuterEntry
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        rsx! { <section><p id="nf-entry-label">{p.label.clone()}</p><Frame name="nf-blocking" src="/nf-blocking"/></section> }
+    }
+}
+
+fn blocking_page(prefix: &str, label: &str, blocking: &str) -> String {
+    let mut d = HydrationData::default();
+    let inner = nested_entry(&mut d, (&format!("{prefix}c"), "ClientOnlyEntry", blocking), None, "");
+    let (eid, fid) = (format!("{prefix}o"), format!("{prefix}of"));
+    d.entries.push((eid.clone(), "BlockingOuterEntry".into(), format!(r#"{{"label":"{label}"}}"#)));
+    d.frames.push((fid.clone(), "/nf-blocking".into(), Some("nf-blocking".into()), "resolved"));
+    format!(
+        r#"<main><!--rmx:h:{eid}--><section><p id="nf-entry-label">{label}</p>{}</section><!--/rmx:h--></main>{}"#,
+        region(&fid, &inner),
+        d.to_script()
+    )
+}
+
+#[wasm_bindgen_test]
+async fn reloads_nested_frames_inside_blocking_frames_rendered_by_preserved_client_entries() {
+    let server = start().await;
+    NF_CLIENT_ONLY.with(|f| f.set(false));
+    let base = (loads(&server, "/nf-blocking"), loads(&server, "/nf-client-only"));
+    server.route("/bn-parent", vec![Part::Html(blocking_page("bn1", "Initial entry", "Initial blocking entry"))]);
+    server.route("/nf-client-only", vec![Part::Html(r#"<span id="nf-client-only">Blocking client-only frame 1</span>"#.into())]);
+    let _m = mount("bn-parent", "/bn-parent", "nf-middle-label").await;
+    until("the client-only frame", || text("nf-client-only").as_deref() == Some("Blocking client-only frame 1")).await;
+    let counts = || (loads(&server, "/nf-blocking") - base.0, loads(&server, "/nf-client-only") - base.1);
+    assert_eq!(text("nf-entry-label").as_deref(), Some("Initial entry"));
+    assert_eq!(text("nf-middle-label").as_deref(), Some("Initial blocking entry"));
+    assert_eq!(counts(), (0, 1));
+
+    server.route("/bn-parent", vec![Part::Html(blocking_page("bn2", "Reloaded entry", "Reloaded blocking entry"))]);
+    server.route("/nf-blocking", vec![Part::Html(middle_content("bn3", "Reloaded blocking entry from browser"))]);
+    server.route("/nf-client-only", vec![Part::Html(r#"<span id="nf-client-only">Blocking client-only frame 2</span>"#.into())]);
+    let _ = frame("bn-parent").reload_async(ReloadOptions::default()).await;
+    assert_eq!(text("nf-entry-label").as_deref(), Some("Reloaded entry"));
+    assert_eq!(
+        text("nf-middle-label").as_deref(),
+        Some("Reloaded blocking entry from browser"),
+        "the reload waits for the blocking frame"
+    );
+    until("the client-only frame reload", || text("nf-client-only").as_deref() == Some("Blocking client-only frame 2")).await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(counts(), (1, 2));
 }

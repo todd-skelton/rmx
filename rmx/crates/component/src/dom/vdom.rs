@@ -1645,6 +1645,9 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
                 return create_at(Node::Frame(f), parent, &cursor.clone().or_else(|| end.cloned()), scope);
             };
             *cursor = state.end().next_sibling();
+            // The region's own client entries and frames hydrate with it, as when the
+            // region is in the page outside any entry.
+            frames::hydrate_region(&state);
             Mounted::Frame(Box::new(MFrame { src: f.src.clone(), name: f.name.clone(), state }))
         }
         other => create_at(other, parent, &cursor.clone().or_else(|| end.cloned()), scope),
