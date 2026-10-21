@@ -359,6 +359,14 @@ Covered since phase 0b:
    end early and look complete), with tests for that, source cancellation on drop and the
    206 skip. Remix's "Compressor interactions" cases test Node stream backpressure and
    events and have no counterpart.
+   `remix/headers` tests are ported for accept, accept-encoding, accept-language, range,
+   content-range, vary, if-match, if-none-match, if-range, cache-control and content-type
+   (`crates/headers/tests/`). Porting changed behavior: `AcceptEncoding::accepts` always
+   passes `identity` like Remix (`accepts_encoding` is gone; compression negotiates on
+   `weight("identity")`), `Range::can_satisfy` rejects hand-built ranges without bounds or
+   with start > end (`normalize` used to panic on them), and `Content-Range` with an empty
+   unit and `Content-Type` with empty media type, charset or boundary leave those parts out.
+   Header lists collect from and iterate over their values.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
