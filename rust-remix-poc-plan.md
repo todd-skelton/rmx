@@ -315,13 +315,20 @@ Covered since phase 0b:
    client credentials are set. `rmx-serve` has `node-fetch-server`'s listener options (host,
    protocol, trusted proxy headers, error handler, client address) and answers handler
    panics with 500; the logger has Remix's format tokens and colors.
-5. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
+5. Validation: `rmx-data-schema` (`rmx::data_schema`) ports `remix/data-schema`: the
+   schema combinators, `pipe`/`refine`/`transform`, checks, coercion, `abortEarly`, error
+   maps with locale, and the form-data reader, checked by ports of its test files (31 unit
+   tests). Objects build Rust values through a closure instead of returning plain
+   objects; JavaScript-only schemas (bigint, symbol, Map, Set, Date) are left out. The
+   timeboxer schedule API and signup, the bookstore auth forms and the sse message limit
+   now validate with it, as their Remix originals do.
+6. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
    the component runtime, `ui`, `router`, `fetch`, `spa` and the platform-neutral crates.
    All examples depend on `rmx` alone.
 
-6. Component runtime behavior is checked against Remix's own test suites, ported test by
+7. Component runtime behavior is checked against Remix's own test suites, ported test by
    test: 492 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
    headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
    SSR options and server/client parity), the style manager, diff-dom, document state
