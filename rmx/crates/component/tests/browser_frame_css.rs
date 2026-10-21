@@ -9,7 +9,7 @@ extern crate rmx_component as rmx;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, css, render_to_string, rsx, Frame, FrameContent, FrameRequest, FrameResponse, Frames, ReloadOptions, Root, RunOptions};
+use rmx::{create_root, css, on, render_to_string, rsx, Component, Frame, Handle, Node, FrameContent, FrameRequest, FrameResponse, Frames, ReloadOptions, Root, RunOptions};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -30,6 +30,7 @@ fn content(path: &str) -> String {
         "/a2" => rsx! { <div id="a-plain">"A2"</div> },
         "/b" => rsx! { <div id="b-shared" mix={css(SHARED)}>"B"</div> },
         "/stable" => rsx! { <div id="stable" mix={css(STABLE)}>"Stable"</div> },
+        "/style-frame" => rsx! { <section id="style-frame" class="frame-loaded">"Frame loaded"</section> },
         other => panic!("unexpected frame source {other}"),
     };
     render_to_string(&node)
@@ -126,4 +127,53 @@ async fn does_not_accumulate_rules_when_a_frame_reloads_with_unchanged_styles() 
 
     assert_eq!(count_rules(), after_first);
     assert_eq!(color("stable"), "rgb(44, 55, 66)");
+}
+
+// frame.test.tsx: removing a client-created frame keeps the managed stylesheet
+
+const SHELL: &str = "color: rgb(0, 187, 255)";
+
+/// A shell with a `css()` rule and a frame (with a styled fallback) it can remove.
+struct Shell {
+    mounted: bool,
+}
+
+impl Component for Shell {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        Shell { mounted: true }
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        let toggle = h.on(|this, h| {
+            this.mounted = !this.mounted;
+            h.update();
+        });
+        let frame = self.mounted.then(|| {
+            let fallback = rsx! { <div mix={css("color: rgb(255, 0, 187)")}>"Loading style frame..."</div> };
+            rsx! { <Frame src="/style-frame" fallback={fallback}/> }
+        });
+        rsx! {
+            <main id="shell" mix={css(SHELL)}>
+                <button id="toggle-frame" type="button" mix={on("click", toggle)}>"Toggle"</button>
+                {frame.unwrap_or(Node::Empty)}
+            </main>
+        }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn does_not_dispose_managed_stylesheets_when_removing_a_client_created_frame() {
+    let m = mount(rsx! { <Shell/> }, &["style-frame"]).await;
+    let sheets = || js_sys::Function::new_no_args("return document.adoptedStyleSheets.length").call0(&JsValue::NULL).unwrap().as_f64().unwrap();
+    let before = sheets();
+    assert_eq!(color("shell"), "rgb(0, 187, 255)");
+
+    let button: web_sys::HtmlElement = document().get_element_by_id("toggle-frame").unwrap().unchecked_into();
+    button.click();
+    m.root.flush();
+    tick().await;
+    assert!(document().get_element_by_id("style-frame").is_none(), "the frame is removed");
+    let after = sheets();
+    assert!(after > 0.0 && after >= before, "{before} -> {after}");
+    assert_eq!(color("shell"), "rgb(0, 187, 255)", "the shell's rule is still applied");
 }
