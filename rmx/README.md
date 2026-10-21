@@ -148,14 +148,20 @@ crates:
    `FrameRequest::enc_type`; `ReloadOptions::enc_type` does the same for reloads.
    A redirected frame load renders the final content but keeps the frame's requested
    `src` (only a top frame navigation moves to the redirect target), as in Remix.
+   Navigations the runtime cannot route (an unknown `data-rmx-target`, a cross-origin,
+   malformed, `data:` or `javascript:` source, resolved against the document base URL)
+   go to the browser; a back/forward traversal to such an entry reloads the document, since
+   otherwise only the URL would change. `navigation.reload({ info: "remix-document-reload" })`
+   is never intercepted, and a hash change that interrupts a pending frame navigation
+   still lets the destination load.
    Navigations and frame reloads diff the server HTML into the live DOM: keyed elements
    match by `data-rmx-key`, live state wins (typed values, checked, selected, open,
    popovers), `data-rmx-preserve-dom` / `data-rmx-preserve-attrs` opt out, and nodes
    already in order stay put, so a custom element is not reconnected when siblings move.
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
-   document-state, form-navigation and frame request/resolver test suites
-   (`crates/component/tests/browser_*.rs`, 415 tests).
+   document-state, form-navigation, navigation and frame request/resolver test suites
+   (`crates/component/tests/browser_*.rs`, 452 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

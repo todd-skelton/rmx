@@ -129,10 +129,45 @@ pub(crate) fn stop() {
     }
 }
 
+/// Whether `url`, resolved against the document base URL, is on this origin.
 fn same_origin(url: &str) -> bool {
     let location = window().location();
-    let base = location.href().unwrap_or_default();
+    let base = super::document().base_uri().ok().flatten().or_else(|| location.href().ok()).unwrap_or_default();
     web_sys::Url::new_with_base(url, &base).is_ok_and(|u| Some(u.origin()) == location.origin().ok())
+}
+
+/// `navigate` events with this `info` load a fresh document (Remix `reloadCurrentDocument`).
+const DOCUMENT_RELOAD_INFO: &str = "remix-document-reload";
+
+/// Reload the current document without the runtime intercepting it.
+fn reload_document() {
+    if let Some(nav) = navigation().filter(|n| get(n, "reload").is_function()) {
+        let _ = call(&nav, "reload", &[&object(&[("info", JsValue::from_str(DOCUMENT_RELOAD_INFO))])]);
+    } else {
+        let _ = window().location().reload();
+    }
+}
+
+/// A navigation the runtime cannot route to a frame. Pushes and replaces are left to the
+/// browser; a traversal between entries the runtime created would only change the URL, so
+/// it reloads the destination document instead.
+fn fallback_to_document(event: &JsValue, nav_type: &str) {
+    if nav_type != "traverse" {
+        return;
+    }
+    let signal = get(event, "signal");
+    let handler = Closure::once_into_js(move || {
+        if get(&signal, "aborted").as_bool() != Some(true) {
+            reload_document();
+        }
+    });
+    intercept(event, handler, false);
+}
+
+thread_local! {
+    /// A frame load for a navigation has started and not finished. A hash change that
+    /// interrupts it is routed like any navigation, so the destination still loads.
+    static NEEDS_FRAME_RELOAD: Cell<bool> = const { Cell::new(false) };
 }
 
 /// What a navigation should do, read from its source element or history state.
@@ -148,6 +183,9 @@ struct Plan {
 
 fn on_navigate(event: JsValue) {
     let info = get(&event, "info");
+    if info.as_string().as_deref() == Some(DOCUMENT_RELOAD_INFO) {
+        return;
+    }
     if get(&info, "type").as_string().as_deref() == Some("rmx-redirect") {
         // The content for this URL is already in the page; just commit the URL.
         let reset_scroll = get(&info, "resetScroll").as_bool().unwrap_or(true);
@@ -166,7 +204,7 @@ fn on_navigate(event: JsValue) {
     let can_intercept = get(&event, "canIntercept").as_bool().unwrap_or(false);
     let hash_change = get(&event, "hashChange").as_bool().unwrap_or(false);
     let download = get(&event, "downloadRequest");
-    if !can_intercept || hash_change || !(download.is_null() || download.is_undefined()) {
+    if !can_intercept || (hash_change && !NEEDS_FRAME_RELOAD.with(Cell::get)) || !(download.is_null() || download.is_undefined()) {
         return;
     }
     let destination = get(&event, "destination");
@@ -177,14 +215,14 @@ fn on_navigate(event: JsValue) {
     let nav_type = get(&event, "navigationType").as_string().unwrap_or_default();
     let Some(plan) = plan(&event, &destination, &dest, &nav_type) else { return };
     if !same_origin(&plan.src) {
-        return;
+        return fallback_to_document(&event, &nav_type);
     }
 
     let top = frames::top();
     let frame = match &plan.target {
         Some(name) => match frames::by_name(name) {
             Some(f) => f,
-            None => return, // unknown frame: let the browser load the document
+            None => return fallback_to_document(&event, &nav_type),
         },
         None => top.clone(),
     };
@@ -208,6 +246,8 @@ fn on_navigate(event: JsValue) {
     let (reset_scroll, reset_focus) = if traverse { (true, true) } else { (plan.reset_scroll, plan.reset_focus) };
     let styles = ScrollStyles::install(&event, &nav_type, &dest, reset_scroll);
     let handler_styles = styles.clone();
+    NEEDS_FRAME_RELOAD.with(|n| n.set(true));
+    let event_signal = get(&event, "signal");
     let handler = Closure::once_into_js(move || -> JsValue {
         if let Some(styles) = handler_styles {
             styles.bind(&nav);
@@ -224,7 +264,11 @@ fn on_navigate(event: JsValue) {
                 let s = pending.get();
                 Submission { method: Some(s.method.to_ascii_uppercase()), form_data: s.form_data, enc_type: Some(s.enc_type) }
             });
-            match frame.load(submission.unwrap_or_default()).await {
+            let result = frame.load(submission.unwrap_or_default()).await;
+            if result.is_ok() && get(&event_signal, "aborted").as_bool() != Some(true) {
+                NEEDS_FRAME_RELOAD.with(|n| n.set(false));
+            }
+            match result {
                 Ok(Some(redirected)) if Rc::ptr_eq(&frame, &top) => {
                     top.set_src(&redirected);
                     let opts = object(&[

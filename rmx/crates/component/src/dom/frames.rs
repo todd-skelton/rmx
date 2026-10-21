@@ -104,6 +104,11 @@ impl Submission {
     }
 }
 
+/// The document base URL that relative frame sources resolve against.
+fn base_url() -> String {
+    document().base_uri().ok().flatten().or_else(|| window().location().href().ok()).unwrap_or_default()
+}
+
 /// Line breaks as CRLF, as browsers encode form entries.
 fn crlf(value: &str) -> String {
     value.replace("\r\n", "\n").replace('\r', "\n").replace('\n', "\r\n")
@@ -202,7 +207,7 @@ impl FrameState {
                 }
                 submission.form_data = Some(form_data);
                 submission.enc_type = options.enc_type.clone();
-            } else if let Ok(url) = web_sys::Url::new_with_base(&self.src(), &window().location().href().unwrap_or_default()) {
+            } else if let Ok(url) = web_sys::Url::new_with_base(&self.src(), &base_url()) {
                 url.set_search(&url_encoded(fields).to_string().as_string().unwrap_or_default());
                 self.set_src(&url.href());
             }
@@ -371,7 +376,7 @@ impl FrameState {
         submission: Submission,
         signal: &web_sys::AbortSignal,
     ) -> Result<Option<String>, JsValue> {
-        let base = window().location().href().unwrap_or_default();
+        let base = base_url();
         let url = web_sys::Url::new_with_base(&self.src(), &base).map(|u| u.href()).unwrap_or_else(|_| self.src());
         let request = FrameRequest {
             url,
