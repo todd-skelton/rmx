@@ -340,6 +340,11 @@ Covered since phase 0b:
    `formMethod` option. Route helper options that change a map's shape (`only`, `exclude`,
    `names`) become a struct you declare with `#[derive(RouteMap)]` (the bookstore's
    `ReadOnly` and `Users`).
+   `remix/response`'s `redirect.test.ts` and the init and stream cases of `html.test.ts` are
+   ported in `crates/fetch/src/response.rs`: one `ResponseInit` (status, headers) is shared by
+   `redirect_with`, `html_with`, `ctx.render_with` and the SPA `render_with`, and a `Location`
+   or `Content-Type` in an init replaces the constructor's. `createMixin(setup, { ssr })` is
+   `HostMixin` with `mixin_with(args, MixinOptions { ssr })`.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
