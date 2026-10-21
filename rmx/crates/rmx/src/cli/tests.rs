@@ -361,3 +361,49 @@ fn dev_sees_source_changes_but_not_its_own_client_output() {
     std::fs::write(app.join("src/new_module.rs"), "").unwrap();
     assert_ne!(plan.snapshot(), before);
 }
+
+// Ports of completion.test.ts and commands/completion.test.ts.
+
+fn complete(line: &[&str]) -> String {
+    // The word being completed is the last one ("" after a trailing space).
+    let mut list = vec!["completion", "--", ""];
+    let index = (line.len() - 1).to_string();
+    list[2] = &index;
+    list.extend(line);
+    match parse(&args(&list)).unwrap() {
+        Invocation::Print(out) => out,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn completion_prints_the_script_for_bash_and_zsh() {
+    let Invocation::Print(bash) = parse(&args(&["completion", "bash"])).unwrap() else { panic!() };
+    let Invocation::Print(zsh) = parse(&args(&["completion", "zsh"])).unwrap() else { panic!() };
+    assert_eq!(bash, zsh);
+    assert!(bash.starts_with("###-begin-rmx-completion-###\n"));
+    assert!(bash.contains("complete -o default -F _rmx_completion rmx") && bash.contains("compdef _rmx_completion rmx"));
+    assert!(bash.contains(r#"output=$(rmx completion -- "$cword" "${words[@]}" 2>/dev/null)"#), "{bash}");
+    assert_eq!(parse(&args(&["completion", "fish"])).unwrap_err().message, "Unknown completion shell: fish");
+    assert_eq!(parse(&args(&["completion"])), Ok(Invocation::Print(COMPLETION_HELP.into())));
+    assert!(HELP.contains("completion        Print shell completion scripts for rmx"));
+}
+
+#[test]
+fn completion_offers_commands_subcommands_flags_and_files() {
+    assert_eq!(complete(&["rmx", ""]), "mode:values\nassets\ncompletion\ndev\ndoctor\nhelp\nnew\nroutes\ntest\nversion\n");
+    assert_eq!(complete(&["rmx", "d"]), "mode:values\ndev\ndoctor\n");
+    assert_eq!(complete(&["rmx", "--v"]), "mode:values\n--version\n");
+    assert_eq!(complete(&["rmx", "help", "ro"]), "mode:values\nroutes\n");
+    assert_eq!(complete(&["rmx", "completion", ""]), "mode:values\nbash\nzsh\n");
+    assert_eq!(complete(&["rmx", "assets", ""]), "mode:values\ninspect\n");
+    assert_eq!(complete(&["rmx", "assets", "inspect", "app/"]), "mode:files\n");
+    assert_eq!(complete(&["rmx", "new", ""]), "mode:files\n");
+    assert_eq!(complete(&["rmx", "new", "my-app", "--"]), "mode:values\n--app-name\n--force\n--help\n");
+    assert_eq!(complete(&["rmx", "new", "my-app", "--app-name", ""]), "mode:none\n");
+    assert_eq!(complete(&["rmx", "new", "--app-name", "X", ""]), "mode:files\n", "the name is not the target");
+    assert_eq!(complete(&["rmx", "doctor", "--json", "--"]), "mode:values\n--strict\n--no-strict\n--help\n");
+    assert_eq!(complete(&["rmx", "routes", "--t"]), "mode:values\n--table\n");
+    assert_eq!(complete(&["rmx", "test", ""]), "mode:values\n");
+    assert_eq!(complete(&["rmx", "routes", "--help", ""]), "mode:values\n");
+}

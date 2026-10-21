@@ -272,8 +272,8 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
    helpers such as `select::select_change`, rather than `Event` subclasses.
 5. No HMR or `remix/test` runner: `rmx dev` rebuilds and restarts the app on changes and
    `rmx::middleware::live_reload` reloads open pages, but state is not kept across the
-   reload. The `rmx` CLI covers `new`, `dev`, `doctor`, `routes`, `assets`, `test`,
-   `version` and `help` but not `completion` or `db` (`doctor` checks the
+   reload. The `rmx` CLI covers `new`, `dev`, `doctor`, `completion`, `routes`, `assets`,
+   `test`, `version` and `help` but not `db` (`doctor` checks the
    Rust toolchain, the route map and the built client instead of package.json and
    controller files): native tests use `cargo test`, component tests
    use `wasm-bindgen-test` in Chromium, and e2e checks use Playwright scripts.

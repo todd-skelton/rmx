@@ -1,4 +1,4 @@
-//! The `rmx` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `routes`, `assets`, `test`,
+//! The `rmx` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `completion`, `routes`, `assets`, `test`,
 //! `version` and `help`. Install it with `cargo install --path crates/rmx`.
 //!
 //! `new` writes the starter app (`examples/template`, Remix's `template`) as a standalone
@@ -10,6 +10,7 @@
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+pub mod completion;
 pub mod dev;
 pub mod doctor;
 
@@ -107,6 +108,7 @@ Usage:
 
 Commands:
   assets [command]  List or inspect browser-reachable assets
+  completion        Print shell completion scripts for rmx
   dev [-- args]     Build and run the app, rebuilding and reloading on changes
   doctor            Check project health for the current project
   help [command]    Show help for rmx commands
@@ -121,6 +123,7 @@ Options:
 
 Examples:
   rmx assets
+  rmx completion bash
   rmx dev
   rmx doctor
   rmx help
@@ -199,6 +202,17 @@ Examples:
   rmx dev -- --port 4000
 ";
 
+const COMPLETION_HELP: &str = "\
+Usage:
+  rmx completion <bash|zsh>
+
+Print a shell completion script for rmx.
+
+Examples:
+  rmx completion bash >> ~/.bashrc
+  rmx completion zsh >> ~/.zshrc
+";
+
 const TEST_HELP: &str = "\
 Usage:
   rmx test [filter]
@@ -217,6 +231,7 @@ pub fn help_for(command: Option<&str>) -> Result<&'static str, CliError> {
         Some("test") => TEST_HELP,
         Some("doctor") => DOCTOR_HELP,
         Some("dev") => DEV_HELP,
+        Some("completion") => COMPLETION_HELP,
         Some("help") => HELP,
         Some(other) => return Err(CliError::unknown_command(other)),
     })
@@ -262,6 +277,25 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             argv.extend(args.iter().map(|a| a.to_string()));
             Ok(Invocation::Exec(argv))
         }
+        "completion" => match args.as_slice() {
+            // The scripts' query: `completion -- <index> <words...>`.
+            ["--", index, words @ ..] => {
+                let index = index.parse().unwrap_or(usize::MAX);
+                let words: Vec<String> = words.iter().map(|w| w.to_string()).collect();
+                Ok(Invocation::Print(completion::complete(&words, index).render()))
+            }
+            [] => Ok(Invocation::Print(COMPLETION_HELP.into())),
+            _ if wants_help => Ok(Invocation::Print(COMPLETION_HELP.into())),
+            [shell] if completion::SHELLS.contains(shell) => Ok(Invocation::Print(completion::script().into())),
+            [shell] if shell.starts_with('-') => Err(CliError::unknown_argument(shell)),
+            [shell] => Err(CliError::usage(
+                "RMX_UNKNOWN_COMPLETION_SHELL",
+                "Unknown completion shell",
+                "Use `rmx completion bash` or `rmx completion zsh`.",
+                format!("Unknown completion shell: {shell}"),
+            )),
+            [_, extra, ..] => Err(CliError::unexpected_extra_argument(extra)),
+        },
         "dev" => {
             let (before, after) = match args.iter().position(|a| *a == "--") {
                 Some(i) => (&args[..i], &args[i + 1..]),
