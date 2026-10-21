@@ -1,6 +1,7 @@
 // Browser checks for the starter app. Start the server first (`cargo run -p template-demo`),
 // then: node examples/template/e2e.mjs
-// Env: BASE (http://127.0.0.1:44113), PLAYWRIGHT_NODE_MODULES, CHROMIUM_PATH.
+// Env: BASE (http://127.0.0.1:44113), TITLE (rmx App; an app made by `rmx new` uses its
+// name), PLAYWRIGHT_NODE_MODULES, CHROMIUM_PATH.
 import { createRequire } from 'node:module'
 
 const NODE_MODULES =
@@ -8,6 +9,7 @@ const NODE_MODULES =
   'C:/Users/ToddS/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/'
 const { chromium } = createRequire(NODE_MODULES)('playwright')
 const BASE = process.env.BASE ?? 'http://127.0.0.1:44113'
+const TITLE = process.env.TITLE ?? 'rmx App'
 const FIRST_PROMPT = 'I want to build a simple headless Shopify store, what does Remix have available to help scaffold this?'
 
 const browser = await chromium.launch({
@@ -40,7 +42,7 @@ const firstButton = () =>
   })
 
 const html = await (await fetch(BASE + '/')).text()
-check('server renders the document with the client entry script', html.startsWith('<!DOCTYPE html>') && html.includes('<title>rmx App</title>') && html.includes('/assets/app/actions/public/entry.js'))
+check('server renders the document with the client entry script', html.startsWith('<!DOCTYPE html>') && html.includes(`<title>${TITLE}</title>`) && html.includes('/assets/app/actions/public/entry.js'))
 check('server renders four prompt buttons', (html.match(/<button type="button"/g) ?? []).length === 4)
 check('favicon is served from public/', (await fetch(BASE + '/favicon.svg')).headers.get('content-type') === 'image/svg+xml')
 

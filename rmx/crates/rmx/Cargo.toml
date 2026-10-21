@@ -5,6 +5,12 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+# `cargo install --path crates/rmx` installs the `rmx` command (`rmx::cli`).
+[[bin]]
+name = "rmx"
+path = "src/bin/rmx.rs"
+doc = false
+
 [features]
 default = ["ui"]
 # The rmx-ui component library (accordion, menu, popover, ...).

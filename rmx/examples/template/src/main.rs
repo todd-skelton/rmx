@@ -1,5 +1,9 @@
-//! Server for the starter app: `cargo run -p template-demo` (after
-//! `./build-client.ps1 -Crate template-demo -Out examples/template/app/actions/public/pkg`).
+//! Server for the starter app: `cargo run -p template-demo`, after building the client into
+//! `app/actions/public/pkg` (see the README).
+// rmx-template:remove-start
+// In this repository the client builds with
+// `./build-client.ps1 -Crate template-demo -Out examples/template/app/actions/public/pkg`.
+// rmx-template:remove-end
 //! List its routes with `cargo run -p template-demo -- routes` and its browser assets with
 //! `cargo run -p template-demo -- assets` (or `assets inspect <url-or-file>`).
 //!

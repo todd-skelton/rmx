@@ -29,6 +29,7 @@
 //! | `remix/html-template` | `rmx::html_template` | server |
 //! | `remix/tar-parser` | `rmx::tar_parser` | server |
 //! | Web Crypto helpers | `rmx::crypto` | server |
+//! | `remix/cli` (`remix new`, `routes`, `assets`, `test`, `version`) | `rmx::cli`, the `rmx` binary | native |
 //!
 //! Server modules exist when compiling for a native target; a browser (wasm32) build of the
 //! same crate sees only the browser column, so one dependency serves both halves of an app.
@@ -61,6 +62,9 @@ pub use rmx_spa as spa;
 #[cfg(feature = "ui")]
 pub use rmx_ui as ui;
 pub use rmx_url as url;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod cli;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use {

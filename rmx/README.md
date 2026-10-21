@@ -220,8 +220,11 @@ Every Remix 3 demo has a port under `examples/`, each with a Playwright e2e scri
 (`examples/<name>/e2e.mjs`): assets, bookstore, frame-navigation, frames, i18n,
 lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `examples/template` ports the
 `remix new` starter app (`reference/remix/template`): the home page, the copy-to-clipboard
-`PromptButton` client entry, the asset server and the controller test. Every demo binary lists
-its route map with `-- routes`. `examples/bench` is the benchmark app used in
+`PromptButton` client entry, the asset server and the controller test; `rmx new <dir>` writes
+it out as a standalone crate (`cargo install --path crates/rmx` installs the `rmx` command;
+the generated app depends on this checkout's `rmx` by path, or on `RMX_VERSION`). Every demo
+binary lists its route map with `-- routes`, and `rmx routes` / `rmx assets` run those
+commands for the app in the current directory. `examples/bench` is the benchmark app used in
 `../bench/README.md`.
 
 ## Build and Run
@@ -267,8 +270,8 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
 4. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.
-5. No HMR, standalone CLI, or `remix/test` runner (the `routes` and `assets` commands run
-   from each app binary instead): native tests use `cargo test`, component tests
+5. No HMR or `remix/test` runner, and the `rmx` CLI covers `new`, `routes`, `assets`,
+   `test`, `version` and `help` but not `doctor`, `completion` or `db`: native tests use `cargo test`, component tests
    use `wasm-bindgen-test` in Chromium, and e2e checks use Playwright scripts.
 6. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
 7. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`
