@@ -2111,3 +2111,123 @@ async fn retains_focus_in_a_live_hydration_range_when_a_following_sibling_is_rem
     assert!(by_id("fe-input").unwrap().is_same_node(Some(&input)), "the live entry's input is kept");
     assert!(document().active_element().is_some_and(|a| a.is_same_node(Some(&input))), "and keeps focus");
 }
+
+// frame.test.tsx: pending frames, nested templates and empty reloads
+
+#[wasm_bindgen_test]
+async fn hydrates_components_without_waiting_for_pending_frames() {
+    let server = start().await;
+    let mut d = HydrationData::default();
+    d.entries.push(("hwh".into(), "Clicker".into(), r#"{"label":"Count"}"#.into()));
+    d.frames.push(("hwf".into(), "/hw-slow".into(), None, "pending"));
+    let page = format!(
+        r#"<div><!--rmx:h:hwh--><button id="mc-count">Count</button><!--/rmx:h-->{}</div>{}"#,
+        region("hwf", r#"<span id="hw-frame">Loading...</span>"#),
+        d.to_script()
+    );
+    server.route("/hwp", vec![Part::Html(page)]);
+    let _m = mount("hwp", "/hwp", "hw-frame").await;
+    tick().await;
+    input("mc-count").click();
+    rmx::flush();
+    assert_eq!(text("mc-count").as_deref(), Some("Count!"), "the entry is interactive first");
+    assert_eq!(text("hw-frame").as_deref(), Some("Loading..."));
+
+    insert_template("hwf", &format!(r#"<span id="hw-frame">Loaded!</span><!--{TEMPLATE_END}-->"#));
+    until("the frame", || text("hw-frame").as_deref() == Some("Loaded!")).await;
+    assert_eq!(text("mc-count").as_deref(), Some("Count!"), "the entry keeps its state");
+    assert_eq!(loads(&server, "/hw-slow"), 0);
+}
+
+#[wasm_bindgen_test]
+async fn pending_frames_resolve_independently_as_their_templates_arrive() {
+    let server = start().await;
+    let page = format!(
+        "<div>{}{}</div>{}",
+        region("pif", r#"<span id="pi-fast">Loading fast...</span>"#),
+        region("pis", r#"<span id="pi-slow">Loading slow...</span>"#),
+        data(&[("pif", "/pi-fast", "pi-fast", true), ("pis", "/pi-slow", "pi-slow", true)])
+    );
+    server.route("/pip", vec![Part::Html(page)]);
+    let _m = mount("pip", "/pip", "pi-slow").await;
+
+    insert_template("pif", &format!(r#"<span id="pi-fast">Fast loaded</span><!--{TEMPLATE_END}-->"#));
+    until("the fast frame", || text("pi-fast").as_deref() == Some("Fast loaded")).await;
+    tick().await;
+    assert_eq!(text("pi-slow").as_deref(), Some("Loading slow..."));
+
+    insert_template("pis", &format!(r#"<span id="pi-slow">Slow loaded</span><!--{TEMPLATE_END}-->"#));
+    until("the slow frame", || text("pi-slow").as_deref() == Some("Slow loaded")).await;
+    assert_eq!(text("pi-fast").as_deref(), Some("Fast loaded"));
+}
+
+#[wasm_bindgen_test]
+async fn deeply_nested_frames_resolve_independently_at_each_level() {
+    let server = start().await;
+    let page = format!(
+        r#"<div><h1 id="dn-title">Page</h1>{}</div>{}"#,
+        region("dno", r#"<span id="dn-outer">Loading outer...</span>"#),
+        data(&[("dno", "/dn-outer", "dn-outer", true)])
+    );
+    server.route("/dnp", vec![Part::Html(page)]);
+    let _m = mount("dnp", "/dnp", "dn-outer").await;
+
+    let outer = format!(
+        r#"<div><p id="dn-outer-content">Outer loaded</p>{}</div>{}"#,
+        region("dnm", r#"<span id="dn-middle">Loading middle...</span>"#),
+        data(&[("dnm", "/dn-middle", "dn-middle", true)])
+    );
+    insert_template("dno", &format!("{outer}<!--{TEMPLATE_END}-->"));
+    until("the outer frame", || by_id("dn-outer-content").is_some()).await;
+    assert_eq!(text("dn-middle").as_deref(), Some("Loading middle..."));
+
+    let middle = format!(
+        r#"<div><p id="dn-middle-content">Middle loaded</p>{}</div>{}"#,
+        region("dni", r#"<span id="dn-inner">Loading inner...</span>"#),
+        data(&[("dni", "/dn-inner", "dn-inner", true)])
+    );
+    insert_template("dnm", &format!("{middle}<!--{TEMPLATE_END}-->"));
+    until("the middle frame", || by_id("dn-middle-content").is_some()).await;
+    assert_eq!(text("dn-inner").as_deref(), Some("Loading inner..."));
+
+    insert_template("dni", &format!(r#"<p id="dn-inner-content">Inner loaded</p><!--{TEMPLATE_END}-->"#));
+    until("the inner frame", || by_id("dn-inner-content").is_some()).await;
+    assert_eq!(text("dn-outer-content").as_deref(), Some("Outer loaded"));
+    assert_eq!(text("dn-middle-content").as_deref(), Some("Middle loaded"));
+    assert_eq!(text("dn-title").as_deref(), Some("Page"));
+    assert_eq!(server.calls().iter().filter(|c| c.starts_with("/dn-")).count(), 0, "every level came from a template");
+}
+
+#[wasm_bindgen_test]
+async fn reloads_a_frame_that_is_nested_inside_another_frame() {
+    let server = start().await;
+    let outer = format!(
+        r#"<div><p id="rn-outer-text">Outer</p>{}</div>{}"#,
+        region("rni", r#"<span id="rn-fallback">Loading...</span>"#),
+        data(&[("rni", "/rn-inner", "rn-inner", true)])
+    );
+    let page = format!("<div>{}</div>{}", region("rno", &outer), data(&[("rno", "/rn-outer", "rn-outer", false)]));
+    server.route("/rnp", vec![Part::Html(page)]);
+    let _m = mount("rnp", "/rnp", "rn-fallback").await;
+
+    insert_template("rni", &format!(r#"<div><p id="rn-inner-text">Render 1</p></div><!--{TEMPLATE_END}-->"#));
+    until("the inner frame", || text("rn-inner-text").as_deref() == Some("Render 1")).await;
+
+    server.route("/rn-inner", vec![Part::Html(r#"<div><p id="rn-inner-text">Render 2</p></div>"#.into())]);
+    let _ = frame("rn-inner").reload_async(ReloadOptions::default()).await;
+    assert_eq!(text("rn-inner-text").as_deref(), Some("Render 2"));
+    assert_eq!(text("rn-outer-text").as_deref(), Some("Outer"));
+    assert_eq!((loads(&server, "/rn-outer"), loads(&server, "/rn-inner")), (0, 1), "only the inner frame reloads");
+}
+
+#[wasm_bindgen_test]
+async fn clears_frame_content_when_reload_resolves_to_an_empty_stream() {
+    let server = start().await;
+    server.route("/ce", vec![Part::Html(r#"<section id="ce-content"><p id="ce-value">Initial content</p></section>"#.into())]);
+    let _m = mount("ce", "/ce", "ce-value").await;
+    server.route("/ce", vec![]);
+    let signal = frame("ce").reload_async(ReloadOptions::default()).await.expect("the reload");
+    assert!(!signal.aborted());
+    assert!(by_id("ce-content").is_none());
+    assert!(by_id("ce-value").is_none());
+}
