@@ -136,22 +136,8 @@ pub fn parse_tar(archive: &[u8], options: &TarOptions, handler: impl FnMut(TarEn
 }
 
 /// Parse an archive that arrives in pieces, calling `handler` with each entry.
-pub fn parse_tar_chunks<C: AsRef<[u8]>>(chunks: impl IntoIterator<Item = C>, options: &TarOptions, mut handler: impl FnMut(TarEntry)) -> Result<(), TarError> {
-    let mut parser = TarParser::new(options.clone());
-    let mut current: Option<TarEntry> = None;
-    let mut on_event = |event: TarEvent<'_>| match event {
-        TarEvent::Entry(header) => {
-            // The size is attacker-controlled; let large bodies grow as data arrives.
-            let capacity = header.size.min(1 << 20) as usize;
-            current = Some(TarEntry { header: header.clone(), body: Vec::with_capacity(capacity) });
-        }
-        TarEvent::Data(bytes) => current.as_mut().expect("data follows an entry").body.extend_from_slice(bytes),
-        TarEvent::End => handler(current.take().expect("end follows an entry")),
-    };
-    for chunk in chunks {
-        parser.write(chunk.as_ref(), &mut on_event)?;
-    }
-    parser.finish()
+pub fn parse_tar_chunks<C: AsRef<[u8]>>(chunks: impl IntoIterator<Item = C>, options: &TarOptions, handler: impl FnMut(TarEntry)) -> Result<(), TarError> {
+    TarParser::new(options.clone()).parse(chunks, handler)
 }
 
 /// A push parser. Call [TarParser::write] for each chunk, then [TarParser::finish].
@@ -202,6 +188,24 @@ impl TarParser {
 
     pub fn options(&self) -> &TarOptions {
         &self.options
+    }
+
+    /// Parse a whole archive, calling `handler` with each complete entry. Like Remix's
+    /// `TarParser.parse`, each call starts fresh, so one parser can read many archives
+    /// (limits are counted per archive, and a failed parse leaves nothing behind).
+    pub fn parse<C: AsRef<[u8]>>(&mut self, chunks: impl IntoIterator<Item = C>, mut handler: impl FnMut(TarEntry)) -> Result<(), TarError> {
+        *self = TarParser::new(self.options.clone());
+        let mut current: Option<TarEntry> = None;
+        let mut on_event = |event: TarEvent<'_>| match event {
+            // The declared size is attacker-controlled, so bodies grow from received bytes.
+            TarEvent::Entry(header) => current = Some(TarEntry { header: header.clone(), body: Vec::new() }),
+            TarEvent::Data(bytes) => current.as_mut().expect("data follows an entry").body.extend_from_slice(bytes),
+            TarEvent::End => handler(current.take().expect("end follows an entry")),
+        };
+        for chunk in chunks {
+            self.write(chunk.as_ref(), &mut on_event)?;
+        }
+        self.finish()
     }
 
     /// Feed the next chunk of the archive.
@@ -281,15 +285,20 @@ impl TarParser {
         }
         let mut header = header::decode(block, &self.options)?;
         let is_long = header.kind.is_metadata();
-        let pax = match (&self.pax_global, &self.pax) {
-            (None, local) => local.clone(),
-            (Some(global), local) => {
-                let mut merged = global.clone();
-                merged.extend(local.iter().flatten().map(|(k, v)| (k.clone(), v.clone())));
-                Some(merged)
+        // A pending local PAX header belongs to the next entry that is not itself metadata.
+        let pax = if is_long {
+            None
+        } else {
+            match (&self.pax_global, self.pax.take()) {
+                (None, local) => local,
+                (Some(global), local) => {
+                    let mut merged = global.clone();
+                    merged.extend(local.into_iter().flatten());
+                    Some(merged)
+                }
             }
         };
-        let pax_size = pax.as_ref().and_then(|p| p.get("size")).filter(|s| !s.is_empty() && !is_long);
+        let pax_size = pax.as_ref().and_then(|p| p.get("size")).filter(|s| !s.is_empty());
         header.size = match pax_size {
             Some(size) => header::parse_decimal_size(size)?,
             None => header::parse_size_field(&block[124..136])?,
@@ -323,7 +332,6 @@ impl TarParser {
                 header.linkname = Some(path.clone());
             }
             header.pax = Some(pax);
-            self.pax = None;
         }
         header::validate_paths(&header, self.options.path_policy)?;
 
@@ -344,8 +352,8 @@ impl TarParser {
         self.in_long_header = false;
         let buffer = std::mem::take(&mut self.long_header);
         match self.header.as_ref().map(|h| h.kind) {
-            Some(TarEntryType::GnuLongPath) => self.gnu_long_path = Some(header::decode_long_path(&buffer)),
-            Some(TarEntryType::GnuLongLinkPath) => self.gnu_long_link_path = Some(header::decode_long_path(&buffer)),
+            Some(TarEntryType::GnuLongPath) => self.gnu_long_path = Some(header::decode_long_path(buffer)),
+            Some(TarEntryType::GnuLongLinkPath) => self.gnu_long_link_path = Some(header::decode_long_path(buffer)),
             Some(TarEntryType::PaxGlobalHeader) => self.pax_global.get_or_insert_with(BTreeMap::new).extend(header::decode_pax(&buffer)),
             Some(TarEntryType::PaxHeader) => self.pax = Some(header::decode_pax(&buffer)),
             _ => {}

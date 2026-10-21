@@ -225,9 +225,12 @@ pub(crate) fn parse_decimal_size(value: &str) -> Result<u64, TarError> {
 }
 
 /// A GNU long name or link: the data, minus one trailing NUL.
-pub(crate) fn decode_long_path(buffer: &[u8]) -> String {
-    let buffer = buffer.strip_suffix(&[0]).unwrap_or(buffer);
-    String::from_utf8_lossy(buffer).into_owned()
+pub(crate) fn decode_long_path(mut buffer: Vec<u8>) -> String {
+    if buffer.last() == Some(&0) {
+        buffer.pop();
+    }
+    // Valid UTF-8 reuses the buffer; anything else is decoded lossily, as TextDecoder does.
+    String::from_utf8(buffer).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
 /// PAX records: `"<len> <key>=<value>\n"`, where `len` counts the whole record.
@@ -242,9 +245,10 @@ pub(crate) fn decode_pax(mut buffer: &[u8]) -> BTreeMap<String, String> {
         // `subarray(space + 1, len - 1)`, clamped the same way.
         let start = (space + 1).min(buffer.len());
         let end = len.saturating_sub(1).min(buffer.len());
-        let record = String::from_utf8_lossy(if start < end { &buffer[start..end] } else { &[] });
-        let Some((key, value)) = record.split_once('=') else { break };
-        pax.insert(key.to_string(), value.to_string());
+        let record = if start < end { &buffer[start..end] } else { &[] };
+        let Some(equals) = record.iter().position(|b| *b == b'=') else { break };
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+        pax.insert(text(&record[..equals]), text(&record[equals + 1..]));
         buffer = &buffer[len.min(buffer.len())..];
     }
     pax
