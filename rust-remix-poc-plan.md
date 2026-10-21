@@ -367,6 +367,19 @@ Covered since phase 0b:
    with start > end (`normalize` used to panic on them), and `Content-Range` with an empty
    unit and `Content-Type` with empty media type, charset or boundary leave those parts out.
    Header lists collect from and iterate over their values.
+   The rest of the package is ported too: content-disposition (`filename*` decodes through
+   the WHATWG labels for UTF-8, UTF-16, windows-1252, which `latin1` also names, and
+   ISO-8859-15, falling back to the percent-decoded text), cookie, set-cookie (`Max-Age`
+   reads like `parseInt`), param-values, raw-headers (`rmx_headers::raw::{parse,
+   stringify, canonical_header_name}` over `http::HeaderMap`; `parse` returns an error
+   where `Headers` would throw) and super-headers. `SuperHeaders` is a trait on
+   `HeaderMap` rather than a subclass: `typed::<H>()`, `set_typed`, `update(|h| ...)`,
+   `apply` / `apply_typed` with Remix's merge rules (`Set-Cookie` added, `Cookie` and
+   `Vary` merged, list headers appended, others replaced), `get_joined` for
+   `Headers.get`, and number, date, list, ETag and `Set-Cookie` helpers. Nothing is
+   cached, so the lazy-parse, cache identity, proxy and stale-value cases have no
+   counterpart; an edit that prints empty is not kept for the next edit the way Remix's
+   cached object keeps it.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
