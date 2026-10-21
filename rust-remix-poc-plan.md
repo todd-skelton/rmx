@@ -406,6 +406,17 @@ Covered since phase 0b:
    percent-encode set, so a lone `%` and lowercase escapes stay as written. The rewrite
    grew the spa client wasm from 480.2 to 532.1 KiB and timeboxer from 600.1 to 620.5 KiB
    (measured after rebuild77).
+   `remix/cookie` is ported with `cookie.test.ts` (`crates/cookie/tests/cookie.rs`). This
+   changed behavior to match Remix: cookies default to `Path=/` and `SameSite=Lax`, values
+   are base64 of their UTF-8 bytes by default (`hello world` is `aGVsbG8gd29ybGQ=`, and a
+   value that is not valid base64 or UTF-8 reads as `None`), `encode`/`decode` replace the
+   codec (the lazy-frames theme cookie uses the identity codec as in Remix), `Set-Cookie` is
+   printed by `rmx_headers::SetCookie` in Remix's attribute order, and `Expires` and
+   `Partitioned` (which forces `Secure`) are supported. `serialize_with` takes
+   `CookieProperties` overrides; `clear()` is gone, and the demos delete cookies the way
+   theirs do (`serialize('', { maxAge: 0 })`). Session middleware now honors an `Expires`
+   cookie as an absolute expiry rounded to the second, as Remix's does. Lowercase
+   `sameSite` strings have no counterpart: `SameSite` is an enum.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
