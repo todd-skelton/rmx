@@ -1173,6 +1173,7 @@ dependencies = [
  "rmx-session",
  "rmx-spa",
  "rmx-tar-parser",
+ "rmx-terminal",
  "rmx-ui",
  "rmx-url",
 ]
@@ -1311,6 +1312,7 @@ dependencies = [
  "rmx-mime",
  "rmx-router",
  "rmx-session",
+ "rmx-terminal",
  "rmx-url",
  "serde_json",
 ]
@@ -1407,6 +1409,10 @@ dependencies = [
  "flate2",
  "rmx-crypto",
 ]
+
+[[package]]
+name = "rmx-terminal"
+version = "0.1.0"
 
 [[package]]
 name = "rmx-ui"

@@ -70,5 +70,5 @@ pub mod cli;
 pub use {
     rmx_assets as assets, rmx_auth as auth, rmx_cookie as cookie, rmx_crypto as crypto, rmx_fetch_proxy as fetch_proxy,
     rmx_file_storage as file_storage, rmx_html_template as html_template, rmx_middleware as middleware, rmx_multipart_parser as multipart_parser,
-    rmx_render as render, rmx_serve as serve, rmx_session as session, rmx_tar_parser as tar_parser,
+    rmx_render as render, rmx_serve as serve, rmx_session as session, rmx_tar_parser as tar_parser, rmx_terminal as terminal,
 };

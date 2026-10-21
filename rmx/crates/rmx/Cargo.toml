@@ -45,6 +45,7 @@ rmx-render.workspace = true
 rmx-serve.workspace = true
 rmx-session.workspace = true
 rmx-tar-parser.workspace = true
+rmx-terminal.workspace = true
 
 [dev-dependencies]
 http.workspace = true

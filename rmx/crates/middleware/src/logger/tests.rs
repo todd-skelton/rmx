@@ -89,15 +89,3 @@ fn every_token() {
         "text/plain; charset=UTF-8|remix.run:8080|remix.run|GET|/a/b?x=1|/a/b|8080|http:|?x=1|?x=1|https://ref.example/|Created|http://remix.run:8080/a/b?x=1|test-agent|-|100%"
     );
 }
-
-#[test]
-fn color_detection_follows_the_terminal_rules() {
-    let env = |pairs: &'static [(&'static str, &'static str)]| move |name: &str| pairs.iter().find(|(k, _)| *k == name).map(|(_, v)| v.to_string());
-    assert!(should_use_colors(&env(&[]), true));
-    assert!(!should_use_colors(&env(&[]), false));
-    assert!(!should_use_colors(&env(&[("NO_COLOR", "1"), ("FORCE_COLOR", "1")]), true));
-    assert!(should_use_colors(&env(&[("FORCE_COLOR", "1")]), false));
-    assert!(!should_use_colors(&env(&[("FORCE_COLOR", "false")]), true));
-    assert!(!should_use_colors(&env(&[("CI", "true")]), true));
-    assert!(!should_use_colors(&env(&[("TERM", "dumb")]), true));
-}

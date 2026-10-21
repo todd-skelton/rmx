@@ -213,6 +213,8 @@ crates:
    `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie`, `rmx-crypto` (SHA-1/256/384/512 by Web Crypto name, HMAC, PBKDF2, scrypt; no
    dependencies), `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
+   `rmx-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
+   nested-safe `Styles` and a `Terminal` over injectable streams; the logger uses it),
    `rmx-headers`, `rmx-mime`, `rmx-spa`, `rmx-url`.
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
    entrance, exit, FLIP layout), combobox, listbox, menu (submenus with hover aim, context

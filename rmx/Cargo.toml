@@ -26,6 +26,7 @@ members = [
     "crates/macros",
     "crates/ui",
     "crates/data-schema",
+    "crates/terminal",
     "examples/bench/app",
     "examples/bench/server",
     "examples/bench/client",
@@ -54,6 +55,7 @@ rmx = { path = "crates/rmx" }
 rmx-component = { path = "crates/component" }
 rmx-macros = { path = "crates/macros" }
 rmx-url = { path = "crates/url" }
+rmx-terminal = { path = "crates/terminal" }
 rmx-route-pattern = { path = "crates/route-pattern" }
 rmx-fetch = { path = "crates/fetch" }
 rmx-router = { path = "crates/router" }

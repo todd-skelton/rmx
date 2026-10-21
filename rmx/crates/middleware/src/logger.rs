@@ -12,12 +12,12 @@
 //! });
 //! ```
 
-use std::io::IsTerminal;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use http::header;
 use rmx_headers::UtcDateTime;
+use rmx_terminal::Styles;
 use rmx_fetch::Response;
 use rmx_router::{BoxFuture, Context, Middleware, Next};
 
@@ -65,7 +65,7 @@ pub struct LoggerMiddleware {
 
 /// Log every request with [DEFAULT_FORMAT] to stdout, coloring when stdout is a terminal.
 pub fn logger() -> LoggerMiddleware {
-    LoggerMiddleware { format: DEFAULT_FORMAT.into(), log: Logger::stdout(), colors: should_use_colors(&|name| std::env::var(name).ok(), std::io::stdout().is_terminal()) }
+    LoggerMiddleware { format: DEFAULT_FORMAT.into(), log: Logger::stdout(), colors: rmx_terminal::stdout_colors() }
 }
 
 impl LoggerMiddleware {
@@ -94,7 +94,7 @@ impl LoggerMiddleware {
     }
 
     fn message(&self, request: &RequestInfo, response: &Response, duration_ms: u128) -> String {
-        let style = Style(self.colors);
+        let style = Style(Styles::new(self.colors));
         let headers = response.headers();
         let content_length = headers.get(header::CONTENT_LENGTH).and_then(|v| v.to_str().ok());
         let url = &request.url;
@@ -175,79 +175,53 @@ fn replace_tokens(format: &str, token: impl Fn(&str) -> String) -> String {
     out
 }
 
-/// `shouldUseColors` from `remix/terminal`.
-fn should_use_colors(env: &dyn Fn(&str) -> Option<String>, is_tty: bool) -> bool {
-    if env("NO_COLOR").is_some() {
-        return false;
-    }
-    if let Some(force) = env("FORCE_COLOR") {
-        let value = force.to_ascii_lowercase();
-        return value != "0" && value != "false";
-    }
-    if env("CI").as_deref() == Some("true") || env("TERM").as_deref() == Some("dumb") {
-        return false;
-    }
-    is_tty
-}
-
-struct Style(bool);
+/// The logger's token colors over [`Styles`] (Remix's logger uses `createStyles`).
+struct Style(Styles);
 
 impl Style {
-    fn paint(&self, code: u8, value: &str) -> String {
-        if self.0 {
-            format!("\x1b[{code}m{value}\x1b[39m")
-        } else {
-            value.to_string()
-        }
-    }
-
     fn method(&self, method: &str) -> String {
+        let s = &self.0;
         match method.to_ascii_uppercase().as_str() {
-            "GET" | "HEAD" => self.paint(GREEN, method),
-            "POST" => self.paint(CYAN, method),
-            "PUT" | "PATCH" => self.paint(YELLOW, method),
-            "DELETE" => self.paint(RED, method),
-            "OPTIONS" => self.paint(MAGENTA, method),
+            "GET" | "HEAD" => s.green(method),
+            "POST" => s.cyan(method),
+            "PUT" | "PATCH" => s.yellow(method),
+            "DELETE" => s.red(method),
+            "OPTIONS" => s.magenta(method),
             _ => method.to_string(),
         }
     }
 
     fn status(&self, status: u16) -> String {
-        let value = status.to_string();
+        let (s, value) = (&self.0, status.to_string());
         match status {
-            500.. => self.paint(RED, &value),
-            400.. => self.paint(YELLOW, &value),
-            300.. => self.paint(CYAN, &value),
-            200.. => self.paint(GREEN, &value),
+            500.. => s.red(&value),
+            400.. => s.yellow(&value),
+            300.. => s.cyan(&value),
+            200.. => s.green(&value),
             _ => value,
         }
     }
 
     fn duration(&self, ms: u128) -> String {
-        let value = ms.to_string();
+        let (s, value) = (&self.0, ms.to_string());
         match ms {
-            1000.. => self.paint(RED, &value),
-            500.. => self.paint(MAGENTA, &value),
-            100.. => self.paint(YELLOW, &value),
-            _ => self.paint(GREEN, &value),
+            1000.. => s.red(&value),
+            500.. => s.magenta(&value),
+            100.. => s.yellow(&value),
+            _ => s.green(&value),
         }
     }
 
     fn content_length(&self, value: &str) -> String {
+        let s = &self.0;
         match value.parse::<u64>() {
-            Ok(bytes) if bytes >= 1024 * 1024 => self.paint(RED, value),
-            Ok(bytes) if bytes >= 100 * 1024 => self.paint(YELLOW, value),
-            Ok(bytes) if bytes >= 1024 => self.paint(CYAN, value),
+            Ok(bytes) if bytes >= 1024 * 1024 => s.red(value),
+            Ok(bytes) if bytes >= 100 * 1024 => s.yellow(value),
+            Ok(bytes) if bytes >= 1024 => s.cyan(value),
             _ => value.to_string(),
         }
     }
 }
-
-const RED: u8 = 31;
-const GREEN: u8 = 32;
-const YELLOW: u8 = 33;
-const MAGENTA: u8 = 35;
-const CYAN: u8 = 36;
 
 #[cfg(test)]
 mod tests;
