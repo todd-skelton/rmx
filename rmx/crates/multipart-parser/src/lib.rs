@@ -587,13 +587,13 @@ pub fn parse_multipart_request<B: http_body::Body>(request: http::Request<B>, op
     if !is_multipart_request(&request) {
         return Err(MultipartError::parse("Request is not a multipart request"));
     }
-    let content_type = request.headers().get(http::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default();
-    let boundary = get_multipart_boundary(content_type).ok_or_else(|| MultipartError::parse("Invalid Content-Type header: missing boundary"))?;
-    let body = request.into_body();
-    if body.is_end_stream() {
+    // Like Remix: a missing body is reported before a missing boundary.
+    if request.body().is_end_stream() {
         return Err(MultipartError::parse("Request body is empty"));
     }
-    parse_multipart_stream(body, &boundary, options)
+    let content_type = request.headers().get(http::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let boundary = get_multipart_boundary(content_type).ok_or_else(|| MultipartError::parse("Invalid Content-Type header: missing boundary"))?;
+    parse_multipart_stream(request.into_body(), &boundary, options)
 }
 
 #[cfg(test)]

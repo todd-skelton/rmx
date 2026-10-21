@@ -222,7 +222,9 @@ crates:
    session middleware runs Remix's `session.test.ts` and `session-expiration.test.ts`, and
    seals the session with `Context::set_sealed` so a handler that replaces it panics with
    Remix's "Cannot save session that was initialized by another middleware/handler"),
-   `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
+   `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser` (Remix's multipart, request,
+   Node and buffer-search tests ported one per case; an empty request body is reported
+   before a missing boundary, as in Remix), `rmx-html-template`,
    `rmx-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
    nested-safe `Styles` and a `Terminal` over injectable streams; the logger uses it),
    `rmx-headers` (every Remix header type, raw header blocks, and `SuperHeaders` as a

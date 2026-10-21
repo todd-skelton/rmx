@@ -327,3 +327,50 @@ fn requests() {
     let stream = parse_multipart_request(request(&ct, Body::from(message(BOUNDARY, &[]))), &opts()).unwrap();
     assert!(collect(stream).unwrap().is_empty());
 }
+
+// Port of Remix's buffer-search.test.ts (createSearch is find, createPartialTailSearch is
+// MultipartParser::partial_tail).
+
+fn tail_search(pattern: &str) -> MultipartParser {
+    let mut parser = MultipartParser::new(BOUNDARY, opts()).unwrap();
+    parser.delimiter = pattern.as_bytes().to_vec();
+    parser
+}
+
+#[test]
+fn search_finds_the_first_occurrence_of_a_pattern_in_a_buffer() {
+    assert_eq!(find(b"hello world", b"world", 0), Some(6));
+}
+
+#[test]
+fn search_returns_none_if_the_pattern_is_not_found() {
+    assert_eq!(find(b"hello worl", b"world", 0), None);
+}
+
+#[test]
+fn search_handles_long_patterns_whose_length_would_wrap_a_byte_sized_skip_table() {
+    assert_eq!(find(&[b'a'; 512], &[b'x'; 256], 0), None);
+}
+
+#[test]
+fn search_finds_a_256_byte_pattern() {
+    let hay = [vec![b'a'; 10], vec![b'x'; 256]].concat();
+    assert_eq!(find(&hay, &[b'x'; 256], 0), Some(10));
+}
+
+#[test]
+fn partial_tail_search_finds_the_last_partial_occurrence_of_a_pattern_in_a_buffer() {
+    assert_eq!(tail_search("world").partial_tail(b"hello worl"), Some(6));
+}
+
+#[test]
+fn partial_tail_search_returns_none_if_the_pattern_is_not_found_at_the_end() {
+    assert_eq!(tail_search("world").partial_tail(b"hello worlds"), None);
+}
+
+/// Not in Remix: with a self-overlapping pattern the longest partial match wins, so no byte
+/// that could start the pattern is released as content.
+#[test]
+fn partial_tail_search_prefers_the_longest_partial_match() {
+    assert_eq!(tail_search("abab").partial_tail(b"xaba"), Some(1));
+}
