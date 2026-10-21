@@ -86,7 +86,7 @@ impl<I> Auth<I> {
 }
 
 /// What a scheme decided. Schemes return `None` to skip a request they do not apply to.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemeResult<I> {
     Success(I),
     Failure { code: FailureCode, message: String, challenge: Option<String> },
@@ -96,6 +96,12 @@ impl<I> SchemeResult<I> {
     /// An `InvalidCredentials` failure.
     pub fn invalid(message: impl Into<String>) -> SchemeResult<I> {
         SchemeResult::Failure { code: FailureCode::InvalidCredentials, message: message.into(), challenge: None }
+    }
+
+    /// A failure with Remix's defaults (`{ status: 'failure' }`): `InvalidCredentials`,
+    /// "Invalid credentials", no challenge.
+    pub fn failure() -> SchemeResult<I> {
+        SchemeResult::invalid("Invalid credentials")
     }
 }
 
@@ -147,7 +153,7 @@ where
 ///
 /// When `schemes` is empty.
 pub fn auth<I: Clone + Send + Sync + 'static>(schemes: Vec<Arc<dyn AuthScheme<I>>>) -> impl Middleware {
-    assert!(!schemes.is_empty(), "auth() needs at least one scheme");
+    assert!(!schemes.is_empty(), "auth() requires at least one authentication scheme");
     let schemes: Arc<[Arc<dyn AuthScheme<I>>]> = schemes.into();
     move |mut ctx: Context, next: Next| {
         let schemes = schemes.clone();
@@ -202,7 +208,9 @@ impl<I> Clone for RequireAuth<I> {
 
 impl<I: Clone + Send + Sync + 'static> Middleware for RequireAuth<I> {
     fn call(&self, ctx: Context, next: Next) -> BoxFuture<Response> {
-        let state = ctx.auth::<I>();
+        let state = ctx
+            .get::<Auth<I>>()
+            .expect("Auth state not found. Make sure auth() middleware runs before requireAuth().");
         if state.is_ok() {
             return next.run(ctx);
         }
@@ -363,7 +371,10 @@ where
     }
 
     fn authenticate(&self, ctx: &Context) -> BoxFuture<Option<SchemeResult<I>>> {
-        let session = ctx.get::<Session>().expect("session_scheme needs the session() middleware before auth()").clone();
+        let session = ctx
+            .get::<Session>()
+            .expect("Session not found. Make sure session() middleware runs before createSessionAuthScheme().")
+            .clone();
         let Some(value) = (self.read)(&session) else {
             return Box::pin(async { None });
         };
@@ -399,7 +410,7 @@ where
     V: Fn(String) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Option<I>> + MaybeSend + 'static,
 {
-    BearerScheme { name: "bearer".into(), header_name: "authorization".into(), scheme: "Bearer".into(), challenge: None, verify }
+    BearerScheme { name: "bearer".into(), header_name: "Authorization".into(), scheme: "Bearer".into(), challenge: None, verify }
 }
 
 impl<V> BearerScheme<V> {
@@ -439,7 +450,8 @@ where
     fn authenticate(&self, ctx: &Context) -> BoxFuture<Option<SchemeResult<I>>> {
         let challenge = Some(self.challenge.clone().unwrap_or_else(|| self.scheme.clone()));
         let fail = |code, message: String| Some(SchemeResult::Failure { code, message, challenge: challenge.clone() });
-        let Some(value) = ctx.header(&self.header_name) else {
+        // Fetch's `Headers` strips surrounding whitespace, so Remix never sees it.
+        let Some(value) = ctx.header(&self.header_name).map(|v| v.trim_matches([' ', '\t'])) else {
             return Box::pin(async { None });
         };
         let Some((prefix, token)) = value.split_once(char::is_whitespace).filter(|(p, t)| !p.is_empty() && !t.is_empty())
@@ -472,7 +484,7 @@ where
     V: Fn(String) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Option<I>> + MaybeSend + 'static,
 {
-    ApiKeyScheme { name: "api-key".into(), header_name: "x-api-key".into(), verify }
+    ApiKeyScheme { name: "api-key".into(), header_name: "X-Api-Key".into(), verify }
 }
 
 impl<V> ApiKeyScheme<V> {
@@ -508,7 +520,7 @@ where
             });
         }
         let verified = (self.verify)(key.to_string());
-        Box::pin(async move { Some(verified.await.map(SchemeResult::Success).unwrap_or_else(|| SchemeResult::invalid("Invalid credentials"))) })
+        Box::pin(async move { Some(verified.await.map(SchemeResult::Success).unwrap_or_else(SchemeResult::failure)) })
     }
 }
 

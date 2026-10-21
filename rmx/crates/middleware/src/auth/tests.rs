@@ -104,8 +104,8 @@ fn require_auth_redirect_and_challenge() {
     let (status, _, h) = send(&router, "GET", "http://x/private", &[("authorization", "Bearer bad")]);
     assert_eq!((status, h["www-authenticate"].to_str().unwrap()), (401, "Bearer"));
     assert_eq!(send(&router, "GET", "http://x/whoami", &[("authorization", "Basic abc")]).1, "anonymous", "other schemes skip");
-    assert_eq!(send(&router, "GET", "http://x/whoami", &[("authorization", "Bearer  ")]).1, "rejected by bearer: Bearer token is missing");
-    assert_eq!(send(&router, "GET", "http://x/whoami", &[("authorization", "Bearer")]).1, "rejected by bearer: authorization header is malformed");
+    assert_eq!(send(&router, "GET", "http://x/whoami", &[("authorization", "Bearer  ")]).1, "rejected by bearer: Authorization header is malformed");
+    assert_eq!(send(&router, "GET", "http://x/whoami", &[("authorization", "Bearer")]).1, "rejected by bearer: Authorization header is malformed");
 }
 
 #[test]
@@ -117,6 +117,6 @@ fn api_key_and_closure_schemes() {
     }));
     let router = app(vec![key, custom]);
     assert_eq!(send(&router, "GET", "http://x/whoami", &[("x-api-key", "abc")]).1, "2 via api-key");
-    assert_eq!(send(&router, "GET", "http://x/whoami", &[("x-api-key", " ")]).1, "rejected by api-key: x-api-key header is empty");
+    assert_eq!(send(&router, "GET", "http://x/whoami", &[("x-api-key", " ")]).1, "rejected by api-key: X-Api-Key header is empty");
     assert_eq!(send(&router, "GET", "http://x/whoami?as=9", &[]).1, "9 via query");
 }
