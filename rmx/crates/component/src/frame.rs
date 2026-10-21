@@ -116,6 +116,23 @@ pub struct FrameHandle {
     pub(crate) src: String,
 }
 
+/// Handles are equal when they refer to the same frame (on the server, the same src).
+impl PartialEq for FrameHandle {
+    fn eq(&self, other: &FrameHandle) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            match (&self.frame, &other.frame) {
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                (a, b) => a.is_none() && b.is_none(),
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.src == other.src
+        }
+    }
+}
+
 impl FrameHandle {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn server(src: String) -> FrameHandle {

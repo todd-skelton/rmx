@@ -40,6 +40,8 @@ async fn start() -> Server {
             rmx::entry::<EntryWithBlockingFrame>(),
             rmx::entry::<EntryWithSrc>(),
             rmx::entry::<EntryWithLateFrame>(),
+            rmx::entry::<RowAction>(),
+            rmx::entry::<CartItems>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -1127,4 +1129,174 @@ async fn cancels_stale_client_frame_streams_when_src_changes() {
     assert_eq!(text("cs-result").as_deref(), Some("Fast result"));
     root.dispose();
     el.remove();
+}
+
+// frame.test.tsx: a client entry's own frame and the frames next to it
+
+thread_local! {
+    static ROW: RefCell<Option<Handle<RowAction>>> = const { RefCell::new(None) };
+    static SUMMARY_EVENTS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
+    static ROW_EVENTS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
+}
+
+/// A client entry rendered inside an unnamed frame next to a frame named \`ra-summary\`.
+struct RowAction;
+
+impl Component for RowAction {
+    type Props = EntryProps;
+    rmx::client_entry!("RowAction");
+    fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
+        ROW.with(|r| *r.borrow_mut() = Some(h.clone()));
+        RowAction
+    }
+    fn render(&self, _: &EntryProps, _: &Handle<Self>) -> Node {
+        rsx! { <button id="ra-button">"Update"</button> }
+    }
+}
+
+fn row() -> Handle<RowAction> {
+    ROW.with(|r| r.borrow().clone()).expect("a hydrated RowAction")
+}
+
+/// Server markup for a named summary frame and an unnamed row frame holding \`RowAction\`.
+fn row_page(prefix: &str, summary: u32) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((format!("{prefix}h"), "RowAction".into(), r#"{"label":""}"#.into()));
+    d.frames.push((format!("{prefix}s"), "/ra-summary".into(), Some("ra-summary".into()), "resolved"));
+    d.frames.push((format!("{prefix}r"), "/ra-row".into(), None, "resolved"));
+    format!(
+        "<main>{}{}</main>{}",
+        region(&format!("{prefix}s"), &format!(r#"<p id="ra-summary">Summary: {summary}</p>"#)),
+        region(&format!("{prefix}r"), &format!(r#"<!--rmx:h:{prefix}h--><button id="ra-button">Update</button><!--/rmx:h-->"#)),
+        d.to_script()
+    )
+}
+
+#[wasm_bindgen_test]
+async fn looks_up_named_adjacent_frames_from_a_client_entry() {
+    let server = start().await;
+    server.route("/ra-parent", vec![Part::Html(row_page("ral", 1))]);
+    server.route("/ra-summary", vec![Part::Html(r#"<p id="ra-summary">Summary: 2</p>"#.into())]);
+    let _m = mount("ra-parent", "/ra-parent", "ra-button").await;
+    assert_eq!(text("ra-summary").as_deref(), Some("Summary: 1"));
+
+    let h = row();
+    assert!(h.frames().get("ra-missing").is_none());
+    h.frames().get("ra-summary").expect("the summary frame").reload_async(ReloadOptions::default()).await;
+    assert_eq!(text("ra-summary").as_deref(), Some("Summary: 2"));
+}
+
+#[wasm_bindgen_test]
+async fn exposes_the_top_frame_apart_from_a_client_entrys_own_frame() {
+    let server = start().await;
+    server.route("/rt-parent", vec![Part::Html(row_page("rtp", 1))]);
+    let _m = mount("rt-parent", "/rt-parent", "ra-button").await;
+    let h = row();
+    assert!(h.frame() != h.frames().top(), "the entry renders in its frame, not the top frame");
+    assert!(h.frames().top() == Frames.top());
+    assert!(h.frame().src().ends_with("/ra-row"));
+}
+
+#[wasm_bindgen_test]
+async fn dispatches_reload_events_for_a_client_entrys_frame_and_a_named_frame() {
+    let server = start().await;
+    server.route("/re-parent", vec![Part::Html(row_page("rep", 1))]);
+    server.route("/ra-summary", vec![Part::Html(r#"<p id="ra-summary">Summary: 2</p>"#.into())]);
+    server.route("/ra-row", vec![Part::Html(r#"<!--rmx:h:reh2--><button id="ra-button">Update</button><!--/rmx:h-->"#.to_string() + &{
+        let mut d = HydrationData::default();
+        d.entries.push(("reh2".into(), "RowAction".into(), r#"{"label":""}"#.into()));
+        d.to_script()
+    })]);
+    let _m = mount("re-parent", "/re-parent", "ra-button").await;
+    SUMMARY_EVENTS.with(|e| e.set((0, 0)));
+    ROW_EVENTS.with(|e| e.set((0, 0)));
+
+    let h = row();
+    let summary = h.frames().get("ra-summary").expect("the summary frame");
+    let bump = |cell: &'static std::thread::LocalKey<Cell<(u32, u32)>>, start: bool| {
+        cell.with(|e| {
+            let (s, c) = e.get();
+            e.set(if start { (s + 1, c) } else { (s, c + 1) });
+        })
+    };
+    h.on_frame(&summary, FrameEvent::ReloadStart, move |_, _| bump(&SUMMARY_EVENTS, true));
+    h.on_frame(&summary, FrameEvent::ReloadComplete, move |_, _| bump(&SUMMARY_EVENTS, false));
+    h.on_frame(&h.frame(), FrameEvent::ReloadStart, move |_, _| bump(&ROW_EVENTS, true));
+    h.on_frame(&h.frame(), FrameEvent::ReloadComplete, move |_, _| bump(&ROW_EVENTS, false));
+
+    let summary_done = reload(summary);
+    let row_done = reload(h.frame());
+    until("both reloads", || summary_done.get() && row_done.get()).await;
+    assert_eq!(SUMMARY_EVENTS.with(Cell::get), (1, 1));
+    assert_eq!(ROW_EVENTS.with(Cell::get), (1, 1));
+    assert_eq!(text("ra-summary").as_deref(), Some("Summary: 2"));
+}
+
+thread_local! {
+    static CART: RefCell<Option<Handle<CartItems>>> = const { RefCell::new(None) };
+    static CART_PENDING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// A client entry that is the whole content of its frame, which can reload it away.
+struct CartItems;
+
+impl Component for CartItems {
+    type Props = EntryProps;
+    rmx::client_entry!("CartItems");
+    fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
+        CART.with(|c| *c.borrow_mut() = Some(h.clone()));
+        CartItems
+    }
+    fn render(&self, _: &EntryProps, _: &Handle<Self>) -> Node {
+        let pending = CART_PENDING.with(Cell::get).then(|| rsx! { <p id="cart-pending">"Updating your cart..."</p> });
+        rsx! {
+            <>
+                {pending.unwrap_or(Node::Empty)}
+                <table id="cart-items"><tbody><tr><td>"Book"</td><td><button>"Remove"</button></td></tr></tbody></table>
+                <div id="cart-total">"Total: $16.99"</div>
+            </>
+        }
+    }
+}
+
+fn cart_markup(entry_id: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "CartItems".into(), r#"{"label":""}"#.into()));
+    format!(
+        r#"<!--rmx:h:{entry_id}--><table id="cart-items"><tbody><tr><td>Book</td><td><button>Remove</button></td></tr></tbody></table><div id="cart-total">Total: $16.99</div><!--/rmx:h-->{}"#,
+        d.to_script()
+    )
+}
+
+#[wasm_bindgen_test]
+async fn ignores_updates_from_a_client_entry_removed_by_its_frame_reload() {
+    let server = start().await;
+    let mut d = HydrationData::default();
+    d.frames.push(("cif".into(), "/ci-cart".into(), None, "resolved"));
+    server.route("/ci-cart-parent", vec![Part::Html(format!("<main>{}</main>{}", region("cif", &cart_markup("cih")), d.to_script()))]);
+    let _m = mount("ci-cart-parent", "/ci-cart-parent", "cart-items").await;
+    let errors = Rc::new(RefCell::new(Vec::<String>::new()));
+    let seen = errors.clone();
+    let app = APP.with(|a| a.borrow().clone()).expect("app");
+    let listener = app.on_error(move |e| seen.borrow_mut().push(e.message.clone()));
+
+    let h = CART.with(|c| c.borrow().clone()).expect("a hydrated CartItems");
+    CART_PENDING.with(|p| p.set(true));
+    h.update();
+    rmx::flush();
+    assert!(by_id("cart-pending").is_some());
+    server.route("/ci-cart", vec![Part::Html(r#"<p id="empty-cart">Your cart is empty.</p>"#.into())]);
+    h.frame().reload_async(ReloadOptions::default()).await;
+    CART_PENDING.with(|p| p.set(false));
+    h.update();
+    rmx::flush();
+    for _ in 0..3 {
+        tick().await;
+    }
+    app.remove_error_listener(listener);
+
+    assert!(by_id("cart-items").is_none());
+    assert_eq!(text("empty-cart").as_deref(), Some("Your cart is empty."));
+    assert!(by_id("cart-pending").is_none());
+    assert_eq!(*errors.borrow(), Vec::<String>::new());
 }
