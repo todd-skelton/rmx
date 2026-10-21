@@ -247,7 +247,8 @@ for (let i = 0; i < 10 && (await order()) === start; i++) {
   await page.waitForTimeout(20)
 }
 check('moved list items animate from their old position', await page.evaluate(() => [...document.querySelectorAll('#default-animate .item')].some((i) => /^translate3d/.test(i.getAnimations()[0]?.effect.getKeyframes()[0].transform ?? ''))))
-await page.waitForTimeout(3300)
+// The spring runs per animation frame, which slows under load: wait for it to settle.
+await page.waitForFunction(() => document.querySelector('#html-content .count')?.textContent === '100', null, { timeout: 10000 }).catch(() => {})
 check('a spring iterated per frame counts to 100', (await page.textContent('#html-content .count')) === '100', await page.textContent('#html-content .count'))
 await page.click('#enter .replay')
 await page.waitForTimeout(30)

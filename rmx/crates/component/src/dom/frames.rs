@@ -411,8 +411,10 @@ impl FrameState {
     }
 
     /// Apply a response as it streams: the main HTML as soon as the server's flush marker
-    /// arrives, then each `<template>` as it completes (the template watcher swaps it into
-    /// its frame).
+    /// arrives, then each `<template id>` as it completes (the template watcher swaps it
+    /// into its frame). Other HTML after the first marker replaces the frame's content again,
+    /// a batch at each further marker and the rest when the stream ends, as Remix's frame
+    /// streams do.
     async fn read_stream(
         self: &Rc<Self>,
         response: &web_sys::Response,
@@ -441,6 +443,8 @@ impl FrameState {
         let stream_opts = js::object(&[("stream", JsValue::TRUE)]);
         let mut buffer = String::new();
         let mut main_applied = false;
+        // HTML after the main content that is not a template, waiting for its marker.
+        let mut pending = String::new();
         loop {
             // A newer load (or disposal) cancels the stream right away, without waiting for
             // its next chunk.
@@ -473,13 +477,19 @@ impl FrameState {
                 }
             }
             if main_applied {
-                while let Some(end) = template_end(&buffer) {
-                    let rest = buffer.split_off(end);
-                    append_template(&buffer);
-                    buffer = rest.trim_start().to_string();
+                pending.push_str(&take_templates(&mut buffer));
+                while let Some((start, end)) = crate::ssr::find_flush_marker(&pending) {
+                    let rest = pending.split_off(end);
+                    pending.truncate(start);
+                    apply(&pending);
+                    pending = rest;
                 }
             }
             if done {
+                pending.push_str(&buffer);
+                if main_applied && !is_blank(&pending) {
+                    apply(&pending);
+                }
                 return Ok(());
             }
         }
@@ -675,7 +685,7 @@ fn entries(body: &web_sys::FormData) -> Vec<(String, String)> {
 /// The end of the complete `<template ...>...</template>` at the start of `html`, counting
 /// nested templates.
 fn template_end(html: &str) -> Option<usize> {
-    if !html.starts_with("<template") {
+    if !html.get(..9).is_some_and(|p| p.eq_ignore_ascii_case("<template")) {
         return None;
     }
     let lower = html.to_ascii_lowercase();
@@ -697,6 +707,50 @@ fn template_end(html: &str) -> Option<usize> {
         }
     }
     None
+}
+
+/// Publish the complete `<template id>`s in streamed HTML and return the HTML around them.
+/// A template still arriving (or a tag cut off at the end) stays in `buffer`.
+fn take_templates(buffer: &mut String) -> String {
+    const OPEN: &str = "<template";
+    let mut html = String::new();
+    let mut rest = std::mem::take(buffer);
+    loop {
+        let lower = rest.to_ascii_lowercase();
+        let Some(start) = lower.find(OPEN) else {
+            let keep = (1..OPEN.len()).rev().find(|&n| lower.ends_with(&OPEN[..n])).unwrap_or(0);
+            let split = rest.len() - keep;
+            html.push_str(&rest[..split]);
+            *buffer = rest[split..].to_string();
+            return html;
+        };
+        let Some(close) = lower[start..].find('>') else {
+            html.push_str(&rest[..start]);
+            *buffer = rest[start..].to_string();
+            return html;
+        };
+        let attrs = &lower[start + OPEN.len()..start + close];
+        let is_frame_template = attrs.starts_with(|c: char| c.is_ascii_whitespace())
+            && attrs.split_ascii_whitespace().any(|a| a.starts_with("id="));
+        if !is_frame_template {
+            html.push_str(&rest[..start + close + 1]);
+            rest = rest[start + close + 1..].to_string();
+            continue;
+        }
+        let Some(len) = template_end(&rest[start..]) else {
+            html.push_str(&rest[..start]);
+            *buffer = rest[start..].to_string();
+            return html;
+        };
+        html.push_str(&rest[..start]);
+        append_template(&rest[start..start + len]);
+        rest = rest[start + len..].to_string();
+    }
+}
+
+/// Streamed HTML with nothing to render: whitespace and the document's closing tags.
+fn is_blank(html: &str) -> bool {
+    html.to_ascii_lowercase().replace("</body>", "").replace("</html>", "").trim().is_empty()
 }
 
 /// Put a streamed `<template id>` into the document for the template watcher.

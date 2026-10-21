@@ -15,7 +15,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use rmx::ssr::{flush_marker, HydrationData, TEMPLATE_END};
-use rmx::{create_root, rsx, Component, Frame, FrameEvent, FrameHandle, Frames, Handle, Node, ReloadOptions, Root, RunOptions};
+use rmx::{create_root, on, rsx, Component, Frame, FrameEvent, FrameHandle, Frames, Handle, Node, ReloadOptions, Root, RunOptions};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -42,6 +42,7 @@ async fn start() -> Server {
             rmx::entry::<EntryWithLateFrame>(),
             rmx::entry::<RowAction>(),
             rmx::entry::<CartItems>(),
+            rmx::entry::<ReloadButton>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -1398,3 +1399,64 @@ async fn a_failed_reload_resolves_to_its_error_and_reports_it() {
     assert_eq!(*errors.borrow(), std::slice::from_ref(&caught.message), "the same error reaches the app");
     assert_eq!(text("rj").as_deref(), Some("Initial"));
 }
+
+// frame.test.tsx: a reload outlives the component that started it
+
+thread_local! {
+    static CLICK_SIGNAL: RefCell<Option<rmx::Signal>> = const { RefCell::new(None) };
+    /// Whether the reload's signal was aborted, or its error.
+    static CLICK_RELOAD: RefCell<Option<Result<bool, String>>> = const { RefCell::new(None) };
+}
+
+/// A client entry whose button reloads its own frame.
+struct ReloadButton;
+
+impl Component for ReloadButton {
+    type Props = EntryProps;
+    rmx::client_entry!("ReloadButton");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        ReloadButton
+    }
+    fn render(&self, _: &EntryProps, h: &Handle<Self>) -> Node {
+        let click = h.on_event(|_, h, event| {
+            CLICK_SIGNAL.with(|s| *s.borrow_mut() = Some(event.signal()));
+            let frame = h.frame();
+            h.spawn(async move {
+                let result = frame.reload_async(ReloadOptions::default()).await;
+                CLICK_RELOAD.with(|r| *r.borrow_mut() = Some(result.map(|s| s.aborted()).map_err(|e| e.message)));
+            });
+        });
+        rsx! { <button id="sr-reload" mix={on("click", click)}>"Reload"</button> }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn finishes_a_streamed_reload_after_removing_its_calling_component() {
+    let server = start().await;
+    let mut d = HydrationData::default();
+    d.entries.push(("srh".into(), "ReloadButton".into(), r#"{"label":""}"#.into()));
+    d.frames.push(("srf".into(), "/sr-frame".into(), None, "resolved"));
+    let page = format!(
+        "<main>{}</main>{}",
+        region("srf", r#"<!--rmx:h:srh--><button id="sr-reload">Reload</button><!--/rmx:h-->"#),
+        d.to_script()
+    );
+    server.route("/sr-page", vec![Part::Html(page)]);
+    let _m = mount("sr-page", "/sr-page", "sr-reload").await;
+    server.route("/sr-frame", vec![Part::Html(format!(r#"<p id="sr-first">First</p>{}"#, flush())), Part::Gate("sr-tail")]);
+    CLICK_RELOAD.with(|r| r.borrow_mut().take());
+
+    input("sr-reload").click();
+    until("the first batch", || by_id("sr-first").is_some()).await;
+    let event_signal = CLICK_SIGNAL.with(|s| s.borrow_mut().take()).expect("the click's signal");
+    assert!(event_signal.aborted(), "removing the button aborts its event signal");
+    assert!(by_id("sr-reload").is_none());
+    assert!(!server.cancels().contains(&"/sr-frame".to_string()), "the reload's stream keeps going");
+    assert!(CLICK_RELOAD.with(|r| r.borrow().is_none()), "the reload is still streaming");
+
+    server.release("sr-tail", r#"<p id="sr-last">Last</p>"#);
+    until("the reload", || CLICK_RELOAD.with(|r| r.borrow().is_some())).await;
+    assert_eq!(CLICK_RELOAD.with(|r| r.borrow_mut().take()), Some(Ok(false)), "the reload resolves to a live signal");
+    assert_eq!(text("sr-last").as_deref(), Some("Last"));
+}
+
