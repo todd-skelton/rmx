@@ -25,6 +25,8 @@
 //! | `spaResponse`, client-side routing | [`rmx::spa`](spa) | browser and server |
 //! | `remix/fetch-proxy` | `rmx::fetch_proxy` | server |
 //! | `remix/file-storage` | `rmx::file_storage` | server |
+//! | `remix/lazy-file` | [`rmx::lazy_file`](lazy_file) | browser and server |
+//! | `remix/fs` | `rmx::fs` | server |
 //! | `remix/form-data-parser`, `remix/multipart-parser` | `rmx::fetch`, `rmx::multipart_parser` | server |
 //! | `remix/html-template` | `rmx::html_template` | server |
 //! | `remix/tar-parser` | `rmx::tar_parser` | server |
@@ -55,6 +57,7 @@ pub use rmx_component::*;
 pub use rmx_data_schema as data_schema;
 pub use rmx_fetch as fetch;
 pub use rmx_headers as headers;
+pub use rmx_lazy_file as lazy_file;
 pub use rmx_mime as mime;
 pub use rmx_route_pattern as route_pattern;
 pub use rmx_router as router;
@@ -69,6 +72,6 @@ pub mod cli;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
     rmx_assets as assets, rmx_auth as auth, rmx_cookie as cookie, rmx_crypto as crypto, rmx_fetch_proxy as fetch_proxy,
-    rmx_file_storage as file_storage, rmx_html_template as html_template, rmx_middleware as middleware, rmx_multipart_parser as multipart_parser,
+    rmx_file_storage as file_storage, rmx_fs as fs, rmx_html_template as html_template, rmx_middleware as middleware, rmx_multipart_parser as multipart_parser,
     rmx_render as render, rmx_serve as serve, rmx_session as session, rmx_tar_parser as tar_parser, rmx_terminal as terminal,
 };

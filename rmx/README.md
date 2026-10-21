@@ -227,7 +227,11 @@ crates:
    session middleware runs Remix's `session.test.ts` and `session-expiration.test.ts`, and
    seals the session with `Context::set_sealed` so a handler that replaces it panics with
    Remix's "Cannot save session that was initialized by another middleware/handler"),
-   `rmx-file-storage`, `rmx-tar-parser` (Remix's `tar.test.ts`, `tar-name.test.ts` and
+   `rmx-file-storage`, `rmx-lazy-file` (Remix's `lazy-file`: `LazyFile` and `LazyBlob` know
+   their size and type up front and read content only when streamed; `slice` narrows the byte
+   range without reading; works in the browser too), `rmx-fs` (Remix's `fs`: `open_lazy_file`
+   streams a file from disk on demand, `write_file` and `write_to` stream any file or blob to
+   disk; both packages' tests ported one per case), `rmx-tar-parser` (Remix's `tar.test.ts`, `tar-name.test.ts` and
    `tar-size.test.ts` ported one per case, including the lodash and npm package fixtures;
    `TarParser::parse` reuses one parser across archives like Remix's `parser.parse`, and
    bodies grow from received bytes rather than the declared size), `rmx-multipart-parser` (Remix's multipart, request,

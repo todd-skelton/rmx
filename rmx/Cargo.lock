@@ -1161,8 +1161,10 @@ dependencies = [
  "rmx-fetch",
  "rmx-fetch-proxy",
  "rmx-file-storage",
+ "rmx-fs",
  "rmx-headers",
  "rmx-html-template",
+ "rmx-lazy-file",
  "rmx-middleware",
  "rmx-mime",
  "rmx-multipart-parser",
@@ -1285,6 +1287,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-fs"
+version = "0.1.0"
+dependencies = [
+ "rmx-fetch",
+ "rmx-lazy-file",
+ "rmx-mime",
+]
+
+[[package]]
 name = "rmx-headers"
 version = "0.1.0"
 dependencies = [
@@ -1296,6 +1307,15 @@ name = "rmx-html-template"
 version = "0.1.0"
 dependencies = [
  "rmx-macros",
+]
+
+[[package]]
+name = "rmx-lazy-file"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "js-sys",
+ "rmx-fetch",
 ]
 
 [[package]]

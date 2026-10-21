@@ -1,0 +1,11 @@
+[package]
+name = "rmx-fs"
+description = "Local files as lazy files for rmx (Remix's fs): open_lazy_file streams a file from disk on demand, write_file streams any file or blob to disk"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+rmx-fetch.workspace = true
+rmx-lazy-file.workspace = true
+rmx-mime.workspace = true

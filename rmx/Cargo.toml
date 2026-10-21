@@ -27,6 +27,8 @@ members = [
     "crates/ui",
     "crates/data-schema",
     "crates/terminal",
+    "crates/lazy-file",
+    "crates/fs",
     "examples/bench/app",
     "examples/bench/server",
     "examples/bench/client",
@@ -77,6 +79,8 @@ rmx-auth = { path = "crates/auth" }
 rmx-cookie = { path = "crates/cookie" }
 rmx-ui = { path = "crates/ui" }
 rmx-data-schema = { path = "crates/data-schema" }
+rmx-lazy-file = { path = "crates/lazy-file" }
+rmx-fs = { path = "crates/fs" }
 bytes = "1"
 http = "1"
 http-body = "1"
