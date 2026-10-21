@@ -91,10 +91,15 @@ pub struct FrameRequest {
     pub signal: crate::Signal,
 }
 
-/// Content a resolver produced: server-style HTML, or a node tree to render directly.
+/// Content a resolver produced: server-style HTML, a node tree to render directly, or (in
+/// the browser) a streamed HTML body, applied as it arrives like a fetched frame response:
+/// the content at its flush marker, then each `<template>` (Remix's `ReadableStream`
+/// resolution).
 pub enum FrameContent {
     Html(String),
     Node(Node),
+    #[cfg(target_arch = "wasm32")]
+    Stream(web_sys::ReadableStream),
 }
 
 /// A resolved frame request. `url` is the final URL when the resolver followed redirects.

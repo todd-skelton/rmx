@@ -533,6 +533,10 @@ impl FrameState {
             FrameContent::Html(html) => self.tracked(|| self.apply_html(&html)),
             // Node content from a load re-renders like a frame load's server content.
             FrameContent::Node(node) => self.tracked(|| server_reload(|| self.apply_node(node))),
+            FrameContent::Stream(stream) => {
+                let response = web_sys::Response::new_with_opt_readable_stream(Some(&stream))?;
+                self.read_stream(&response, signal, None).await?;
+            }
         }
         Ok(response.url)
     }

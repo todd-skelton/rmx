@@ -29,6 +29,8 @@ enum Answer {
     Node,
     /// Never resolves.
     Pending,
+    /// A streamed body.
+    Stream(web_sys::ReadableStream),
 }
 
 fn answer(next: Answer) {
@@ -50,6 +52,7 @@ fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
             Answer::Html(html, url) => FrameResponse { content: FrameContent::Html(html), url },
             Answer::Node => FrameResponse { content: FrameContent::Node(rsx! { <p id="node">"From a node"</p> }), url: None },
             Answer::Pending => std::future::pending().await,
+            Answer::Stream(stream) => FrameResponse { content: FrameContent::Stream(stream), url: None },
         })
     })
 }
@@ -276,4 +279,62 @@ async fn passes_each_load_a_signal_that_aborts_when_a_newer_load_supersedes_it()
     assert!(!requests()[2].signal.aborted());
     assert!(!current.aborted());
     assert_eq!(m.text_of("#content").as_deref(), Some("Fresh"));
+}
+
+// frame.test.tsx: a resolver's streamed body updates nested placeholders incrementally
+
+/// A stream that sends `first` at once; `release(html)` sends `html` and closes it.
+fn held_stream(first: &str) -> (web_sys::ReadableStream, js_sys::Function) {
+    let make = js_sys::Function::new_with_args(
+        "first",
+        "const encoder = new TextEncoder(); let release;
+         const stream = new ReadableStream({ start(c) {
+           c.enqueue(encoder.encode(first));
+           release = (html) => { c.enqueue(encoder.encode(html)); c.close() };
+         } });
+         return [stream, (html) => release(html)];",
+    );
+    let pair: js_sys::Array = make.call1(&wasm_bindgen::JsValue::NULL, &first.into()).unwrap().unchecked_into();
+    (pair.get(0).unchecked_into(), pair.get(1).unchecked_into())
+}
+
+#[wasm_bindgen_test]
+async fn streams_resolver_templates_and_updates_nested_placeholders_incrementally() {
+    use rmx::ssr::{flush_marker, HydrationData, TEMPLATE_END};
+    let m = mount("streamed").await;
+    let mut d = HydrationData::default();
+    d.frames.push(("sn1".into(), "/nested".into(), None, "pending"));
+    let first = format!(
+        r#"<section><p id="outer">Reloaded outer</p><!--rmx:f:sn1--><span id="nested">Loading nested...</span><!--/rmx:f--></section>{}{}"#,
+        d.to_script(),
+        flush_marker(false)
+    );
+    let (stream, release) = held_stream(&first);
+    answer(Answer::Stream(stream));
+    let done = Rc::new(std::cell::Cell::new(false));
+    let flag = done.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let _ = frame("streamed").reload_async(ReloadOptions::default()).await;
+        flag.set(true);
+    });
+    for _ in 0..200 {
+        if m.text_of("#outer").is_some() {
+            break;
+        }
+        tick().await;
+    }
+    assert_eq!(m.text_of("#outer").as_deref(), Some("Reloaded outer"));
+    assert_eq!(m.text_of("#nested").as_deref(), Some("Loading nested..."));
+    assert!(!done.get(), "the reload is still streaming");
+
+    release.call1(&wasm_bindgen::JsValue::NULL, &format!(r#"<template id="sn1"><span id="nested">Nested loaded</span><!--{TEMPLATE_END}--></template>"#).into()).unwrap();
+    for _ in 0..200 {
+        if done.get() && m.text_of("#nested").as_deref() == Some("Nested loaded") {
+            break;
+        }
+        tick().await;
+    }
+    assert!(done.get());
+    assert_eq!(m.text_of("#nested").as_deref(), Some("Nested loaded"));
+    assert_eq!(requests().iter().filter(|r| r.url.ends_with("/nested")).count(), 0, "the nested frame came from the stream");
 }
