@@ -176,7 +176,7 @@ fn parse_bypass(pattern: &str) -> BypassPattern {
                 return Segment::Static(seg.to_string());
             };
             assert!(!name.is_empty(), "invalid bypass pattern {pattern:?}: empty wildcards are not allowed");
-            assert!(name != "$", "invalid bypass pattern {pattern:?}: \"{{$}}\" is not supported in cop");
+            assert!(name != "$", "invalid bypass pattern {pattern:?}: \"{{$}}\" is not supported in cop-middleware");
             match name.strip_suffix("...") {
                 Some(rest_name) => {
                     assert!(i == last, "invalid bypass pattern {pattern:?}: tail wildcards must be last");
