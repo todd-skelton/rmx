@@ -11,6 +11,10 @@ pub struct Match<T> {
     pub data: T,
 }
 
+/// How specific a match is; greater is more specific (Remix's `Specificity` comparisons).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Specificity(Vec<u8>);
+
 /// Per-character specificity: higher is more specific.
 const STATIC: u8 = 3;
 const VAR: u8 = 2;
@@ -59,6 +63,11 @@ impl<T> Matcher<T> {
 
     /// Every match, most specific first.
     pub fn match_all(&self, url: &Url) -> Vec<Match<&T>> {
+        self.match_all_ranked(url).into_iter().map(|(_, m)| m).collect()
+    }
+
+    /// Every match with its specificity, most specific first (ties in insertion order).
+    pub fn match_all_ranked(&self, url: &Url) -> Vec<(Specificity, Match<&T>)> {
         let mut all: Vec<(Vec<u8>, usize, Params, &T)> = self
             .entries
             .iter()
@@ -66,7 +75,7 @@ impl<T> Matcher<T> {
             .filter_map(|(i, (p, d))| match_one(p, url).map(|(params, rank)| (rank, i, params, d)))
             .collect();
         all.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        all.into_iter().map(|(_, _, params, data)| Match { params, data }).collect()
+        all.into_iter().map(|(rank, _, params, data)| (Specificity(rank), Match { params, data })).collect()
     }
 
     /// Patterns and data in insertion order.

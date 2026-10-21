@@ -415,6 +415,27 @@ impl<A> From<A> for Controller<A> {
     }
 }
 
+/// `any`, `get`, `head`, `post`, `put`, `patch`, `delete` and `options` for [`Router`] and
+/// [`RouteBuilder`]. Each takes a handler or an [`Action`] with action middleware.
+macro_rules! verb_methods {
+    () => {
+        verb_methods!(@one any, None, "any request method");
+        verb_methods!(@one get, Some(Method::GET), "`GET` (which also serves `HEAD`)");
+        verb_methods!(@one head, Some(Method::HEAD), "`HEAD`");
+        verb_methods!(@one post, Some(Method::POST), "`POST`");
+        verb_methods!(@one put, Some(Method::PUT), "`PUT`");
+        verb_methods!(@one patch, Some(Method::PATCH), "`PATCH`");
+        verb_methods!(@one delete, Some(Method::DELETE), "`DELETE`");
+        verb_methods!(@one options, Some(Method::OPTIONS), "`OPTIONS`");
+    };
+    (@one $name:ident, $method:expr, $doc:literal) => {
+        #[doc = concat!("Register an action for ", $doc, " requests to `route`.")]
+        pub fn $name(&mut self, route: impl IntoRoute, action: impl Into<Action>) -> &mut Self {
+            self.add_verb($method, route, action)
+        }
+    };
+}
+
 // ---------------------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------------------
@@ -485,46 +506,19 @@ impl Router {
         RouteBuilder { router: self, prefix: None, middleware: Vec::new() }
     }
 
-    /// Register a handler for a route, using the route's own method.
-    pub fn route(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().route(route, handler);
+    /// Register an action for a route, using the route's own method. An action is a
+    /// handler, or [`action`]`(handler).with(middleware)` for action middleware.
+    pub fn route(&mut self, route: impl IntoRoute, action: impl Into<Action>) -> &mut Self {
+        self.builder().route(route, action);
         self
     }
 
-    pub fn any(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(None, route, handler);
+    fn add_verb(&mut self, method: Option<Method>, route: impl IntoRoute, action: impl Into<Action>) -> &mut Self {
+        self.builder().add_verb(method, route, action);
         self
     }
 
-    pub fn get(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(Some(Method::GET), route, handler);
-        self
-    }
-
-    pub fn post(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(Some(Method::POST), route, handler);
-        self
-    }
-
-    pub fn put(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(Some(Method::PUT), route, handler);
-        self
-    }
-
-    pub fn patch(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(Some(Method::PATCH), route, handler);
-        self
-    }
-
-    pub fn delete(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(Some(Method::DELETE), route, handler);
-        self
-    }
-
-    pub fn head(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.builder().add(Some(Method::HEAD), route, handler);
-        self
-    }
+    verb_methods!();
 
     /// Map a route map to a controller (Remix's `router.map(routes, controller)`): each direct
     /// route of `routes` gets its action, behind the controller's and the action's middleware.
@@ -571,40 +565,51 @@ impl Router {
 
     async fn dispatch(&self, mut ctx: Context) -> Response {
         let method = ctx.method().clone();
-        let matches = self.inner.routes.match_all(ctx.url());
-        if matches.is_empty() {
-            return self.inner.not_found.call(ctx).await;
-        }
-        let pick = |want: &Method| {
-            matches.iter().find(|m| m.data.method.as_ref().is_none_or(|rm| rm == want))
-        };
-        let mut strip_body = false;
-        let found = pick(&method).or_else(|| {
-            if method == Method::HEAD {
-                strip_body = true;
-                pick(&Method::GET)
-            } else {
-                None
-            }
-        });
-        let Some(found) = found else {
-            let mut allow: Vec<String> = Vec::new();
-            for m in &matches {
-                if let Some(rm) = &m.data.method {
-                    allow.push(rm.to_string());
-                    if *rm == Method::GET {
-                        allow.push("HEAD".into());
-                    }
+        let matches = self.inner.routes.match_all_ranked(ctx.url());
+        // Remix's dispatch: the first match (most specific first) for this method or ANY wins.
+        // A HEAD request falls back to the most specific GET match, unless an equally specific
+        // HEAD or ANY route follows it.
+        let mut found = None;
+        let mut head_fallback: Option<usize> = None;
+        let mut allowed: Vec<Method> = Vec::new();
+        for (i, (rank, m)) in matches.iter().enumerate() {
+            if let Some(fallback) = head_fallback {
+                if *rank != matches[fallback].0 {
+                    break;
                 }
             }
-            allow.sort();
-            allow.dedup();
-            let mut res = response::status(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed");
+            match &m.data.method {
+                Some(rm) if *rm != method => {
+                    if method == Method::HEAD && *rm == Method::GET {
+                        head_fallback.get_or_insert(i);
+                    } else if !allowed.contains(rm) {
+                        allowed.push(rm.clone());
+                    }
+                }
+                _ => {
+                    found = Some(i);
+                    break;
+                }
+            }
+        }
+        let strip_body = found.is_none() && head_fallback.is_some();
+        let Some(index) = found.or(head_fallback) else {
+            if allowed.is_empty() {
+                return self.inner.not_found.call(ctx).await;
+            }
+            // GET routes also serve HEAD, so HEAD is allowed whenever GET is.
+            let allow: Vec<&str> = [Method::GET, Method::HEAD, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS]
+                .iter()
+                .filter(|m| allowed.contains(m) || (**m == Method::HEAD && allowed.contains(&Method::GET)))
+                .map(Method::as_str)
+                .collect();
+            let mut res = response::status(StatusCode::METHOD_NOT_ALLOWED, format!("Method Not Allowed: {method}"));
             if let Ok(v) = HeaderValue::from_str(&allow.join(", ")) {
                 res.headers_mut().insert(header::ALLOW, v);
             }
             return res;
         };
+        let found = &matches[index].1;
         let entry = found.data.clone();
         ctx.params = found.params.clone();
         async_context::update(&ctx.scope, |s| s.params = ctx.params.clone());
@@ -628,9 +633,11 @@ pub struct RouteBuilder<'a> {
 }
 
 impl RouteBuilder<'_> {
-    fn add(&mut self, method: Option<Method>, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        let middleware = self.middleware.clone();
-        self.add_entry(route.into_route(method), Arc::new(handler), middleware)
+    fn add_verb(&mut self, method: Option<Method>, route: impl IntoRoute, action: impl Into<Action>) -> &mut Self {
+        let Action { handler, middleware } = action.into();
+        let mut chain = self.middleware.clone();
+        chain.extend(middleware);
+        self.add_entry(route.into_route(method), handler, chain)
     }
 
     fn add_entry(&mut self, mut route: Route, handler: Arc<dyn Handler>, middleware: Vec<Arc<dyn Middleware>>) -> &mut Self {
@@ -659,34 +666,12 @@ impl RouteBuilder<'_> {
         self
     }
 
-    /// Register a handler for a route, using the route's own method.
-    pub fn route(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(None, route, handler)
+    /// Register an action for a route, using the route's own method.
+    pub fn route(&mut self, route: impl IntoRoute, action: impl Into<Action>) -> &mut Self {
+        self.add_verb(None, route, action)
     }
 
-    pub fn any(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(None, route, handler)
-    }
-
-    pub fn get(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(Some(Method::GET), route, handler)
-    }
-
-    pub fn post(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(Some(Method::POST), route, handler)
-    }
-
-    pub fn put(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(Some(Method::PUT), route, handler)
-    }
-
-    pub fn patch(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(Some(Method::PATCH), route, handler)
-    }
-
-    pub fn delete(&mut self, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        self.add(Some(Method::DELETE), route, handler)
-    }
+    verb_methods!();
 
     /// Nested group with extra route middleware.
     pub fn group(&mut self, middleware: Vec<Arc<dyn Middleware>>, install: impl FnOnce(&mut RouteBuilder<'_>)) {

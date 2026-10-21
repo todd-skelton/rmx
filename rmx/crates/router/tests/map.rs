@@ -499,3 +499,213 @@ fn routes_command_parses_flags_like_remix_routes() {
     assert_eq!(routes_command_output(&routes, &args(&["--no-headers"])).unwrap_err(), "Cannot use --no-headers without --table.");
     assert_eq!(routes_command_output(&routes, &args(&["--verbose"])).unwrap_err(), "Unknown option --verbose.");
 }
+
+// --- router.fetch(), action middleware, 404, 405 and HEAD (router.test.ts) --------------
+
+fn fetch_res(router: &Router, method: &str, url: &str) -> Response {
+    block_on(router.fetch(req(method, url)))
+}
+
+#[test]
+fn fetches_a_route_with_specific_method_actions() {
+    let home = get("/");
+    let mut router = Router::new();
+    router.get(&home, |_: Context| async { "GET" });
+    router.head(&home, |_: Context| async { "HEAD" });
+    router.post(&home, |_: Context| async { "POST" });
+    router.put(&home, |_: Context| async { "PUT" });
+    router.patch(&home, |_: Context| async { "PATCH" });
+    router.delete(&home, |_: Context| async { "DELETE" });
+    router.options(&home, |_: Context| async { "OPTIONS" });
+    for method in ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] {
+        assert_eq!(fetch(&router, method, "https://remix.run"), (200, method.to_string()));
+    }
+    // The explicit HEAD route runs (its body is dropped by the server, not the router).
+    assert_eq!(fetch(&router, "HEAD", "https://remix.run"), (200, "HEAD".into()));
+}
+
+#[test]
+fn verb_methods_take_actions_with_middleware() {
+    let log = log();
+    let mut router = Router::new().with(record(&log, "router middleware"));
+    let l = log.clone();
+    router.get(
+        "/",
+        action(move |_: Context| {
+            l.lock().unwrap().push("action".into());
+            async { "OK" }
+        })
+        .with(record(&log, "action middleware 1"))
+        .with(record(&log, "action middleware 2")),
+    );
+    let l = log.clone();
+    router.get(
+        "/b",
+        move |_: Context| {
+            l.lock().unwrap().push("action-b".into());
+            async { "B" }
+        },
+    );
+    assert_eq!(fetch(&router, "GET", "https://remix.run/"), (200, "OK".into()));
+    assert_eq!(take(&log), ["router middleware", "action middleware 1", "action middleware 2", "action"]);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/b"), (200, "B".into()));
+    assert_eq!(take(&log), ["router middleware", "action-b"]);
+}
+
+#[test]
+fn action_middleware_can_short_circuit() {
+    let log = log();
+    let l = log.clone();
+    let mut router = Router::new();
+    let block = {
+        let log = log.clone();
+        move |_: Context, _: Next| {
+            log.lock().unwrap().push("m2-short-circuit".to_string());
+            async { (http::StatusCode::FORBIDDEN, "Blocked").into_response() }
+        }
+    };
+    router.get(
+        "/",
+        action(move |_: Context| {
+            l.lock().unwrap().push("action".into());
+            async { "OK" }
+        })
+        .with(record(&log, "m1"))
+        .with(block)
+        .with(record(&log, "m3")),
+    );
+    assert_eq!(fetch(&router, "GET", "https://remix.run/"), (403, "Blocked".into()));
+    assert_eq!(take(&log), ["m1", "m2-short-circuit"]);
+}
+
+#[test]
+fn runs_both_controller_and_action_middleware() {
+    #[derive(RouteMap)]
+    struct Admin {
+        dashboard: Route,
+        users: Route,
+    }
+    let log = log();
+    let (l1, l2) = (log.clone(), log.clone());
+    let mut router = Router::new();
+    router.map(
+        &Admin { dashboard: get("/admin/dashboard"), users: get("/admin/users") },
+        Controller::new(AdminActions {
+            dashboard: action(move |_: Context| {
+                l1.lock().unwrap().push("dashboard-action".into());
+                async { "Dashboard" }
+            }),
+            users: action(move |_: Context| {
+                l2.lock().unwrap().push("users-action".into());
+                async { "Users" }
+            })
+            .with(record(&log, "users-action-middleware")),
+        })
+        .with(record(&log, "auth"))
+        .with(record(&log, "admin")),
+    );
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/dashboard"), (200, "Dashboard".into()));
+    assert_eq!(take(&log), ["auth", "admin", "dashboard-action"]);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/admin/users"), (200, "Users".into()));
+    assert_eq!(take(&log), ["auth", "admin", "users-action-middleware", "users-action"]);
+}
+
+#[test]
+fn not_found_handling() {
+    let log = log();
+    let mut router = Router::new().with(record(&log, "middleware"));
+    assert_eq!(fetch(&router, "GET", "https://remix.run/nonexistent"), (404, "Not Found: /nonexistent".into()));
+    assert_eq!(take(&log), ["middleware"]);
+    router.get("/home", |_: Context| async { "Home" });
+    let calls = Arc::new(Mutex::new(0));
+    let c = calls.clone();
+    router.not_found(move |ctx: Context| {
+        *c.lock().unwrap() += 1;
+        let path = ctx.url().pathname().to_string();
+        async move { (http::StatusCode::NOT_FOUND, format!("Custom 404: {path}")) }
+    });
+    assert_eq!(fetch(&router, "GET", "https://remix.run/home"), (200, "Home".into()));
+    assert_eq!(*calls.lock().unwrap(), 0);
+    assert_eq!(fetch(&router, "GET", "https://remix.run/missing"), (404, "Custom 404: /missing".into()));
+    assert_eq!(*calls.lock().unwrap(), 1);
+}
+
+#[test]
+fn method_not_allowed_handling() {
+    let mut router = Router::new();
+    router.get("/home", |_: Context| async { "Home" });
+    let res = fetch_res(&router, "POST", "https://remix.run/home");
+    assert_eq!(res.status(), 405);
+    assert_eq!(res.headers()["allow"], "GET, HEAD");
+    assert_eq!(block_on(res.into_body().text()).unwrap(), "Method Not Allowed: POST");
+
+    let mut router = Router::new();
+    router.get("/posts/:id", |_: Context| async { "Show" });
+    router.put("/posts/:id", |_: Context| async { "Update" });
+    router.delete("/posts/:id", |_: Context| async { "Destroy" });
+    let res = fetch_res(&router, "POST", "https://remix.run/posts/1");
+    assert_eq!(res.status(), 405);
+    assert_eq!(res.headers()["allow"], "GET, HEAD, PUT, DELETE");
+
+    // Falls through to a less specific route that allows the method.
+    let mut router = Router::new();
+    router.get("/posts/featured", |_: Context| async { "Featured" });
+    router.any("/posts/:id", |_: Context| async { "Any post" });
+    assert_eq!(fetch(&router, "POST", "https://remix.run/posts/featured"), (200, "Any post".into()));
+
+    // No 405 when nothing matches the URL, and an ANY catch-all handles other methods.
+    let mut router = Router::new();
+    router.get("/home", |_: Context| async { "Home" });
+    assert_eq!(fetch(&router, "POST", "https://remix.run/missing").0, 404);
+    router.any("/*rest", |_: Context| async { "Catch-all" });
+    assert_eq!(fetch(&router, "POST", "https://remix.run/home"), (200, "Catch-all".into()));
+}
+
+#[test]
+fn head_request_handling() {
+    // A GET route serves HEAD without a body and keeps its headers.
+    let mut router = Router::new();
+    router.get("/file", |_: Context| async {
+        let mut res = rmx::fetch::response::text("content");
+        res.headers_mut().insert("x-extra", "yes".parse().unwrap());
+        res
+    });
+    let res = fetch_res(&router, "HEAD", "https://remix.run/file");
+    assert_eq!(res.status(), 200);
+    assert_eq!(res.headers()["x-extra"], "yes");
+    assert_eq!(block_on(res.into_body().text()).unwrap(), "");
+
+    // An explicit HEAD route beats a GET route for the same pattern.
+    let mut router = Router::new();
+    router.get("/file", |_: Context| async { "content" });
+    router.head("/file", |_: Context| async {
+        let mut res = rmx::fetch::response::text("");
+        res.headers_mut().insert("x-head", "explicit".parse().unwrap());
+        res
+    });
+    assert_eq!(fetch_res(&router, "HEAD", "https://remix.run/file").headers()["x-head"], "explicit");
+
+    // A more specific GET route beats a less specific HEAD route.
+    let mut router = Router::new();
+    router.head("/*rest", |_: Context| async {
+        let mut res = rmx::fetch::response::text("");
+        res.headers_mut().insert("x-head", "catch-all".parse().unwrap());
+        res
+    });
+    router.get("/file", |_: Context| async {
+        let mut res = rmx::fetch::response::text("content");
+        res.headers_mut().insert("x-get", "specific".parse().unwrap());
+        res
+    });
+    let res = fetch_res(&router, "HEAD", "https://remix.run/file");
+    assert_eq!(res.headers()["x-get"], "specific");
+    assert!(res.headers().get("x-head").is_none());
+    assert_eq!(block_on(res.into_body().text()).unwrap(), "");
+
+    // 405 for HEAD when only other methods match.
+    let mut router = Router::new();
+    router.post("/submit", |_: Context| async { "Submitted" });
+    let res = fetch_res(&router, "HEAD", "https://remix.run/submit");
+    assert_eq!(res.status(), 405);
+    assert_eq!(res.headers()["allow"], "POST");
+}

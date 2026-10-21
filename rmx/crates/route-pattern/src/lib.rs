@@ -29,7 +29,7 @@ use rmx_url::{decode, encode_path, encode_path_segment, SearchParams, Url};
 
 mod matcher;
 
-pub use matcher::{Match, Matcher};
+pub use matcher::{Match, Matcher, Specificity};
 
 /// A parsed route pattern.
 #[derive(Clone, Debug, PartialEq, Eq)]
