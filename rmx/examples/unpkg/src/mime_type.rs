@@ -7,18 +7,10 @@ const TEXT_EXTENSIONS: &[&str] = &[
     ".prisma", ".env", ".gitignore", ".npmignore", ".eslintrc", ".prettierrc", ".editorconfig", "LICENSE", "README", "CHANGELOG", "Makefile", "Dockerfile",
 ];
 
-/// The type shown in directory listings (Remix's `detectMimeType`, without parameters).
+/// The type shown in directory listings (Remix's `detectMimeType`, or
+/// `application/octet-stream` when unknown).
 pub fn detect_file_mime_type(filename: &str) -> &'static str {
-    let ext = filename.rsplit_once('.').map_or("", |(_, e)| e);
-    match ext.to_ascii_lowercase().as_str() {
-        // Types rmx-mime does not list but Remix's mime database does.
-        "ts" | "mts" | "cts" => "video/mp2t",
-        "tsx" => "text/tsx",
-        "jsx" => "text/jsx",
-        "yaml" | "yml" => "text/yaml",
-        "markdown" => "text/markdown",
-        _ => rmx::mime::from_path(filename).split(';').next().unwrap_or("application/octet-stream"),
-    }
+    rmx::mime::detect_mime_type(filename).unwrap_or("application/octet-stream")
 }
 
 /// The type for an inline `<img>` preview, for the formats browsers display.

@@ -121,12 +121,12 @@ fn conditional_requests_and_ranges() {
 fn streams_large_files_in_chunks() {
     let dir = TempDir::new("large");
     let data: String = (0..200_000).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
-    dir.file("big.bin", &data);
+    dir.file("big.rmxunknown", &data);
     let r = router(&dir.0, StaticOptions::default());
-    let mut body = get(&r, "/big.bin", &[]).into_body();
+    let mut body = get(&r, "/big.rmxunknown", &[]).into_body();
     let first = block_on(body.chunk()).unwrap().unwrap();
     assert!(first.len() < data.len(), "streamed, not buffered");
-    let part = get(&r, "/big.bin", &[("range", "bytes=100000-100009")]);
+    let part = get(&r, "/big.rmxunknown", &[("range", "bytes=100000-100009")]);
     assert_eq!(part.headers().get("content-type"), None, "unknown types get no Content-Type");
     assert_eq!(text(part), &data[100_000..100_010]);
 }

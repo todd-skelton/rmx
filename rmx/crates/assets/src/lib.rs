@@ -322,8 +322,8 @@ impl AssetServer {
             res
         } else {
             let mut res = Response::new(if head { Body::empty() } else { Body::from((*built.body).clone()) });
-            let ct = rmx_mime::from_extension(built.extension.trim_start_matches('.'));
-            if let Ok(v) = HeaderValue::from_str(ct) {
+            let ct = rmx_mime::detect_content_type(&built.extension).unwrap_or_else(|| "application/octet-stream".into());
+            if let Ok(v) = HeaderValue::from_str(&ct) {
                 res.headers_mut().insert(header::CONTENT_TYPE, v);
             }
             res.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(built.body.len()));

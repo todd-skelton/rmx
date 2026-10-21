@@ -1,6 +1,6 @@
 [package]
 name = "rmx-mime"
-description = "File extension to MIME type lookup"
+description = "MIME types by file extension for rmx (Remix's mime package): the mime-db table, charset and compressibility rules, custom types"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

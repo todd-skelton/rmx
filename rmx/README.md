@@ -216,7 +216,8 @@ crates:
    `rmx-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
    nested-safe `Styles` and a `Terminal` over injectable streams; the logger uses it),
    `rmx-headers` (every Remix header type, raw header blocks, and `SuperHeaders` as a
-   typed-access trait on `http::HeaderMap`), `rmx-mime`, `rmx-spa`, `rmx-url`.
+   typed-access trait on `http::HeaderMap`), `rmx-mime` (Remix's mime-db table and
+   `defineMimeType`), `rmx-spa`, `rmx-url`.
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
    entrance, exit, FLIP layout), combobox, listbox, menu (submenus with hover aim, context
    menus), popover, select, tabs and toggle. The spring CSS output matches Remix's

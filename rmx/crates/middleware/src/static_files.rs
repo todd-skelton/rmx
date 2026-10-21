@@ -212,7 +212,7 @@ fn respond_with_file(
 ) -> io::Result<Response> {
     let head = method == Method::HEAD;
     let size = file.size;
-    let content_type = (!file.mime_type.is_empty()).then(|| rmx_mime::to_content_type(file.mime_type));
+    let content_type = (!file.mime_type.is_empty()).then(|| rmx_mime::mime_type_to_content_type(file.mime_type));
     let modified = file.last_modified.filter(|_| options.last_modified);
     let etag = match options.etag {
         ETag::Off => None,
@@ -230,7 +230,7 @@ fn respond_with_file(
         }
     };
     let accept_ranges = match &options.accept_ranges {
-        AcceptRanges::Auto => !rmx_mime::is_compressible(content_type.as_deref().unwrap_or_default()),
+        AcceptRanges::Auto => !rmx_mime::is_compressible_mime_type(content_type.as_deref().unwrap_or_default()),
         AcceptRanges::Always => true,
         AcceptRanges::Never => false,
         AcceptRanges::With(decide) => decide(file),

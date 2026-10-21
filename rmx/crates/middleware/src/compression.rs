@@ -276,12 +276,12 @@ pub struct Compression {
     brotli: PerResponse<BrotliOptions>,
 }
 
-/// Compress responses whose media type is compressible (see [`rmx_mime::is_compressible`]),
+/// Compress responses whose media type is compressible (see [`rmx_mime::is_compressible_mime_type`]),
 /// using [`compress_response`] with its defaults.
 pub fn compression() -> Compression {
     Compression {
         threshold: 1024,
-        filter: Arc::new(rmx_mime::is_compressible),
+        filter: Arc::new(rmx_mime::is_compressible_mime_type),
         encodings: Arc::new(|_| DEFAULT_ENCODINGS.to_vec()),
         zlib: Arc::new(|_| ZlibOptions::default()),
         brotli: Arc::new(|_| BrotliOptions::default()),
