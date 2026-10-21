@@ -160,10 +160,16 @@ crates:
    already in order stay put, so a custom element is not reconnected when siblings move.
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
-   document-state, form-navigation, navigation, frame request/resolver and frame css
-   test suites (`crates/component/tests/browser_*.rs`, 460 tests), plus Remix's nested client entry
-   regressions (one listener per nested entry wherever it sits; removal of a component or
-   nested entry waits for a `persist_node` exit at its top level).
+   document-state, form-navigation, navigation, frame request/resolver, frame css and
+   child frame reload test suites (`crates/component/tests/browser_*.rs`, 475 tests), plus
+   Remix's nested client entry regressions (one listener per nested entry wherever it sits;
+   removal of a component or nested entry waits for a `persist_node` exit at its top level).
+   Frames inside a reloading frame get `reloadStart` with it and `reloadComplete` once
+   their own new content is in, and a pending frame applies only the template for its
+   latest marker. A newer load of a frame cancels the older load's response stream at
+   once. Server streaming is checked by ports of `stream.test.tsx`
+   (`crates/component/tests/ssr_*.rs`, and `crates/render/src/stream_tests.rs` for frames,
+   which resolve through the router).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

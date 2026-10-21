@@ -26,11 +26,19 @@ thread_local! {
     static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
     static GUARD: RefCell<Option<JsValue>> = const { RefCell::new(None) };
     static REQUESTS: RefCell<Vec<FrameRequest>> = const { RefCell::new(Vec::new()) };
+    /// When set, the next resolve waits for this promise.
+    static HOLD: RefCell<Option<js_sys::Promise>> = const { RefCell::new(None) };
 }
 
 fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
     REQUESTS.with(|r| r.borrow_mut().push(request));
-    Box::pin(async { Ok(FrameResponse { content: FrameContent::Html(r#"<p id="loaded">Loaded</p>"#.into()), url: None }) })
+    let hold = HOLD.with(|h| h.borrow_mut().take());
+    Box::pin(async move {
+        if let Some(hold) = hold {
+            let _ = JsFuture::from(hold).await;
+        }
+        Ok(FrameResponse { content: FrameContent::Html(r#"<p id="loaded">Loaded</p>"#.into()), url: None })
+    })
 }
 
 fn window() -> web_sys::Window {
@@ -634,4 +642,38 @@ async fn reloads_a_targeted_frame_when_a_temporary_submitter_is_removed_during_s
     let requests = requests();
     assert_eq!(requests[0].target.as_deref(), Some("details"));
     assert_eq!(requests[0].form, Some(vec![("name".to_string(), "Ada".to_string()), ("intent".to_string(), "save".to_string())]));
+}
+
+/// Remix's version interrupts a top frame load; here the load targets the named frame. The
+/// fragment is not `#details`, which `does_not_intercept_hash_only_navigations` links to.
+#[wasm_bindgen_test]
+async fn finishes_loading_the_destination_when_a_hash_navigation_interrupts_its_frame_load() {
+    let _page = Page::new().await;
+    let mut release = None;
+    let hold = js_sys::Promise::new(&mut |resolve, _| release = Some(resolve));
+    HOLD.with(|h| *h.borrow_mut() = Some(hold));
+    let destination = page_url("pending-hash");
+    let target = || NavigateOptions { target: Some("details".into()), ..Default::default() };
+    navigate(&destination, target());
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(requests().len(), 1, "the first load is pending");
+    assert_eq!(current_url(), destination);
+
+    navigate(&format!("{destination}#interrupt"), target());
+    for _ in 0..3 {
+        tick().await;
+    }
+    release.unwrap().call0(&JsValue::NULL).unwrap();
+    settle().await;
+    assert_eq!(decisions(), [true, true], "the hash navigation is routed while the frame load is pending");
+    assert_eq!(requests().len(), 2, "the destination loads again");
+    assert_eq!(current_url(), format!("{destination}#interrupt"));
+    assert!(Frames.get("details").unwrap().src().ends_with("#interrupt"));
+
+    navigate(&format!("{destination}#other"), target());
+    settle().await;
+    assert_eq!(decisions(), [true, true, false], "later hash navigations are left to the browser");
+    assert_eq!(requests().len(), 2);
 }

@@ -39,6 +39,9 @@ pub(crate) struct FrameState {
     root: RefCell<Option<Root>>,
     /// Loads of blocking frames created while applying this frame's current load.
     tracker: RefCell<Option<Tracker>>,
+    /// Reloading because a frame it is in reloads (Remix's inherited reload): it sent
+    /// `reloadStart` and sends `reloadComplete` once its new content is in the page.
+    inherited: Cell<bool>,
 }
 
 /// Loads a frame load waits for before it finishes (Remix's reconciliation tracker): a
@@ -167,7 +170,65 @@ impl FrameState {
             events: web_sys::EventTarget::new().expect("EventTarget"),
             root: RefCell::new(None),
             tracker: RefCell::new(None),
+            inherited: Cell::new(false),
         }
+    }
+
+    /// The live frames directly inside this frame's content (frames inside them excluded).
+    fn child_frames(&self) -> Vec<Rc<FrameState>> {
+        let doc = document();
+        let (root, first, stop): (web_sys::Node, Option<web_sys::Node>, Option<web_sys::Node>) = match &self.range {
+            Some((start, end)) => match start.parent_node() {
+                Some(parent) => (parent, Some(start.clone().into()), Some(end.clone().into())),
+                None => return Vec::new(),
+            },
+            None => match doc.body() {
+                Some(body) => (body.into(), None, None),
+                None => return Vec::new(),
+            },
+        };
+        let Ok(walker) = doc.create_tree_walker_with_what_to_show(&root, 0x80 /* SHOW_COMMENT */) else { return Vec::new() };
+        if let Some(first) = &first {
+            walker.set_current_node(first);
+        }
+        let mut out = Vec::new();
+        while let Ok(Some(node)) = walker.next_node() {
+            if stop.as_ref().is_some_and(|s| s.is_same_node(Some(&node))) {
+                break;
+            }
+            if let Some(child) = is_start(&node).then(|| live(&node)).flatten() {
+                if let Some(end) = find_end(&node) {
+                    walker.set_current_node(&end);
+                }
+                out.push(child);
+            }
+        }
+        out
+    }
+
+    /// An ancestor started reloading: send `reloadStart` once, here and further down.
+    fn start_inherited(&self) {
+        if self.inherited.replace(true) || self.disposed.get() {
+            return;
+        }
+        self.emit("reloadStart");
+        for child in self.child_frames() {
+            child.start_inherited();
+        }
+    }
+
+    /// The new content of an inherited reload is in the page: send `reloadComplete`, and
+    /// finish frames inside that are not waiting for a streamed template.
+    fn complete_inherited(&self) {
+        if !self.inherited.replace(false) || self.disposed.get() {
+            return;
+        }
+        for child in self.child_frames() {
+            if !child.is_pending() {
+                child.complete_inherited();
+            }
+        }
+        self.emit("reloadComplete");
     }
 
     /// Call `handler` for `event` until `signal` aborts.
@@ -231,7 +292,13 @@ impl FrameState {
             previous.abort();
         }
         let signal = controller.signal();
-        self.emit("reloadStart");
+        // A load that takes over an inherited reload reuses its `reloadStart`.
+        if !self.inherited.replace(false) {
+            self.emit("reloadStart");
+        }
+        for child in self.child_frames() {
+            child.start_inherited();
+        }
         let tracker = Tracker::default();
         *self.tracker.borrow_mut() = Some(tracker.clone());
         let mut result = self.fetch_and_apply(submission, &signal).await;
@@ -256,6 +323,13 @@ impl FrameState {
             return Ok(None);
         }
         self.reload.replace(None);
+        // Frames inside that got their content with this load are done; ones waiting for a
+        // streamed template finish when it arrives.
+        for child in self.child_frames() {
+            if !child.is_pending() {
+                child.complete_inherited();
+            }
+        }
         self.emit("reloadComplete");
         result
     }
@@ -330,11 +404,16 @@ impl FrameState {
         let mut buffer = String::new();
         let mut main_applied = false;
         loop {
-            let chunk = JsFuture::from(js::call(&reader, "read", &[])?.unchecked_into::<js_sys::Promise>()).await?;
-            if signal.aborted() || self.disposed.get() {
-                let _ = js::call(&reader, "cancel", &[]);
-                return Ok(());
-            }
+            // A newer load (or disposal) cancels the stream right away, without waiting for
+            // its next chunk.
+            let read: js_sys::Promise = js::call(&reader, "read", &[])?.unchecked_into();
+            let chunk = match until_aborted(JsFuture::from(read.clone()), signal).await {
+                Some(chunk) if !signal.aborted() && !self.disposed.get() => chunk?,
+                _ => {
+                    cancel_quietly(&reader, Some(&read));
+                    return Ok(());
+                }
+            };
             let done = js::get(&chunk, "done").as_bool().unwrap_or(true);
             if !done {
                 let text = js::call(&decoder, "decode", &[&js::get(&chunk, "value"), &stream_opts])?;
@@ -345,7 +424,7 @@ impl FrameState {
                     let rest = buffer.split_off(end);
                     buffer.truncate(start);
                     if !apply(&buffer) {
-                        let _ = js::call(&reader, "cancel", &[]);
+                        cancel_quietly(&reader, None);
                         return Ok(());
                     }
                     buffer = rest.trim_start().to_string();
@@ -481,6 +560,19 @@ impl FrameState {
             diff::diff_nodes(&body_node, child_nodes(&body_node), child_nodes(next_body.as_ref()), None);
         }
         hydrate_region(self);
+    }
+}
+
+/// Cancel a response body reader. Once an aborted fetch errors the body, its pending read
+/// and the cancel both reject; those rejections are expected, so they are handled here
+/// instead of reaching the console as unhandled.
+fn cancel_quietly(reader: &JsValue, pending_read: Option<&js_sys::Promise>) {
+    let ignore: JsValue = js_sys::Function::new_no_args("").into();
+    if let Some(read) = pending_read {
+        let _ = js::call(read, "catch", &[&ignore]);
+    }
+    if let Ok(cancelled) = js::call(reader, "cancel", &[]) {
+        let _ = js::call(&cancelled, "catch", &[&ignore]);
     }
 }
 
@@ -958,10 +1050,16 @@ fn find_comment(root: &web_sys::Node, data: &str) -> Option<web_sys::Node> {
     None
 }
 
-/// Wait for the `<template id>` holding a non-blocking frame's content.
+/// Wait for the `<template id>` holding a non-blocking frame's content. A frame waits for
+/// one template: the one for its latest marker, so a late template from content that a
+/// reload replaced is ignored.
 fn watch(id: String, frame: &Rc<FrameState>) {
     frame.pending.set(true);
-    PENDING.with(|p| p.borrow_mut().push((id, Rc::downgrade(frame))));
+    PENDING.with(|p| {
+        let mut p = p.borrow_mut();
+        p.retain(|(_, f)| !f.upgrade().is_some_and(|f| Rc::ptr_eq(&f, frame)));
+        p.push((id, Rc::downgrade(frame)));
+    });
     OBSERVER.with(|o| {
         let mut o = o.borrow_mut();
         if o.is_some() {
@@ -1001,6 +1099,7 @@ fn check_templates() {
         mark_resolved(std::slice::from_ref(&id));
         frame.pending.set(false);
         frame.apply_fragment(&content);
+        frame.complete_inherited();
     }
     let empty = PENDING.with(|p| {
         let mut p = p.borrow_mut();
