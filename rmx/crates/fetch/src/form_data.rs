@@ -1,11 +1,12 @@
 //! `FormData`: parsed form fields and uploaded files, from URL-encoded or multipart bodies.
 
 use std::fmt;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use rmx_multipart_parser::{get_multipart_boundary, parse_multipart_stream, MultipartError, MultipartOptions};
 
-use crate::{Body, SearchParams};
+use crate::{BoxError, Body, SearchParams};
 
 /// A file, like the web's `File`: an uploaded file, or one read back from storage.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -19,14 +20,17 @@ pub struct File {
 }
 
 impl File {
-    /// A file modified now.
+    /// A file modified now. Like the web's `File` constructor, the type is lowercased, and a
+    /// type with characters outside U+0020 to U+007E becomes empty.
     pub fn new(name: impl Into<String>, content_type: impl Into<String>, bytes: impl Into<Bytes>) -> File {
         // `SystemTime` panics in wasm32.
         #[cfg(target_arch = "wasm32")]
         let now = js_sys::Date::now() as u64;
         #[cfg(not(target_arch = "wasm32"))]
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
-        File { name: name.into(), content_type: content_type.into(), bytes: bytes.into(), last_modified: now }
+        let content_type: String = content_type.into();
+        let content_type = if content_type.bytes().all(|b| (0x20..=0x7e).contains(&b)) { content_type.to_ascii_lowercase() } else { String::new() };
+        File { name: name.into(), content_type, bytes: bytes.into(), last_modified: now }
     }
 
     /// `size` in bytes.
@@ -97,20 +101,38 @@ impl FormLimits {
 }
 
 /// Why a form could not be parsed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum FormDataError {
-    /// A malformed body (`FormDataParseError`).
+    /// A malformed body or an unsupported media type (`FormDataParseError`).
     Parse(String),
     /// More file parts than `max_files` (`MaxFilesExceededError`).
     MaxFilesExceeded(usize),
     /// A multipart limit, or a URL-encoded body over `max_parts` or the total size.
     Limit(MultipartError),
+    /// The upload handler failed; the error is passed through as it was returned (Remix lets
+    /// errors thrown by the handler propagate).
+    Upload(Arc<dyn std::error::Error + Send + Sync>),
 }
 
+impl PartialEq for FormDataError {
+    fn eq(&self, other: &FormDataError) -> bool {
+        match (self, other) {
+            (FormDataError::Parse(a), FormDataError::Parse(b)) => a == b,
+            (FormDataError::MaxFilesExceeded(a), FormDataError::MaxFilesExceeded(b)) => a == b,
+            (FormDataError::Limit(a), FormDataError::Limit(b)) => a == b,
+            (FormDataError::Upload(a), FormDataError::Upload(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for FormDataError {}
+
 impl FormDataError {
-    /// Whether a configured limit was exceeded (as opposed to a malformed body).
+    /// Whether a configured limit was exceeded (as opposed to a malformed body or a failed
+    /// upload handler).
     pub fn is_limit(&self) -> bool {
-        !matches!(self, FormDataError::Parse(_))
+        matches!(self, FormDataError::MaxFilesExceeded(_) | FormDataError::Limit(_))
     }
 
     fn cannot_parse(cause: impl fmt::Display) -> FormDataError {
@@ -124,11 +146,37 @@ impl fmt::Display for FormDataError {
             FormDataError::Parse(message) => f.write_str(message),
             FormDataError::MaxFilesExceeded(max) => write!(f, "Maximum number of files exceeded: {max}"),
             FormDataError::Limit(e) => e.fmt(f),
+            FormDataError::Upload(e) => e.fmt(f),
         }
     }
 }
 
-impl std::error::Error for FormDataError {}
+impl std::error::Error for FormDataError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            FormDataError::Upload(e) => Some(&**e),
+            _ => None,
+        }
+    }
+}
+
+/// What an upload handler may return: `Option<FormValue>` (`None` drops the file), or a
+/// `Result` of one, whose error stops parsing with [`FormDataError::Upload`].
+pub trait UploadResult {
+    fn into_upload_result(self) -> Result<Option<FormValue>, BoxError>;
+}
+
+impl UploadResult for Option<FormValue> {
+    fn into_upload_result(self) -> Result<Option<FormValue>, BoxError> {
+        Ok(self)
+    }
+}
+
+impl<E: Into<BoxError>> UploadResult for Result<Option<FormValue>, E> {
+    fn into_upload_result(self) -> Result<Option<FormValue>, BoxError> {
+        self.map_err(Into::into)
+    }
+}
 
 /// A file part as it is parsed, before it reaches the form (`FileUpload`). Give it to an
 /// upload handler with [`FormData::parse_with`].
@@ -204,8 +252,9 @@ impl FormData {
             .collect()
     }
 
-    /// Parse a body according to its `Content-Type`: URL-encoded, multipart (streamed, with
-    /// files kept in memory) or `text/plain`. Other content types give an empty form.
+    /// Parse a body according to its `Content-Type` (`parseFormData`): URL-encoded or
+    /// multipart (streamed, with files kept in memory). Other media types, and a missing
+    /// `Content-Type`, are a [`FormDataError::Parse`] before the body is read.
     pub async fn parse(content_type: Option<&str>, body: Body, limits: FormLimits) -> Result<FormData, FormDataError> {
         FormData::parse_with(content_type, body, limits, |upload: FileUpload| std::future::ready(Some(FormValue::File(upload.file)))).await
     }
@@ -214,30 +263,22 @@ impl FormData {
     /// uploadHandler)`): each file part is passed to `upload_handler` as soon as it has been
     /// read, and the value it returns (a stored file's URL, the file itself, or `None` to
     /// drop it) goes into the form. Fields without a name are skipped. Empty file inputs
-    /// arrive as empty files, as in the browser's `FormData`.
+    /// arrive as empty files, as in the browser's `FormData`. The handler may return a
+    /// [`Result`] (see [`UploadResult`]); its error ends parsing as [`FormDataError::Upload`].
     pub async fn parse_with<F, Fut>(content_type: Option<&str>, body: Body, limits: FormLimits, mut upload_handler: F) -> Result<FormData, FormDataError>
     where
         F: FnMut(FileUpload) -> Fut,
-        Fut: std::future::Future<Output = Option<FormValue>>,
+        Fut: std::future::Future,
+        Fut::Output: UploadResult,
     {
-        let Some(ct) = content_type else { return Ok(FormData::new()) };
+        let ct = content_type.unwrap_or("");
         let essence = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
         if essence == "application/x-www-form-urlencoded" {
             let bytes = read_url_encoded(body, limits).await?;
             return Ok(SearchParams::parse(&String::from_utf8_lossy(&bytes)).into());
         }
-        if essence == "text/plain" {
-            let bytes = read_limited(body, limits.total_size()).await?;
-            let text = String::from_utf8_lossy(&bytes);
-            let mut form = FormData::new();
-            for line in text.split("\r\n").filter(|l| !l.is_empty()) {
-                let (k, v) = line.split_once('=').unwrap_or((line, ""));
-                form.append(k, v);
-            }
-            return Ok(form);
-        }
         if !essence.starts_with("multipart/") {
-            return Ok(FormData::new());
+            return Err(FormDataError::Parse("Cannot parse form data".into()));
         }
         let boundary = get_multipart_boundary(ct).ok_or_else(|| FormDataError::cannot_parse("Invalid Content-Type header: missing boundary"))?;
         let multipart_error = |e: MultipartError| if e.is_limit() { FormDataError::Limit(e) } else { FormDataError::cannot_parse(e) };
@@ -255,7 +296,8 @@ impl FormData {
                 let file_name = part.filename().unwrap_or_else(|| "file-upload".into());
                 let media_type = part.media_type().unwrap_or_else(|| "application/octet-stream".into());
                 let file = File::new(file_name, media_type, part.bytes());
-                match upload_handler(FileUpload { field_name: name.clone(), file }).await {
+                let value = upload_handler(FileUpload { field_name: name.clone(), file }).await.into_upload_result();
+                match value.map_err(|e| FormDataError::Upload(Arc::from(e)))? {
                     Some(FormValue::Text(text)) => form.append(name, text),
                     Some(FormValue::File(file)) => form.append_file(name, file),
                     None => {}
@@ -361,7 +403,7 @@ mod tests {
     fn parses_urlencoded_and_ignores_other_types() {
         let form = block_on(FormData::parse(Some("application/x-www-form-urlencoded"), Body::from("a=1&b=x%20y"), FormLimits::default())).unwrap();
         assert_eq!(form.get("b"), Some("x y"));
-        let form = block_on(FormData::parse(Some("application/json"), Body::from("{}"), FormLimits::default())).unwrap();
-        assert!(form.is_empty());
+        let err = block_on(FormData::parse(Some("application/json"), Body::from("{}"), FormLimits::default())).unwrap_err();
+        assert_eq!(err, FormDataError::Parse("Cannot parse form data".into()));
     }
 }

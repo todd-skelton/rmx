@@ -22,7 +22,7 @@ pub mod form_data;
 pub mod response;
 
 pub use abort::{AbortController, AbortError, AbortSignal, RequestExt};
-pub use form_data::{File, FileUpload, FormData, FormDataError, FormLimits, FormValue};
+pub use form_data::{File, FileUpload, FormData, FormDataError, FormLimits, FormValue, UploadResult};
 
 /// An HTTP request with an rmx [`Body`].
 pub type Request = http::Request<Body>;

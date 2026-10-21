@@ -5,16 +5,17 @@ use std::sync::Arc;
 
 use http::{header, StatusCode};
 pub use rmx_fetch::form_data::FileUpload;
-use rmx_fetch::{FormData, FormLimits, FormValue};
+use rmx_fetch::{BoxError, FormData, FormDataError, FormLimits, FormValue, UploadResult};
 use rmx_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
 
-type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Option<FormValue>> + Send + Sync>;
+type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Result<Option<FormValue>, BoxError>> + Send + Sync>;
 
 /// The `formData()` middleware. Parses URL-encoded and multipart bodies, streaming
 /// multipart files to the upload handler as they arrive. Other requests (GET, HEAD, JSON and
 /// any other media type) get an empty `FormData` and keep their body for the handler. A
-/// request that already has a `FormData` is left alone. Bodies over the limits get a 413
-/// and malformed bodies a 400 (or an empty form with [`FormDataParser::suppress_errors`]).
+/// request that already has a `FormData` is left alone. Bodies over the limits get a 413,
+/// malformed bodies a 400 and a failed upload handler a 500 (the last two become an empty
+/// form with [`FormDataParser::suppress_errors`]). Remix throws these errors instead.
 #[derive(Clone)]
 pub struct FormDataParser {
     limits: FormLimits,
@@ -45,7 +46,8 @@ impl FormDataParser {
 
     /// Decide what each uploaded file becomes in the form (`uploadHandler`): store it and
     /// return a reference such as a URL, keep it as a file, or return `None` to drop it.
-    /// Without a handler, files stay in the form as they are.
+    /// Without a handler, files stay in the form as they are. The handler may also return a
+    /// `Result`; an error stops the request with a 500.
     ///
     /// ```
     /// use rmx_fetch::FormValue;
@@ -59,9 +61,13 @@ impl FormDataParser {
     pub fn upload_handler<F, Fut>(mut self, handler: F) -> FormDataParser
     where
         F: Fn(FileUpload) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Option<FormValue>> + Send + 'static,
+        Fut: Future + Send + 'static,
+        Fut::Output: UploadResult,
     {
-        self.upload_handler = Some(Arc::new(move |upload| Box::pin(handler(upload))));
+        self.upload_handler = Some(Arc::new(move |upload| {
+            let fut = handler(upload);
+            Box::pin(async move { fut.await.into_upload_result() })
+        }));
         self
     }
 }
@@ -87,6 +93,7 @@ impl Middleware for FormDataParser {
                 Ok(form) => form,
                 Err(e) if e.is_limit() => return Error::new(StatusCode::PAYLOAD_TOO_LARGE, e.to_string()).into_response(),
                 Err(_) if this.suppress_errors => FormData::new(),
+                Err(FormDataError::Upload(e)) => return Error::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
                 Err(e) => return Error::bad_request(format!("invalid form data: {e}")).into_response(),
             };
             ctx.set(form);
@@ -193,7 +200,10 @@ mod tests {
 
     #[test]
     fn an_existing_form_is_reused() {
-        let mut router = Router::new().with(form_data()).with(form_data().upload_handler(|_: FileUpload| async { panic!("parsed twice") }));
+        fn parsed_twice(_: FileUpload) -> std::future::Ready<Option<FormValue>> {
+            panic!("parsed twice")
+        }
+        let mut router = Router::new().with(form_data()).with(form_data().upload_handler(parsed_twice));
         router.post("/", echo());
         let text = block_on(block_on(router.fetch(multipart())).into_body().text()).unwrap();
         assert_eq!(text, r#""title=Dune&cover=dune.png&skip=x.bin" ["cover=dune.png", "skip=x.bin"]"#);

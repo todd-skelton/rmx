@@ -194,7 +194,10 @@ crates:
    Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern` (Remix's
    `route-pattern`: parser with its `ParseError` types, matcher with specificity ranking and
    resource limits, joins, and hrefs with `base_url`-relative output; Remix's tests ported),
-   `rmx-fetch` (Request, Response, FormData, the `remix/response` constructors, where `html_with` and
+   `rmx-fetch` (Request, Response, FormData with Remix's `parseFormData`: URL-encoded and
+   multipart only, other media types an error before the body is read, upload handlers that
+   may return a `Result`, and `File::new` lowercasing the type like the web `File`; the
+   `remix/response` constructors, where `html_with` and
    `redirect_with` take the same `ResponseInit` that render and spa use, an init `Location`
    winning as in Remix, and `AbortController` / `AbortSignal` for
    `request.signal`: the router checks it before each middleware step and races it like
