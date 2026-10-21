@@ -2,8 +2,9 @@
 
 use std::sync::LazyLock;
 
-use rmx::router::routes::{prefix, Form, Route};
+use rmx::router::routes::{prefix, Form, Route, RouteMap};
 
+#[derive(RouteMap)]
 pub struct Routes {
     pub assets: Route,
     pub home: Route,
@@ -11,6 +12,7 @@ pub struct Routes {
     pub schedules: Schedules,
 }
 
+#[derive(RouteMap)]
 pub struct Auth {
     pub index: Route,
     pub login: Form,
@@ -18,6 +20,7 @@ pub struct Auth {
     pub signup: Form,
 }
 
+#[derive(RouteMap)]
 pub struct Schedules {
     pub index: Route,
     pub create: Route,

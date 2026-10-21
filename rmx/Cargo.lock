@@ -1353,7 +1353,9 @@ name = "rmx-router"
 version = "0.1.0"
 dependencies = [
  "http",
+ "rmx",
  "rmx-fetch",
+ "rmx-macros",
  "rmx-route-pattern",
  "rmx-url",
 ]

@@ -4,7 +4,7 @@
 use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Handle, Node};
 use rmx::fetch::{response, Body, Response};
-use rmx::router::{Context, Router};
+use rmx::router::{action, Context, Router};
 use rmx::data_schema::checks::{max_length, min_length};
 use rmx::data_schema::{self as s, Issue, PathSegment, Schema};
 use serde_json::{json, Map, Value};
@@ -15,18 +15,22 @@ use super::ui::Document;
 use super::{current_user, db, json, json_with, render, token};
 use crate::grid::{ScheduleGrid, ScheduleGridProps};
 use crate::layout::{Block, ScheduleDocument};
-use crate::routes::{schedule_href, ROUTES};
+use crate::routes::{schedule_href, SchedulesActions, ROUTES};
 use crate::sidebar::{ScheduleSidebar, SidebarSchedule};
 use crate::theme::{surface, text};
 
 pub fn routes(router: &mut Router) {
-    let r = &ROUTES.schedules;
-    router.route(&r.index, index);
-    router.route(&r.create, create);
-    router.route(&r.destroy, destroy);
-    router.route(&r.download_ics, download_ics);
-    router.route(&r.show, show);
-    router.route(&r.update, update);
+    router.map(
+        &ROUTES.schedules,
+        SchedulesActions {
+            index: action(index),
+            create: action(create),
+            destroy: action(destroy),
+            download_ics: action(download_ics),
+            show: action(show),
+            update: action(update),
+        },
+    );
 }
 
 fn unauthorized() -> Response {

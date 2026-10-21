@@ -7,27 +7,37 @@ use rmx::{rsx, Frame};
 use rmx::fetch::{response, Response};
 use rmx::data_schema::{self as s, form_data as f};
 use rmx::middleware::session::SessionExt;
-use rmx::router::{Context, Router};
+use rmx::router::{action, Context, Router};
 
 use super::schemas::{optional_text, parse_form};
 use super::ui::Layout;
 use super::{bad_request, current_cart, db, no_content, parse_id, render};
-use crate::routes::ROUTES;
+use crate::routes::{CartActions, CartApiActions, ROUTES};
 
 pub fn routes(router: &mut Router, delay: Duration) {
     let r = &ROUTES.cart;
-    router.route(&r.index, |ctx: Context| async move {
-        let page = rsx! {
-            <Layout>
-                <h1>"Shopping Cart"</h1>
-                <div class="card"><Frame name="cart" src={ROUTES.fragments.cart_items.href(())}/></div>
-            </Layout>
-        };
-        render(&ctx, page)
-    });
-    router.route(&r.api.add, move |ctx: Context| change(ctx, delay, Change::Add));
-    router.route(&r.api.update, move |ctx: Context| change(ctx, delay, Change::Update));
-    router.route(&r.api.remove, move |ctx: Context| change(ctx, delay, Change::Remove));
+    router.map(
+        r,
+        CartActions {
+            index: action(|ctx: Context| async move {
+                let page = rsx! {
+                    <Layout>
+                        <h1>"Shopping Cart"</h1>
+                        <div class="card"><Frame name="cart" src={ROUTES.fragments.cart_items.href(())}/></div>
+                    </Layout>
+                };
+                render(&ctx, page)
+            }),
+        },
+    );
+    router.map(
+        &r.api,
+        CartApiActions {
+            add: action(move |ctx: Context| change(ctx, delay, Change::Add)),
+            update: action(move |ctx: Context| change(ctx, delay, Change::Update)),
+            remove: action(move |ctx: Context| change(ctx, delay, Change::Remove)),
+        },
+    );
 }
 
 #[derive(Clone, Copy)]

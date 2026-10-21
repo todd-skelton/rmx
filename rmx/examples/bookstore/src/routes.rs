@@ -2,8 +2,9 @@
 
 use std::sync::LazyLock;
 
-use rmx::router::routes::{form, get, post, prefix, resources_with_param, Form, Resources, Route};
+use rmx::router::routes::{form, get, post, prefix, resources_with_param, Form, Resources, Route, RouteMap};
 
+#[derive(RouteMap)]
 pub struct Routes {
     pub uploads: Route,
     pub fragments: Fragments,
@@ -20,21 +21,25 @@ pub struct Routes {
     pub admin: Admin,
 }
 
+#[derive(RouteMap)]
 pub struct Fragments {
     pub cart_button: Route,
     pub cart_items: Route,
 }
 
+#[derive(RouteMap)]
 pub struct Api {
     pub cart_toggle: Route,
 }
 
+#[derive(RouteMap)]
 pub struct Books {
     pub index: Route,
     pub genre: Route,
     pub show: Route,
 }
 
+#[derive(RouteMap)]
 pub struct Auth {
     pub login: Form,
     pub register: Form,
@@ -43,44 +48,73 @@ pub struct Auth {
     pub reset_password: Form,
 }
 
+#[derive(RouteMap)]
 pub struct Account {
     pub index: Route,
     /// `form('settings', { formMethod: 'PUT', names: { action: 'update' } })`
     pub settings: SettingsForm,
     /// `resources('orders', { only: ['index', 'show'], param: 'orderId' })`
-    pub orders: Resources,
+    pub orders: ReadOnly,
 }
 
+/// A read-only collection: `resources(.., { only: ['index', 'show'] })`.
+#[derive(RouteMap)]
+pub struct ReadOnly {
+    pub index: Route,
+    pub show: Route,
+}
+
+impl ReadOnly {
+    fn new(base: &str, param: &str) -> ReadOnly {
+        let r = resources_with_param(base, param);
+        ReadOnly { index: r.index, show: r.show }
+    }
+}
+
+/// `resources('users', { only: ['index', 'show', 'edit', 'update', 'destroy'] })`: users
+/// register themselves.
+#[derive(RouteMap)]
+pub struct Users {
+    pub index: Route,
+    pub show: Route,
+    pub edit: Route,
+    pub update: Route,
+    pub destroy: Route,
+}
+
+#[derive(RouteMap)]
 pub struct SettingsForm {
     pub index: Route,
     pub update: Route,
 }
 
+#[derive(RouteMap)]
 pub struct Cart {
     pub index: Route,
     pub api: CartApi,
 }
 
+#[derive(RouteMap)]
 pub struct CartApi {
     pub add: Route,
     pub update: Route,
     pub remove: Route,
 }
 
+#[derive(RouteMap)]
 pub struct Checkout {
     pub index: Route,
     pub action: Route,
     pub confirmation: Route,
 }
 
+#[derive(RouteMap)]
 pub struct Admin {
     pub index: Route,
     /// Full CRUD on books.
     pub books: Resources,
-    /// `only: ['index', 'show', 'edit', 'update', 'destroy']`: users register themselves.
-    pub users: Resources,
-    /// `only: ['index', 'show']`
-    pub orders: Resources,
+    pub users: Users,
+    pub orders: ReadOnly,
 }
 
 pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| {
@@ -106,7 +140,7 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| {
         account: Account {
             index: account.get("/"),
             settings: SettingsForm { index: account.get("settings"), update: account.put("settings") },
-            orders: resources_with_param("account/orders", "orderId"),
+            orders: ReadOnly::new("account/orders", "orderId"),
         },
         cart: Cart {
             index: cart.get("/"),
@@ -116,8 +150,11 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| {
         admin: Admin {
             index: get("/admin"),
             books: resources_with_param("admin/books", "bookId"),
-            users: resources_with_param("admin/users", "userId"),
-            orders: resources_with_param("admin/orders", "orderId"),
+            users: {
+                let r = resources_with_param("admin/users", "userId");
+                Users { index: r.index, show: r.show, edit: r.edit, update: r.update, destroy: r.destroy }
+            },
+            orders: ReadOnly::new("admin/orders", "orderId"),
         },
     }
 });

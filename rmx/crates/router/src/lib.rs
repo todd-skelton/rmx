@@ -35,7 +35,7 @@ use rmx_url::Url;
 pub mod async_context;
 pub mod routes;
 
-pub use routes::{IntoRoute, Route};
+pub use routes::{IntoRoute, Route, RouteMap};
 
 /// A boxed future: `Send` on servers, where requests run on a multi-threaded runtime.
 #[cfg(not(target_arch = "wasm32"))]
@@ -356,6 +356,66 @@ impl Next {
 }
 
 // ---------------------------------------------------------------------------------------
+// Controllers
+// ---------------------------------------------------------------------------------------
+
+/// A route's handler plus its own middleware (Remix's action object). Build one with
+/// [`action`] and add middleware with [`Action::with`].
+pub struct Action {
+    handler: Arc<dyn Handler>,
+    middleware: Vec<Arc<dyn Middleware>>,
+}
+
+impl Action {
+    pub fn new(handler: impl Handler) -> Action {
+        Action { handler: Arc::new(handler), middleware: Vec::new() }
+    }
+
+    /// Add middleware that runs after router and controller middleware, before the handler.
+    pub fn with(mut self, middleware: impl Middleware) -> Action {
+        self.middleware.push(Arc::new(middleware));
+        self
+    }
+}
+
+impl<H: Handler> From<H> for Action {
+    fn from(handler: H) -> Action {
+        Action::new(handler)
+    }
+}
+
+/// An action for a route: `action(handler)` or `action(handler).with(middleware)`.
+pub fn action(handler: impl Handler) -> Action {
+    Action::new(handler)
+}
+
+/// Actions for a route map plus middleware shared by all of them (Remix's
+/// `createController(routes, { middleware, actions })`). The actions alone convert into a
+/// controller without middleware.
+pub struct Controller<A> {
+    pub middleware: Vec<Arc<dyn Middleware>>,
+    pub actions: A,
+}
+
+impl<A> Controller<A> {
+    pub fn new(actions: A) -> Controller<A> {
+        Controller { middleware: Vec::new(), actions }
+    }
+
+    /// Add middleware that runs before every action of this controller.
+    pub fn with(mut self, middleware: impl Middleware) -> Controller<A> {
+        self.middleware.push(Arc::new(middleware));
+        self
+    }
+}
+
+impl<A> From<A> for Controller<A> {
+    fn from(actions: A) -> Controller<A> {
+        Controller::new(actions)
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------------------
 
@@ -466,6 +526,14 @@ impl Router {
         self
     }
 
+    /// Map a route map to a controller (Remix's `router.map(routes, controller)`): each direct
+    /// route of `routes` gets its action, behind the controller's and the action's middleware.
+    /// Nested route maps are mapped with their own call. A single [`Route`] takes an [`Action`].
+    pub fn map<M: RouteMap + ?Sized>(&mut self, routes: &M, controller: impl Into<Controller<M::Actions>>) -> &mut Self {
+        self.builder().map(routes, controller);
+        self
+    }
+
     /// Register routes that share route middleware (Remix's controller middleware).
     pub fn group(&mut self, middleware: Vec<Arc<dyn Middleware>>, install: impl FnOnce(&mut RouteBuilder<'_>)) {
         let mut b = RouteBuilder { router: self, prefix: None, middleware };
@@ -561,17 +629,33 @@ pub struct RouteBuilder<'a> {
 
 impl RouteBuilder<'_> {
     fn add(&mut self, method: Option<Method>, route: impl IntoRoute, handler: impl Handler) -> &mut Self {
-        let mut route = route.into_route(method);
+        let middleware = self.middleware.clone();
+        self.add_entry(route.into_route(method), Arc::new(handler), middleware)
+    }
+
+    fn add_entry(&mut self, mut route: Route, handler: Arc<dyn Handler>, middleware: Vec<Arc<dyn Middleware>>) -> &mut Self {
         if let Some(p) = &self.prefix {
             route = route.under(p);
         }
         let entry = RouteEntry {
             method: route.method().cloned(),
-            handler: Arc::new(handler),
-            middleware: Arc::from(self.middleware.clone()),
+            handler,
+            middleware: Arc::from(middleware),
             pattern: route.pattern().clone(),
         };
         self.router.inner_mut().routes.add(route.pattern().clone(), Arc::new(entry));
+        self
+    }
+
+    /// Map a route map to a controller below this builder's prefix (see [`Router::map`]).
+    pub fn map<M: RouteMap + ?Sized>(&mut self, routes: &M, controller: impl Into<Controller<M::Actions>>) -> &mut Self {
+        let Controller { middleware, actions } = controller.into();
+        for (route, action) in routes.pair_actions(actions) {
+            let mut chain = self.middleware.clone();
+            chain.extend(middleware.iter().cloned());
+            chain.extend(action.middleware);
+            self.add_entry(route, action.handler, chain);
+        }
         self
     }
 

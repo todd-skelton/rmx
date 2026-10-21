@@ -7,24 +7,22 @@ use rmx::middleware::auth::{complete_auth, credentials_provider, verify_credenti
 use rmx::middleware::form_data::FormDataExt;
 use rmx::middleware::session::SessionExt;
 use rmx::render::ResponseInit;
-use rmx::router::{Context, Router};
+use rmx::router::routes::FormActions;
+use rmx::router::{action, Context, Router};
 use rmx::data_schema::checks::{max_length, min_length};
 use rmx::data_schema::{self as s, form_data as f, Issue, PathSegment, Schema};
 
 use super::passwords::{hash_password, verify_password};
 use super::ui::Layout;
 use super::{current_user, db, render, render_with, see_other, token, AuthSession};
-use crate::routes::ROUTES;
+use crate::routes::{AuthActions, ROUTES};
 use crate::theme::{self, border, font_size, space, surface, text, Tone, DANGER, FOCUS_RING, RADIUS};
 
 pub fn routes(router: &mut Router) {
     let r = &ROUTES.auth;
-    router.route(&r.index, index);
-    router.route(&r.logout, logout);
-    router.route(&r.login.index, login_page);
-    router.route(&r.login.action, login);
-    router.route(&r.signup.index, signup_page);
-    router.route(&r.signup.action, signup);
+    router.map(r, AuthActions { index: action(index), logout: action(logout) });
+    router.map(&r.login, FormActions { index: action(login_page), action: action(login) });
+    router.map(&r.signup, FormActions { index: action(signup_page), action: action(signup) });
 }
 
 // --- actions/auth/controller.tsx ---------------------------------------------------------

@@ -4,7 +4,8 @@
 use rmx::{css, rsx, Mixin, Node};
 use rmx::fetch::{response, Response};
 use rmx::middleware::form_data::FormDataExt;
-use rmx::router::{middleware, Context, Router};
+use rmx::router::routes::ResourcesActions;
+use rmx::router::{action, Context, Controller, Router};
 
 use rmx::data_schema::{self as s, form_data as f};
 
@@ -14,27 +15,41 @@ use super::data::{locale_date, Book, BookInput, Role, User, UserInput, WriteErro
 use super::ui::{Layout, RestfulForm};
 use super::{bad_request, db, not_found_page, parse_id, render, require_admin, require_auth, user};
 use crate::cart::money;
-use crate::routes::ROUTES;
+use crate::routes::{AdminActions, ReadOnlyActions, UsersActions, ROUTES};
 
 pub fn routes(router: &mut Router) {
-    router.group(vec![middleware(require_auth()), middleware(require_admin())], |r| {
-        let a = &ROUTES.admin;
-        r.route(&a.index, dashboard);
-        r.route(&a.books.index, books);
-        r.route(&a.books.new, new_book);
-        r.route(&a.books.create, create_book);
-        r.route(&a.books.show, show_book);
-        r.route(&a.books.edit, edit_book);
-        r.route(&a.books.update, update_book);
-        r.route(&a.books.destroy, destroy_book);
-        r.route(&a.users.index, users);
-        r.route(&a.users.show, show_user);
-        r.route(&a.users.edit, edit_user);
-        r.route(&a.users.update, update_user);
-        r.route(&a.users.destroy, destroy_user);
-        r.route(&a.orders.index, orders);
-        r.route(&a.orders.show, show_order);
-    });
+    let a = &ROUTES.admin;
+    router.map(a, Controller::new(AdminActions { index: action(dashboard) }).with(require_auth()).with(require_admin()));
+    router.map(
+        &a.books,
+        Controller::new(ResourcesActions {
+            index: action(books),
+            new: action(new_book),
+            show: action(show_book),
+            create: action(create_book),
+            edit: action(edit_book),
+            update: action(update_book),
+            destroy: action(destroy_book),
+        })
+        .with(require_auth())
+        .with(require_admin()),
+    );
+    router.map(
+        &a.users,
+        Controller::new(UsersActions {
+            index: action(users),
+            show: action(show_user),
+            edit: action(edit_user),
+            update: action(update_user),
+            destroy: action(destroy_user),
+        })
+        .with(require_auth())
+        .with(require_admin()),
+    );
+    router.map(
+        &a.orders,
+        Controller::new(ReadOnlyActions { index: action(orders), show: action(show_order) }).with(require_auth()).with(require_admin()),
+    );
 }
 
 fn small_button() -> Mixin {

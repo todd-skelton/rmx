@@ -10,6 +10,7 @@
 //! Also `html!`/`html_raw!` for `rmx-html-template`.
 
 mod html;
+mod route_map;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
@@ -30,6 +31,15 @@ pub fn html(input: TokenStream) -> TokenStream {
 pub fn html_raw(input: TokenStream) -> TokenStream {
     let template = syn::parse_macro_input!(input as html::Template);
     html::expand(template, true).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+
+/// `#[derive(RouteMap)]` for a struct of routes and nested route maps. Also generates
+/// `<Name>Actions`, a struct with one `rmx::router::Action` per direct `Route` field, which
+/// `Router::map` takes as the controller for this map. See `rmx::router::routes::RouteMap`.
+#[proc_macro_derive(RouteMap)]
+pub fn derive_route_map(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+    route_map::expand(input).unwrap_or_else(syn::Error::into_compile_error).into()
 }
 
 #[proc_macro]

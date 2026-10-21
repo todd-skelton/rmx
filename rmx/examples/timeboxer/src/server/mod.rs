@@ -21,7 +21,7 @@ use rmx::middleware::form_data::form_data;
 use rmx::middleware::logger::logger;
 use rmx::middleware::session::session;
 use rmx::render::{Render, ResponseInit};
-use rmx::router::{Context, Middleware, Next, Router};
+use rmx::router::{action, Context, Middleware, Next, Router};
 use rmx::session::SessionStorage;
 use serde::{Deserialize, Serialize};
 
@@ -79,10 +79,13 @@ pub fn router<S: SessionStorage>(options: TimeboxerOptions<S>) -> Router {
     router.use_middleware(load_scripts(assets.clone()));
 
     if let Some(assets) = assets {
-        router.route(&ROUTES.assets, move |ctx: Context| {
-            let assets = assets.clone();
-            async move { assets.fetch(&ctx).unwrap_or_else(|| response::status(StatusCode::NOT_FOUND, "Not Found")) }
-        });
+        router.map(
+            &ROUTES.assets,
+            action(move |ctx: Context| {
+                let assets = assets.clone();
+                async move { assets.fetch(&ctx).unwrap_or_else(|| response::status(StatusCode::NOT_FOUND, "Not Found")) }
+            }),
+        );
     }
     home::routes(&mut router);
     auth::routes(&mut router);

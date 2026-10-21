@@ -8,32 +8,41 @@ use rmx::file_storage::FileStorage;
 use rmx::middleware::session::SessionExt;
 use rmx::middleware::static_files::{file_response_for, StaticOptions};
 use rmx::render::ResponseInit;
-use rmx::router::{Context, Router};
+use rmx::router::routes::FormActions;
+use rmx::router::{action, Context, Router};
 
 use super::data::Book;
 use super::schemas::book_id;
 use super::ui::{book_card, Layout};
 use super::{current_cart, current_user, db, parse_id, render, render_with};
-use crate::routes::ROUTES;
+use crate::routes::{ApiActions, FragmentsActions, RoutesActions, ROUTES};
 use crate::{CartButton, CartItems};
 
 pub fn routes<U: FileStorage + Clone>(router: &mut Router, uploads: U) {
-    let r = &*ROUTES;
-    router.route(&r.uploads, move |ctx: Context| {
-        let uploads = uploads.clone();
-        let key = ctx.param("key").unwrap_or_default().to_string();
-        let headers = ctx.headers().clone();
-        let head = ctx.method() == Method::HEAD;
-        async move { serve_upload(key, headers, head, uploads).await }
-    });
-    router.route(&r.home, home);
-    router.route(&r.about, |ctx: Context| async move { render(&ctx, about_page()) });
-    router.route(&r.search, search);
-    router.route(&r.contact.index, |ctx: Context| async move { render(&ctx, contact_page()) });
-    router.route(&r.contact.action, |ctx: Context| async move { render(&ctx, contact_success_page()) });
-    router.route(&r.fragments.cart_button, cart_button);
-    router.route(&r.fragments.cart_items, cart_items);
-    router.route(&r.api.cart_toggle, cart_toggle);
+    router.map(
+        &ROUTES,
+        RoutesActions {
+            uploads: action(move |ctx: Context| {
+                let uploads = uploads.clone();
+                let key = ctx.param("key").unwrap_or_default().to_string();
+                let headers = ctx.headers().clone();
+                let head = ctx.method() == Method::HEAD;
+                async move { serve_upload(key, headers, head, uploads).await }
+            }),
+            home: action(home),
+            about: action(|ctx: Context| async move { render(&ctx, about_page()) }),
+            search: action(search),
+        },
+    );
+    router.map(
+        &ROUTES.contact,
+        FormActions {
+            index: action(|ctx: Context| async move { render(&ctx, contact_page()) }),
+            action: action(|ctx: Context| async move { render(&ctx, contact_success_page()) }),
+        },
+    );
+    router.map(&ROUTES.fragments, FragmentsActions { cart_button: action(cart_button), cart_items: action(cart_items) });
+    router.map(&ROUTES.api, ApiActions { cart_toggle: action(cart_toggle) });
 }
 
 async fn serve_upload<U: FileStorage>(key: String, headers: http::HeaderMap, head: bool, uploads: U) -> Response {

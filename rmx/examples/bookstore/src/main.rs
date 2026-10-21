@@ -1,4 +1,5 @@
-//! Server for the bookstore demo: `cargo run -p bookstore-demo`.
+//! Server for the bookstore demo: `cargo run -p bookstore-demo`. List its routes with
+//! `cargo run -p bookstore-demo -- routes` (`--table`, `--json`).
 //!
 //! Env: `HOST` (127.0.0.1), `PORT` (44108), `PUBLIC_DIR` (examples/bookstore/public),
 //! `TMP_DIR` (examples/bookstore/tmp, for sessions and uploads), `CART_DELAY_MS` (1000).
@@ -10,6 +11,8 @@ fn main() {
     use bookstore_demo::server::{data::Db, router, session_cookie, BookstoreOptions};
     use rmx::file_storage::FsFileStorage;
     use rmx::session::FsStorage;
+
+    rmx::router::routes::routes_command(&*bookstore_demo::routes::ROUTES);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44108".into());

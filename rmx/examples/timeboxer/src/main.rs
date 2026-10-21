@@ -1,4 +1,5 @@
-//! Server for the timeboxer demo: `cargo run -p timeboxer-demo`.
+//! Server for the timeboxer demo: `cargo run -p timeboxer-demo`. List its routes with
+//! `cargo run -p timeboxer-demo -- routes` (`--table`, `--json`).
 //!
 //! Env: `SESSION_SECRET` (required, as in Remix), `HOST` (127.0.0.1), `PORT` (44112),
 //! `ASSETS_ROOT` (examples/timeboxer), `TMP_DIR` (examples/timeboxer/tmp, for sessions),
@@ -7,6 +8,8 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use timeboxer_demo::server::{asset_server, data::Db, router, session_cookie, TimeboxerOptions};
+
+    rmx::router::routes::routes_command(&*timeboxer_demo::routes::ROUTES);
 
     let Ok(secret) = std::env::var("SESSION_SECRET") else {
         eprintln!("SESSION_SECRET is required");

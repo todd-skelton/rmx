@@ -5,30 +5,41 @@ use rmx::fetch::{response, Response};
 use rmx::middleware::auth::{complete_auth, credentials_provider, verify_credentials};
 use rmx::middleware::session::SessionExt;
 use rmx::render::ResponseInit;
-use rmx::router::{Context, Router};
+use rmx::router::routes::FormActions;
+use rmx::router::{action, Context, Router};
 use rmx::data_schema::checks::min_length;
 use rmx::data_schema::{self as s, form_data as f, Schema};
 
 use super::data::{hash_password, normalize_email, now_ms, verify_password, PasswordResetToken, UserInput};
 use super::ui::Document;
 use super::{bad_request, db, login_redirect_url, post_auth_redirect, render, render_with, AuthSession};
-use crate::routes::ROUTES;
+use crate::routes::{AuthActions, ROUTES};
 
 pub fn routes(router: &mut Router) {
     let r = &ROUTES.auth;
-    router.route(&r.logout, |ctx: Context| async move {
-        ctx.session().unset("auth");
-        ctx.session().regenerate_id(true);
-        response::redirect(&ROUTES.home.href(()))
-    });
-    router.route(&r.login.index, login_page);
-    router.route(&r.login.action, login);
-    router.route(&r.register.index, |ctx: Context| async move { render(&ctx, register_page()) });
-    router.route(&r.register.action, register);
-    router.route(&r.forgot_password.index, |ctx: Context| async move { render(&ctx, forgot_password_page()) });
-    router.route(&r.forgot_password.action, forgot_password);
-    router.route(&r.reset_password.index, reset_password_page);
-    router.route(&r.reset_password.action, reset_password);
+    router.map(
+        r,
+        AuthActions {
+            logout: action(|ctx: Context| async move {
+                ctx.session().unset("auth");
+                ctx.session().regenerate_id(true);
+                response::redirect(&ROUTES.home.href(()))
+            }),
+        },
+    );
+    router.map(&r.login, FormActions { index: action(login_page), action: action(login) });
+    router.map(
+        &r.register,
+        FormActions { index: action(|ctx: Context| async move { render(&ctx, register_page()) }), action: action(register) },
+    );
+    router.map(
+        &r.forgot_password,
+        FormActions {
+            index: action(|ctx: Context| async move { render(&ctx, forgot_password_page()) }),
+            action: action(forgot_password),
+        },
+    );
+    router.map(&r.reset_password, FormActions { index: action(reset_password_page), action: action(reset_password) });
 }
 
 /// `authCardStyle`

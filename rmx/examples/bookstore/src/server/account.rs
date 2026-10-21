@@ -4,7 +4,7 @@
 use rmx::{css, rsx, Node};
 use rmx::fetch::{response, Response};
 use rmx::middleware::session::SessionExt;
-use rmx::router::{middleware, Context, Router};
+use rmx::router::{action, Context, Controller, Router};
 
 use rmx::data_schema::checks::min_length;
 use rmx::data_schema::{self as s, form_data as f, Schema};
@@ -14,21 +14,21 @@ use super::schemas::{parse_form, text_field};
 use super::ui::{Layout, RestfulForm};
 use super::{bad_request, current_cart, db, not_found_page, parse_id, render, require_auth, user};
 use crate::cart::{money, Cart};
-use crate::routes::ROUTES;
+use crate::routes::{AccountActions, CheckoutActions, ReadOnlyActions, SettingsFormActions, ROUTES};
 
 pub fn routes(router: &mut Router) {
-    router.group(vec![middleware(require_auth())], |r| {
-        let a = &ROUTES.account;
-        r.route(&a.index, account);
-        r.route(&a.settings.index, settings);
-        r.route(&a.settings.update, update_settings);
-        r.route(&a.orders.index, orders);
-        r.route(&a.orders.show, order);
-        let c = &ROUTES.checkout;
-        r.route(&c.index, checkout);
-        r.route(&c.action, place_order);
-        r.route(&c.confirmation, confirmation);
-    });
+    let a = &ROUTES.account;
+    router.map(a, Controller::new(AccountActions { index: action(account) }).with(require_auth()));
+    router.map(
+        &a.settings,
+        Controller::new(SettingsFormActions { index: action(settings), update: action(update_settings) }).with(require_auth()),
+    );
+    router.map(&a.orders, Controller::new(ReadOnlyActions { index: action(orders), show: action(order) }).with(require_auth()));
+    router.map(
+        &ROUTES.checkout,
+        Controller::new(CheckoutActions { index: action(checkout), action: action(place_order), confirmation: action(confirmation) })
+            .with(require_auth()),
+    );
 }
 
 async fn account(ctx: Context) -> Response {

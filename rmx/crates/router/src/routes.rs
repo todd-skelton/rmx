@@ -257,6 +257,356 @@ pub fn resource(base: &str) -> Resource {
     }
 }
 
+// ---------------------------------------------------------------------------------------
+// Route maps
+// ---------------------------------------------------------------------------------------
+
+/// A route map: a [`Route`] or a struct of routes and nested route maps (Remix's
+/// `RouteMap`). `#[derive(RouteMap)]` implements it for a struct and generates a
+/// `<Name>Actions` struct with one [`Action`](crate::Action) per direct `Route` field,
+/// which is what [`Router::map`](crate::Router::map) takes as a controller:
+///
+/// ```
+/// use rmx::router::routes::{get, post, Route, RouteMap};
+/// use rmx::router::{action, Context, Router};
+///
+/// #[derive(RouteMap)]
+/// pub struct Routes { pub home: Route, pub blog: Blog }
+/// #[derive(RouteMap)]
+/// pub struct Blog { pub index: Route, pub create: Route }
+///
+/// let routes = Routes { home: get("/"), blog: Blog { index: get("/blog"), create: post("/blog") } };
+/// let mut router = Router::new();
+/// router.map(&routes, RoutesActions { home: action(|_: Context| async { "Home" }) });
+/// router.map(&routes.blog, BlogActions {
+///     index: action(|_: Context| async { "Blog" }),
+///     create: action(|_: Context| async { "Created" }),
+/// });
+/// let res = rmx::fetch::block_on(router.fetch_url("https://remix.run/blog"));
+/// assert_eq!(rmx::fetch::block_on(res.into_body().text()).unwrap(), "Blog");
+/// ```
+///
+/// Remix checks controllers when they are mapped; here the compiler does. A controller must
+/// name every direct route, and only those:
+///
+/// ```compile_fail,E0063
+/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # use rmx::router::{action, Context};
+/// #[derive(RouteMap)]
+/// pub struct Routes { pub home: Route, pub about: Route }
+/// // error: missing field `about` (Remix: "Missing action `about` in controller")
+/// let _ = RoutesActions { home: action(|_: Context| async { "Home" }) };
+/// ```
+///
+/// ```compile_fail,E0560
+/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # use rmx::router::{action, Context};
+/// #[derive(RouteMap)]
+/// pub struct Routes { pub home: Route, pub blog: Blog }
+/// #[derive(RouteMap)]
+/// pub struct Blog { pub index: Route }
+/// // error: no field `blog` (Remix: "Cannot map nested route map key `blog`")
+/// let _ = RoutesActions {
+///     home: action(|_: Context| async { "Home" }),
+///     blog: action(|_: Context| async { "Blog" }),
+/// };
+/// ```
+pub trait RouteMap {
+    /// What a controller for this map supplies: an [`Action`](crate::Action) for a single
+    /// route, or a struct with one action per direct route.
+    type Actions;
+
+    /// The routes as a tree, for listing them (`rmx routes`).
+    fn route_tree(&self) -> RouteTree;
+
+    /// Pair each direct route with its action.
+    #[doc(hidden)]
+    fn pair_actions(&self, actions: Self::Actions) -> Vec<(Route, crate::Action)>;
+}
+
+pub use rmx_macros::RouteMap;
+
+impl RouteMap for Route {
+    type Actions = crate::Action;
+
+    fn route_tree(&self) -> RouteTree {
+        RouteTree::Route(self.clone())
+    }
+
+    fn pair_actions(&self, action: crate::Action) -> Vec<(Route, crate::Action)> {
+        vec![(self.clone(), action)]
+    }
+}
+
+impl<T: RouteMap, F: FnOnce() -> T> RouteMap for std::sync::LazyLock<T, F> {
+    type Actions = T::Actions;
+
+    fn route_tree(&self) -> RouteTree {
+        (**self).route_tree()
+    }
+
+    fn pair_actions(&self, actions: T::Actions) -> Vec<(Route, crate::Action)> {
+        (**self).pair_actions(actions)
+    }
+}
+
+macro_rules! builtin_route_map {
+    ($map:ident, $actions:ident, $doc:literal, [$($field:ident),*]) => {
+        #[doc = $doc]
+        pub struct $actions {
+            $(pub $field: crate::Action,)*
+        }
+
+        impl RouteMap for $map {
+            type Actions = $actions;
+
+            fn route_tree(&self) -> RouteTree {
+                RouteTree::Group(vec![$((stringify!($field), RouteTree::Route(self.$field.clone()))),*])
+            }
+
+            fn pair_actions(&self, actions: $actions) -> Vec<(Route, crate::Action)> {
+                vec![$((self.$field.clone(), actions.$field)),*]
+            }
+        }
+    };
+}
+
+builtin_route_map!(Form, FormActions, "The actions for a [`Form`]: show it and handle its submission.", [index, action]);
+builtin_route_map!(
+    Resources,
+    ResourcesActions,
+    "The seven actions for [`Resources`].",
+    [index, new, show, create, edit, update, destroy]
+);
+builtin_route_map!(Resource, ResourceActions, "The six actions for a [`Resource`].", [new, show, create, edit, update, destroy]);
+
+/// A route map as data: a route, or named children in declaration order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RouteTree {
+    Route(Route),
+    Group(Vec<(&'static str, RouteTree)>),
+}
+
+/// One entry of a listed route map. `name` is the dotted path from the root
+/// (`auth.login.action`), like the names `remix routes` prints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RouteNode {
+    pub key: String,
+    pub name: String,
+    /// `None` for groups.
+    pub route: Option<Route>,
+    pub children: Vec<RouteNode>,
+}
+
+impl RouteNode {
+    /// `GET`, `POST`, ... or `ANY`; `None` for groups.
+    pub fn method(&self) -> Option<String> {
+        self.route.as_ref().map(|r| r.method().map_or_else(|| "ANY".to_string(), |m| m.to_string()))
+    }
+}
+
+impl RouteTree {
+    /// The top-level entries, with dotted names. A single route lists as one entry named
+    /// `route`.
+    pub fn nodes(&self) -> Vec<RouteNode> {
+        fn build(key: &str, parent: &str, tree: &RouteTree) -> RouteNode {
+            let name = if parent.is_empty() { key.to_string() } else { format!("{parent}.{key}") };
+            match tree {
+                RouteTree::Route(r) => RouteNode { key: key.to_string(), name, route: Some(r.clone()), children: Vec::new() },
+                RouteTree::Group(children) => {
+                    let children = children.iter().map(|(k, t)| build(k, &name, t)).collect();
+                    RouteNode { key: key.to_string(), name, route: None, children }
+                }
+            }
+        }
+        match self {
+            RouteTree::Route(_) => vec![build("route", "", self)],
+            RouteTree::Group(children) => children.iter().map(|(k, t)| build(k, "", t)).collect(),
+        }
+    }
+
+    /// Every route in declaration order.
+    pub fn routes(&self) -> Vec<RouteNode> {
+        fn flatten(nodes: Vec<RouteNode>, out: &mut Vec<RouteNode>) {
+            for n in nodes {
+                if n.route.is_some() {
+                    out.push(n);
+                } else {
+                    flatten(n.children, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        flatten(self.nodes(), &mut out);
+        out
+    }
+
+    /// The tree view of `remix routes`:
+    ///
+    /// ```text
+    /// home     GET    /
+    /// books
+    /// ├─ index  GET    /books
+    /// └─ show   GET    /books/:slug
+    /// ```
+    pub fn format_tree(&self) -> String {
+        fn render(lines: &mut Vec<String>, nodes: &[RouteNode], prefix: &str, root: bool) {
+            let width = nodes.iter().filter(|n| n.route.is_some()).map(|n| n.key.len()).max().unwrap_or(0);
+            for (i, n) in nodes.iter().enumerate() {
+                let last = i + 1 == nodes.len();
+                let branch = if root { "" } else if last { "└─ " } else { "├─ " };
+                match &n.route {
+                    Some(r) => {
+                        let method = n.method().unwrap_or_default();
+                        lines.push(format!("{prefix}{branch}{:width$}  {method:6} {}", n.key, r.pattern()));
+                    }
+                    None => {
+                        lines.push(format!("{prefix}{branch}{}", n.key));
+                        let child = if root { String::new() } else { format!("{prefix}{}", if last { "   " } else { "│  " }) };
+                        render(lines, &n.children, &child, false);
+                    }
+                }
+            }
+        }
+        let nodes = self.nodes();
+        if nodes.is_empty() {
+            return "No routes.\n".to_string();
+        }
+        let mut lines = Vec::new();
+        render(&mut lines, &nodes, "", true);
+        lines.iter().map(|l| format!("{}\n", l.trim_end())).collect()
+    }
+
+    /// The flat table of `remix routes --table`: route name, method and path.
+    pub fn format_table(&self, headers: bool) -> String {
+        let mut rows: Vec<[String; 3]> = Vec::new();
+        if headers {
+            rows.push(["Route".into(), "Method".into(), "Path".into()]);
+        }
+        for n in self.routes() {
+            let path = n.route.as_ref().map(|r| r.pattern().to_string()).unwrap_or_default();
+            rows.push([n.name.clone(), n.method().unwrap_or_default(), path]);
+        }
+        let widths: Vec<usize> = (0..3).map(|c| rows.iter().map(|r| r[c].chars().count()).max().unwrap_or(0)).collect();
+        rows.iter()
+            .map(|r| {
+                let line = format!("{:w0$}  {:w1$}  {}", r[0], r[1], r[2], w0 = widths[0], w1 = widths[1]);
+                format!("{}\n", line.trim_end())
+            })
+            .collect()
+    }
+
+    /// The tree as JSON, shaped like `remix routes --json`'s `tree` (without controller
+    /// owners, since rmx has no controller file convention).
+    pub fn to_json(&self) -> String {
+        fn string(s: &str) -> String {
+            let mut out = String::from("\"");
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+            out
+        }
+        fn node(n: &RouteNode) -> String {
+            let children: Vec<String> = n.children.iter().map(node).collect();
+            let mut fields = vec![
+                format!("\"children\":[{}]", children.join(",")),
+                format!("\"key\":{}", string(&n.key)),
+                format!("\"kind\":\"{}\"", if n.route.is_some() { "route" } else { "group" }),
+            ];
+            if let Some(m) = n.method() {
+                fields.push(format!("\"method\":{}", string(&m)));
+            }
+            fields.push(format!("\"name\":{}", string(&n.name)));
+            if let Some(r) = &n.route {
+                fields.push(format!("\"pattern\":{}", string(&r.pattern().to_string())));
+            }
+            format!("{{{}}}", fields.join(","))
+        }
+        let nodes: Vec<String> = self.nodes().iter().map(node).collect();
+        format!("{{\"tree\":[{}]}}", nodes.join(","))
+    }
+}
+
+/// `remix routes` for an app binary: when the first argument is `routes`, print the route
+/// map (tree, `--table` with optional `--no-headers`, or `--json`) and exit. Call it first
+/// thing in `main`:
+///
+/// ```no_run
+/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # #[derive(RouteMap)] pub struct Routes { pub home: Route }
+/// # static ROUTES: std::sync::LazyLock<Routes> = std::sync::LazyLock::new(|| Routes { home: get("/") });
+/// fn main() {
+///     rmx::router::routes::routes_command(&*ROUTES); // cargo run -- routes --table
+///     // start the server...
+/// }
+/// ```
+#[cfg(not(target_arch = "wasm32"))]
+pub fn routes_command(map: &impl RouteMap) {
+    let mut args = std::env::args().skip(1);
+    if args.next().as_deref() != Some("routes") {
+        return;
+    }
+    let args: Vec<String> = args.collect();
+    match routes_command_output(map, &args) {
+        Ok(out) => {
+            print!("{out}");
+            std::process::exit(0);
+        }
+        Err(e) => {
+            eprint!("Error: {e}\n\n{ROUTES_HELP}");
+            std::process::exit(1);
+        }
+    }
+}
+
+const ROUTES_HELP: &str = "\
+Usage:
+  routes [--json | --table] [--no-headers]
+
+Show the route tree for this app.
+
+Options:
+  --json        Print the normalized route tree as JSON
+  --table       Print routes as a flat table
+  --no-headers  Omit the table header row when using --table
+";
+
+/// What [`routes_command`] prints for `args` (the arguments after `routes`), or the
+/// usage error.
+pub fn routes_command_output(map: &impl RouteMap, args: &[String]) -> Result<String, String> {
+    let (mut json, mut table, mut no_headers) = (false, false, false);
+    for arg in args {
+        match arg.as_str() {
+            "-h" | "--help" => return Ok(ROUTES_HELP.to_string()),
+            "--json" => json = true,
+            "--table" => table = true,
+            "--no-headers" => no_headers = true,
+            other if other.starts_with('-') => return Err(format!("Unknown option {other}.")),
+            other => return Err(format!("Unexpected argument {other}.")),
+        }
+    }
+    if json && table {
+        return Err("Cannot combine --json with --table.".into());
+    }
+    if no_headers && !table {
+        return Err("Cannot use --no-headers without --table.".into());
+    }
+    let tree = map.route_tree();
+    Ok(if json {
+        format!("{}\n", tree.to_json())
+    } else if table {
+        tree.format_table(!no_headers)
+    } else {
+        tree.format_tree()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

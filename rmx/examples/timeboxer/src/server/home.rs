@@ -2,7 +2,7 @@
 
 use rmx::{css, rsx, Component, Handle, Node};
 use rmx::fetch::{response, Response};
-use rmx::router::{Context, Router};
+use rmx::router::{action, Context, Router};
 
 use super::schedules::SchedulePage;
 use super::ui::Layout;
@@ -11,7 +11,7 @@ use crate::routes::{schedule_href, ROUTES};
 use crate::theme::{self, font_size, space, text};
 
 pub fn routes(router: &mut Router) {
-    router.route(&ROUTES.home, index);
+    router.map(&ROUTES.home, action(index));
 }
 
 async fn index(ctx: Context) -> Response {

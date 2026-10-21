@@ -3,20 +3,17 @@
 use rmx::{css, rsx, Frame, Node};
 use rmx::fetch::Response;
 use rmx::render::ResponseInit;
-use rmx::router::{Context, Router};
+use rmx::router::{action, Context, Router};
 
 use super::data::Book;
 use super::ui::{book_card, Layout};
 use super::{db, not_found_page, render, render_with};
 use crate::cart::money;
-use crate::routes::ROUTES;
+use crate::routes::{BooksActions, ROUTES};
 use crate::ImageCarousel;
 
 pub fn routes(router: &mut Router) {
-    let r = &ROUTES.books;
-    router.route(&r.index, index);
-    router.route(&r.genre, genre);
-    router.route(&r.show, show);
+    router.map(&ROUTES.books, BooksActions { index: action(index), genre: action(genre), show: action(show) });
 }
 
 async fn index(ctx: Context) -> Response {
