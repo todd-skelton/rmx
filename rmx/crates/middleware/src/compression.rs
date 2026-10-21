@@ -179,20 +179,31 @@ fn compress(response: Response, method: &Method, accept_encoding: Option<&str>, 
     let body = Body::from_task(move |tx| async move {
         let mut body = body;
         let mut encoder = encoder;
+        // A source or encoder error fails the compressed body too (Remix's "propagates
+        // errors from input stream"), so it cannot end looking complete. Dropping this body
+        // drops the task and with it the source, which cancels it.
         while let Some(chunk) = body.chunk().await {
-            let Ok(chunk) = chunk else { return };
+            let chunk = match chunk {
+                Ok(chunk) => chunk,
+                Err(error) => return tx.abort(error),
+            };
             if chunk.is_empty() {
                 continue;
             }
-            let Ok(out) = encoder.write(&chunk, flush) else { return };
+            let out = match encoder.write(&chunk, flush) {
+                Ok(out) => out,
+                Err(error) => return tx.abort(error),
+            };
             if !out.is_empty() && !tx.send(out) {
                 return;
             }
         }
-        if let Ok(rest) = encoder.finish() {
-            if !rest.is_empty() {
+        match encoder.finish() {
+            Ok(rest) if !rest.is_empty() => {
                 tx.send(rest);
             }
+            Ok(_) => {}
+            Err(error) => tx.abort(error),
         }
     });
     Response::from_parts(parts, body)

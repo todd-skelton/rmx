@@ -291,3 +291,71 @@ fn middleware_options_per_response() {
     assert_eq!(encoding(&skipped), None);
     assert_eq!(decode(skipped), "not compressed");
 }
+
+#[test]
+fn skips_partial_content() {
+    let partial = with(text("Partial content"), &[("content-range", "bytes 0-9/100")]);
+    let mut partial = partial;
+    *partial.status_mut() = http::StatusCode::PARTIAL_CONTENT;
+    let res = compress_default(partial, Some("gzip"));
+    assert_eq!((res.status().as_u16(), encoding(&res), varies(&res)), (206, None, false));
+    assert_eq!(decode(res), "Partial content");
+}
+
+/// A source that sends two chunks and then fails, like Remix's `createErrorStream(2)`.
+fn failing_source() -> Body {
+    Body::from_task(|tx| async move {
+        tx.send("chunk 1\n".repeat(50));
+        tx.send("chunk 2\n".repeat(50));
+        tx.abort("Stream error");
+    })
+}
+
+#[test]
+fn propagates_errors_from_the_source() {
+    for encoding in [Encoding::Br, Encoding::Gzip, Encoding::Deflate] {
+        let res = Response::new(failing_source());
+        let res = compress_response(with(res, &[("content-type", "text/plain")]), &request(Some(encoding.as_str())), &offering(&[encoding]));
+        let mut body = res.into_body();
+        let error = block_on(async {
+            loop {
+                match body.chunk().await {
+                    Some(Ok(_)) => continue,
+                    Some(Err(error)) => return Some(error.to_string()),
+                    None => return None,
+                }
+            }
+        });
+        assert_eq!(error.as_deref(), Some("Stream error"), "{}", encoding.as_str());
+    }
+}
+
+#[test]
+fn dropping_the_compressed_body_cancels_the_source() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    struct OnDrop(Arc<AtomicBool>);
+    impl Drop for OnDrop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let guard = OnDrop(cancelled.clone());
+    let source = Body::from_task(move |tx| async move {
+        let _guard = guard;
+        // One chunk, then a wait that never ends, like a source waiting on the network.
+        tx.send("chunk\n".repeat(100));
+        std::future::pending::<()>().await;
+    });
+    // HTML flushes every chunk, so the first compressed chunk arrives while the source is
+    // still streaming (Remix reads once from a Node stream; buffered brotli would hold it).
+    let res = compress_response(with(Response::new(source), &[("content-type", "text/html")]), &request(Some("br")), &offering(&[Encoding::Br]));
+    let mut body = res.into_body();
+    assert!(block_on(body.chunk()).is_some_and(|c| c.is_ok()));
+    assert!(!cancelled.load(Ordering::SeqCst), "still streaming while read");
+    drop(body);
+    assert!(cancelled.load(Ordering::SeqCst), "the source was dropped with the compressed body");
+}
