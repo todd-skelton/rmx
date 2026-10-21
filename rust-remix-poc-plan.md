@@ -387,6 +387,25 @@ Covered since phase 0b:
    types, multi-part extensions, charset and compressibility overrides, `reset_mime_types`).
    Static files, compression, assets and the unpkg demo use it; `.xml` is now `text/xml`
    and `.ts` is `video/mp2t`, as in Remix.
+   `remix/route-pattern` is ported with its tests (split, parse, serialize, route-pattern,
+   join, specificity, href, match and match/limits; 355 cases in
+   `crates/route-pattern/src/tests` and `crates/route-pattern/tests`). The parser reports
+   Remix's ten `ParseError` types with UTF-16 indexes and normalizes sources the same way;
+   static text is decoded and canonicalized; matching runs compiled part programs behind
+   static prefix, suffix and anchor indexes with the `maxPatternSize`, `maxMatcherSize` and
+   `maxMatchWork` limits (exact work counts match Remix); `specificity` has `compare`,
+   `less_than`, `greater_than`, `equal`, `ascending` and `descending`; hrefs return
+   `HrefError` with Remix's detail types (`kind()`) and relative output for a same-origin
+   `base_url`. The router's HEAD fallback now stops at the first match that is not
+   `specificity::equal`, as in Remix's `router.ts`. Divergences: URLs are parsed (and
+   relative references joined) with `rmx_url` before matching rather than passing a
+   string and `baseURL`; the missing-params message has no `Params:` JSON line;
+   `Params` leaves an unmatched optional out instead of holding `undefined`; `rmx_url`
+   does no IDNA, so the punycode tests feed URLs computed by Node's WHATWG `URL`; and the
+   TypeScript type tests have no counterpart. `rmx_url` paths now use the WHATWG path
+   percent-encode set, so a lone `%` and lowercase escapes stay as written. The rewrite
+   grew the spa client wasm from 480.2 to 532.1 KiB and timeboxer from 600.1 to 620.5 KiB
+   (measured after rebuild77).
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
