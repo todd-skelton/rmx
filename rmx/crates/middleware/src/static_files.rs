@@ -1,40 +1,23 @@
-//! Serve files from a directory (Remix's `remix/middleware/static`), and file responses with
-//! conditional requests and byte ranges (`remix/response/file`).
+//! Serve files from a directory (Remix's `remix/middleware/static`). Each file is opened as a
+//! [LazyFile] and answered by [response::file] (Remix's `createFileResponse`), so conditional
+//! requests and byte ranges behave exactly as for any other file response.
 
 use std::cmp::Ordering;
-use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use rmx_fetch::{response, Body, Bytes, File, Response};
-use rmx_headers::{format_http_date, parse_http_date, unix_seconds, ContentRange, IfMatch, IfNoneMatch, IfRange, Range};
+use http::{Method, StatusCode};
+use rmx_fetch::response::{self, FileResponseOptions};
+use rmx_fetch::Response;
+use rmx_fs::{open_lazy_file, OpenLazyFileOptions};
 use rmx_html_template::escape_html;
+use rmx_lazy_file::LazyFile;
 use rmx_router::{Context, Middleware, Next};
 
-/// Which `ETag` to send.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ETag {
-    /// No `ETag`; `If-Match` and `If-None-Match` are ignored.
-    Off,
-    /// `W/"<size>-<lastModified ms>"`, computed without reading the file (the default).
-    #[default]
-    Weak,
-    /// A quoted hex digest of the content, by [`StaticOptions::digest`] (SHA-256 by default).
-    Strong,
-}
+pub use rmx_fetch::response::{Digest, DigestFn, ETag};
 
-/// Facts about a file passed to an [`AcceptRanges::With`] function.
-#[derive(Clone, Copy, Debug)]
-pub struct FileInfo<'a> {
-    /// The path relative to the static root, or the file's own name.
-    pub name: &'a str,
-    /// The MIME type without parameters; empty when unknown.
-    pub mime_type: &'a str,
-    pub size: u64,
-    pub last_modified: Option<SystemTime>,
-}
+/// Decides per file whether to serve byte ranges (Remix's `AcceptRangesFunction`).
+pub type AcceptRangesFn = Arc<dyn Fn(&LazyFile) -> bool + Send + Sync>;
 
 /// Whether to serve byte ranges.
 #[derive(Clone, Default)]
@@ -45,50 +28,29 @@ pub enum AcceptRanges {
     Auto,
     Always,
     Never,
-    /// Decide per file.
-    With(Arc<dyn Fn(&FileInfo) -> bool + Send + Sync>),
-}
-
-/// Computes a strong `ETag` value (without quotes) from the file content.
-pub type DigestFn = Arc<dyn Fn(&[u8]) -> String + Send + Sync>;
-
-/// How [`ETag::Strong`] digests a file (Remix's `digest` option): a Web Crypto algorithm,
-/// hex encoded, or a function.
-#[derive(Clone)]
-pub enum Digest {
-    Algorithm(rmx_crypto::DigestAlgorithm),
-    With(DigestFn),
-}
-
-impl Default for Digest {
-    fn default() -> Self {
-        Digest::Algorithm(rmx_crypto::DigestAlgorithm::Sha256)
-    }
-}
-
-impl From<rmx_crypto::DigestAlgorithm> for Digest {
-    fn from(algorithm: rmx_crypto::DigestAlgorithm) -> Digest {
-        Digest::Algorithm(algorithm)
-    }
+    /// Decide per file. The file's name is its path relative to the root, and its type comes
+    /// from the requested path, also when that is a symlink.
+    With(AcceptRangesFn),
 }
 
 /// Decides whether a relative path may be served.
 pub type PathFilter = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
-/// Options for [`static_files`] and [`file_response`].
+/// Options for [static_files] (Remix's `StaticFilesOptions`): the [FileResponseOptions] plus
+/// the directory options.
 #[derive(Clone)]
 pub struct StaticOptions {
     /// `Cache-Control` for served files (default: none).
     pub cache_control: Option<String>,
-    /// Default [`ETag::Weak`].
+    /// Default [ETag::Weak].
     pub etag: ETag,
-    /// The digest for [`ETag::Strong`] (default: SHA-256).
-    pub digest: Digest,
+    /// The digest for [ETag::Strong] (default: SHA-256).
+    pub digest: Digest<LazyFile>,
     /// Send `Last-Modified` and honor `If-Modified-Since`/`If-Unmodified-Since` (default: true).
     pub last_modified: bool,
     pub accept_ranges: AcceptRanges,
     /// Files to try, in order, for a directory request (default: `index.html`, `index.htm`).
-    /// Empty disables index files.
+    /// Empty disables index files (Remix's `index: false`).
     pub index: Vec<String>,
     /// List a directory's entries when no index file matches (default: false).
     pub list_files: bool,
@@ -112,8 +74,8 @@ impl Default for StaticOptions {
 }
 
 /// Middleware serving `GET`/`HEAD` requests from `root`. Anything it cannot serve (a missing
-/// file, a filtered path, a path that escapes the root, also through symlinks) falls through
-/// to the next handler.
+/// file, a filtered path, a path that escapes the root, also through symlinks, or a file that
+/// fails to read) falls through to the next handler.
 pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Middleware {
     let root: PathBuf = root.into();
     let root = Arc::new(root.canonicalize().unwrap_or(root));
@@ -131,22 +93,27 @@ pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Mi
             }
             let Some(requested) = join(&root, &rel) else { return next.run(ctx).await };
             let Some(real) = contained(&root, &requested) else { return next.run(ctx).await };
+            let mut found = None;
             if real.is_file() {
-                if let Ok(res) = path_response(&real, &rel, ctx.method(), ctx.headers(), &options) {
-                    return res;
-                }
+                found = Some((real, rel.to_string()));
             } else if real.is_dir() {
                 for index in &options.index {
                     let Some(index_real) = contained(&root, &requested.join(index)) else { continue };
                     if index_real.is_file() {
                         let name = if rel.is_empty() { index.clone() } else { format!("{}/{index}", rel.trim_end_matches('/')) };
-                        if let Ok(res) = path_response(&index_real, &name, ctx.method(), ctx.headers(), &options) {
-                            return res;
-                        }
+                        found = Some((index_real, name));
+                        break;
                     }
                 }
-                if options.list_files {
+                if found.is_none() && options.list_files {
                     return directory_listing(&real, ctx.url().pathname());
+                }
+            }
+            if let Some((file, file_options)) = found.and_then(|(real, name)| open(&real, &name, &options)) {
+                // The response future borrows the request only while it is created.
+                let response = response::file(&file, ctx.request(), &file_options);
+                if let Ok(res) = response.await {
+                    return res;
                 }
             }
             next.run(ctx).await
@@ -165,152 +132,25 @@ fn contained(root: &Path, path: &Path) -> Option<PathBuf> {
     path.canonicalize().ok().filter(|real| real.starts_with(root))
 }
 
-fn path_response(real: &Path, name: &str, method: &Method, req_headers: &HeaderMap, options: &StaticOptions) -> io::Result<Response> {
-    let meta = std::fs::metadata(real)?;
-    let mime_type = rmx_mime::detect_mime_type(name).unwrap_or_default();
-    let info = FileInfo { name, mime_type, size: meta.len(), last_modified: meta.modified().ok() };
-    let read = |start: u64, len: u64| -> io::Result<Body> {
-        let mut file = std::fs::File::open(real)?;
-        file.seek(SeekFrom::Start(start))?;
-        Ok(Body::from_reader(file.take(len)))
-    };
-    let contents = || std::fs::read(real).map(Bytes::from);
-    respond_with_file(&info, read, contents, method, req_headers, options)
-}
-
-/// A file response with Remix's `createFileResponse` semantics: content type and `nosniff`,
-/// an `ETag` and `Last-Modified`, `If-Match`/`If-Unmodified-Since` (412),
-/// `If-None-Match`/`If-Modified-Since` (304), and single byte ranges with `If-Range` (206,
-/// 400 for malformed ranges, 416 for unsatisfiable or multipart ones). Ranges apply to `GET`
-/// only and `HEAD` gets no body, as in Remix, which reads both from the request. The body
-/// is read from disk as it is sent. The type comes from the path's extension; unknown types
-/// get no `Content-Type`.
-pub fn file_response(path: &Path, method: &Method, req_headers: &HeaderMap, options: &StaticOptions) -> io::Result<Response> {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    path_response(path, &name, method, req_headers, options)
-}
-
-/// [`file_response`] for a [`File`] held in memory, such as one from file storage
-/// (`createFileResponse(file, request)`). The type is the file's own (`File.type`); a file
-/// without one gets no `Content-Type`.
-pub fn file_response_for(file: &File, method: &Method, req_headers: &HeaderMap, options: &StaticOptions) -> Response {
-    let mime_type = file.content_type.as_str();
-    let last_modified = UNIX_EPOCH.checked_add(Duration::from_millis(file.last_modified));
-    let info = FileInfo { name: &file.name, mime_type, size: file.size() as u64, last_modified };
-    let read = |start: u64, len: u64| Ok(Body::from(file.bytes.slice(start as usize..(start + len) as usize)));
-    let contents = || Ok(file.bytes.clone());
-    respond_with_file(&info, read, contents, method, req_headers, options).expect("reading memory cannot fail")
-}
-
-fn respond_with_file(
-    file: &FileInfo,
-    read_range: impl Fn(u64, u64) -> io::Result<Body>,
-    contents: impl Fn() -> io::Result<Bytes>,
-    method: &Method,
-    req_headers: &HeaderMap,
-    options: &StaticOptions,
-) -> io::Result<Response> {
-    let head = method == Method::HEAD;
-    let size = file.size;
-    let content_type = (!file.mime_type.is_empty()).then(|| rmx_mime::mime_type_to_content_type(file.mime_type));
-    let modified = file.last_modified.filter(|_| options.last_modified);
-    let etag = match options.etag {
-        ETag::Off => None,
-        ETag::Weak => {
-            let ms = file.last_modified.and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
-            Some(format!("W/\"{size}-{ms}\""))
-        }
-        ETag::Strong => {
-            let bytes = contents()?;
-            let digest = match &options.digest {
-                Digest::Algorithm(algorithm) => rmx_crypto::hex(&algorithm.digest(&bytes)),
-                Digest::With(digest) => digest(&bytes),
-            };
-            Some(format!("\"{digest}\""))
-        }
-    };
+/// The file at `real` as a [LazyFile] named and typed by the requested path `name`, with the
+/// file response options for it.
+fn open(real: &Path, name: &str, options: &StaticOptions) -> Option<(LazyFile, FileResponseOptions<LazyFile>)> {
+    let content_type = rmx_mime::detect_mime_type(name).unwrap_or_default().to_string();
+    let file = open_lazy_file(real, OpenLazyFileOptions { name: Some(name.to_string()), content_type: Some(content_type), last_modified: None }).ok()?;
     let accept_ranges = match &options.accept_ranges {
-        AcceptRanges::Auto => !rmx_mime::is_compressible_mime_type(content_type.as_deref().unwrap_or_default()),
-        AcceptRanges::Always => true,
-        AcceptRanges::Never => false,
-        AcceptRanges::With(decide) => decide(file),
+        AcceptRanges::Auto => None,
+        AcceptRanges::Always => Some(true),
+        AcceptRanges::Never => Some(false),
+        AcceptRanges::With(decide) => Some(decide(&file)),
     };
-    let get = |name: HeaderName| req_headers.get(name).and_then(|v| v.to_str().ok());
-
-    // Remix's buildResponseHeaders: `full` adds the representation headers, `validators`
-    // the caching ones; nosniff is always set.
-    let respond = |status: StatusCode, body: Body, full: bool, validators: bool| {
-        let mut res = Response::new(body);
-        *res.status_mut() = status;
-        let h = res.headers_mut();
-        h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-        let mut set = |name: HeaderName, value: Option<String>| {
-            if let Some(v) = value.and_then(|v| HeaderValue::from_str(&v).ok()) {
-                h.insert(name, v);
-            }
-        };
-        if full {
-            set(header::CONTENT_TYPE, content_type.clone());
-            set(header::CACHE_CONTROL, options.cache_control.clone());
-        }
-        if validators {
-            set(header::ETAG, etag.clone());
-            set(header::LAST_MODIFIED, modified.map(format_http_date));
-            set(header::ACCEPT_RANGES, accept_ranges.then(|| "bytes".to_string()));
-        }
-        res
+    let file_options = FileResponseOptions {
+        cache_control: options.cache_control.clone(),
+        etag: options.etag,
+        digest: options.digest.clone(),
+        last_modified: options.last_modified,
+        accept_ranges,
     };
-    let failed = || respond(StatusCode::PRECONDITION_FAILED, Body::from("Precondition Failed"), false, true);
-
-    let has_if_match = req_headers.contains_key(header::IF_MATCH);
-    if let (Some(tag), true) = (&etag, has_if_match) {
-        if !IfMatch::parse(get(header::IF_MATCH)).matches(tag) {
-            return Ok(failed());
-        }
-    }
-    if let (Some(m), false) = (modified, has_if_match) {
-        if get(header::IF_UNMODIFIED_SINCE).and_then(parse_http_date).is_some_and(|since| unix_seconds(m) > unix_seconds(since)) {
-            return Ok(failed());
-        }
-    }
-    let if_none_match = IfNoneMatch::parse(get(header::IF_NONE_MATCH));
-    let not_modified = match (&etag, modified) {
-        (Some(tag), _) if if_none_match.matches(tag) => true,
-        (_, Some(m)) if if_none_match.tags.is_empty() => {
-            get(header::IF_MODIFIED_SINCE).and_then(parse_http_date).is_some_and(|since| unix_seconds(m) <= unix_seconds(since))
-        }
-        _ => false,
-    };
-    if not_modified {
-        return Ok(respond(StatusCode::NOT_MODIFIED, Body::empty(), false, true));
-    }
-
-    let read = |start: u64, len: u64| -> io::Result<Body> {
-        if head || len == 0 {
-            return Ok(Body::empty());
-        }
-        read_range(start, len)
-    };
-    if accept_ranges && method == Method::GET && req_headers.contains_key(header::RANGE) {
-        let range = Range::parse(get(header::RANGE));
-        if range.ranges.is_empty() {
-            return Ok(respond(StatusCode::BAD_REQUEST, Body::from("Bad Request"), false, false));
-        }
-        if IfRange::parse(get(header::IF_RANGE)).matches(etag.as_deref(), modified) {
-            let [(start, end)] = range.normalize(size)[..] else {
-                let mut res = respond(StatusCode::RANGE_NOT_SATISFIABLE, Body::from("Range Not Satisfiable"), false, false);
-                res.headers_mut().insert(header::CONTENT_RANGE, HeaderValue::from_str(&ContentRange::unsatisfied(size).to_string()).expect("ascii"));
-                return Ok(res);
-            };
-            let mut res = respond(StatusCode::PARTIAL_CONTENT, read(start, end - start + 1)?, true, true);
-            res.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(end - start + 1));
-            res.headers_mut().insert(header::CONTENT_RANGE, HeaderValue::from_str(&ContentRange::bytes(start, end, size).to_string()).expect("ascii"));
-            return Ok(res);
-        }
-    }
-    let mut res = respond(StatusCode::OK, read(0, size)?, true, true);
-    res.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(size));
-    Ok(res)
+    Some((file, file_options))
 }
 
 struct Entry {
@@ -437,7 +277,5 @@ tr:last-child td { border-bottom: none; } \
 .name-cell a, .size-cell, .type-cell { padding: 0.375rem 0.75rem; } .type-cell { display: none; } .name-cell { width: 60%; } .size-cell { width: 40%; text-align: right; } } \
 @media (max-width: 480px) { body { font-size: 13px; } .name-cell a, .size-cell, .type-cell { padding: 0.375rem 0.5rem; } h1 { font-size: 1rem; } .icon { width: 12px; height: 12px; } }";
 
-#[cfg(test)]
-mod file_tests;
 #[cfg(test)]
 mod tests;

@@ -214,9 +214,10 @@ crates:
    servers for streamed bodies, redirects and a trusted development proxy; a `redirect`
    option, overridable per request, returns redirects by default or follows them with
    fetch's rules), `rmx-render`, `rmx-middleware` (compression with
-   br/gzip/deflate negotiation, static files with strong ETags (any Web Crypto digest or a
-   function), ranges for `GET` only, `file_response_for` with Remix's `File.type` rule, and directory
-   listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
+   br/gzip/deflate negotiation, static files served as Remix does (each
+   file opened as a `LazyFile` and answered by `response::file`, typed by the requested path,
+   per-file `accept_ranges`; `static.test.ts` ported one per case, including symlinks) and
+   directory listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
    override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer, custom providers with their own
    token types and transaction state, OIDC `map_profile`; Remix's 17 auth test files ported one

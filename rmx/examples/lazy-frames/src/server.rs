@@ -6,10 +6,12 @@ use http::{header, HeaderValue, StatusCode};
 use lazy_frames_demo::*;
 use rmx::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
 use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::fetch::{response, Response};
+use rmx::fetch::response::{self, FileResponseOptions};
+use rmx::fetch::Response;
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
-use rmx::middleware::static_files::{file_response, static_files, StaticOptions};
+use rmx::fs::{open_lazy_file, OpenLazyFileOptions};
+use rmx::middleware::static_files::{static_files, StaticOptions};
 use rmx::render::{Render, ResponseInit};
 use rmx::router::routes::{get, post, prefix, Route, RouteMap};
 use rmx::router::{action, Context, Next, Router};
@@ -125,9 +127,11 @@ pub fn router(config: Config) -> Router {
                 let config = html_config.clone();
                 async move {
                     let Some(file) = ctx.param("id").and_then(html_frame_file) else { return not_found() };
-                    let options = StaticOptions { cache_control: Some(frame_cache_control(&config).into()), ..Default::default() };
                     let path = config.root.join("frames-html").join(file);
-                    file_response(&path, ctx.method(), ctx.headers(), &options).unwrap_or_else(|_| not_found())
+                    let Ok(file) = open_lazy_file(&path, OpenLazyFileOptions::default()) else { return not_found() };
+                    let options = FileResponseOptions { cache_control: Some(frame_cache_control(&config).into()), ..Default::default() };
+                    let response = response::file(&file, ctx.request(), &options);
+                    response.await.unwrap_or_else(|_| not_found())
                 }
             }),
             ui: action(move |ctx: Context| {

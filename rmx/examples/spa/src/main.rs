@@ -8,7 +8,9 @@
 fn main() {
     use std::path::PathBuf;
 
-    use rmx::middleware::static_files::{file_response, static_files, ETag, StaticOptions};
+    use rmx::fetch::response::{self, FileResponseOptions};
+    use rmx::fs::{open_lazy_file, OpenLazyFileOptions};
+    use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
     use rmx::router::{Context, Router};
 
     // The browser router's routes (`routes`); this server only serves files.
@@ -18,11 +20,16 @@ fn main() {
     let public = PathBuf::from(std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "examples/spa/public".into()));
     let options = StaticOptions { cache_control: Some("no-store".into()), etag: ETag::Off, last_modified: false, ..Default::default() };
     let mut router = Router::new();
-    router.use_middleware(static_files(public.clone(), options.clone()));
+    router.use_middleware(static_files(public.clone(), options));
     let index = public.join("index.html");
+    let index_options = FileResponseOptions { cache_control: Some("no-store".into()), etag: ETag::Off, last_modified: false, ..Default::default() };
     router.not_found(move |ctx: Context| {
-        let (index, options) = (index.clone(), options.clone());
-        async move { file_response(&index, ctx.method(), ctx.headers(), &options).unwrap_or_else(|_| rmx::fetch::response::not_found()) }
+        let (index, options) = (index.clone(), index_options.clone());
+        async move {
+            let Ok(file) = open_lazy_file(&index, OpenLazyFileOptions::default()) else { return response::not_found() };
+            let response = response::file(&file, ctx.request(), &options);
+            response.await.unwrap_or_else(|_| response::not_found())
+        }
     });
     let addr = format!("{host}:{port}");
     println!("spa demo on http://{addr}");

@@ -1,12 +1,12 @@
 //! `actions/controller.tsx` (home, about, search, uploads), `actions/contact`,
 //! `actions/fragments` and `actions/api`.
 
-use http::{Method, StatusCode};
+use http::StatusCode;
 use rmx::{css, rsx, IntoNode, Node};
-use rmx::fetch::{response, Response};
+use rmx::fetch::response::{self, FileResponseOptions};
+use rmx::fetch::Response;
 use rmx::file_storage::FileStorage;
 use rmx::middleware::session::SessionExt;
-use rmx::middleware::static_files::{file_response_for, StaticOptions};
 use rmx::render::ResponseInit;
 use rmx::router::routes::FormActions;
 use rmx::router::{action, Context, Router};
@@ -24,10 +24,7 @@ pub fn routes<U: FileStorage + Clone>(router: &mut Router, uploads: U) {
         RoutesActions {
             uploads: action(move |ctx: Context| {
                 let uploads = uploads.clone();
-                let key = ctx.param("key").unwrap_or_default().to_string();
-                let headers = ctx.headers().clone();
-                let method = ctx.method().clone();
-                async move { serve_upload(key, method, headers, uploads).await }
+                async move { serve_upload(ctx, &uploads).await }
             }),
             home: action(home),
             about: action(|ctx: Context| async move { render(&ctx, about_page()) }),
@@ -45,11 +42,13 @@ pub fn routes<U: FileStorage + Clone>(router: &mut Router, uploads: U) {
     router.map(&ROUTES.api, ApiActions { cart_toggle: action(cart_toggle) });
 }
 
-async fn serve_upload<U: FileStorage>(key: String, method: Method, headers: http::HeaderMap, uploads: U) -> Response {
+async fn serve_upload<U: FileStorage>(ctx: Context, uploads: &U) -> Response {
+    let key = ctx.param("key").unwrap_or_default().to_string();
     match uploads.get(&key).await {
         Ok(Some(file)) => {
-            let options = StaticOptions { cache_control: Some("public, max-age=31536000".into()), ..Default::default() };
-            file_response_for(&file, &method, &headers, &options)
+            let options = FileResponseOptions { cache_control: Some("public, max-age=31536000".into()), ..Default::default() };
+            let response = response::file(&file, ctx.request(), &options);
+            response.await.unwrap_or_else(|_| response::status(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"))
         }
         _ => response::status(StatusCode::NOT_FOUND, "File not found"),
     }

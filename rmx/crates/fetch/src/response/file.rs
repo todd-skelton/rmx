@@ -169,6 +169,14 @@ impl<F> Clone for FileResponseOptions<F> {
 ///
 /// A `HEAD` gets the headers without a body. Only the requested range is streamed, so a lazy
 /// file reads just that part. Fails when computing a strong `ETag` fails to read the file.
+///
+/// The future does not borrow `request`. In a handler, create it before awaiting so the borrow
+/// of the context ends first (a `Context` is not `Sync`):
+///
+/// ```ignore
+/// let response = response::file(&file, ctx.request(), &options);
+/// response.await
+/// ```
 pub fn file<'a, F: FileLike>(file: &'a F, request: &Request, options: &'a FileResponseOptions<F>) -> impl Future<Output = Result<Response, BoxError>> + Send + 'a {
     let method = request.method().clone();
     let headers = request.headers().clone();

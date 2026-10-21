@@ -16,14 +16,16 @@ brotli = { version = "9", default-features = false, features = ["std"], optional
 flate2 = { version = "1", optional = true }
 rmx-cookie = { workspace = true, optional = true }
 rmx-crypto = { workspace = true, optional = true }
+rmx-fs = { workspace = true, optional = true }
 rmx-html-template = { workspace = true, optional = true }
+rmx-lazy-file = { workspace = true, optional = true }
 rmx-session = { workspace = true, optional = true }
 rmx-terminal = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 [features]
 default = ["static", "live-reload", "logger", "form-data", "method-override", "compression", "session", "csrf", "auth", "cop", "cors"]
-static = ["dep:rmx-crypto", "dep:rmx-html-template"]
+static = ["dep:rmx-fs", "dep:rmx-lazy-file", "dep:rmx-html-template"]
 logger = ["dep:rmx-terminal"]
 live-reload = []
 form-data = []
