@@ -214,7 +214,9 @@ crates:
    function), ranges for `GET` only, `file_response_for` with Remix's `File.type` rule, and directory
    listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
    override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
-   Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer).
+   Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer, custom providers with their own
+   token types and transaction state, OIDC `map_profile`; Remix's 17 auth test files ported one
+   test per case, including the full browser flow against a fake OIDC server on a loopback port).
 3. Supporting crates: `rmx-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
    error maps and typed `FormData` / `URLSearchParams` parsing, used by the timeboxer,
    bookstore, social-auth and sse ports wherever the Remix demos use it), `rmx-assets` (with Remix's asset inspection, `assets()` and `asset_details()`, and its

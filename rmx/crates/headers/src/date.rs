@@ -91,6 +91,36 @@ impl UtcDateTime {
     }
 }
 
+/// Parse `Date.prototype.toISOString()` output (`2025-09-23T18:34:12.345Z`); the
+/// milliseconds are optional.
+pub fn parse_iso_date(value: &str) -> Option<SystemTime> {
+    let b = value.as_bytes();
+    let with_millis = match b.len() {
+        20 => false,
+        24 if b[19] == b'.' => true,
+        _ => return None,
+    };
+    if b[4] != b'-' || b[7] != b'-' || b[10] != b'T' || b[13] != b':' || b[16] != b':' || b[b.len() - 1] != b'Z' {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| -> Option<i64> {
+        let s = &value[r];
+        s.bytes().all(|c| c.is_ascii_digit()).then(|| s.parse().ok()).flatten()
+    };
+    let (year, month, day) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (h, m, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    let ms = if with_millis { num(20..23)? } else { 0 };
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || h > 23 || m > 59 || s > 59 {
+        return None;
+    }
+    let days = days_from_civil(year, month, day);
+    if civil_from_days(days) != (year, month, day) {
+        return None;
+    }
+    let millis = (days * 86_400 + h * 3600 + m * 60 + s) * 1000 + ms;
+    Some(if millis >= 0 { UNIX_EPOCH + Duration::from_millis(millis as u64) } else { UNIX_EPOCH - Duration::from_millis((-millis) as u64) })
+}
+
 /// Seconds since the epoch, for comparing dates at HTTP precision.
 pub fn unix_seconds(t: SystemTime) -> i64 {
     match t.duration_since(UNIX_EPOCH) {
@@ -125,6 +155,18 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iso_dates_round_trip() {
+        let t = UNIX_EPOCH + Duration::from_millis(1_758_652_452_345);
+        assert_eq!(UtcDateTime::new(t).to_iso_string(), "2025-09-23T18:34:12.345Z");
+        assert_eq!(parse_iso_date("2025-09-23T18:34:12.345Z"), Some(t));
+        assert_eq!(parse_iso_date("2025-09-23T18:34:12Z"), Some(UNIX_EPOCH + Duration::from_secs(1_758_652_452)));
+        assert_eq!(parse_iso_date("1969-12-31T23:59:59.999Z"), Some(UNIX_EPOCH - Duration::from_millis(1)));
+        for bad in ["2025-02-30T00:00:00Z", "2025-13-01T00:00:00Z", "2025-09-23 18:34:12Z", "2025-09-23T18:34:12.345", "2025-09-23T24:00:00Z", "2025-09-23T18:34:12.3Z", ""] {
+            assert_eq!(parse_iso_date(bad), None, "{bad}");
+        }
+    }
 
     #[test]
     fn format_and_parse() {

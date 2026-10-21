@@ -1,5 +1,7 @@
 //! The built-in providers (`remix/auth`'s providers/*.ts).
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use rmx_fetch::Fetch;
@@ -79,22 +81,41 @@ const GITHUB_USER_ENDPOINT: &str = "https://api.github.com/user";
 const GITHUB_USER_EMAILS_ENDPOINT: &str = "https://api.github.com/user/emails";
 const GITHUB_HEADERS: [(&str, &str); 1] = [("user-agent", "rmx-auth")];
 
-/// A GitHub user. Fields GitHub sends beyond these are kept in `extra`.
+/// A field GitHub sent, possibly as `null` (`Some(None)`); a missing field stays `None`.
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(deserializer: D) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
+}
+
+/// A GitHub user. Fields GitHub sends beyond these are kept in `extra`. `name` and `email`
+/// tell a `null` (`Some(None)`) from a missing field (`None`) so the profile serializes as
+/// GitHub sent it; read them with [GitHubProfile::name] and [GitHubProfile::email].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GitHubProfile {
     pub id: i64,
     #[serde(default)]
     pub login: String,
-    #[serde(default)]
-    pub name: Option<String>,
-    #[serde(default)]
-    pub email: Option<String>,
+    #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
+    pub name: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
+    pub email: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub html_url: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+impl GitHubProfile {
+    /// The display name, when GitHub sent one.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_ref().and_then(Option::as_deref)
+    }
+
+    /// The profile email, or the verified address looked up when the profile had none.
+    pub fn email(&self) -> Option<&str> {
+        self.email.as_ref().and_then(Option::as_deref)
+    }
 }
 
 /// One of a GitHub user's email addresses.
@@ -122,12 +143,13 @@ pub fn github_provider(options: ClientOptions, fetch: impl Fetch) -> GitHubProvi
 
 impl OAuthProvider for GitHubProvider {
     type Profile = GitHubProfile;
+    type Tokens = OAuthTokens;
 
     fn name(&self) -> &str {
         "github"
     }
 
-    async fn authorization_url(&self, transaction: &OAuthTransaction) -> Result<Url, AuthError> {
+    async fn authorization_url(&self, transaction: &mut OAuthTransaction) -> Result<Url, AuthError> {
         self.options.authorize(GITHUB_AUTHORIZATION_ENDPOINT, &["read:user", "user:email"], false, transaction)
     }
 
@@ -141,11 +163,13 @@ impl OAuthProvider for GitHubProvider {
             return Err(AuthError("GitHub profile did not include a valid id.".into()));
         }
         let mut profile: GitHubProfile = decode(json, "GitHub profile did not include a valid id.")?;
-        if profile.email.is_none() {
+        if profile.email().is_none() {
             let emails = fetch_json(&*self.fetch, bearer_get(GITHUB_USER_EMAILS_ENDPOINT, &tokens.access_token, &GITHUB_HEADERS)?, "Failed to load GitHub email addresses.").await?;
             let emails: Vec<GitHubEmail> = decode(emails, "Failed to load GitHub email addresses.")?;
             let pick = emails.iter().find(|e| e.primary && e.verified).or_else(|| emails.iter().find(|e| e.verified));
-            profile.email = pick.map(|e| e.email.clone());
+            if let Some(pick) = pick {
+                profile.email = Some(Some(pick.email.clone()));
+            }
         }
         Ok(OAuthResult { provider: "github".into(), account: account("github", profile.id.to_string()), profile, tokens })
     }
@@ -188,12 +212,13 @@ pub fn x_provider(options: ClientOptions, fetch: impl Fetch) -> XProvider {
 
 impl OAuthProvider for XProvider {
     type Profile = XProfile;
+    type Tokens = OAuthTokens;
 
     fn name(&self) -> &str {
         "x"
     }
 
-    async fn authorization_url(&self, transaction: &OAuthTransaction) -> Result<Url, AuthError> {
+    async fn authorization_url(&self, transaction: &mut OAuthTransaction) -> Result<Url, AuthError> {
         self.options.authorize(X_AUTHORIZATION_ENDPOINT, &["tweet.read", "users.read"], true, transaction)
     }
 
@@ -261,12 +286,13 @@ pub fn facebook_provider(options: ClientOptions, fetch: impl Fetch) -> FacebookP
 
 impl OAuthProvider for FacebookProvider {
     type Profile = FacebookProfile;
+    type Tokens = OAuthTokens;
 
     fn name(&self) -> &str {
         "facebook"
     }
 
-    async fn authorization_url(&self, transaction: &OAuthTransaction) -> Result<Url, AuthError> {
+    async fn authorization_url(&self, transaction: &mut OAuthTransaction) -> Result<Url, AuthError> {
         self.options.authorize(FACEBOOK_AUTHORIZATION_ENDPOINT, &["public_profile", "email"], true, transaction)
     }
 
@@ -381,18 +407,33 @@ impl OidcOptions {
     }
 }
 
+/// What [OidcProvider::map_profile]'s function receives (`mapProfile`'s input). Remix passes
+/// the request context; here it is the callback URL, as in [OAuthProvider::handle_callback].
+#[derive(Clone, Debug)]
+pub struct OidcProfileInput {
+    pub claims: OidcProfile,
+    pub tokens: OAuthTokens,
+    pub metadata: OidcMetadata,
+    pub callback: Url,
+}
+
+type MapProfile<Pr> = Arc<dyn Fn(OidcProfileInput) -> Pin<Box<dyn Future<Output = Pr> + Send>> + Send + Sync>;
+
 /// Any OpenID Connect provider (`createOIDCAuthProvider`): PKCE login, the userinfo endpoint
 /// for the profile, and refresh. Metadata comes from discovery (cached after the first
-/// success) unless given. Default scopes `openid profile email`.
-pub struct OidcProvider {
+/// success) unless given. Default scopes `openid profile email`. The profile is the userinfo
+/// claims unless [OidcProvider::map_profile] maps them to another type `Pr`.
+pub struct OidcProvider<Pr = OidcProfile> {
     options: OidcOptions,
     default_scopes: &'static [&'static str],
     fetch: Arc<dyn Fetch>,
     metadata: Mutex<Option<OidcMetadata>>,
+    map: MapProfile<Pr>,
 }
 
 pub fn oidc_provider(options: OidcOptions, fetch: impl Fetch) -> OidcProvider {
-    OidcProvider { options, default_scopes: &["openid", "profile", "email"], fetch: Arc::new(fetch), metadata: Mutex::new(None) }
+    let claims: MapProfile<OidcProfile> = Arc::new(|input: OidcProfileInput| -> Pin<Box<dyn Future<Output = OidcProfile> + Send>> { Box::pin(std::future::ready(input.claims)) });
+    OidcProvider { options, default_scopes: &["openid", "profile", "email"], fetch: Arc::new(fetch), metadata: Mutex::new(None), map: claims }
 }
 
 /// Google (`createGoogleAuthProvider`): OIDC with Google's endpoints. Default scopes
@@ -448,7 +489,19 @@ pub fn auth0_provider(options: Auth0Options, fetch: impl Fetch) -> OidcProvider 
     oidc_provider(OidcOptions { name: "auth0".into(), ..OidcOptions::new(issuer, options.client) }, fetch)
 }
 
-impl OidcProvider {
+impl<Pr> OidcProvider<Pr> {
+    /// Map the userinfo claims to the app's profile type (`mapProfile`). The function also
+    /// gets the tokens, the provider metadata and the callback URL.
+    pub fn map_profile<Q, F, Fut>(self, map: F) -> OidcProvider<Q>
+    where
+        F: Fn(OidcProfileInput) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Q> + Send + 'static,
+    {
+        let OidcProvider { options, default_scopes, fetch, metadata, map: _ } = self;
+        let map: MapProfile<Q> = Arc::new(move |input: OidcProfileInput| -> Pin<Box<dyn Future<Output = Q> + Send>> { Box::pin(map(input)) });
+        OidcProvider { options, default_scopes, fetch, metadata, map }
+    }
+
     async fn metadata(&self) -> Result<OidcMetadata, AuthError> {
         let name = &self.options.name;
         if let Some(metadata) = &self.options.metadata {
@@ -471,19 +524,20 @@ impl OidcProvider {
     }
 }
 
-impl OAuthProvider for OidcProvider {
-    type Profile = OidcProfile;
+impl<Pr: Send + 'static> OAuthProvider for OidcProvider<Pr> {
+    type Profile = Pr;
+    type Tokens = OAuthTokens;
 
     fn name(&self) -> &str {
         &self.options.name
     }
 
-    async fn authorization_url(&self, transaction: &OAuthTransaction) -> Result<Url, AuthError> {
+    async fn authorization_url(&self, transaction: &mut OAuthTransaction) -> Result<Url, AuthError> {
         let metadata = self.metadata().await?;
         self.options.client.authorize(&metadata.authorization_endpoint, self.default_scopes, true, transaction)
     }
 
-    async fn handle_callback(&self, callback: &Url, transaction: &OAuthTransaction) -> Result<OAuthResult<OidcProfile>, AuthError> {
+    async fn handle_callback(&self, callback: &Url, transaction: &OAuthTransaction) -> Result<OAuthResult<Pr>, AuthError> {
         let metadata = self.metadata().await?;
         let name = self.name();
         let code = authorization_code(callback)?;
@@ -503,7 +557,9 @@ impl OAuthProvider for OidcProvider {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| AuthError(format!("OIDC provider \"{name}\" did not return a valid \"sub\" claim.")))?
             .to_string();
-        Ok(OAuthResult { provider: name.to_string(), account: account(name, sub.clone()), profile: OidcProfile { sub, claims }, tokens })
+        let input = OidcProfileInput { claims: OidcProfile { sub: sub.clone(), claims }, tokens: tokens.clone(), metadata, callback: callback.clone() };
+        let profile = (self.map)(input).await;
+        Ok(OAuthResult { provider: name.to_string(), account: account(name, sub), profile, tokens })
     }
 
     async fn refresh_tokens(&self, tokens: &OAuthTokens) -> Result<OAuthTokens, AuthError> {

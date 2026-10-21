@@ -176,12 +176,12 @@ fn google_profile(profile: &OidcProfile) -> ExternalProfile {
 }
 
 fn github_profile(profile: &GitHubProfile) -> ExternalProfile {
-    let email = profile.email.as_deref().map(normalize_email);
+    let email = profile.email().map(normalize_email);
     ExternalProfile {
         linkable_email: email.clone(),
         email,
         username: Some(profile.login.clone()),
-        display_name: Some(profile.name.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| profile.login.clone())),
+        display_name: Some(profile.name().filter(|n| !n.trim().is_empty()).map_or_else(|| profile.login.clone(), str::to_string)),
         avatar_url: profile.avatar_url.clone(),
         profile_json: json_of(profile),
     }

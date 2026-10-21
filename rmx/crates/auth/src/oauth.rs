@@ -1,6 +1,6 @@
 //! Building blocks for providers (`remix/auth`'s provider.ts and utils.ts).
 
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::header;
 use rmx_fetch::{Body, Fetch, Request};
@@ -141,10 +141,17 @@ fn normalize_tokens(json: Value) -> Result<OAuthTokens, AuthError> {
         access_token,
         refresh_token: text("refresh_token"),
         token_type: text("token_type"),
-        expires_at: data.get("expires_in").and_then(Value::as_f64).map(|secs| SystemTime::now() + Duration::from_secs_f64(secs.max(0.0))),
+        expires_at: data.get("expires_in").and_then(Value::as_f64).and_then(expires_in),
         scope: text("scope").filter(|s| !s.is_empty()).map(|s| s.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).map(str::to_string).collect()),
         id_token: text("id_token"),
     })
+}
+
+/// Now plus `secs`, at millisecond precision like a JavaScript `Date`; `None` when out of range.
+fn expires_in(secs: f64) -> Option<SystemTime> {
+    let at = SystemTime::now().checked_add(Duration::try_from_secs_f64(secs.max(0.0)).ok()?)?;
+    let millis = u64::try_from(at.duration_since(UNIX_EPOCH).ok()?.as_millis()).ok()?;
+    Some(UNIX_EPOCH + Duration::from_millis(millis))
 }
 
 /// Send `request` and read a JSON body. A non-2xx status or an OAuth `error` field fails with

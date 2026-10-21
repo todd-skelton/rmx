@@ -66,7 +66,7 @@ fn credentials(ctx: &Context) -> (String, String) {
 async fn login(ctx: Context) -> Response {
     // middleware/auth.ts passwordProvider
     let db = db(&ctx).clone();
-    let password = credentials_provider(credentials, move |(username, password): (String, String)| {
+    let password = credentials_provider(credentials, move |(username, password): (String, String), _: &Context| {
         let user = db
             .find_user_by_username(&username)
             .filter(|user| db.password_for(user.id).is_some_and(|record| verify_password(&password, &record.password_hash)));

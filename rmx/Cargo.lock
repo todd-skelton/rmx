@@ -1197,12 +1197,15 @@ dependencies = [
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-headers",
  "rmx-middleware",
  "rmx-router",
+ "rmx-serve",
  "rmx-session",
  "rmx-url",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

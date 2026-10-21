@@ -245,7 +245,7 @@ impl AuthExt for Context {
 /// Rotate the session id after a successful login (dropping the old session's stored
 /// data) and return the session to write the login into. Remix's `completeAuth`.
 pub fn complete_auth(ctx: &Context) -> Session {
-    let session = ctx.get::<Session>().expect("complete_auth() needs the session() middleware");
+    let session = ctx.get::<Session>().expect("Session not found. Make sure session() middleware runs before completeAuth().");
     session.regenerate_id(true);
     session.clone()
 }
@@ -255,7 +255,9 @@ pub fn complete_auth(ctx: &Context) -> Session {
 // ---------------------------------------------------------------------------------------
 
 /// Direct form-based login: `parse` reads the submitted credentials from the request and
-/// `verify` checks them, yielding who logged in or `None` when they are rejected.
+/// `verify` checks them (with the request context at hand), yielding who logged in or `None`
+/// when they are rejected. A `verify` that can fail returns `Result<Option<_>, E>`, which
+/// [verify_credentials] hands back unchanged.
 ///
 /// ```
 /// use rmx_middleware::auth::{credentials_provider, verify_credentials};
@@ -263,7 +265,7 @@ pub fn complete_auth(ctx: &Context) -> Session {
 ///
 /// let password = credentials_provider(
 ///     |ctx| (ctx.form_data().get("email").unwrap_or_default().trim().to_lowercase(), ctx.form_data().get("password").unwrap_or_default().to_string()),
-///     |(email, password): (String, String)| async move { (email == "a@b.c" && password == "secret").then_some(1_u64) },
+///     |(email, password): (String, String), _ctx| async move { (email == "a@b.c" && password == "secret").then_some(1_u64) },
 /// );
 /// assert_eq!(password.name(), "password");
 /// // In a handler: let Some(user_id) = verify_credentials(&password, &ctx).await else { .. };
@@ -274,11 +276,11 @@ pub struct CredentialsProvider<P, V> {
     verify: V,
 }
 
-pub fn credentials_provider<In, Out, P, V, Fut>(parse: P, verify: V) -> CredentialsProvider<P, V>
+pub fn credentials_provider<In, P, V, Fut>(parse: P, verify: V) -> CredentialsProvider<P, V>
 where
     P: Fn(&Context) -> In,
-    V: Fn(In) -> Fut,
-    Fut: Future<Output = Option<Out>>,
+    V: Fn(In, &Context) -> Fut,
+    Fut: Future,
 {
     CredentialsProvider { name: "password".into(), parse, verify }
 }
@@ -293,16 +295,27 @@ impl<P, V> CredentialsProvider<P, V> {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    /// The hook that reads the submitted credentials.
+    pub fn parse(&self) -> &P {
+        &self.parse
+    }
+
+    /// The hook that checks them.
+    pub fn verify(&self) -> &V {
+        &self.verify
+    }
 }
 
-/// Parse and verify the submitted credentials; `None` when they are rejected.
-pub fn verify_credentials<In, Out, P, V, Fut>(provider: &CredentialsProvider<P, V>, ctx: &Context) -> Fut
+/// Parse and verify the submitted credentials: whatever `verify` returns, such as `None`
+/// when they are rejected or an error it raised.
+pub fn verify_credentials<In, P, V, Fut>(provider: &CredentialsProvider<P, V>, ctx: &Context) -> Fut
 where
     P: Fn(&Context) -> In,
-    V: Fn(In) -> Fut,
-    Fut: Future<Output = Option<Out>>,
+    V: Fn(In, &Context) -> Fut,
+    Fut: Future,
 {
-    (provider.verify)((provider.parse)(ctx))
+    (provider.verify)((provider.parse)(ctx), ctx)
 }
 
 // ---------------------------------------------------------------------------------------

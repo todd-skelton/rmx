@@ -121,7 +121,7 @@ async fn login(ctx: Context) -> Response {
     let db = db(&ctx).clone();
     let password = credentials_provider(
         |ctx: &Context| (normalize_email(&field(ctx, "email")), field(ctx, "password")),
-        move |(email, password): (String, String)| {
+        move |(email, password): (String, String), _: &Context| {
             let user = db.find_user_by_email(&email).filter(|u| verify_password(&password, &u.password_hash));
             async move { user }
         },
