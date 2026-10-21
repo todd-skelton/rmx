@@ -371,6 +371,16 @@ Covered since phase 0b:
    `BodySender::ready()`, so a source chunk is read only after the previous output was
    taken (before, a fast source was read to the end in one poll). The middleware's own
    `compression.test.ts` (9) is ported too.
+   `node-fetch-server`'s `request-listener.test.ts` (52) and `request-listener.http2.test.ts`
+   (12) are ported case by case against real loopback servers (raw TCP and HTTP/2 clients
+   for Node's mocked request events). Porting changed `rmx-serve`: request bodies are read
+   by a task at most 16 KiB ahead of the handler (Node's `highWaterMark`), so a client that
+   leaves mid-upload aborts the signal while the handler is not reading, and reads then fail
+   with `AbortError` (a malformed body keeps its own error); a handler that panics after the
+   request aborted is not reported to `on_error` (`isRequestAbortError`); a response body
+   that fails after headers were sent is reported as `ServeError::ResponseBody`. `rmx-url`
+   now serializes IPv6 hosts as WHATWG URL does (`[2001:db8::1]`), so equivalent `Host` and
+   `:authority` values match.
    `remix/headers` tests are ported for accept, accept-encoding, accept-language, range,
    content-range, vary, if-match, if-none-match, if-range, cache-control and content-type
    (`crates/headers/tests/`). Porting changed behavior: `AcceptEncoding::accepts` always
