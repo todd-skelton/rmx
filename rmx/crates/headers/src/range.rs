@@ -44,9 +44,19 @@ impl Range {
         h
     }
 
-    /// Whether at least one range overlaps a resource of `size` bytes.
+    /// Whether every range is well formed (a bound, and `start <= end`) and at least one
+    /// overlaps a resource of `size` bytes. The fields are public, so this checks ranges
+    /// built by hand too.
     pub fn can_satisfy(&self, size: u64) -> bool {
-        !self.unit.is_empty() && !self.ranges.is_empty() && self.ranges.iter().any(|r| r.0.is_none_or(|start| start < size))
+        let well_formed = |r: &(Option<u64>, Option<u64>)| match *r {
+            (None, None) => false,
+            (Some(start), Some(end)) => start <= end,
+            _ => true,
+        };
+        !self.unit.is_empty()
+            && !self.ranges.is_empty()
+            && self.ranges.iter().all(well_formed)
+            && self.ranges.iter().any(|r| r.0.is_none_or(|start| start < size))
     }
 
     /// Inclusive `(start, end)` byte ranges clamped to `size` (empty if unsatisfiable).

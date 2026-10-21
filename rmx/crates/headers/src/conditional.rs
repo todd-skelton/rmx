@@ -3,7 +3,7 @@
 use std::fmt;
 use std::time::SystemTime;
 
-use crate::date::{parse_http_date, unix_seconds};
+use crate::date::{format_http_date, parse_http_date, unix_seconds};
 use crate::params::{quote_etag, split_list};
 
 /// `If-None-Match`: weak comparison, `*` matches anything.
@@ -23,6 +23,13 @@ impl IfNoneMatch {
 
     pub fn matches(&self, tag: &str) -> bool {
         self.has(tag) || self.tags.iter().any(|t| t == "*")
+    }
+}
+
+/// Tags from a list (Remix's array init), quoting bare ones.
+impl<S: AsRef<str>> FromIterator<S> for IfNoneMatch {
+    fn from_iter<I: IntoIterator<Item = S>>(tags: I) -> IfNoneMatch {
+        IfNoneMatch { tags: tags.into_iter().map(|t| quote_etag(t.as_ref())).collect() }
     }
 }
 
@@ -56,6 +63,13 @@ impl IfMatch {
     }
 }
 
+/// Tags from a list (Remix's array init), quoting bare ones.
+impl<S: AsRef<str>> FromIterator<S> for IfMatch {
+    fn from_iter<I: IntoIterator<Item = S>>(tags: I) -> IfMatch {
+        IfMatch { tags: tags.into_iter().map(|t| quote_etag(t.as_ref())).collect() }
+    }
+}
+
 impl fmt::Display for IfMatch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.tags.join(", "))
@@ -66,6 +80,19 @@ impl fmt::Display for IfMatch {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct IfRange {
     pub value: String,
+}
+
+/// An HTTP date (Remix's `Date` init).
+impl From<SystemTime> for IfRange {
+    fn from(date: SystemTime) -> IfRange {
+        IfRange { value: format_http_date(date) }
+    }
+}
+
+impl fmt::Display for IfRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.value)
+    }
 }
 
 impl IfRange {

@@ -168,7 +168,11 @@ impl ContentRange {
 }
 
 impl fmt::Display for ContentRange {
+    /// Empty when there is no unit, like an unset header.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.unit.is_empty() {
+            return Ok(());
+        }
         write!(f, "{} ", self.unit)?;
         match self.range {
             Some((a, b)) => write!(f, "{a}-{b}")?,

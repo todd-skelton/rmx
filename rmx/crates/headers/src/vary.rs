@@ -54,6 +54,35 @@ impl Vary {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// The header names, lowercase, in insertion order.
+    pub fn iter(&self) -> impl Iterator<Item = &str> {
+        self.header_names()
+    }
+}
+
+/// `Vary` from a list of names (Remix's array init).
+impl<S: AsRef<str>> FromIterator<S> for Vary {
+    fn from_iter<I: IntoIterator<Item = S>>(names: I) -> Vary {
+        let mut v = Vary::default();
+        for name in names {
+            v.add(name.as_ref());
+        }
+        v
+    }
+}
+
+impl<'a> IntoIterator for &'a Vary {
+    type Item = &'a str;
+    type IntoIter = std::iter::Map<std::slice::Iter<'a, String>, fn(&String) -> &str>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter().map(String::as_str)
+    }
 }
 
 impl fmt::Display for Vary {
