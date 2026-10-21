@@ -284,10 +284,8 @@ impl FrameState {
         if status >= 500 || (status >= 300 && !is_html) {
             return Err(JsValue::from_str(&format!("Failed to resolve frame: {status} {}", response.status_text())));
         }
+        // A redirect renders its final content; the frame keeps the source it requested.
         let redirected = response.redirected().then(|| response.url());
-        if let Some(url) = &redirected {
-            self.set_src(url);
-        }
         // A redirect can land a named frame on a page that is not frame content (a login
         // page, say). If it sends a whole document, load it as one.
         let document_fallback = redirected.clone().filter(|_| !self.is_top());
@@ -384,9 +382,6 @@ impl FrameState {
         };
         let Some(result) = until_aborted(resolve(request), signal).await else { return Ok(None) };
         let response = result.map_err(|e| JsValue::from_str(&e))?;
-        if let Some(url) = &response.url {
-            self.set_src(url);
-        }
         match response.content {
             FrameContent::Html(html) => self.tracked(|| self.apply_html(&html)),
             FrameContent::Node(node) => self.tracked(|| self.apply_node(node)),

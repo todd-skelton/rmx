@@ -226,6 +226,7 @@ fn on_navigate(event: JsValue) {
             });
             match frame.load(submission.unwrap_or_default()).await {
                 Ok(Some(redirected)) if Rc::ptr_eq(&frame, &top) => {
+                    top.set_src(&redirected);
                     let opts = object(&[
                         ("state", state(None, &redirected, reset_scroll, reset_focus)),
                         ("history", JsValue::from_str("replace")),

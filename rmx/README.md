@@ -146,14 +146,16 @@ crates:
    the browser's own form data. POST bodies are URL encoded, `multipart/form-data` or
    `text/plain` (CRLF lines), and custom resolvers get the encoding as
    `FrameRequest::enc_type`; `ReloadOptions::enc_type` does the same for reloads.
+   A redirected frame load renders the final content but keeps the frame's requested
+   `src` (only a top frame navigation moves to the redirect target), as in Remix.
    Navigations and frame reloads diff the server HTML into the live DOM: keyed elements
    match by `data-rmx-key`, live state wins (typed values, checked, selected, open,
    popovers), `data-rmx-preserve-dom` / `data-rmx-preserve-attrs` opt out, and nodes
    already in order stay put, so a custom element is not reconnected when siblings move.
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
-   document-state and form-navigation test suites (`crates/component/tests/browser_*.rs`,
-   390 tests).
+   document-state, form-navigation and frame request/resolver test suites
+   (`crates/component/tests/browser_*.rs`, 415 tests).
 2. Server: `rmx-router` (routes, middleware, nested mounts, and `async_context` for
    reading the request context deeper in the call stack), `rmx-route-pattern`,
    `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with

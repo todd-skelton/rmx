@@ -65,4 +65,4 @@ serde.workspace = true
 # Browser tests (`tests/browser_*.rs`): run with ../../test-browser.ps1.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.79"
-web-sys = { workspace = true, features = ["ErrorEvent", "ErrorEventInit", "HtmlDivElement", "CssRule", "CssRuleList", "CssStyleSheet", "CssStyleDeclaration", "Window", "HtmlElement", "HtmlButtonElement", "HtmlFormElement", "HtmlHeadElement", "HtmlInputElement", "HtmlTextAreaElement", "EventInit", "HtmlSelectElement", "MouseEvent", "MouseEventInit"] }
+web-sys = { workspace = true, features = ["ErrorEvent", "ErrorEventInit", "HtmlDivElement", "CssRule", "CssRuleList", "CssStyleSheet", "CssStyleDeclaration", "Window", "History", "HtmlElement", "HtmlButtonElement", "HtmlFormElement", "HtmlHeadElement", "HtmlInputElement", "Request", "HtmlTextAreaElement", "EventInit", "HtmlSelectElement", "MouseEvent", "MouseEventInit"] }
