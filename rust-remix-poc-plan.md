@@ -322,14 +322,16 @@ Covered since phase 0b:
    All examples depend on `rmx` alone.
 
 6. Component runtime behavior is checked against Remix's own test suites, ported test by
-   test: 415 browser tests in 25 files (`rmx/crates/component/tests/browser_*.rs`, run in
+   test: 460 browser tests in 28 files (`rmx/crates/component/tests/browser_*.rs`, run in
    headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
    SSR options and server/client parity), the style manager, diff-dom, document state
-   (focus restore), form navigation, and frame requests and resolvers; native ports cover
+   (focus restore), form navigation, navigation interception, nested client entries,
+   frame CSS, and frame requests and resolvers; native ports cover
    server streaming (`ssr_stream.rs`, `ssr_mixins.rs`). Porting found and fixed real
    gaps: host-element listeners, the constructed stylesheet, link mixin options, focus
    restore, detached form submitters, submitter encodings and `text/plain` bodies, frame
-   sources after redirects, and runaway mixin expansion.
+   sources after redirects, and runaway mixin expansion, document-relative origins, and deferred removal of
+   components whose content persists.
 
 Remaining gaps:
 
@@ -340,6 +342,6 @@ Remaining gaps:
    `Root::on_error` / `App::on_error` like Remix error events.
 3. Tooling: HMR and a CLI. The `remix/component/test` render helper exists as `rmx::test`.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
-5. Not yet ported: the rest of Remix's `frame.test.tsx` (client entry and nested frame
-   reload cases), `navigation.test.ts` and the remaining `stream.test.tsx` sections. The
+5. Not yet ported: the rest of Remix's `frame.test.tsx` (nested frame reload cases) and
+   the remaining `stream.test.tsx` sections. The
    behavior they cover is exercised by the demo e2e scripts.
