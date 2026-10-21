@@ -1318,6 +1318,7 @@ dependencies = [
  "rmx-terminal",
  "rmx-url",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

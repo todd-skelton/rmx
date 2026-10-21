@@ -17,3 +17,4 @@ fs = ["dep:tokio"]
 
 [dev-dependencies]
 rmx-fetch.workspace = true
+tokio.workspace = true

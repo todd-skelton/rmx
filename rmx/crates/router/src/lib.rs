@@ -24,6 +24,7 @@
 
 use std::fmt;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -164,21 +165,54 @@ impl Context {
         self.request.extensions().get::<T>()
     }
 
+    /// # Panics
+    ///
+    /// When `T` was stored with [`Context::set_sealed`].
     pub fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.check_sealed::<T>();
         self.request.extensions_mut().get_mut::<T>()
     }
 
     /// Store a request-scoped value (one per type; use a newtype for distinct keys).
+    ///
+    /// # Panics
+    ///
+    /// When `T` was stored with [`Context::set_sealed`].
     pub fn set<T: Clone + Send + Sync + 'static>(&mut self, value: T) {
+        self.check_sealed::<T>();
         async_context::update(&self.scope, |s| {
             s.values.insert(value.clone());
         });
         self.request.extensions_mut().insert(value);
     }
 
+    /// Store a value that later middleware and handlers can read but not replace: their
+    /// [`Context::set`] and [`Context::get_mut`] for `T` panic with `message`. The session
+    /// middleware uses this so a handler cannot swap in a session it would never save (Remix
+    /// checks the same thing after `next()`).
+    pub fn set_sealed<T: Clone + Send + Sync + 'static>(&mut self, value: T, message: &'static str) {
+        self.set(value);
+        self.request.extensions_mut().insert(Sealed::<T>(message, PhantomData));
+    }
+
+    fn check_sealed<T: 'static>(&self) {
+        if let Some(sealed) = self.request.extensions().get::<Sealed<T>>() {
+            panic!("{}", sealed.0);
+        }
+    }
+
     /// The router handling this request, for subrequests (`ctx.router().fetch(req)`).
     pub fn router(&self) -> &Router {
         &self.router
+    }
+}
+
+/// Marks `T` as stored by [`Context::set_sealed`]; holds the panic message.
+struct Sealed<T>(&'static str, PhantomData<fn() -> T>);
+
+impl<T> Clone for Sealed<T> {
+    fn clone(&self) -> Self {
+        Sealed(self.0, PhantomData)
     }
 }
 

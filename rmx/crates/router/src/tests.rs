@@ -78,6 +78,29 @@ fn middleware_order_and_context() {
 }
 
 #[test]
+fn sealed_values_can_be_read_but_not_replaced() {
+    #[derive(Clone, Debug, PartialEq)]
+    struct Owner(&'static str);
+    #[derive(Clone)]
+    struct Other;
+
+    let sealing = |ctx: &mut Context| ctx.set_sealed(Owner("mw"), "Owner is sealed");
+    let mut ctx = Context::new(req("GET", "https://x/"), Router::new());
+    sealing(&mut ctx);
+    assert_eq!(ctx.get::<Owner>(), Some(&Owner("mw")));
+    ctx.set(Other);
+    assert!(ctx.get_mut::<Other>().is_some(), "other types stay writable");
+
+    let replace = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ctx.set(Owner("handler"))));
+    assert_eq!(*replace.unwrap_err().downcast::<String>().unwrap(), "Owner is sealed");
+    let mutate = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        ctx.get_mut::<Owner>();
+    }));
+    assert!(mutate.is_err());
+    assert_eq!(ctx.get::<Owner>(), Some(&Owner("mw")));
+}
+
+#[test]
 fn mount_and_route_maps() {
     use crate::routes::{form, get, prefix, resources};
     let books = resources("books");

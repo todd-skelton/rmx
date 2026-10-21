@@ -20,19 +20,16 @@ use serde_json::json;
 ///
 /// When the cookie has no secrets, and when a session is already in the context.
 pub fn session<S: SessionStorage>(cookie: Cookie, storage: S) -> impl Middleware {
-    assert!(cookie.is_signed(), "session cookie must be signed (Cookie::secrets)");
-    if cookie.get_http_only() == Some(false) {
-        eprintln!(
-            "session cookie \"{}\" has http_only(false) and may be readable by client-side JavaScript",
-            cookie.name()
-        );
+    assert!(cookie.is_signed(), "Session cookie must be signed");
+    if let Some(warning) = http_only_warning(&cookie) {
+        eprintln!("{warning}");
     }
     let shared = Arc::new((cookie, storage));
     move |mut ctx: Context, next: Next| {
         let shared = shared.clone();
         async move {
             let (cookie, storage) = &*shared;
-            assert!(ctx.get::<Session>().is_none(), "existing session found, refusing to overwrite");
+            assert!(ctx.get::<Session>().is_none(), "Existing session found, refusing to overwrite");
             let max_age = cookie.get_max_age();
             let expires = cookie.get_expires();
             let has_expiration = max_age.is_some() || expires.is_some();
@@ -45,7 +42,7 @@ pub fn session<S: SessionStorage>(cookie: Cookie, storage: S) -> impl Middleware
                 Err(e) => return Error::new(http::StatusCode::INTERNAL_SERVER_ERROR, format!("session read failed: {e}")).into_response(),
             };
             let https = ctx.url().scheme() == "https";
-            ctx.set(session.clone());
+            ctx.set_sealed(session.clone(), "Cannot save session that was initialized by another middleware/handler");
 
             let mut res = next.run(ctx).await;
 
@@ -75,8 +72,27 @@ pub fn session<S: SessionStorage>(cookie: Cookie, storage: S) -> impl Middleware
     }
 }
 
+fn http_only_warning(cookie: &Cookie) -> Option<String> {
+    (cookie.get_http_only() == Some(false)).then(|| {
+        format!(
+            "Session cookie \"{}\" is configured with httpOnly: false and may be accessible to client-side JavaScript.",
+            cookie.name()
+        )
+    })
+}
+
 fn now_ms() -> i64 {
+    #[cfg(test)]
+    if let Some(now) = MOCK_NOW.with(std::cell::Cell::get) {
+        return now;
+    }
     system_time_ms(SystemTime::now())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Remix's tests mock `Date.now`; these set the session clock for the current thread.
+    static MOCK_NOW: std::cell::Cell<Option<i64>> = const { std::cell::Cell::new(None) };
 }
 
 /// Milliseconds since the epoch, negative before it (Remix's `Date.getTime()`).
@@ -218,8 +234,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "must be signed")]
+    #[should_panic(expected = "Session cookie must be signed")]
     fn requires_a_signed_cookie() {
         let _ = session(Cookie::new("sid"), MemoryStorage::new());
     }
 }
+
+#[cfg(test)]
+#[path = "session_remix_tests.rs"]
+mod remix_tests;

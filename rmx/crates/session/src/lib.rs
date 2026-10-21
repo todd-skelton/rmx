@@ -95,7 +95,7 @@ impl Session {
 
     fn live(&self) -> MutexGuard<'_, State> {
         let state = self.state();
-        assert!(!state.destroyed, "session has been destroyed");
+        assert!(!state.destroyed, "Session has been destroyed");
         state
     }
 
@@ -263,6 +263,9 @@ impl SessionStorage for CookieStorage {
     }
 
     async fn save(&self, session: &Session) -> Result<Option<String>, Error> {
+        if let Some(old) = session.delete_id() {
+            eprintln!("Session ID {old} was regenerated, but the old session cannot be deleted when using cookie storage");
+        }
         if session.is_destroyed() {
             return Ok(Some(String::new()));
         }

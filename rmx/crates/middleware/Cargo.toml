@@ -34,3 +34,6 @@ csrf = ["session", "form-data", "dep:rmx-crypto"]
 auth = ["session"]
 cop = []
 cors = []
+
+[dev-dependencies]
+tokio.workspace = true
