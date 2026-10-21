@@ -345,6 +345,10 @@ Covered since phase 0b:
    `redirect_with`, `html_with`, `ctx.render_with` and the SPA `render_with`, and a `Location`
    or `Content-Type` in an init replaces the constructor's. `createMixin(setup, { ssr })` is
    `HostMixin` with `mixin_with(args, MixinOptions { ssr })`.
+   `file.test.ts` is ported case by case (`static_files/file_tests.rs`): file responses take
+   the request method (ranges only for `GET`), an empty `File` type sends no `Content-Type`,
+   and strong ETags take `Digest::Algorithm` (SHA-1/256/384/512, hand-written in `rmx-crypto`)
+   or `Digest::With(fn)`; an unknown algorithm name fails to parse instead of rejecting.
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
