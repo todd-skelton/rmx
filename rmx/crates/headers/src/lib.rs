@@ -21,6 +21,8 @@ mod cookie;
 mod date;
 mod params;
 mod range;
+pub mod raw;
+mod typed;
 mod vary;
 
 pub use accept::{Accept, AcceptEncoding, AcceptLanguage};
@@ -31,4 +33,5 @@ pub use cookie::{Cookie, SameSite, SetCookie};
 pub use date::{format_http_date, parse_http_date, unix_seconds, UtcDateTime};
 pub use params::{parse_params, quote, quote_etag, split_list};
 pub use range::Range;
+pub use typed::{SuperHeaders, TypedHeader};
 pub use vary::Vary;

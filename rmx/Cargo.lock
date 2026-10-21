@@ -1279,6 +1279,9 @@ dependencies = [
 [[package]]
 name = "rmx-headers"
 version = "0.1.0"
+dependencies = [
+ "http",
+]
 
 [[package]]
 name = "rmx-html-template"

@@ -129,6 +129,24 @@ pub fn quote_etag(tag: &str) -> String {
     }
 }
 
+/// JavaScript's `parseInt(text, 10)`: leading whitespace, an optional sign, then as many
+/// digits as there are (`"60s"` is 60, `"1.5"` is 1); `None` without digits.
+pub(crate) fn parse_int(text: &str) -> Option<i64> {
+    let text = text.trim_start();
+    let (negative, digits) = match text.as_bytes().first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    let end = digits.bytes().position(|b| !b.is_ascii_digit()).unwrap_or(digits.len());
+    let magnitude = digits[..end].bytes().try_fold(0i64, |n, b| n.checked_mul(10)?.checked_add(i64::from(b - b'0')));
+    if end == 0 {
+        return None;
+    }
+    let magnitude = magnitude.unwrap_or(i64::MAX);
+    Some(if negative { -magnitude } else { magnitude })
+}
+
 /// JavaScript's `Number(text)` for q-values: blank is 0, junk is NaN.
 pub(crate) fn js_number(text: Option<&str>) -> f64 {
     match text.map(str::trim) {
