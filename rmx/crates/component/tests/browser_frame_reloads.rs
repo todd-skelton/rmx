@@ -43,6 +43,7 @@ async fn start() -> Server {
             rmx::entry::<RowAction>(),
             rmx::entry::<CartItems>(),
             rmx::entry::<ReloadButton>(),
+            rmx::entry::<KeyedIsland>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -92,14 +93,15 @@ struct Server {
 impl Server {
     fn new() -> Server {
         let make = js_sys::Function::new_no_args(
-            "const routes = {}; const gates = {}; const calls = []; const cancels = [];
+            "const routes = {}; const gates = {}; const calls = []; const cancels = []; const targets = [];
              const gate = (name) => {
                if (!gates[name]) { let release; const promise = new Promise((r) => { release = r }); gates[name] = { promise, release } }
                return gates[name];
              };
-             window.fetch = async (input) => {
+             window.fetch = async (input, init) => {
                const url = new URL(typeof input === 'string' ? input : input.url, document.baseURI);
                calls.push(url.pathname);
+               targets.push(url.pathname + ' ' + (init?.headers?.get?.('X-Remix-Target') ?? '-'));
                const parts = routes[url.pathname] || [];
                if (parts === 'fail') throw new TypeError('Failed to reload entry frame');
                const encoder = new TextEncoder();
@@ -118,6 +120,7 @@ impl Server {
              return {
                calls,
                cancels,
+               targets,
                route(path, parts) { routes[path] = parts },
                fail(path) { routes[path] = 'fail' },
                release(name, html) { gate(name).release(html) },
@@ -156,6 +159,12 @@ impl Server {
     fn calls(&self) -> Vec<String> {
         let calls: js_sys::Array = get(&self.stub, "calls").unchecked_into();
         calls.iter().map(|c| c.as_string().unwrap()).collect()
+    }
+
+    /// `path target` for each request (`-` without an `X-Remix-Target` header).
+    fn targets(&self) -> Vec<String> {
+        let targets: js_sys::Array = get(&self.stub, "targets").unchecked_into();
+        targets.iter().map(|c| c.as_string().unwrap()).collect()
     }
 
     /// Paths whose response stream the runtime cancelled.
@@ -1460,3 +1469,51 @@ async fn finishes_a_streamed_reload_after_removing_its_calling_component() {
     assert_eq!(text("sr-last").as_deref(), Some("Last"));
 }
 
+
+// frame.test.tsx: a keyed frame in a client entry remounted by an ancestor reload
+
+/// A client entry rendering a named frame keyed by its `label` (Remix's `CommentsIsland`).
+struct KeyedIsland;
+
+impl Component for KeyedIsland {
+    type Props = EntryProps;
+    rmx::client_entry!("KeyedIsland");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        KeyedIsland
+    }
+    fn render(&self, p: &EntryProps, _: &Handle<Self>) -> Node {
+        let fallback = rsx! { <span id="ki-fallback">"Loading island..."</span> };
+        let src = format!("/ki-comments/{}", p.label);
+        rsx! { <div class="comments-island"><Frame name="island" key={p.label.clone()} src={src} fallback={fallback}/></div> }
+    }
+}
+
+fn island_page(entry_id: &str, frame_id: &str, issue: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "KeyedIsland".into(), format!(r#"{{"label":"{issue}"}}"#)));
+    d.frames.push((frame_id.into(), format!("/ki-comments/{issue}"), Some("island".into()), "resolved"));
+    format!(
+        r#"<section id="ki-shell"><!--rmx:h:{entry_id}--><div class="comments-island">{}</div><!--/rmx:h--></section>{}"#,
+        region(frame_id, &format!(r#"<p id="ki-content" data-server-issue="{issue}">island {issue}</p>"#)),
+        d.to_script()
+    )
+}
+
+#[wasm_bindgen_test]
+async fn re_resolves_a_keyed_client_entry_frame_with_its_target_on_an_ancestor_reload() {
+    let server = start().await;
+    server.route("/ki-parent", vec![Part::Html(island_page("kih1", "kif1", "a"))]);
+    let _m = mount("ki-parent", "/ki-parent", "ki-content").await;
+    let island_loads = || server.targets().into_iter().filter(|t| t.starts_with("/ki-comments/")).collect::<Vec<_>>();
+    assert_eq!(island_loads(), Vec::<String>::new(), "the server-resolved island is adopted");
+
+    server.route("/ki-parent", vec![Part::Html(island_page("kih2", "kif2", "b"))]);
+    server.route("/ki-comments/b", vec![Part::Html(r#"<p id="ki-content" data-client-issue="b">island b (client)</p>"#.into())]);
+    let _ = frame("ki-parent").reload_async(ReloadOptions::default()).await;
+    until("the remounted island", || by_id("ki-content").and_then(|e| e.get_attribute("data-client-issue")).is_some()).await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(island_loads(), vec!["/ki-comments/b island".to_string()], "one client re-resolve, targeted at the island");
+    assert_eq!(text("ki-content").as_deref(), Some("island b (client)"));
+}

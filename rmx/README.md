@@ -163,7 +163,7 @@ crates:
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
    document-state, form-navigation, navigation, frame request/resolver, frame css and
-   child frame reload test suites (`crates/component/tests/browser_*.rs`, 498 tests), plus
+   child frame reload test suites (`crates/component/tests/browser_*.rs`, 499 tests), plus
    Remix's nested client entry regressions (one listener per nested entry wherever it sits;
    removal of a component or nested entry waits for a `persist_node` exit at its top level).
    Frames inside a reloading frame get `reloadStart` with it and `reloadComplete` once
