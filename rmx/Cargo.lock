@@ -1249,7 +1249,9 @@ dependencies = [
 name = "rmx-fetch"
 version = "0.1.0"
 dependencies = [
+ "brotli",
  "bytes",
+ "flate2",
  "http",
  "http-body",
  "js-sys",

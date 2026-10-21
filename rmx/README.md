@@ -214,7 +214,9 @@ crates:
    servers for streamed bodies, redirects and a trusted development proxy; a `redirect`
    option, overridable per request, returns redirects by default or follows them with
    fetch's rules), `rmx-render`, `rmx-middleware` (compression with
-   br/gzip/deflate negotiation, static files served as Remix does (each
+   br/gzip/deflate negotiation through `rmx_fetch::response::compress`, Remix's
+   `remix/response/compress`, which reads a source chunk only after the previous output was
+   taken; `compress.test.ts` and the middleware's tests ported one per case), static files served as Remix does (each
    file opened as a `LazyFile` and answered by `response::file`, typed by the requested path,
    per-file `accept_ranges`; `static.test.ts` ported one per case, including symlinks) and
    directory listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method

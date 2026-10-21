@@ -6,6 +6,8 @@ use bytes::Bytes;
 
 use crate::{Body, File, Response};
 
+#[cfg(feature = "compress")]
+pub mod compress;
 mod file;
 
 pub use file::{file, Digest, DigestFn, ETag, FileLike, FileResponseOptions};

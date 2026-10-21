@@ -12,8 +12,6 @@ rmx-headers.workspace = true
 rmx-mime.workspace = true
 rmx-router.workspace = true
 rmx-url.workspace = true
-brotli = { version = "9", default-features = false, features = ["std"], optional = true }
-flate2 = { version = "1", optional = true }
 rmx-cookie = { workspace = true, optional = true }
 rmx-crypto = { workspace = true, optional = true }
 rmx-fs = { workspace = true, optional = true }
@@ -30,7 +28,7 @@ logger = ["dep:rmx-terminal"]
 live-reload = []
 form-data = []
 method-override = ["form-data"]
-compression = ["dep:flate2", "dep:brotli"]
+compression = ["rmx-fetch/compress"]
 session = ["dep:rmx-session", "dep:rmx-cookie", "dep:serde_json"]
 csrf = ["session", "form-data", "dep:rmx-crypto"]
 auth = ["session"]
@@ -38,4 +36,6 @@ cop = []
 cors = []
 
 [dev-dependencies]
+brotli = { version = "9", default-features = false, features = ["std"] }
+flate2 = "1"
 tokio.workspace = true

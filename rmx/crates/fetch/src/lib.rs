@@ -261,6 +261,11 @@ impl http_body::Body for Body {
 fn poll_shared(shared: &Shared, cx: &mut Context<'_>) -> Poll<Option<Result<Bytes, BoxError>>> {
     let mut st = shared.state.lock().expect("body lock");
     if let Some(chunk) = st.queue.pop_front() {
+        if st.queue.is_empty() {
+            if let Some(w) = st.sender_waker.take() {
+                w.wake();
+            }
+        }
         return Poll::Ready(Some(Ok(chunk)));
     }
     if st.senders == 0 {
@@ -336,6 +341,8 @@ struct ChannelState {
     closed_by_reader: bool,
     error: Option<BoxError>,
     waker: Option<Waker>,
+    /// A producer waiting in [BodySender::ready].
+    sender_waker: Option<Waker>,
 }
 
 struct Shared {
@@ -366,6 +373,22 @@ impl BodySender {
         self.shared.state.lock().expect("body lock").error = Some(error.into());
     }
 
+    /// Wait until the body has taken every queued chunk, so a producer does not run ahead of
+    /// its reader (backpressure). Resolves to `false` once the body was dropped.
+    pub fn ready(&self) -> impl Future<Output = bool> + '_ {
+        poll_fn(move |cx| {
+            let mut st = self.shared.state.lock().expect("body lock");
+            if st.closed_by_reader {
+                return Poll::Ready(false);
+            }
+            if st.queue.is_empty() {
+                return Poll::Ready(true);
+            }
+            st.sender_waker = Some(cx.waker().clone());
+            Poll::Pending
+        })
+    }
+
     /// Whether the reading side has been dropped.
     pub fn is_closed(&self) -> bool {
         self.shared.state.lock().expect("body lock").closed_by_reader
@@ -394,7 +417,11 @@ impl Drop for BodySender {
 impl Drop for Body {
     fn drop(&mut self) {
         if let Inner::Channel(shared) | Inner::Task(shared, _) = &self.inner {
-            shared.state.lock().expect("body lock").closed_by_reader = true;
+            let mut st = shared.state.lock().expect("body lock");
+            st.closed_by_reader = true;
+            if let Some(w) = st.sender_waker.take() {
+                w.wake();
+            }
         }
     }
 }
