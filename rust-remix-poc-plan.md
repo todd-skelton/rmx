@@ -405,6 +405,11 @@ Covered since phase 0b:
    content when an ancestor reload re-rendered the entry, and client frame reloads started
    by a superseded ancestor reload that were left running, and streamed templates cut
    short before their end marker that never applied once the document finished parsing.
+   `createScheduler` has no separate constructor: Remix passes one scheduler to related
+   roots so their updates batch together, and rmx has one scheduler per wasm thread that
+   every root and frame shares (`rmx::flush()` is `scheduler.dequeue()`). Its phase events
+   and task queues are runtime plumbing that rmx exposes as mixin `on_before_update` /
+   `on_commit` and `Handle::queue_task`, with the same 50-update loop guard and warning.
 
 Remaining gaps:
 
