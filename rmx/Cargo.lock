@@ -1365,6 +1365,7 @@ name = "rmx-serve"
 version = "0.1.0"
 dependencies = [
  "http",
+ "http-body",
  "hyper",
  "hyper-util",
  "rmx-fetch",

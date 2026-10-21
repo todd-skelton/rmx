@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
+http-body.workspace = true
 hyper = { version = "1", features = ["server", "client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
 rmx-fetch.workspace = true

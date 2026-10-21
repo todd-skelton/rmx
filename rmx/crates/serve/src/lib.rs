@@ -15,6 +15,10 @@
 //! `ctx.get::<ClientAddress>()`. A handler that panics answers 500 "Internal Server Error"
 //! (Remix's response for a thrown error) unless [`ServeOptions::on_error`] supplies a response.
 //!
+//! Each request also carries an [`AbortSignal`](rmx_fetch::AbortSignal) (`ctx.signal()`)
+//! that aborts when the response can no longer be written before it finished: the client
+//! disconnected while the handler ran or while the body streamed.
+//!
 //! [`fetch`] is the matching client, for proxies and calls to other servers.
 //!
 //! This is the only crate that depends on a specific runtime (tokio) and HTTP
@@ -31,11 +35,12 @@ use std::sync::Arc;
 use std::task::{Context as TaskContext, Poll};
 
 use http::{header, StatusCode, Version};
+use http_body::Body as _;
 use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
-use rmx_fetch::{Body, Request, Response};
+use rmx_fetch::{AbortController, Body, Request, RequestExt, Response};
 use rmx_router::Router;
 use rmx_url::Url;
 use tokio::net::TcpListener;
@@ -192,12 +197,90 @@ pub async fn serve_with(listener: TcpListener, router: Router, options: ServeOpt
         tokio::spawn(async move {
             let service = service_fn(move |req: hyper::Request<Incoming>| {
                 let (router, options) = (router.clone(), options.clone());
-                async move { Ok::<_, Infallible>(handle(&router, &options, req.map(Body::wrap), remote).await) }
+                async move {
+                    let mut req = req.map(Body::wrap);
+                    let lifecycle = Lifecycle::new();
+                    req.set_signal(lifecycle.controller.signal());
+                    let res = handle(&router, &options, req, remote).await;
+                    Ok::<_, Infallible>(res.map(|body| ServedBody::new(body, lifecycle)))
+                }
             });
             let _ = auto::Builder::new(TokioExecutor::new())
                 .serve_connection(TokioIo::new(stream), service)
                 .await;
         });
+    }
+}
+
+/// A request's lifecycle (Remix's `createRequestLifecycle`): aborts the request signal when
+/// dropped before the response finished, that is when the connection closed first.
+struct Lifecycle {
+    controller: AbortController,
+    finished: bool,
+}
+
+impl Lifecycle {
+    fn new() -> Lifecycle {
+        Lifecycle { controller: AbortController::new(), finished: false }
+    }
+}
+
+impl Drop for Lifecycle {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.controller.abort();
+        }
+    }
+}
+
+/// A response body that holds its request's [`Lifecycle`] until the last frame is written.
+/// hyper drops it early when the client goes away, which aborts the request signal.
+struct ServedBody {
+    body: Body,
+    lifecycle: Option<Lifecycle>,
+}
+
+impl ServedBody {
+    fn new(body: Body, lifecycle: Lifecycle) -> ServedBody {
+        let mut served = ServedBody { body, lifecycle: Some(lifecycle) };
+        served.finish_if_ended();
+        served
+    }
+
+    fn finish_if_ended(&mut self) {
+        if self.body.is_end_stream() {
+            if let Some(mut lifecycle) = self.lifecycle.take() {
+                lifecycle.finished = true;
+            }
+        }
+    }
+}
+
+impl http_body::Body for ServedBody {
+    type Data = rmx_fetch::Bytes;
+    type Error = rmx_fetch::BoxError;
+
+    fn poll_frame(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let this = &mut *self;
+        let polled = Pin::new(&mut this.body).poll_frame(cx);
+        match &polled {
+            Poll::Ready(None) => {
+                if let Some(mut lifecycle) = this.lifecycle.take() {
+                    lifecycle.finished = true;
+                }
+            }
+            Poll::Ready(Some(Ok(_))) => this.finish_if_ended(),
+            _ => {}
+        }
+        polled
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.body.size_hint()
     }
 }
 

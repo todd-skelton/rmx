@@ -213,3 +213,95 @@ async fn panicking_handlers_answer_500_or_the_error_handler_response() {
     assert!(out.starts_with("HTTP/1.1 503") && out.ends_with("custom"), "{out}");
     assert_eq!(*seen.lock().unwrap(), ["request handler panicked: boom"]);
 }
+
+/// A router whose `/stream` and `/wait` handlers report through the returned channel when
+/// the request signal aborts.
+fn abort_reporting_router() -> (Router, tokio::sync::mpsc::UnboundedReceiver<&'static str>) {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut router = Router::new();
+    let report = tx.clone();
+    router.get("/stream", move |ctx: Context| {
+        let (signal, report) = (ctx.signal().clone(), report.clone());
+        async move {
+            tokio::spawn(async move {
+                signal.until_aborted().await;
+                let _ = report.send("stream aborted");
+            });
+            http::Response::new(Body::from_task(|tx| async move {
+                while tx.send("tick\n") {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            }))
+        }
+    });
+    let report = tx.clone();
+    router.get("/done", move |ctx: Context| {
+        let (signal, report) = (ctx.signal().clone(), report.clone());
+        async move {
+            tokio::spawn(async move {
+                signal.until_aborted().await;
+                let _ = report.send("done aborted");
+            });
+            "done"
+        }
+    });
+    router.get("/wait", move |ctx: Context| {
+        let (signal, report) = (ctx.signal().clone(), tx.clone());
+        async move {
+            tokio::spawn(async move {
+                signal.until_aborted().await;
+                let _ = report.send("wait aborted");
+            });
+            std::future::pending::<()>().await;
+            "never"
+        }
+    });
+    (router, rx)
+}
+
+async fn start(router: Router) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(serve(listener, router));
+    addr
+}
+
+#[tokio::test]
+async fn aborts_the_request_signal_when_the_client_leaves_during_a_stream() {
+    let (router, mut aborted) = abort_reporting_router();
+    let addr = start(router).await;
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+    s.write_all(b"GET /stream HTTP/1.1\r\nHost: x\r\n\r\n").await.unwrap();
+    let mut buf = [0u8; 256];
+    let n = s.read(&mut buf).await.unwrap();
+    assert!(String::from_utf8_lossy(&buf[..n]).starts_with("HTTP/1.1 200"));
+    drop(s);
+    let got = tokio::time::timeout(std::time::Duration::from_secs(5), aborted.recv()).await;
+    assert_eq!(got.expect("signal should abort").unwrap(), "stream aborted");
+}
+
+#[tokio::test]
+async fn aborts_the_request_signal_when_the_client_leaves_before_the_response() {
+    let (router, mut aborted) = abort_reporting_router();
+    let addr = start(router).await;
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+    s.write_all(b"GET /wait HTTP/1.1\r\nHost: x\r\n\r\n").await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    drop(s);
+    let got = tokio::time::timeout(std::time::Duration::from_secs(5), aborted.recv()).await;
+    assert_eq!(got.expect("signal should abort").unwrap(), "wait aborted");
+}
+
+#[tokio::test]
+async fn finished_responses_do_not_abort_the_request_signal() {
+    let (router, mut aborted) = abort_reporting_router();
+    let addr = start(router).await;
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+    s.write_all(b"GET /done HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").await.unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).await.unwrap();
+    assert!(out.ends_with("done"), "{out}");
+    drop(s);
+    let got = tokio::time::timeout(std::time::Duration::from_millis(300), aborted.recv()).await;
+    assert!(got.is_err(), "a finished response aborted the signal: {got:?}");
+}

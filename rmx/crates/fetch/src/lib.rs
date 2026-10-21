@@ -17,9 +17,11 @@ pub use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use http_body::Frame;
 pub use rmx_url::{SearchParams, Url};
 
+pub mod abort;
 pub mod form_data;
 pub mod response;
 
+pub use abort::{AbortController, AbortError, AbortSignal, RequestExt};
 pub use form_data::{File, FileUpload, FormData, FormDataError, FormLimits, FormValue};
 
 /// An HTTP request with an rmx [`Body`].

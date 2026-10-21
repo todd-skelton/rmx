@@ -28,7 +28,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
-use rmx_fetch::{request_url, response, Body, Request, Response};
+use rmx_fetch::{request_url, response, AbortError, AbortSignal, Body, Request, RequestExt, Response};
 use rmx_route_pattern::{Matcher, Params, RoutePattern};
 use rmx_url::Url;
 
@@ -79,6 +79,7 @@ pub struct Context {
     url: Url,
     params: Params,
     router: Router,
+    signal: AbortSignal,
     /// Set by the [`async_context`] middleware; mirrors changes to this context.
     scope: Option<async_context::Scope>,
 }
@@ -88,7 +89,15 @@ impl Context {
         let (parts, body) = request.into_parts();
         let url = request_url(&parts);
         let original_method = parts.method.clone();
-        Context { request: Request::from_parts(parts, body), original_method, url, params: Params::default(), router, scope: None }
+        let request = Request::from_parts(parts, body);
+        let signal = request.signal();
+        Context { request, original_method, url, params: Params::default(), router, signal, scope: None }
+    }
+
+    /// The request's abort signal (`request.signal`). It aborts when the client goes away
+    /// before the response is finished; it never aborts if the request carries none.
+    pub fn signal(&self) -> &AbortSignal {
+        &self.signal
     }
 
     pub fn request(&self) -> &Request {
@@ -332,6 +341,18 @@ enum Endpoint {
 }
 
 /// The rest of the middleware chain.
+///
+/// [`Next::run`] takes `self`, so calling the rest of the chain twice is a compile error
+/// (Remix rejects with "next() called multiple times" at runtime), and a middleware must
+/// return a `Response`, so one that neither answers nor calls `next` does not compile either.
+///
+/// ```compile_fail,E0382
+/// use rmx_router::{Context, Next};
+/// async fn twice(ctx: Context, next: Next) -> rmx_fetch::Response {
+///     let _ = next.run(ctx).await;
+///     next.run(todo!()).await
+/// }
+/// ```
 pub struct Next {
     chain: MiddlewareList,
     index: usize,
@@ -340,17 +361,31 @@ pub struct Next {
 
 impl Next {
     /// Run the remaining middleware and the handler.
+    ///
+    /// Like Remix's `runMiddleware`, each step first checks the request's [`AbortSignal`] and
+    /// then races the signal: an aborted request skips the rest of the chain and answers with
+    /// [`AbortError::into_response`] (Remix rejects with an `AbortError`), which middleware
+    /// can recognise with [`AbortError::of`].
     pub fn run(mut self, ctx: Context) -> BoxFuture<Response> {
-        if let Some(mw) = self.chain.get(self.index).cloned() {
-            self.index += 1;
-            return mw.call(ctx, self);
+        if ctx.signal.aborted() {
+            return Box::pin(async { AbortError.into_response() });
         }
-        match &*self.endpoint {
-            Endpoint::Handler(h) => h.call(ctx),
-            Endpoint::Dispatch => {
-                let router = ctx.router.clone();
-                Box::pin(async move { router.dispatch(ctx).await })
+        let signal = (!ctx.signal.is_never()).then(|| ctx.signal.clone());
+        let fut = if let Some(mw) = self.chain.get(self.index).cloned() {
+            self.index += 1;
+            mw.call(ctx, self)
+        } else {
+            match &*self.endpoint {
+                Endpoint::Handler(h) => h.call(ctx),
+                Endpoint::Dispatch => {
+                    let router = ctx.router.clone();
+                    Box::pin(async move { router.dispatch(ctx).await })
+                }
             }
+        };
+        match signal {
+            None => fut,
+            Some(signal) => Box::pin(async move { signal.race(fut).await.unwrap_or_else(AbortError::into_response) }),
         }
     }
 }

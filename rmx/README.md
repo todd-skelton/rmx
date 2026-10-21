@@ -190,9 +190,13 @@ crates:
    Controller::new(RoutesActions { .. }).with(require_auth()))` checks at compile time
    that a controller covers every direct route, and `routes_command` gives an app binary
    Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern`,
-   `rmx-fetch` (Request, Response, FormData), `rmx-serve` (hyper server with
+   `rmx-fetch` (Request, Response, FormData, and `AbortController` / `AbortSignal` for
+   `request.signal`: the router checks it before each middleware step and races it like
+   Remix's `raceRequestAbort`, answering an aborted request with a 499 that carries
+   `AbortError`), `rmx-serve` (hyper server with
    `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
-   `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; plus an
+   `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; each
+   request's signal aborts when the client leaves before the response finished; plus an
    HTTP/1 `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression with
    br/gzip/deflate negotiation, static files with strong ETags, ranges and directory
    listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
