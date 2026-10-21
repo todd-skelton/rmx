@@ -1260,9 +1260,14 @@ name = "rmx-fetch-proxy"
 version = "0.1.0"
 dependencies = [
  "http",
+ "http-body",
  "rmx-fetch",
  "rmx-headers",
+ "rmx-middleware",
+ "rmx-router",
+ "rmx-serve",
  "rmx-url",
+ "tokio",
 ]
 
 [[package]]

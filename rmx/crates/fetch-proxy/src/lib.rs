@@ -21,7 +21,8 @@
 //! headers can be set from the incoming URL. On the way back, `Set-Cookie` domains and paths are
 //! rewritten for the client.
 //!
-//! Redirects reach the client unless the fetch function follows them. Unlike browser and
+//! Redirects reach the client by default ([`Redirect::Manual`]); with [`Redirect::Follow`] the
+//! proxy follows them itself, as the Fetch API's `fetch` would. Unlike browser and
 //! Node `fetch`, a Rust HTTP client usually hands back the body as sent, so
 //! `Content-Encoding` is kept unless [`FetchProxyOptions::fetch_decodes_content`] says the
 //! fetch function decoded it.
@@ -42,9 +43,28 @@ const HOP_BY_HOP: [&str; 9] = ["connection", "keep-alive", "proxy-authenticate",
 pub use rmx_fetch::{BoxFuture, Fetch};
 
 
+/// How upstream redirects are handled (the Fetch API's `RequestRedirect`). Put one in a
+/// request's extensions to override [`FetchProxyOptions::redirect`] for that request, like
+/// Remix's per-call `init.redirect`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Redirect {
+    /// Return redirects to the client (the default, as in Remix).
+    #[default]
+    Manual,
+    /// Follow up to 20 redirects and return the final response.
+    Follow,
+    /// Fail on a redirect.
+    Error,
+}
+
+/// Fetch's redirect limit.
+const MAX_REDIRECTS: usize = 20;
+
 /// Options for [`FetchProxy`] (Remix's `FetchProxyOptions`).
 #[derive(Clone, Debug)]
 pub struct FetchProxyOptions {
+    /// Upstream redirect handling. Default [`Redirect::Manual`], so redirects reach the client.
+    pub redirect: Redirect,
     /// Rewrite a `Set-Cookie` `Domain` to the incoming request's host (dropped for
     /// `localhost` and IP addresses). Default `true`.
     pub rewrite_cookie_domain: bool,
@@ -62,7 +82,7 @@ pub struct FetchProxyOptions {
 
 impl Default for FetchProxyOptions {
     fn default() -> Self {
-        FetchProxyOptions { rewrite_cookie_domain: true, rewrite_cookie_path: true, x_forwarded_headers: false, fetch_decodes_content: false }
+        FetchProxyOptions { redirect: Redirect::Manual, rewrite_cookie_domain: true, rewrite_cookie_path: true, x_forwarded_headers: false, fetch_decodes_content: false }
     }
 }
 
@@ -85,12 +105,31 @@ impl FetchProxy {
 
     /// Forward `request` and return the upstream response, rewritten for the client.
     pub async fn fetch(&self, request: Request) -> Result<Response, BoxError> {
+        let mode = request.extensions().get::<Redirect>().copied().unwrap_or(self.options.redirect);
         let (parts, body) = request.into_parts();
         let incoming = request_url(&parts);
         let method = parts.method.clone();
-        let outgoing = self.proxy_request(Request::from_parts(parts, body));
-        let response = self.fetch.fetch(outgoing).await?;
-        Ok(self.proxy_response(&incoming, &method, response))
+        let mut outgoing = self.proxy_request(Request::from_parts(parts, body));
+        let mut redirects = 0;
+        loop {
+            let hop = (mode == Redirect::Follow).then(|| (outgoing.method().clone(), outgoing.uri().clone(), outgoing.headers().clone(), !http_body::Body::is_end_stream(outgoing.body())));
+            let response = self.fetch.fetch(outgoing).await?;
+            if !is_redirect(response.status()) || mode == Redirect::Manual {
+                return Ok(self.proxy_response(&incoming, &method, response));
+            }
+            if mode == Redirect::Error {
+                return Err(format!("Unexpected redirect ({}) for {}", response.status().as_u16(), self.proxy_url(&incoming).href()).into());
+            }
+            let (hop_method, uri, headers, had_body) = hop.expect("follow mode records the hop");
+            let Some(next) = redirect_request(hop_method, &uri, headers, had_body, &response)? else {
+                return Ok(self.proxy_response(&incoming, &method, response));
+            };
+            redirects += 1;
+            if redirects > MAX_REDIRECTS {
+                return Err("Too many redirects".into());
+            }
+            outgoing = next;
+        }
     }
 
     /// The target URL for an incoming URL: the target path followed by the request path,
@@ -186,6 +225,40 @@ impl FetchProxy {
         }
         cookie
     }
+}
+
+fn is_redirect(status: http::StatusCode) -> bool {
+    matches!(status.as_u16(), 301 | 302 | 303 | 307 | 308)
+}
+
+/// The request for the next hop of a followed redirect, following the Fetch standard: 303
+/// (and 301/302 after a POST) switch to a bodyless GET, credentials are dropped when the
+/// origin changes (as undici does), and a streamed body cannot be sent twice. `None` when
+/// the response has no `Location`, which fetch returns as is.
+fn redirect_request(mut method: Method, uri: &http::Uri, mut headers: http::HeaderMap, had_body: bool, response: &Response) -> Result<Option<Request>, BoxError> {
+    let Some(location) = response.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()) else {
+        return Ok(None);
+    };
+    let current = Url::parse(&uri.to_string())?;
+    let mut next = current.join(location)?;
+    next.set_fragment(None);
+    let status = response.status().as_u16();
+    if (status == 303 && method != Method::GET && method != Method::HEAD) || ((status == 301 || status == 302) && method == Method::POST) {
+        method = Method::GET;
+        for name in [header::CONTENT_ENCODING, header::CONTENT_LANGUAGE, header::CONTENT_LOCATION, header::CONTENT_TYPE, header::CONTENT_LENGTH] {
+            headers.remove(name);
+        }
+    } else if had_body {
+        return Err("Cannot follow a redirect with a streamed request body".into());
+    }
+    if next.origin() != current.origin() {
+        for name in [header::AUTHORIZATION, header::COOKIE, header::PROXY_AUTHORIZATION] {
+            headers.remove(name);
+        }
+    }
+    let mut request = http::Request::builder().method(method).uri(next.href()).body(Body::empty())?;
+    *request.headers_mut() = headers;
+    Ok(Some(request))
 }
 
 /// The cookie domain for a request host: none for `localhost` and IP addresses.

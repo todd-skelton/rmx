@@ -206,7 +206,10 @@ crates:
    `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
    `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; each
    request's signal aborts when the client leaves before the response finished; plus an
-   HTTP/1 `fetch` client), `rmx-fetch-proxy`, `rmx-render`, `rmx-middleware` (compression with
+   HTTP/1 `fetch` client), `rmx-fetch-proxy` (Remix's `fetch-proxy.test.ts` ported one per case, including real
+   servers for streamed bodies, redirects and a trusted development proxy; a `redirect`
+   option, overridable per request, returns redirects by default or follows them with
+   fetch's rules), `rmx-render`, `rmx-middleware` (compression with
    br/gzip/deflate negotiation, static files with strong ETags (any Web Crypto digest or a
    function), ranges for `GET` only, `file_response_for` with Remix's `File.type` rule, and directory
    listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
