@@ -349,6 +349,10 @@ Covered since phase 0b:
    the request method (ranges only for `GET`), an empty `File` type sends no `Content-Type`,
    and strong ETags take `Digest::Algorithm` (SHA-1/256/384/512, hand-written in `rmx-crypto`)
    or `Digest::With(fn)`; an unknown algorithm name fails to parse instead of rejecting.
+   `remix/terminal` is `rmx-terminal` with its four test files ported; the logger's colors and
+   detection now come from it. Cursor helpers take unsigned and signed integers, so Remix's
+   NaN and fraction normalization has nothing to port. The `rmx` CLI's own output is still
+   uncolored (Remix colors its wordmark and step marks).
 7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
    component model at the root and every other crate as a module (`rmx::router`,
    `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
