@@ -351,8 +351,10 @@ Covered since phase 0b:
    or `Digest::With(fn)`; an unknown algorithm name fails to parse instead of rejecting.
    `remix/terminal` is `rmx-terminal` with its four test files ported; the logger's colors and
    detection now come from it. Cursor helpers take unsigned and signed integers, so Remix's
-   NaN and fraction normalization has nothing to port. The `rmx` CLI's own output is still
-   uncolored (Remix colors its wordmark and step marks).
+   NaN and fraction normalization has nothing to port. The `rmx` CLI colors `new` progress and
+   `doctor` like Remix's reporter (gray steps, green `✓`, red `✗`, yellow warnings) when
+   detection allows; it closes each style rather than resetting, so the bytes differ from
+   Remix's while the rendering matches.
    Compression now fails the compressed body when the source or encoder fails (it used to
    end early and look complete), with tests for that, source cancellation on drop and the
    206 skip. Remix's "Compressor interactions" cases test Node stream backpressure and
