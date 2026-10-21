@@ -181,3 +181,134 @@ fn script_entries_link_modules_and_wasm() {
     assert!(wasm.contains(".@"));
     assert!(pkg.contains(&format!("new URL('{wasm}', import.meta.url)")), "{pkg}");
 }
+
+// Ports of asset-server.test.ts (getAssets, getAssetDetails) and the CLI's assets.test.ts.
+
+fn inspection_fixture(name: &str) -> (Fixture, AssetServer) {
+    let fixture = Fixture::new(name);
+    std::fs::create_dir_all(fixture.root.join("app/private")).unwrap();
+    std::fs::write(fixture.root.join("app/private/secret.js"), "export const secret = true").unwrap();
+    let server = AssetServer::new(AssetOptions {
+        root_dir: fixture.root.clone(),
+        mounts: vec![("app".into(), "app".into())],
+        allow_files: vec!["app/public/**".into()],
+        deny_files: vec!["app/**/*.test.*".into()],
+        ..Default::default()
+    })
+    .unwrap();
+    (fixture, server)
+}
+
+fn rel(details: &AssetDetails, server: &AssetServer) -> String {
+    let file = details.file_path.as_ref().unwrap();
+    file.strip_prefix(&server.0.root).unwrap().components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
+}
+
+#[test]
+fn lists_browser_reachable_assets_using_the_mounts_and_access_rules() {
+    let (_fixture, server) = inspection_fixture("list");
+    let listed: Vec<(String, String, &str)> =
+        server.assets().iter().map(|a| (a.url.clone().unwrap(), rel(a, &server), a.kind.unwrap().as_str())).collect();
+    let expected = [
+        ("/assets/app/public/entry.js", "app/public/entry.js", "script"),
+        ("/assets/app/public/images/image.svg", "app/public/images/image.svg", "file"),
+        ("/assets/app/public/pkg/app.js", "app/public/pkg/app.js", "script"),
+        ("/assets/app/public/pkg/app_bg.wasm", "app/public/pkg/app_bg.wasm", "file"),
+        ("/assets/app/public/styles/app.css", "app/public/styles/app.css", "style"),
+    ];
+    let expected: Vec<(String, String, &str)> = expected.iter().map(|(u, f, k)| (u.to_string(), f.to_string(), *k)).collect();
+    assert_eq!(listed, expected);
+}
+
+#[test]
+fn explains_reachable_denied_not_allowed_missing_and_unmapped_assets() {
+    let (_fixture, server) = inspection_fixture("details");
+    let reachable = server.asset_details("/assets/app/public/entry.js");
+    assert_eq!(reachable.status, AssetStatus::Reachable);
+    assert_eq!(reachable.kind, Some(AssetKind::Script));
+    assert_eq!(reachable.file_root.as_deref(), Some("app"));
+    assert_eq!(reachable.url_root.as_deref(), Some("/assets/app"));
+    assert_eq!(reachable.access.as_ref().unwrap().allowed_by.as_deref(), Some("app/public/**"));
+
+    let by_file = server.asset_details("app/public/entry.js");
+    assert_eq!(by_file.url.as_deref(), Some("/assets/app/public/entry.js"));
+    assert_eq!(by_file.status, AssetStatus::Reachable);
+
+    let by_absolute_url = server.asset_details("https://example.com/assets/app/public/entry.js");
+    assert_eq!(by_absolute_url, reachable);
+    let fingerprinted = server.asset_details("/assets/app/public/entry.@abc123.js?x=1");
+    assert_eq!(fingerprinted, reachable);
+    let by_absolute_file = server.asset_details(&reachable.file_path.clone().unwrap().display().to_string());
+    assert_eq!(by_absolute_file, reachable);
+
+    let denied = server.asset_details("/assets/app/public/secret.test.js");
+    assert_eq!(denied.status, AssetStatus::Denied);
+    assert_eq!(denied.access.as_ref().unwrap().denied_by.as_deref(), Some("app/**/*.test.*"));
+
+    let not_allowed = server.asset_details("/assets/app/private/secret.js");
+    assert_eq!(not_allowed.status, AssetStatus::NotAllowed);
+    assert_eq!(not_allowed.access, Some(AssetAccess::default()));
+
+    let missing = server.asset_details("/assets/app/public/missing.js");
+    assert_eq!(missing.status, AssetStatus::Missing);
+    let missing_file = server.asset_details("app/public/missing.js");
+    assert_eq!(missing_file.status, AssetStatus::Missing);
+    assert_eq!(missing_file.url.as_deref(), Some("/assets/app/public/missing.js"));
+
+    assert_eq!(server.asset_details("/other/entry.js"), AssetDetails::unmapped());
+    assert_eq!(server.asset_details("/assets/app/../server.rs").status, AssetStatus::Unmapped);
+    assert_eq!(server.asset_details("server.rs").status, AssetStatus::Unmapped);
+}
+
+fn args(list: &[&str]) -> Vec<String> {
+    list.iter().map(|s| s.to_string()).collect()
+}
+
+#[test]
+fn the_assets_command_lists_and_inspects() {
+    let (_fixture, server) = inspection_fixture("command");
+    let help = assets_command_output(&server, &args(&["--help"])).unwrap();
+    assert!(help.contains("assets inspect <url-or-file>") && help.contains("List or inspect browser-reachable assets."));
+
+    let list = assets_command_output(&server, &[]).unwrap();
+    assert!(list.lines().any(|l| l == "/assets/app/public/entry.js -> app/public/entry.js"), "{list}");
+    assert!(list.lines().any(|l| l == "/assets/app/public/images/image.svg -> app/public/images/image.svg"), "{list}");
+    assert!(!list.contains("secret"), "{list}");
+    assert!(!list.starts_with('\n') && !list.contains("\n\n") && list.ends_with('\n'));
+
+    let by_url = assets_command_output(&server, &args(&["inspect", "/assets/app/public/entry.js"])).unwrap();
+    assert_eq!(by_url, "Status: reachable\nURL: /assets/app/public/entry.js\nFile: app/public/entry.js\n");
+    let by_absolute_url = assets_command_output(&server, &args(&["inspect", "https://example.com/assets/app/public/entry.js"])).unwrap();
+    assert_eq!(by_absolute_url, by_url);
+    let by_file = assets_command_output(&server, &args(&["inspect", "app/public/images/image.svg"])).unwrap();
+    assert_eq!(by_file, "Status: reachable\nURL: /assets/app/public/images/image.svg\nFile: app/public/images/image.svg\n");
+    let denied = assets_command_output(&server, &args(&["inspect", "/assets/app/public/secret.test.js"])).unwrap();
+    assert_eq!(
+        denied,
+        "Status: denied\nURL: /assets/app/public/secret.test.js\nFile: app/public/secret.test.js\nDenied by: app/**/*.test.*\n"
+    );
+    assert_eq!(assets_command_output(&server, &args(&["inspect", "/nowhere"])).unwrap(), "Status: unmapped\n");
+}
+
+#[test]
+fn the_assets_command_requires_inspect_and_an_input() {
+    let (_fixture, server) = inspection_fixture("command-errors");
+    assert_eq!(
+        assets_command_output(&server, &args(&["/assets/app/public/entry.js"])),
+        Err("Unknown command: assets /assets/app/public/entry.js".into())
+    );
+    assert_eq!(assets_command_output(&server, &args(&["inspect"])), Err("`assets inspect` requires a URL or file path.".into()));
+    assert_eq!(assets_command_output(&server, &args(&["--json"])), Err("Unknown option --json.".into()));
+}
+
+#[test]
+fn the_assets_command_reports_no_assets() {
+    let (_fixture, server) = inspection_fixture("command-empty");
+    let empty = AssetServer::new(AssetOptions {
+        root_dir: server.0.root.clone(),
+        allow_files: vec!["app/nothing/**".into()],
+        ..Default::default()
+    })
+    .unwrap();
+    assert_eq!(assets_command_output(&empty, &[]).unwrap(), "No assets.\n");
+}

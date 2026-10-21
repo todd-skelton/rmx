@@ -15,6 +15,7 @@ use rmx::router::routes::{get, post, prefix, Route, RouteMap};
 use rmx::router::{action, Context, Next, Router};
 
 pub fn main() {
+    rmx::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44100".into());
     let root = std::env::var("DEMO_DIR").unwrap_or_else(|_| "examples/lazy-frames".into());

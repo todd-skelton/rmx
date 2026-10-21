@@ -12,6 +12,7 @@ use ui_demo::demos::*;
 use ui_demo::{find_demo, Demo, DEMOS};
 
 pub fn main() {
+    rmx::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44105".into());
     let public = std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "examples/ui/public".into());

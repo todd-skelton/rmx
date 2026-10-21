@@ -204,7 +204,8 @@ crates:
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer).
 3. Supporting crates: `rmx-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
    error maps and typed `FormData` / `URLSearchParams` parsing, used by the timeboxer,
-   bookstore, social-auth and sse ports wherever the Remix demos use it), `rmx-assets`, `rmx-cookie`, `rmx-crypto`, `rmx-session`,
+   bookstore, social-auth and sse ports wherever the Remix demos use it), `rmx-assets` (with Remix's asset inspection, `assets()` and `asset_details()`, and its
+   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie`, `rmx-crypto`, `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
    `rmx-headers`, `rmx-mime`, `rmx-spa`, `rmx-url`.
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
@@ -266,7 +267,8 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
 4. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.
-5. No HMR, CLI, or `remix/test` runner: native tests use `cargo test`, component tests
+5. No HMR, standalone CLI, or `remix/test` runner (the `routes` and `assets` commands run
+   from each app binary instead): native tests use `cargo test`, component tests
    use `wasm-bindgen-test` in Chromium, and e2e checks use Playwright scripts.
 6. Data access is out of scope: demos that use Remix's `data-table` use in-memory stores.
 7. Some dependencies differ from Remix's zero-dependency stance: ICU4X (i18n), `ureq`

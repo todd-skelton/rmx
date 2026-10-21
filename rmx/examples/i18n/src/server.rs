@@ -25,6 +25,7 @@ use crate::{CartPreview, NumberPreview};
 use styles::*;
 
 pub fn main() {
+    rmx::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44107".into());
     let public = std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "examples/i18n/public".into());

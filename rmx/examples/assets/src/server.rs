@@ -15,7 +15,9 @@ pub fn main() {
     let port = std::env::var("PORT").unwrap_or_else(|_| "44104".into());
     let root = std::env::var("ASSETS_ROOT").unwrap_or_else(|_| "examples/assets".into());
     let production = std::env::var("RMX_ENV").is_ok_and(|v| v == "production");
+    rmx::router::routes::routes_command(&*ROUTES);
     let assets = asset_server(Path::new(&root), production).expect("asset server");
+    rmx::assets::assets_command(&assets);
     let addr = format!("{host}:{port}");
     println!("assets demo is running on http://{addr}");
     println!("Edit a client file and refresh to verify the client code updates.");

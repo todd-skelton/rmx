@@ -11,6 +11,8 @@ fn main() {
     use rmx::middleware::static_files::{file_response, static_files, ETag, StaticOptions};
     use rmx::router::{Context, Router};
 
+    // The browser router's routes (`routes`); this server only serves files.
+    rmx::router::routes::routes_command(&*spa_demo::ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44103".into());
     let public = PathBuf::from(std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "examples/spa/public".into()));

@@ -29,6 +29,7 @@
 //! ```
 
 mod glob;
+mod inspect;
 mod rewrite;
 
 use std::collections::{HashMap, HashSet};
@@ -42,6 +43,7 @@ use rmx_fetch::{Body, Response};
 use rmx_router::Context;
 
 pub use glob::glob_match;
+pub use inspect::{assets_command, assets_command_output, AssetAccess, AssetDetails, AssetKind, AssetStatus};
 
 /// A request transform's parameter: none, required (`name:param`) or optional.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -182,11 +184,18 @@ pub struct ScriptEntry {
 #[derive(Clone)]
 pub struct AssetServer(Arc<Inner>);
 
+/// A mounted directory: `dir` (as configured, `file_root`) served below `url_root`.
+struct Mount {
+    url_root: String,
+    dir: PathBuf,
+    file_root: String,
+}
+
 struct Inner {
     root: PathBuf,
     base: String,
-    /// `(url root, directory)`, longest URL root first.
-    mounts: Vec<(String, PathBuf)>,
+    /// Longest URL root first.
+    mounts: Vec<Mount>,
     allow: Vec<String>,
     deny: Vec<String>,
     fingerprint: bool,
@@ -222,12 +231,12 @@ impl AssetServer {
             let dir_path = root.join(dir);
             let dir_path = dir_path.canonicalize().unwrap_or(dir_path);
             let url_root = format!("{base}/{}", url.trim_matches('/')).trim_end_matches('/').to_string();
-            if mounts.iter().any(|(u, d): &(String, PathBuf)| overlaps(u, &url_root) || d.starts_with(&dir_path) || dir_path.starts_with(d)) {
+            if mounts.iter().any(|m: &Mount| overlaps(&m.url_root, &url_root) || m.dir.starts_with(&dir_path) || dir_path.starts_with(&m.dir)) {
                 return Err(AssetError::Config(format!("mount {url} overlaps another mount")));
             }
-            mounts.push((url_root, dir_path));
+            mounts.push(Mount { url_root, dir: dir_path, file_root: dir.clone() });
         }
-        mounts.sort_by_key(|(u, _)| std::cmp::Reverse(u.len()));
+        mounts.sort_by_key(|m| std::cmp::Reverse(m.url_root.len()));
         let mut transforms = HashMap::new();
         for (name, t) in options.transforms {
             if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
@@ -365,7 +374,7 @@ impl Inner {
     }
 
     fn url_for_file(&self, file: &Path) -> Option<String> {
-        self.mounts.iter().find_map(|(url_root, dir)| {
+        self.mounts.iter().find_map(|Mount { url_root, dir, .. }| {
             let rel = file.strip_prefix(dir).ok()?;
             let segments: Vec<String> = rel.components().map(|c| encode_segment(&c.as_os_str().to_string_lossy())).collect();
             Some(format!("{url_root}/{}", segments.join("/")))
@@ -373,20 +382,23 @@ impl Inner {
     }
 
     fn file_for_url(&self, pathname: &str) -> Option<PathBuf> {
-        let (url_root, dir) = self.mounts.iter().find(|(u, _)| pathname.starts_with(&format!("{u}/")))?;
-        let mut path = dir.clone();
-        for segment in pathname[url_root.len() + 1..].split('/') {
+        let (mount, path) = self.mapped_url(pathname)?;
+        let path = path.canonicalize().ok()?;
+        (path.starts_with(&mount.dir) && path.is_file() && self.allowed(&path)).then_some(path)
+    }
+
+    /// The mount and file a URL pathname maps to, whether or not the file exists.
+    fn mapped_url(&self, pathname: &str) -> Option<(&Mount, PathBuf)> {
+        let mount = self.mounts.iter().find(|m| pathname.starts_with(&format!("{}/", m.url_root)))?;
+        let mut path = mount.dir.clone();
+        for segment in pathname[mount.url_root.len() + 1..].split('/') {
             let segment = rmx_url::decode(segment);
             if segment.is_empty() || segment == "." || segment == ".." || segment.contains(['\\', '/', ':']) {
                 return None;
             }
             path.push(segment);
         }
-        if !matches!(path.strip_prefix(dir).ok()?.components().next(), Some(Component::Normal(_))) {
-            return None;
-        }
-        let path = path.canonicalize().ok()?;
-        (path.starts_with(dir) && path.is_file() && self.allowed(&path)).then_some(path)
+        matches!(path.strip_prefix(&mount.dir).ok()?.components().next(), Some(Component::Normal(_))).then_some((mount, path))
     }
 
     /// Read, transform and rewrite a file, reusing the cached result while the file and

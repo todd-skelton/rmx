@@ -6,6 +6,7 @@ fn main() {
     use unpkg_demo::fetch::Fetch;
     use unpkg_demo::npm::Npm;
 
+    rmx::router::routes::routes_command(&*unpkg_demo::ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44109".into());
     let tmp = std::path::PathBuf::from(std::env::var("TMP_DIR").unwrap_or_else(|_| "examples/unpkg/tmp".into()));

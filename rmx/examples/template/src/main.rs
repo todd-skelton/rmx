@@ -1,6 +1,7 @@
 //! Server for the starter app: `cargo run -p template-demo` (after
 //! `./build-client.ps1 -Crate template-demo -Out examples/template/app/actions/public/pkg`).
-//! List its routes with `cargo run -p template-demo -- routes`.
+//! List its routes with `cargo run -p template-demo -- routes` and its browser assets with
+//! `cargo run -p template-demo -- assets` (or `assets inspect <url-or-file>`).
 //!
 //! Env: `HOST` (127.0.0.1), `PORT` (44113), `APP_ROOT` (examples/template),
 //! `NODE_ENV=production` for fingerprinted assets.
@@ -12,6 +13,9 @@ fn main() {
     let port = std::env::var("PORT").unwrap_or_else(|_| "44113".into());
     let root = std::env::var("APP_ROOT").unwrap_or_else(|_| "examples/template".into());
     let production = std::env::var("NODE_ENV").as_deref() == Ok("production");
+    if let Ok(assets) = template_demo::server::asset_server(std::path::Path::new(&root), production) {
+        rmx::assets::assets_command(&assets);
+    }
     let router = template_demo::server::router(std::path::Path::new(&root), production).expect("asset server");
     let addr = format!("{host}:{port}");
     println!("Server listening on http://{addr}");
