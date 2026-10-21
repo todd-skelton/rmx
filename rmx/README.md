@@ -212,7 +212,9 @@ crates:
 3. Supporting crates: `rmx-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
    error maps and typed `FormData` / `URLSearchParams` parsing, used by the timeboxer,
    bookstore, social-auth and sse ports wherever the Remix demos use it), `rmx-assets` (with Remix's asset inspection, `assets()` and `asset_details()`, and its
-   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie`, `rmx-crypto` (SHA-1/256/384/512 by Web Crypto name, HMAC, PBKDF2, scrypt; no
+   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie` (Remix's `Cookie`: `Path=/` and
+   `SameSite=Lax` defaults, the base64 value codec or a custom `encode`/`decode`, signing with
+   secret rotation, `Expires` and `Partitioned`, and `serialize_with` overrides), `rmx-crypto` (SHA-1/256/384/512 by Web Crypto name, HMAC, PBKDF2, scrypt; no
    dependencies), `rmx-session`,
    `rmx-file-storage`, `rmx-tar-parser`, `rmx-multipart-parser`, `rmx-html-template`,
    `rmx-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
