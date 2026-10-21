@@ -7,8 +7,8 @@ use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, GlobalTr
 use rmx::fetch::{response, Response};
 use rmx::middleware::logger::logger;
 use rmx::render::Render;
-use rmx::router::routes::{get, Route};
-use rmx::router::{Context, Router};
+use rmx::router::routes::{get, Route, RouteMap};
+use rmx::router::{action, Context, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -26,6 +26,7 @@ pub fn main() {
 // app/routes.ts
 pub const ASSETS_BASE: &str = "/assets";
 
+#[derive(RouteMap)]
 pub struct Routes {
     pub home: Route,
     pub assets: Route,
@@ -106,19 +107,24 @@ pub fn router(assets: AssetServer) -> Router {
 
     // app/actions/controller.ts
     let home_assets = assets.clone();
-    router.route(&ROUTES.home, move |ctx: Context| {
-        let assets = home_assets.clone();
-        async move {
-            match page_assets(&assets) {
-                Ok(props) => ctx.render(Node::component::<HomePage>(None, props)),
-                Err(e) => response::status(StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\nBuild the client first: ./build-client.ps1 -Crate assets-demo -Out examples/assets/app/actions/public/pkg")),
-            }
-        }
-    });
-    router.route(&ROUTES.assets, move |ctx: Context| {
-        let assets = assets.clone();
-        async move { assets.fetch(&ctx).unwrap_or_else(not_found) }
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            home: action(move |ctx: Context| {
+                let assets = home_assets.clone();
+                async move {
+                    match page_assets(&assets) {
+                        Ok(props) => ctx.render(Node::component::<HomePage>(None, props)),
+                        Err(e) => response::status(StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\nBuild the client first: ./build-client.ps1 -Crate assets-demo -Out examples/assets/app/actions/public/pkg")),
+                    }
+                }
+            }),
+            assets: action(move |ctx: Context| {
+                let assets = assets.clone();
+                async move { assets.fetch(&ctx).unwrap_or_else(not_found) }
+            }),
+        },
+    );
     router
 }
 

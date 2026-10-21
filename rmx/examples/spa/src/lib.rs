@@ -7,11 +7,12 @@ use std::sync::LazyLock;
 
 use http::StatusCode;
 use rmx::{css, on, rsx, Children, Component, FrameEvent, Handle, Mixin, Node};
-use rmx::router::routes::{get, post, Route};
-use rmx::router::{Context, Next, Router};
+use rmx::router::routes::{get, post, Route, RouteMap};
+use rmx::router::{action, Context, Next, Router};
 use rmx::spa::{Render, ResponseInit};
 
 // app/routes.ts
+#[derive(RouteMap)]
 pub struct Routes {
     pub home: Route,
     pub about: Route,
@@ -61,23 +62,28 @@ async fn log_spa_requests(ctx: Context, next: Next) -> rmx::fetch::Response {
 pub fn router() -> Router {
     let mut router = Router::new();
     router.use_middleware(log_spa_requests);
-    router.route(&ROUTES.home, |ctx: Context| async move {
-        sleep(700).await;
-        ctx.render(rsx! { <HomePage url={ctx.url().pathname().to_string()}/> })
-    });
-    router.route(&ROUTES.about, |ctx: Context| async move {
-        sleep(700).await;
-        ctx.render(rsx! { <AboutPage url={ctx.url().pathname().to_string()}/> })
-    });
-    router.route(&ROUTES.greet, |ctx: Context| async move {
-        ctx.render(rsx! { <GreetingPage name="friend" url={ctx.url().pathname().to_string()}/> })
-    });
-    router.route(&ROUTES.submit_greet, |mut ctx: Context| async move {
-        let form = ctx.take_body().form().await.unwrap_or_default();
-        let name = form.get("name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("friend").to_string();
-        sleep(700).await;
-        ctx.render(rsx! { <GreetingPage is_submission name={name} url={ctx.url().pathname().to_string()}/> })
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            home: action(|ctx: Context| async move {
+                sleep(700).await;
+                ctx.render(rsx! { <HomePage url={ctx.url().pathname().to_string()}/> })
+            }),
+            about: action(|ctx: Context| async move {
+                sleep(700).await;
+                ctx.render(rsx! { <AboutPage url={ctx.url().pathname().to_string()}/> })
+            }),
+            greet: action(|ctx: Context| async move {
+                ctx.render(rsx! { <GreetingPage name="friend" url={ctx.url().pathname().to_string()}/> })
+            }),
+            submit_greet: action(|mut ctx: Context| async move {
+                let form = ctx.take_body().form().await.unwrap_or_default();
+                let name = form.get("name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("friend").to_string();
+                sleep(700).await;
+                ctx.render(rsx! { <GreetingPage is_submission name={name} url={ctx.url().pathname().to_string()}/> })
+            }),
+        },
+    );
     router.not_found(|ctx: Context| async move {
         ctx.render_with(rsx! { <NotFoundPage url={ctx.url().pathname().to_string()}/> }, ResponseInit::status(StatusCode::NOT_FOUND))
     });

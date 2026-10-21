@@ -11,8 +11,8 @@ use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{file_response, static_files, StaticOptions};
 use rmx::render::{Render, ResponseInit};
-use rmx::router::routes::{get, post, prefix, Route};
-use rmx::router::{Context, Next, Router};
+use rmx::router::routes::{get, post, prefix, Route, RouteMap};
+use rmx::router::{action, Context, Next, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -28,12 +28,14 @@ pub fn main() {
 // Routes (app/routes.ts)
 // ---------------------------------------------------------------------------------------
 
+#[derive(RouteMap)]
 pub struct Routes {
     pub home: Route,
     pub latency: Route,
     pub frames: FrameRoutes,
 }
 
+#[derive(RouteMap)]
 pub struct FrameRoutes {
     pub html: Route,
     pub ui: Route,
@@ -88,57 +90,65 @@ pub fn router(config: Config) -> Router {
     ));
     router.use_middleware(form_data());
 
-    router.route(&ROUTES.home, |ctx: Context| async move {
-        let latency = *ctx.get::<DemoLatency>().expect("demo latency middleware");
-        let theme = *ctx.get::<Theme>().expect("theme middleware");
-        ctx.render(rsx! { <HomePage latency={latency} theme={theme}/> })
-    });
 
-    router.route(&ROUTES.latency, |ctx: Context| async move {
-        let enabled = match ctx.form_data().get("enabled") {
-            Some("true") => true,
-            Some("false") => false,
-            _ => return response::status(StatusCode::BAD_REQUEST, "Expected enabled to be true or false"),
-        };
-        let cookie = if enabled { LATENCY_COOKIE.serialize("1") } else { LATENCY_COOKIE.clear() };
-        let mut res = response::redirect_with(&ROUTES.home.href(()), StatusCode::SEE_OTHER);
-        if let Ok(v) = HeaderValue::from_str(&cookie) {
-            res.headers_mut().append(header::SET_COOKIE, v);
-        }
-        res
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            home: action(|ctx: Context| async move {
+                let latency = *ctx.get::<DemoLatency>().expect("demo latency middleware");
+                let theme = *ctx.get::<Theme>().expect("theme middleware");
+                ctx.render(rsx! { <HomePage latency={latency} theme={theme}/> })
+            }),
+            latency: action(|ctx: Context| async move {
+                let enabled = match ctx.form_data().get("enabled") {
+                    Some("true") => true,
+                    Some("false") => false,
+                    _ => return response::status(StatusCode::BAD_REQUEST, "Expected enabled to be true or false"),
+                };
+                let cookie = if enabled { LATENCY_COOKIE.serialize("1") } else { LATENCY_COOKIE.clear() };
+                let mut res = response::redirect_with(&ROUTES.home.href(()), StatusCode::SEE_OTHER);
+                if let Ok(v) = HeaderValue::from_str(&cookie) {
+                    res.headers_mut().append(header::SET_COOKIE, v);
+                }
+                res
+            }),
+        },
+    );
 
     // actions/frames/controller.tsx: three response shapes behind one route map.
-    let frames = config.clone();
-    router.route(&ROUTES.frames.html, move |ctx: Context| {
-        let config = frames.clone();
-        async move {
-            let Some(file) = ctx.param("id").and_then(html_frame_file) else { return not_found() };
-            let options = StaticOptions { cache_control: Some(frame_cache_control(&config).into()), ..Default::default() };
-            let path = config.root.join("frames-html").join(file);
-            file_response(&path, ctx.headers(), false, &options).unwrap_or_else(|_| not_found())
-        }
-    });
-    let frames = config.clone();
-    router.route(&ROUTES.frames.ui, move |ctx: Context| {
-        let config = frames.clone();
-        async move {
-            let Some(Exhibit { kind: ExhibitKind::Ui(ui), .. }) = ctx.param("id").and_then(exhibit) else { return not_found() };
-            let init = ResponseInit::default().header("cache-control", frame_cache_control(&config));
-            ctx.render_with(rsx! { <MetricFrame exhibit={ui} served_at={format_time(SystemTime::now())}/> }, init)
-        }
-    });
-    let frames = config.clone();
-    router.route(&ROUTES.frames.interactive, move |ctx: Context| {
-        let config = frames.clone();
-        async move {
-            let Some(Exhibit { kind: ExhibitKind::Interactive(ix), .. }) = ctx.param("id").and_then(exhibit) else {
-                return not_found();
-            };
-            let init = ResponseInit::default().header("cache-control", frame_cache_control(&config));
-            ctx.render_with(rsx! { <InteractiveFrame exhibit={ix} served_at={format_time(SystemTime::now())}/> }, init)
-        }
-    });
+    let (html_config, ui_config, interactive_config) = (config.clone(), config.clone(), config.clone());
+    router.map(
+        &ROUTES.frames,
+        FrameRoutesActions {
+            html: action(move |ctx: Context| {
+                let config = html_config.clone();
+                async move {
+                    let Some(file) = ctx.param("id").and_then(html_frame_file) else { return not_found() };
+                    let options = StaticOptions { cache_control: Some(frame_cache_control(&config).into()), ..Default::default() };
+                    let path = config.root.join("frames-html").join(file);
+                    file_response(&path, ctx.headers(), false, &options).unwrap_or_else(|_| not_found())
+                }
+            }),
+            ui: action(move |ctx: Context| {
+                let config = ui_config.clone();
+                async move {
+                    let Some(Exhibit { kind: ExhibitKind::Ui(ui), .. }) = ctx.param("id").and_then(exhibit) else { return not_found() };
+                    let init = ResponseInit::default().header("cache-control", frame_cache_control(&config));
+                    ctx.render_with(rsx! { <MetricFrame exhibit={ui} served_at={format_time(SystemTime::now())}/> }, init)
+                }
+            }),
+            interactive: action(move |ctx: Context| {
+                let config = interactive_config.clone();
+                async move {
+                    let Some(Exhibit { kind: ExhibitKind::Interactive(ix), .. }) = ctx.param("id").and_then(exhibit) else {
+                        return not_found();
+                    };
+                    let init = ResponseInit::default().header("cache-control", frame_cache_control(&config));
+                    ctx.render_with(rsx! { <InteractiveFrame exhibit={ix} served_at={format_time(SystemTime::now())}/> }, init)
+                }
+            }),
+        },
+    );
     router
 }
 

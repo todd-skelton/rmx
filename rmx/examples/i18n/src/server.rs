@@ -15,8 +15,8 @@ use rmx::headers::{AcceptLanguage, Vary};
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx::render::Render;
-use rmx::router::routes::{get, post, Route};
-use rmx::router::{middleware, Context, Middleware, Next, Router};
+use rmx::router::routes::{get, post, Route, RouteMap};
+use rmx::router::{action, Context, Controller, Middleware, Next, Router};
 use serde_json::Value;
 
 use crate::i18n::{DetectionSource, Language, Translator};
@@ -38,6 +38,7 @@ pub fn main() {
 // routes.ts and router.ts
 // ---------------------------------------------------------------------------------------
 
+#[derive(RouteMap)]
 pub struct Routes {
     pub home: Route,
     pub language: Route,
@@ -63,13 +64,17 @@ pub fn router(public: &str) -> Router {
 
     // actions/controller.tsx: the controller's middleware runs after a route matches, so
     // it sees `params.locale`.
-    router.group(vec![middleware(i18n_middleware())], |r| {
-        r.route(&ROUTES.home, |ctx: Context| async move {
-            let i18n = *i18n(&ctx);
-            ctx.render(rsx! { <I18nProvider value={i18n}><HomePage/></I18nProvider> })
-        });
-        r.route(&ROUTES.language, language);
-    });
+    router.map(
+        &*ROUTES,
+        Controller::new(RoutesActions {
+            home: action(|ctx: Context| async move {
+                let i18n = *i18n(&ctx);
+                ctx.render(rsx! { <I18nProvider value={i18n}><HomePage/></I18nProvider> })
+            }),
+            language: action(language),
+        })
+        .with(i18n_middleware()),
+    );
     router
 }
 

@@ -8,8 +8,8 @@ use rmx::middleware::compression::compression;
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx::render::Render;
-use rmx::router::routes::{get, Route};
-use rmx::router::{Context, Router};
+use rmx::router::routes::{get, Route, RouteMap};
+use rmx::router::{action, Context, Router};
 use rmx::data_schema::{self as s, coerce, form_data as f};
 use rmx::url::Url;
 use sse_demo::*;
@@ -25,6 +25,7 @@ pub fn main() {
 }
 
 // app/routes.ts
+#[derive(RouteMap)]
 pub struct Routes {
     pub home: Route,
     pub messages: Route,
@@ -44,37 +45,42 @@ pub fn router(public: &str, interval: Duration) -> Router {
         StaticOptions { cache_control: Some("no-store".into()), etag: ETag::Off, last_modified: false, index: vec![], ..Default::default() },
     ));
 
-    router.route(&ROUTES.home, |ctx: Context| async move {
-        let limit = message_limit(ctx.url());
-        ctx.render(rsx! { <HomePage limit={limit}/> })
-    });
 
-    router.route(&ROUTES.messages, move |ctx: Context| async move {
-        let limit = message_limit(ctx.url());
-        // The task stops when the client goes away: the server drops the body, and with it
-        // this future.
-        let body = Body::from_task(move |tx| async move {
-            let mut count = 0;
-            loop {
-                tokio::time::sleep(interval).await;
-                count += 1;
-                let message = Message { count, message: format!("Message #{count} at {}", local_time()) };
-                let data = serde_json::to_string(&message).expect("message serializes");
-                if !tx.send(format!("event: message\ndata: {data}\n\n")) {
-                    return;
-                }
-                if limit.is_some_and(|limit| count >= limit) {
-                    return;
-                }
-            }
-        });
-        let mut res = Response::new(body);
-        let headers = res.headers_mut();
-        headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("text/event-stream"));
-        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
-        headers.insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
-        res
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            home: action(|ctx: Context| async move {
+                let limit = message_limit(ctx.url());
+                ctx.render(rsx! { <HomePage limit={limit}/> })
+            }),
+            messages: action(move |ctx: Context| async move {
+                let limit = message_limit(ctx.url());
+                // The task stops when the client goes away: the server drops the body, and with it
+                // this future.
+                let body = Body::from_task(move |tx| async move {
+                    let mut count = 0;
+                    loop {
+                        tokio::time::sleep(interval).await;
+                        count += 1;
+                        let message = Message { count, message: format!("Message #{count} at {}", local_time()) };
+                        let data = serde_json::to_string(&message).expect("message serializes");
+                        if !tx.send(format!("event: message\ndata: {data}\n\n")) {
+                            return;
+                        }
+                        if limit.is_some_and(|limit| count >= limit) {
+                            return;
+                        }
+                    }
+                });
+                let mut res = Response::new(body);
+                let headers = res.headers_mut();
+                headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("text/event-stream"));
+                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+                headers.insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
+                res
+            }),
+        },
+    );
     router
 }
 

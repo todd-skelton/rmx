@@ -5,13 +5,14 @@ use std::sync::LazyLock;
 use rmx::fetch::{response, Response};
 use rmx::file_storage::FileStorage;
 use rmx::render::{render_with, Renderer, RendererExt, ResponseInit};
-use rmx::router::routes::{get, Route};
-use rmx::router::{Context, Router};
+use rmx::router::routes::{get, Route, RouteMap};
+use rmx::router::{action, Context, Router};
 
 use crate::npm::{files_at_path, is_fully_resolved_version, parse_package_path, resolve_version, FileKind, Npm, NpmError};
 use crate::package_browser::{render_directory_listing, render_error, render_file_content};
 use crate::ui::{create_document, home_page, HtmlDocument};
 
+#[derive(RouteMap)]
 pub struct Routes {
     pub home: Route,
     pub package_browser: Route,
@@ -25,13 +26,18 @@ pub fn router<C: FileStorage + Clone>(npm: Npm<C>) -> Router {
     router.use_middleware(render_with(|_ctx: &Context| {
         |document: HtmlDocument, init: ResponseInit| init.apply(response::html(create_document(&document.title, &document.content).into_string()))
     }));
-    router.route(&ROUTES.home, |ctx: Context| async move {
-        ctx.renderer::<HtmlDocument>().render(HtmlDocument { title: "UNPKG - npm package browser".into(), content: home_page() })
-    });
-    router.route(&ROUTES.package_browser, move |ctx: Context| {
-        let npm = npm.clone();
-        async move { package_browser(ctx, npm).await }
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            home: action(|ctx: Context| async move {
+                ctx.renderer::<HtmlDocument>().render(HtmlDocument { title: "UNPKG - npm package browser".into(), content: home_page() })
+            }),
+            package_browser: action(move |ctx: Context| {
+                let npm = npm.clone();
+                async move { package_browser(ctx, npm).await }
+            }),
+        },
+    );
     router
 }
 

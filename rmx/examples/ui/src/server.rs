@@ -6,8 +6,8 @@ use rmx::fetch::response;
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
 use rmx::render::{Render, ResponseInit};
-use rmx::router::routes::{get, Route};
-use rmx::router::{Context, Router};
+use rmx::router::routes::{get, Route, RouteMap};
+use rmx::router::{action, Context, Router};
 use ui_demo::demos::*;
 use ui_demo::{find_demo, Demo, DEMOS};
 
@@ -22,6 +22,7 @@ pub fn main() {
 }
 
 // config/routes.ts
+#[derive(RouteMap)]
 pub struct Routes {
     pub index: Route,
     pub show: Route,
@@ -38,15 +39,20 @@ pub fn router(public: &str) -> Router {
         public,
         StaticOptions { cache_control: Some("no-store".into()), etag: ETag::Off, last_modified: false, index: vec![], ..Default::default() },
     ));
-    router.route(&ROUTES.index, |ctx: Context| async move {
-        ctx.render_with(rsx! { <DemoIndexDocument/> }, no_store())
-    });
-    router.route(&ROUTES.show, |ctx: Context| async move {
-        match ctx.param("filename").and_then(find_demo) {
-            Some(demo) => ctx.render_with(Node::component::<DemoDocument>(None, DemoDocumentProps { slug: demo.slug }), no_store()),
-            None => response::status(StatusCode::NOT_FOUND, "Demo not found"),
-        }
-    });
+    router.map(
+        &*ROUTES,
+        RoutesActions {
+            index: action(|ctx: Context| async move {
+                ctx.render_with(rsx! { <DemoIndexDocument/> }, no_store())
+            }),
+            show: action(|ctx: Context| async move {
+                match ctx.param("filename").and_then(find_demo) {
+                    Some(demo) => ctx.render_with(Node::component::<DemoDocument>(None, DemoDocumentProps { slug: demo.slug }), no_store()),
+                    None => response::status(StatusCode::NOT_FOUND, "Demo not found"),
+                }
+            }),
+        },
+    );
     router
 }
 
