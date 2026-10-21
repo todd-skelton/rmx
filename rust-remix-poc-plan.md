@@ -345,10 +345,15 @@ Covered since phase 0b:
    `redirect_with`, `html_with`, `ctx.render_with` and the SPA `render_with`, and a `Location`
    or `Content-Type` in an init replaces the constructor's. `createMixin(setup, { ssr })` is
    `HostMixin` with `mixin_with(args, MixinOptions { ssr })`.
-   `file.test.ts` is ported case by case (`static_files/file_tests.rs`): file responses take
-   the request method (ranges only for `GET`), an empty `File` type sends no `Content-Type`,
-   and strong ETags take `Digest::Algorithm` (SHA-1/256/384/512, hand-written in `rmx-crypto`)
-   or `Digest::With(fn)`; an unknown algorithm name fails to parse instead of rejecting.
+   `file.test.ts` is ported case by case (`crates/fetch/tests/response_file.rs`, 85 cases)
+   against `response::file`, Remix's `createFileResponse` for any `FileLike` (an in-memory
+   `File`, or a `LazyFile`, which streams only the requested range): ranges only for `GET`,
+   an empty type sends no `Content-Type`, and strong ETags take a `DigestAlgorithm`
+   (SHA-1/256/384/512, hand-written in `rmx-crypto`) or `Digest::with(fn)` of the file; an
+   unknown algorithm name fails to parse instead of rejecting. Static files are rebuilt on
+   it as Remix's `static.ts` is (`open_lazy_file` plus `response::file`), with
+   `static.test.ts` ported case by case (43, symlinks included); `file_response` and
+   `file_response_for` are gone.
    `remix/terminal` is `rmx-terminal` with its four test files ported; the logger's colors and
    detection now come from it. Cursor helpers take unsigned and signed integers, so Remix's
    NaN and fraction normalization has nothing to port. The `rmx` CLI colors `new` progress and
@@ -357,8 +362,15 @@ Covered since phase 0b:
    Remix's while the rendering matches.
    Compression now fails the compressed body when the source or encoder fails (it used to
    end early and look complete), with tests for that, source cancellation on drop and the
-   206 skip. Remix's "Compressor interactions" cases test Node stream backpressure and
-   events and have no counterpart.
+   206 skip. `remix/response/compress` now lives in `rmx_fetch::response::compress` (feature
+   `compress`, re-exported by the compression middleware) with `compress_response`,
+   `create_compression_options` and `compress_stream` over a `Compressor` trait, and
+   `compress.test.ts` is ported case by case (83). The "Compressor interactions" cases run
+   against a scripted `Compressor`: events are the pieces `write` and `end` return, an error
+   event is an `Err`, `destroy()` is `Drop`, and Node's `drain` is the new
+   `BodySender::ready()`, so a source chunk is read only after the previous output was
+   taken (before, a fast source was read to the end in one poll). The middleware's own
+   `compression.test.ts` (9) is ported too.
    `remix/headers` tests are ported for accept, accept-encoding, accept-language, range,
    content-range, vary, if-match, if-none-match, if-range, cache-control and content-type
    (`crates/headers/tests/`). Porting changed behavior: `AcceptEncoding::accepts` always
