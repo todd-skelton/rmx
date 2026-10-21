@@ -115,7 +115,7 @@ fn comparable(a: &web_sys::Node, b: &web_sys::Node) -> bool {
 }
 
 fn marker_id(node: &web_sys::Node, prefix: &str) -> Option<String> {
-    node.dyn_ref::<web_sys::Comment>()?.data().strip_prefix(prefix).map(str::to_string)
+    node.dyn_ref::<web_sys::Comment>()?.data().trim().strip_prefix(prefix).map(str::to_string)
 }
 
 /// Whether a live boundary unit stays for the incoming one.

@@ -54,6 +54,8 @@ async fn start() -> Server {
             rmx::entry::<Card>(),
             rmx::entry::<ContextProvider>(),
             rmx::entry::<FrameEntry>(),
+            rmx::entry::<Clicker>(),
+            rmx::entry::<FocusEntry>(),
         ];
         APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
     }
@@ -2022,4 +2024,90 @@ async fn preserves_parent_context_for_client_entries_rendered_by_a_frame() {
     let _ = frame("cp-frame").reload_async(ReloadOptions::default()).await;
     input("cp-action").click();
     assert_eq!(CONTEXT_EVENTS.with(Cell::get), 2, "the reloaded entry reads it too");
+}
+
+// frame.test.tsx: hydration data merged across several rmx-data scripts
+
+/// A button that shows its `label`, with `!` once clicked.
+struct Clicker {
+    clicked: bool,
+}
+
+impl Component for Clicker {
+    type Props = EntryProps;
+    rmx::client_entry!("Clicker");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        Clicker { clicked: false }
+    }
+    fn render(&self, p: &EntryProps, h: &Handle<Self>) -> Node {
+        let click = h.on(|this, h| {
+            this.clicked = true;
+            h.update();
+        });
+        let text = if self.clicked { format!("{}!", p.label) } else { p.label.clone() };
+        rsx! { <button id={format!("mc-{}", p.label.to_lowercase())} mix={on("click", click)}>{text}</button> }
+    }
+}
+
+#[wasm_bindgen_test]
+async fn merges_hydration_data_across_multiple_rmx_data_scripts() {
+    let server = start().await;
+    let script = |id: &str, label: &str| {
+        let mut d = HydrationData::default();
+        d.entries.push((id.into(), "Clicker".into(), format!(r#"{{"label":"{label}"}}"#)));
+        d.to_script()
+    };
+    // Markers with spaces, as Remix's test writes them.
+    let page = format!(
+        r#"<!-- rmx:h:mch1 --><button id="mc-a">A</button><!-- /rmx:h --><!-- rmx:h:mch2 --><button id="mc-b">B</button><!-- /rmx:h -->{}{}"#,
+        script("mch1", "A"),
+        script("mch2", "B")
+    );
+    server.route("/mcp", vec![Part::Html(page)]);
+    let _m = mount("mcp", "/mcp", "mc-b").await;
+    tick().await;
+    assert_eq!(text("mc-a").as_deref(), Some("A"));
+    assert_eq!(text("mc-b").as_deref(), Some("B"));
+    input("mc-a").click();
+    input("mc-b").click();
+    rmx::flush();
+    assert_eq!(text("mc-a").as_deref(), Some("A!"));
+    assert_eq!(text("mc-b").as_deref(), Some("B!"));
+}
+
+// diff-dom.test.tsx: focus stays in a live hydration range when a following sibling goes
+
+/// A client entry rendering an input.
+struct FocusEntry;
+
+impl Component for FocusEntry {
+    type Props = EntryProps;
+    rmx::client_entry!("FocusEntry");
+    fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
+        FocusEntry
+    }
+    fn render(&self, _: &EntryProps, _: &Handle<Self>) -> Node {
+        rsx! { <input id="fe-input"/> }
+    }
+}
+
+fn focus_page(entry_id: &str, tail: &str) -> String {
+    let mut d = HydrationData::default();
+    d.entries.push((entry_id.into(), "FocusEntry".into(), r#"{"label":""}"#.into()));
+    format!(r#"<!-- rmx:h:{entry_id} --><input id="fe-input"><!-- /rmx:h --><button>Filter</button>{tail}{}"#, d.to_script())
+}
+
+#[wasm_bindgen_test]
+async fn retains_focus_in_a_live_hydration_range_when_a_following_sibling_is_removed() {
+    let server = start().await;
+    server.route("/fep", vec![Part::Html(focus_page("feh1", "<a id=\"fe-clear\">Clear</a>"))]);
+    let _m = mount("fep", "/fep", "fe-clear").await;
+    let input = input("fe-input");
+    input.focus().unwrap();
+
+    server.route("/fep", vec![Part::Html(focus_page("feh2", ""))]);
+    let _ = frame("fep").reload_async(ReloadOptions::default()).await;
+    assert!(by_id("fe-clear").is_none());
+    assert!(by_id("fe-input").unwrap().is_same_node(Some(&input)), "the live entry's input is kept");
+    assert!(document().active_element().is_some_and(|a| a.is_same_node(Some(&input))), "and keeps focus");
 }

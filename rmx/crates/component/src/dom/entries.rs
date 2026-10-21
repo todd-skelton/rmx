@@ -95,7 +95,7 @@ pub(crate) fn live_name(start: &web_sys::Node) -> Option<String> {
 pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frames::FrameState>>) -> Option<web_sys::Node> {
     let start_node: &web_sys::Node = start.as_ref();
     let end = find_end(start_node)?;
-    let id = start.data().strip_prefix("rmx:h:")?.to_string();
+    let id = start.data().trim().strip_prefix("rmx:h:")?.to_string();
     let (name, props) = frames::entry_data(&id)?;
 
     if let Some(slot) = slot_of(start_node) {
@@ -171,11 +171,11 @@ pub(crate) fn dispose(start: &web_sys::Node) {
 }
 
 pub(crate) fn is_start(node: &web_sys::Node) -> bool {
-    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().starts_with("rmx:h:"))
+    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().trim().starts_with("rmx:h:"))
 }
 
 pub(crate) fn is_end(node: &web_sys::Node) -> bool {
-    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data() == "/rmx:h")
+    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().trim() == "/rmx:h")
 }
 
 /// The matching `<!--/rmx:h-->` after `start`.

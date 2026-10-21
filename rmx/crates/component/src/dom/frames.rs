@@ -976,11 +976,11 @@ pub(crate) fn range_nodes(start: &web_sys::Comment, end: &web_sys::Comment, incl
 }
 
 pub(crate) fn is_start(node: &web_sys::Node) -> bool {
-    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().starts_with("rmx:f:"))
+    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().trim().starts_with("rmx:f:"))
 }
 
 pub(crate) fn is_end(node: &web_sys::Node) -> bool {
-    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data() == "/rmx:f")
+    node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().trim() == "/rmx:f")
 }
 
 /// The matching `<!--/rmx:f-->` after `start`.
@@ -1057,7 +1057,7 @@ pub(crate) fn hydrate_region(frame: &Rc<FrameState>) {
 /// comment already belongs to a frame, otherwise a new frame from the hydration data.
 pub(crate) fn adopt_server_frame(start: &web_sys::Comment, _parent: Option<Rc<FrameState>>) -> Option<Rc<FrameState>> {
     let start_node: &web_sys::Node = start.as_ref();
-    let id = start.data().strip_prefix("rmx:f:")?.to_string();
+    let id = start.data().trim().strip_prefix("rmx:f:")?.to_string();
     let data = frame_data(&id);
     if let Some(frame) = live(start_node) {
         if let Some((_, _, true)) = data {
@@ -1198,7 +1198,7 @@ fn find_comment(root: &web_sys::Node, data: &str) -> Option<web_sys::Node> {
     let doc = root.owner_document().unwrap_or_else(document);
     let walker = doc.create_tree_walker_with_what_to_show(root, 0x80).ok()?;
     while let Ok(Some(node)) = walker.next_node() {
-        if node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data() == data) {
+        if node.dyn_ref::<web_sys::Comment>().is_some_and(|c| c.data().trim() == data) {
             return Some(node);
         }
     }

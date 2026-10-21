@@ -120,13 +120,14 @@ fn retains_focus_when_a_following_sibling_changes_element_type() {
 // comments
 
 #[wasm_bindgen_test]
-fn retains_focus_in_a_hydration_range_when_a_following_sibling_is_removed() {
-    let c = Attached::new("<!-- rmx:h:old --><input><!-- /rmx:h --><button>Filter</button><a>Clear</a>");
-    let input: web_sys::HtmlElement = q(&c.0, "input").unchecked_into();
-    input.focus().unwrap();
-    diff(&c.0, "<!-- rmx:h:old --><input><!-- /rmx:h --><button>Filter</button>");
-    assert!(q(&c.0, "input").is_same_node(Some(&input)));
-    assert!(document().active_element().is_some_and(|a| a.is_same_node(Some(&input))));
+fn replaces_same_identity_hydration_ranges_that_do_not_have_a_live_owner() {
+    // Remix's "retains focus in a live hydration range ..." needs a live client entry, so
+    // it is ported in browser_frame_reloads.rs.
+    let el = container("<!-- rmx:h:old --><button>Old</button><!-- /rmx:h -->");
+    let old_start = el.first_child().unwrap();
+    diff(&el, "<!-- rmx:h:new --><button>New</button><!-- /rmx:h -->");
+    assert!(!same(el.first_child(), &old_start));
+    assert_eq!(q(&el, "button").text_content().as_deref(), Some("New"));
 }
 
 #[wasm_bindgen_test]

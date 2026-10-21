@@ -1516,7 +1516,7 @@ fn claimable(cursor: Option<web_sys::Node>, end: Option<&web_sys::Node>) -> Opti
             return None;
         }
         match n.dyn_ref::<web_sys::Comment>() {
-            Some(c) if !c.data().starts_with("rmx:f:") => node = n.next_sibling(),
+            Some(c) if !c.data().trim().starts_with("rmx:f:") => node = n.next_sibling(),
             _ => return Some(n),
         }
     }
@@ -1640,7 +1640,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
         Node::Frame(f) => {
             let start = claimable(cursor.clone(), end)
                 .and_then(|n| n.dyn_into::<web_sys::Comment>().ok())
-                .filter(|c| c.data().starts_with("rmx:f:"));
+                .filter(|c| c.data().trim().starts_with("rmx:f:"));
             let state = start.and_then(|s| frames::adopt_server_frame(&s, scope.frame.clone()));
             let Some(state) = state else {
                 return create_at(Node::Frame(f), parent, &cursor.clone().or_else(|| end.cloned()), scope);
