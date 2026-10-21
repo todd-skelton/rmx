@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
 use rmx_fetch::{request_url, response, AbortError, AbortSignal, Body, Request, RequestExt, Response};
-use rmx_route_pattern::{Matcher, Params, RoutePattern};
+use rmx_route_pattern::{specificity, Matcher, Params, RoutePattern};
 use rmx_url::Url;
 
 pub mod async_context;
@@ -600,16 +600,19 @@ impl Router {
 
     async fn dispatch(&self, mut ctx: Context) -> Response {
         let method = ctx.method().clone();
-        let matches = self.inner.routes.match_all_ranked(ctx.url());
+        let matches = match self.inner.routes.match_all(ctx.url()) {
+            Ok(matches) => matches,
+            Err(e) => return response::status(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        };
         // Remix's dispatch: the first match (most specific first) for this method or ANY wins.
         // A HEAD request falls back to the most specific GET match, unless an equally specific
         // HEAD or ANY route follows it.
         let mut found = None;
         let mut head_fallback: Option<usize> = None;
         let mut allowed: Vec<Method> = Vec::new();
-        for (i, (rank, m)) in matches.iter().enumerate() {
+        for (i, m) in matches.iter().enumerate() {
             if let Some(fallback) = head_fallback {
-                if *rank != matches[fallback].0 {
+                if !specificity::equal(m, &matches[fallback]) {
                     break;
                 }
             }
@@ -644,7 +647,7 @@ impl Router {
             }
             return res;
         };
-        let found = &matches[index].1;
+        let found = &matches[index];
         let entry = found.data.clone();
         ctx.params = found.params.clone();
         async_context::update(&ctx.scope, |s| s.params = ctx.params.clone());
@@ -685,7 +688,9 @@ impl RouteBuilder<'_> {
             middleware: Arc::from(middleware),
             pattern: route.pattern().clone(),
         };
-        self.router.inner_mut().routes.add(route.pattern().clone(), Arc::new(entry));
+        if let Err(e) = self.router.inner_mut().routes.add(route.pattern().clone(), Arc::new(entry)) {
+            panic!("route {}: {e}", route.pattern());
+        }
         self
     }
 

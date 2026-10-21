@@ -35,28 +35,11 @@ pub fn encode_path_segment(s: &str) -> String {
     encode_with(s, |b| unreserved(b) || b"!$&'()*+,;=:@".contains(&b))
 }
 
-/// Encode a whole path, keeping `/` and existing `%XX` escapes.
+/// Encode a whole path with the WHATWG URL path percent-encode set: C0 controls, non-ASCII,
+/// space, `"`, `#`, `<`, `>`, `?`, backtick, `{` and `}`. Everything else, including `%` and
+/// existing escapes, is kept as written.
 pub fn encode_path(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let b = bytes[i];
-        if b == b'%' && i + 2 < bytes.len() && is_hex(bytes[i + 1]) && is_hex(bytes[i + 2]) {
-            out.push('%');
-            out.push(bytes[i + 1].to_ascii_uppercase() as char);
-            out.push(bytes[i + 2].to_ascii_uppercase() as char);
-            i += 3;
-            continue;
-        }
-        if unreserved(b) || b"/!$&'()*+,;=:@".contains(&b) {
-            out.push(b as char);
-        } else {
-            push_encoded(&mut out, b);
-        }
-        i += 1;
-    }
-    out
+    encode_with(s, |b| b > 0x20 && b < 0x7f && !b"\"#<>?`{}".contains(&b))
 }
 
 /// `application/x-www-form-urlencoded` serialization of one name or value.
@@ -134,6 +117,8 @@ mod tests {
         assert_eq!(decode_form("a+b%26c"), "a b&c");
         assert_eq!(decode("100%"), "100%");
         assert_eq!(decode("%zz%4"), "%zz%4");
-        assert_eq!(encode_path("/a b/%c3%a9"), "/a%20b/%C3%A9");
+        assert_eq!(encode_path("/a b/%c3%a9"), "/a%20b/%c3%a9");
+        assert_eq!(encode_path("/100%/%zz/caf\u{e9}"), "/100%/%zz/caf%C3%A9");
+        assert_eq!(encode_path("/a\"b<c>d`e{f}g#h?"), "/a%22b%3Cc%3Ed%60e%7Bf%7Dg%23h%3F");
     }
 }

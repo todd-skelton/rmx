@@ -191,7 +191,9 @@ crates:
    that a controller covers every direct route; the helpers `form`, `form_with` (Remix's
    `formMethod`), `resource`, `resources` and the method verbs build the route shapes;
    `routes_command` gives an app binary
-   Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern`,
+   Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`), `rmx-route-pattern` (Remix's
+   `route-pattern`: parser with its `ParseError` types, matcher with specificity ranking and
+   resource limits, joins, and hrefs with `base_url`-relative output; Remix's tests ported),
    `rmx-fetch` (Request, Response, FormData, the `remix/response` constructors, where `html_with` and
    `redirect_with` take the same `ResponseInit` that render and spa use, an init `Location`
    winning as in Remix, and `AbortController` / `AbortSignal` for
