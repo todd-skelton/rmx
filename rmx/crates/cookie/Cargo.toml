@@ -7,4 +7,4 @@ license.workspace = true
 
 [dependencies]
 rmx-crypto.workspace = true
-rmx-url.workspace = true
+rmx-headers.workspace = true

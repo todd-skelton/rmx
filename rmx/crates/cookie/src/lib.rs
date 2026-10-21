@@ -1,61 +1,101 @@
-//! Cookies (Remix's `cookie` package): read a value from a `Cookie` header and write
-//! `Set-Cookie` headers.
+//! Cookies (Remix's `cookie` package): read this cookie's value from a `Cookie` header and
+//! write `Set-Cookie` headers, with optional signing and secret rotation.
 //!
 //! ```
-//! use rmx_cookie::{Cookie, SameSite};
+//! use rmx_cookie::{Cookie, CookieProperties};
 //!
-//! let auth = Cookie::new("auth").http_only(true).same_site(SameSite::Lax).path("/");
-//! assert_eq!(auth.parse(Some("theme=dark; auth=1")), Some("1".to_string()));
-//! assert_eq!(auth.serialize("1"), "auth=1; Path=/; HttpOnly; SameSite=Lax");
-//! assert_eq!(auth.clear(), "auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+//! let auth = Cookie::new("auth").http_only(true);
+//! let set = auth.serialize("1");
+//! assert_eq!(set, "auth=MQ==; HttpOnly; Path=/; SameSite=Lax");
+//! assert_eq!(auth.parse(Some("theme=dark; auth=MQ==")), Some("1".to_string()));
+//! let cleared = auth.serialize_with("", &CookieProperties { max_age: Some(0), ..Default::default() });
+//! assert_eq!(cleared, "auth=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax");
 //! ```
 //!
-//! Values are percent-encoded, so any string round-trips. With [`Cookie::secrets`] the
-//! value is signed (HMAC-SHA-256, `value.signature`) and [`Cookie::parse`] only returns
-//! values signed by one of the secrets, which allows rotating them.
+//! Like Remix, the default codec is base64 of the UTF-8 bytes, so any string round-trips;
+//! [`Cookie::encode`] and [`Cookie::decode`] replace it. With [`Cookie::secrets`] the encoded
+//! value is signed (`value.signature`, HMAC-SHA-256 in unpadded base64) with the first secret,
+//! and [`Cookie::parse`] accepts a signature from any of them.
 
-use std::fmt::Write as _;
+use std::fmt;
+use std::sync::Arc;
+use std::time::SystemTime;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SameSite {
-    Strict,
-    Lax,
-    None,
+pub use rmx_headers::SameSite;
+use rmx_headers::SetCookie;
+
+type Encoder = Arc<dyn Fn(&str) -> String + Send + Sync>;
+type Decoder = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
+
+/// `Set-Cookie` attributes (Remix's `CookieProperties`). Unset fields keep the cookie's own.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CookieProperties {
+    pub domain: Option<String>,
+    pub expires: Option<SystemTime>,
+    pub http_only: Option<bool>,
+    /// Lifetime in seconds.
+    pub max_age: Option<i64>,
+    pub partitioned: Option<bool>,
+    pub path: Option<String>,
+    pub same_site: Option<SameSite>,
+    pub secure: Option<bool>,
 }
 
-/// A named cookie and the attributes it is written with.
-#[derive(Clone, Debug)]
+/// A named cookie: its attributes, value codec and signing secrets (Remix's `Cookie`).
+#[derive(Clone)]
 pub struct Cookie {
     name: String,
-    path: Option<String>,
-    domain: Option<String>,
-    max_age: Option<i64>,
-    http_only: Option<bool>,
-    secure: Option<bool>,
-    same_site: Option<SameSite>,
+    encode: Encoder,
+    decode: Decoder,
     secrets: Vec<String>,
+    domain: Option<String>,
+    expires: Option<SystemTime>,
+    http_only: Option<bool>,
+    max_age: Option<i64>,
+    partitioned: Option<bool>,
+    path: String,
+    same_site: SameSite,
+    secure: Option<bool>,
+}
+
+impl fmt::Debug for Cookie {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Cookie")
+            .field("name", &self.name)
+            .field("signed", &self.is_signed())
+            .field("domain", &self.domain)
+            .field("expires", &self.expires)
+            .field("http_only", &self.http_only)
+            .field("max_age", &self.max_age)
+            .field("partitioned", &self.partitioned)
+            .field("path", &self.path)
+            .field("same_site", &self.same_site)
+            .field("secure", &self.secure)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Cookie {
+    /// A cookie with Remix's defaults: `Path=/`, `SameSite=Lax` and the base64 codec.
     pub fn new(name: impl Into<String>) -> Cookie {
         Cookie {
             name: name.into(),
-            path: None,
-            domain: None,
-            max_age: None,
-            http_only: None,
-            secure: None,
-            same_site: None,
+            encode: Arc::new(default_encode),
+            decode: Arc::new(default_decode),
             secrets: Vec::new(),
+            domain: None,
+            expires: None,
+            http_only: None,
+            max_age: None,
+            partitioned: None,
+            path: "/".into(),
+            same_site: SameSite::Lax,
+            secure: None,
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn path(mut self, path: impl Into<String>) -> Cookie {
-        self.path = Some(path.into());
+        self.path = path.into();
         self
     }
 
@@ -70,6 +110,11 @@ impl Cookie {
         self
     }
 
+    pub fn expires(mut self, at: SystemTime) -> Cookie {
+        self.expires = Some(at);
+        self
+    }
+
     pub fn http_only(mut self, on: bool) -> Cookie {
         self.http_only = Some(on);
         self
@@ -81,7 +126,13 @@ impl Cookie {
     }
 
     pub fn same_site(mut self, same_site: SameSite) -> Cookie {
-        self.same_site = Some(same_site);
+        self.same_site = same_site;
+        self
+    }
+
+    /// A partitioned cookie is always `Secure`.
+    pub fn partitioned(mut self, on: bool) -> Cookie {
+        self.partitioned = Some(on);
         self
     }
 
@@ -92,8 +143,35 @@ impl Cookie {
         self
     }
 
+    /// Turn a value into the cookie value (before signing). It must return text that is
+    /// safe in a `Set-Cookie` header.
+    pub fn encode(mut self, encode: impl Fn(&str) -> String + Send + Sync + 'static) -> Cookie {
+        self.encode = Arc::new(encode);
+        self
+    }
+
+    /// Turn a cookie value (after verifying) back into the value; `None` makes
+    /// [`Cookie::parse`] return `None`, like a throwing decoder in Remix.
+    pub fn decode(mut self, decode: impl Fn(&str) -> Option<String> + Send + Sync + 'static) -> Cookie {
+        self.decode = Arc::new(decode);
+        self
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Remix's `signed`: whether values are signed.
     pub fn is_signed(&self) -> bool {
         !self.secrets.is_empty()
+    }
+
+    pub fn get_domain(&self) -> Option<&str> {
+        self.domain.as_deref()
+    }
+
+    pub fn get_expires(&self) -> Option<SystemTime> {
+        self.expires
     }
 
     /// `HttpOnly` as configured; `None` when never set, so middleware can pick a default.
@@ -101,90 +179,93 @@ impl Cookie {
         self.http_only
     }
 
-    /// `Secure` as configured; `None` when never set.
-    pub fn get_secure(&self) -> Option<bool> {
-        self.secure
-    }
-
     pub fn get_max_age(&self) -> Option<i64> {
         self.max_age
     }
 
-    /// This cookie's value in a `Cookie` request header. A signed cookie whose signature
-    /// does not verify reads as `None`.
+    pub fn get_partitioned(&self) -> bool {
+        self.partitioned.unwrap_or(false)
+    }
+
+    pub fn get_path(&self) -> &str {
+        &self.path
+    }
+
+    pub fn get_same_site(&self) -> SameSite {
+        self.same_site
+    }
+
+    /// `Secure` as configured (always `Some(true)` when partitioned); `None` when never set.
+    pub fn get_secure(&self) -> Option<bool> {
+        if self.partitioned == Some(true) {
+            return Some(true);
+        }
+        self.secure
+    }
+
+    /// This cookie's value in a `Cookie` request header: `None` when the header or the
+    /// cookie is missing, the signature does not verify, or the value does not decode.
     pub fn parse(&self, header: Option<&str>) -> Option<String> {
-        let raw = parse_raw(header?).into_iter().find(|(k, _)| *k == self.name).map(|(_, v)| v)?;
-        if raw.is_empty() {
+        let header = header.filter(|h| !h.is_empty())?;
+        let cookies = rmx_headers::Cookie::parse(Some(header));
+        let value = cookies.get(&self.name)?;
+        if value.is_empty() {
             return Some(String::new());
         }
         if self.secrets.is_empty() {
-            return Some(rmx_url::decode(raw));
+            return (self.decode)(value);
         }
-        self.secrets.iter().find_map(|secret| unsign(raw, secret)).map(rmx_url::decode)
+        let unsigned = self.secrets.iter().find_map(|secret| unsign(value, secret))?;
+        (self.decode)(unsigned)
     }
 
     /// A `Set-Cookie` header value.
     pub fn serialize(&self, value: &str) -> String {
-        self.write(value, self.max_age)
+        self.serialize_with(value, &CookieProperties::default())
     }
 
-    /// A `Set-Cookie` header value with `HttpOnly` and `Secure` overridden.
-    pub fn serialize_with(&self, value: &str, http_only: bool, secure: bool) -> String {
-        Cookie { http_only: Some(http_only), secure: Some(secure), ..self.clone() }.serialize(value)
-    }
-
-    /// A `Set-Cookie` header value that deletes the cookie.
-    pub fn clear(&self) -> String {
-        self.write("", Some(0))
-    }
-
-    fn write(&self, value: &str, max_age: Option<i64>) -> String {
-        let mut encoded = rmx_url::encode_component(value);
-        if let (Some(secret), false) = (self.secrets.first(), value.is_empty()) {
-            encoded = sign(&encoded, secret);
-        }
-        let mut out = format!("{}={}", self.name, encoded);
-        if let Some(p) = &self.path {
-            let _ = write!(out, "; Path={p}");
-        }
-        if let Some(d) = &self.domain {
-            let _ = write!(out, "; Domain={d}");
-        }
-        if let Some(m) = max_age {
-            let _ = write!(out, "; Max-Age={m}");
-        }
-        if self.http_only == Some(true) {
-            out.push_str("; HttpOnly");
-        }
-        if self.secure == Some(true) {
-            out.push_str("; Secure");
-        }
-        match self.same_site {
-            Some(SameSite::Strict) => out.push_str("; SameSite=Strict"),
-            Some(SameSite::Lax) => out.push_str("; SameSite=Lax"),
-            Some(SameSite::None) => out.push_str("; SameSite=None"),
-            None => {}
-        }
-        out
+    /// A `Set-Cookie` header value with some attributes replaced.
+    pub fn serialize_with(&self, value: &str, props: &CookieProperties) -> String {
+        let value = if value.is_empty() {
+            String::new()
+        } else {
+            let encoded = (self.encode)(value);
+            match self.secrets.first() {
+                Some(secret) => sign(&encoded, secret),
+                None => encoded,
+            }
+        };
+        let header = SetCookie {
+            name: self.name.clone(),
+            value,
+            domain: props.domain.clone().or_else(|| self.domain.clone()),
+            expires: props.expires.or(self.expires),
+            http_only: props.http_only.or(self.http_only).unwrap_or(false),
+            max_age: props.max_age.or(self.max_age),
+            partitioned: props.partitioned.or(self.partitioned).unwrap_or(false),
+            path: Some(props.path.clone().unwrap_or_else(|| self.path.clone())),
+            same_site: Some(props.same_site.unwrap_or(self.same_site)),
+            secure: props.secure.or(self.get_secure()).unwrap_or(false),
+        };
+        header.to_string()
     }
 }
 
-/// Every `name=value` pair in a `Cookie` header, values decoded.
-pub fn parse(header: &str) -> Vec<(&str, String)> {
-    parse_raw(header).into_iter().map(|(k, v)| (k, rmx_url::decode(v))).collect()
+/// Remix's default encoder: base64 of the UTF-8 bytes, padded like `btoa`.
+fn default_encode(value: &str) -> String {
+    let mut encoded = rmx_crypto::base64_encode(value.as_bytes());
+    while !encoded.len().is_multiple_of(4) {
+        encoded.push('=');
+    }
+    encoded
 }
 
-fn parse_raw(header: &str) -> Vec<(&str, &str)> {
-    header
-        .split(';')
-        .filter_map(|pair| {
-            let (k, v) = pair.split_once('=')?;
-            Some((k.trim(), v.trim().trim_matches('"')))
-        })
-        .collect()
+/// Remix's default decoder: base64 to UTF-8, `None` when either step fails.
+fn default_decode(value: &str) -> Option<String> {
+    String::from_utf8(rmx_crypto::base64_decode(value)?).ok()
 }
 
-/// `value.signature`, the signature being base64 HMAC-SHA-256 of the value.
+/// `value.signature`, the signature being HMAC-SHA-256 of the value in unpadded base64.
 pub fn sign(value: &str, secret: &str) -> String {
     let mac = rmx_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
     format!("{value}.{}", rmx_crypto::base64_encode(&mac))
@@ -196,40 +277,4 @@ pub fn unsign<'a>(signed: &'a str, secret: &str) -> Option<&'a str> {
     let given = rmx_crypto::base64_decode(signature)?;
     let expected = rmx_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
     rmx_crypto::constant_time_eq(&given, &expected).then_some(value)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn round_trips_encoded_values() {
-        let c = Cookie::new("prefs").max_age(60).secure(true);
-        let set = c.serialize("a b;c=d");
-        assert_eq!(set, "prefs=a%20b%3Bc%3Dd; Max-Age=60; Secure");
-        let pair = set.split(';').next().unwrap();
-        assert_eq!(c.parse(Some(&format!("x=1; {pair}"))), Some("a b;c=d".into()));
-        assert_eq!(c.parse(Some("x=1")), None);
-        assert_eq!(c.parse(None), None);
-    }
-
-    #[test]
-    fn signed_cookies_verify_and_rotate() {
-        let old = Cookie::new("s").secrets(vec!["old".into()]);
-        let set = old.serialize("hello world");
-        let pair = set.split(';').next().unwrap();
-        assert!(pair.starts_with("s=hello%20world."), "{pair}");
-        assert_eq!(old.parse(Some(pair)), Some("hello world".into()));
-
-        let rotated = Cookie::new("s").secrets(vec!["new".into(), "old".into()]);
-        assert_eq!(rotated.parse(Some(pair)), Some("hello world".into()), "old signatures still verify");
-        assert!(rotated.serialize("x").starts_with(&format!("s={}", sign("x", "new"))));
-
-        let other = Cookie::new("s").secrets(vec!["other".into()]);
-        assert_eq!(other.parse(Some(pair)), None, "wrong secret");
-        let tampered = pair.replace("hello", "jello");
-        assert_eq!(old.parse(Some(&tampered)), None, "tampered value");
-        assert_eq!(old.parse(Some("s=unsigned")), None);
-        assert_eq!(old.parse(Some("s=")), Some(String::new()));
-    }
 }

@@ -3,7 +3,7 @@ use std::sync::{LazyLock, Mutex};
 use frame_navigation_demo::*;
 use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Frame, Handle, Mixin, Node};
-use rmx::cookie::{Cookie, SameSite};
+use rmx::cookie::{Cookie, CookieProperties, SameSite};
 use rmx::fetch::{response, Response};
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
@@ -144,7 +144,7 @@ pub fn router(public: &str) -> Router {
         &r.auth,
         AuthActions {
             logout: action(|_ctx: Context| async move {
-                with_cookie(response::redirect(&ROUTES.auth.login.index.href(())), &AUTH.clear())
+                with_cookie(response::redirect(&ROUTES.auth.login.index.href(())), &AUTH.serialize_with("", &CookieProperties { max_age: Some(0), ..Default::default() }))
             }),
         },
     );
@@ -537,7 +537,13 @@ mod tests {
         (status, location, block_on(res.into_body().text()).unwrap())
     }
 
-    const SIGNED_IN: (&str, &str) = ("cookie", "frame-navigation-auth=1");
+    /// The auth cookie as the login action sets it (`1`, base64-encoded like Remix).
+    const SIGNED_IN: (&str, &str) = ("cookie", "frame-navigation-auth=MQ==");
+
+    #[test]
+    fn signed_in_cookie_is_what_login_sets() {
+        assert_eq!(AUTH.serialize("1").split(';').next(), Some(SIGNED_IN.1));
+    }
 
     #[test]
     fn controllers_require_auth_except_the_auth_routes() {

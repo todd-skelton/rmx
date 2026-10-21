@@ -6,10 +6,11 @@ mod styles;
 mod tests;
 
 use std::sync::LazyLock;
+use std::time::UNIX_EPOCH;
 
 use http::{header, HeaderValue, StatusCode};
 use rmx::{rsx, Children, Component, Handle, Node};
-use rmx::cookie::{Cookie, SameSite};
+use rmx::cookie::{Cookie, CookieProperties, SameSite};
 use rmx::fetch::{response, Response};
 use rmx::headers::{AcceptLanguage, Vary};
 use rmx::middleware::form_data::{form_data, FormDataExt};
@@ -87,7 +88,7 @@ async fn language(ctx: Context) -> Response {
     match form.get("intent") {
         Some("clear") => {
             let mut res = response::redirect_with(&home_href(None), StatusCode::SEE_OTHER);
-            set_cookie(&mut res, LOCALE_COOKIE.clear());
+            set_cookie(&mut res, LOCALE_COOKIE.serialize_with("", &CookieProperties { expires: Some(UNIX_EPOCH), max_age: Some(0), ..Default::default() }));
             res
         }
         Some("save") => {

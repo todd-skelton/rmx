@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use http::{header, HeaderValue, StatusCode};
 use lazy_frames_demo::*;
 use rmx::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
-use rmx::cookie::{Cookie, SameSite};
+use rmx::cookie::{Cookie, CookieProperties, SameSite};
 use rmx::fetch::{response, Response};
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
@@ -106,7 +106,7 @@ pub fn router(config: Config) -> Router {
                     Some("false") => false,
                     _ => return response::status(StatusCode::BAD_REQUEST, "Expected enabled to be true or false"),
                 };
-                let cookie = if enabled { LATENCY_COOKIE.serialize("1") } else { LATENCY_COOKIE.clear() };
+                let cookie = if enabled { LATENCY_COOKIE.serialize("1") } else { LATENCY_COOKIE.serialize_with("", &CookieProperties { max_age: Some(0), ..Default::default() }) };
                 let mut res = response::redirect_with(&ROUTES.home.href(()), StatusCode::SEE_OTHER);
                 if let Ok(v) = HeaderValue::from_str(&cookie) {
                     res.headers_mut().append(header::SET_COOKIE, v);
@@ -190,7 +190,14 @@ fn format_time(now: SystemTime) -> String {
 // ---------------------------------------------------------------------------------------
 
 static THEME: LazyLock<Cookie> =
-    LazyLock::new(|| Cookie::new(THEME_COOKIE).max_age(THEME_COOKIE_MAX_AGE).path("/").same_site(SameSite::Lax));
+    LazyLock::new(|| {
+        Cookie::new(THEME_COOKIE)
+            .decode(|value| Some(value.to_string()))
+            .encode(str::to_string)
+            .max_age(THEME_COOKIE_MAX_AGE)
+            .path("/")
+            .same_site(SameSite::Lax)
+    });
 
 static LATENCY_COOKIE: LazyLock<Cookie> = LazyLock::new(|| {
     Cookie::new("lazy-frames-latency").http_only(true).max_age(60 * 60 * 24 * 365).path("/").same_site(SameSite::Lax)

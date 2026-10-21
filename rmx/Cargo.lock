@@ -1224,7 +1224,7 @@ name = "rmx-cookie"
 version = "0.1.0"
 dependencies = [
  "rmx-crypto",
- "rmx-url",
+ "rmx-headers",
 ]
 
 [[package]]

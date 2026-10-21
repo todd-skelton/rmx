@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use http::header::{HeaderValue, SET_COOKIE};
-use rmx_cookie::Cookie;
+use rmx_cookie::{Cookie, CookieProperties};
 use rmx_router::{Context, Error, IntoResponse, Middleware, Next};
 use rmx_session::{Session, SessionStorage};
 use serde_json::json;
@@ -34,8 +34,10 @@ pub fn session<S: SessionStorage>(cookie: Cookie, storage: S) -> impl Middleware
             let (cookie, storage) = &*shared;
             assert!(ctx.get::<Session>().is_none(), "existing session found, refusing to overwrite");
             let max_age = cookie.get_max_age();
+            let expires = cookie.get_expires();
+            let has_expiration = max_age.is_some() || expires.is_some();
             let mut value = cookie.parse(ctx.header("cookie"));
-            if max_age.is_some() {
+            if has_expiration {
                 value = value.and_then(|v| read_expiring(&v));
             }
             let session = match storage.read(value.as_deref()).await {
@@ -52,10 +54,19 @@ pub fn session<S: SessionStorage>(cookie: Cookie, storage: S) -> impl Middleware
                 Ok(None) => return res,
                 Err(e) => return Error::new(http::StatusCode::INTERNAL_SERVER_ERROR, format!("session save failed: {e}")).into_response(),
             };
-            if let (Some(age), false) = (max_age, value.is_empty()) {
-                value = json!({ "value": value, "expires": now_ms() + age * 1000 }).to_string();
+            if has_expiration && !value.is_empty() {
+                let expires = match max_age {
+                    Some(age) => now_ms() + age * 1000,
+                    None => expires.map_or(0, |at| system_time_ms(at) / 1000 * 1000),
+                };
+                value = json!({ "value": value, "expires": expires }).to_string();
             }
-            let set = cookie.serialize_with(&value, cookie.get_http_only().unwrap_or(true), cookie.get_secure().unwrap_or(https));
+            let props = CookieProperties {
+                http_only: Some(cookie.get_http_only().unwrap_or(true)),
+                secure: Some(cookie.get_secure().unwrap_or(https)),
+                ..Default::default()
+            };
+            let set = cookie.serialize_with(&value, &props);
             if let Ok(header) = HeaderValue::from_str(&set) {
                 res.headers_mut().append(SET_COOKIE, header);
             }
@@ -65,7 +76,15 @@ pub fn session<S: SessionStorage>(cookie: Cookie, storage: S) -> impl Middleware
 }
 
 fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+    system_time_ms(SystemTime::now())
+}
+
+/// Milliseconds since the epoch, negative before it (Remix's `Date.getTime()`).
+fn system_time_ms(at: SystemTime) -> i64 {
+    match at.duration_since(UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as i64,
+        Err(e) => -(e.duration().as_millis() as i64),
+    }
 }
 
 /// The inner value of an `{"value": .., "expires": ms}` envelope that has not expired.
@@ -165,12 +184,35 @@ mod tests {
         let (_, set) = get(&router, "http://x/", None);
         let set = set.unwrap();
         let signed = pair(&set).trim_start_matches("sid=");
-        let inner = rmx_url::decode(rmx_cookie::unsign(signed, "k").unwrap());
+        let inner = String::from_utf8(rmx_crypto::base64_decode(rmx_cookie::unsign(signed, "k").unwrap()).unwrap()).unwrap();
         let envelope: serde_json::Value = serde_json::from_str(&inner).unwrap();
         assert!(envelope["value"].is_string() && envelope["expires"].as_i64().unwrap() > now_ms());
         assert_eq!(get(&router, "http://x/peek", Some(pair(&set))).0, "1");
 
         let expired = json!({ "value": envelope["value"], "expires": now_ms() - 1 }).to_string();
+        let replay = Cookie::new("sid").secrets(vec!["k".into()]).serialize(&expired);
+        assert_eq!(get(&router, "http://x/peek", Some(pair(&replay))).0, "0");
+    }
+
+    #[test]
+    fn expires_without_max_age_keeps_the_absolute_expiry_on_writes() {
+        // Remix's session-expiration tests: `Expires` is absolute, rounded down to the second like
+        // the header, and a write does not push it back.
+        let at = SystemTime::now() + std::time::Duration::from_millis(60_500);
+        let router = counter_router(Cookie::new("sid").secrets(vec!["k".into()]).expires(at));
+        let (_, set) = get(&router, "http://x/", None);
+        let set = set.unwrap();
+        let envelope = |set: &str| -> serde_json::Value {
+            let signed = pair(set).trim_start_matches("sid=");
+            let inner = String::from_utf8(rmx_crypto::base64_decode(rmx_cookie::unsign(signed, "k").unwrap()).unwrap()).unwrap();
+            serde_json::from_str(&inner).unwrap()
+        };
+        let expires = envelope(&set)["expires"].as_i64().unwrap();
+        assert_eq!(expires, system_time_ms(at) / 1000 * 1000);
+        let (_, again) = get(&router, "http://x/", Some(pair(&set)));
+        assert_eq!(envelope(&again.unwrap())["expires"].as_i64(), Some(expires), "a write keeps the same expiry");
+
+        let expired = json!({ "value": envelope(&set)["value"], "expires": now_ms() - 1 }).to_string();
         let replay = Cookie::new("sid").secrets(vec!["k".into()]).serialize(&expired);
         assert_eq!(get(&router, "http://x/peek", Some(pair(&replay))).0, "0");
     }

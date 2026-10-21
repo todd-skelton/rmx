@@ -97,7 +97,7 @@ const attempt = async (name, fn) => {
     await page.locator('html[lang="ja"]').waitFor({ timeout: 5000 })
   })
   const saved = (await context.cookies()).find((c) => c.name === 'locale')
-  check('the preference cookie is HttpOnly, Lax, one year', saved?.value === 'ja' && saved.httpOnly && saved.sameSite === 'Lax' && saved.expires > Date.now() / 1000 + 364 * 86400, saved)
+  check('the preference cookie is HttpOnly, Lax, one year', saved?.value === 'amE=' && saved.httpOnly && saved.sameSite === 'Lax' && saved.expires > Date.now() / 1000 + 364 * 86400, saved)
 
   await page.getByRole('link', { name: 'Remix i18n', exact: true }).click()
   await attempt('the cookie decides the language at /', async () => {
