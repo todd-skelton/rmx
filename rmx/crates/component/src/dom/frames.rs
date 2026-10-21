@@ -511,6 +511,7 @@ impl FrameState {
             enc_type: submission.enc_type().map(String::from),
             form: submission.form_data.as_ref().filter(|_| !submission.is_get()).map(entries),
             target: self.name(),
+            signal: crate::Signal::from(signal.clone()),
         };
         let Some(result) = until_aborted(resolve(request), signal).await else { return Ok(None) };
         let response = result.map_err(|e| JsValue::from_str(&e))?;

@@ -146,6 +146,8 @@ crates:
    the browser's own form data. POST bodies are URL encoded, `multipart/form-data` or
    `text/plain` (CRLF lines), and custom resolvers get the encoding as
    `FrameRequest::enc_type`; `ReloadOptions::enc_type` does the same for reloads.
+   `FrameRequest::signal` aborts when a newer load of the frame supersedes the request,
+   for resolvers to pass to `fetch` (Remix's `resolveFrame` `options.signal`).
    A redirected frame load renders the final content but keeps the frame's requested
    `src` (only a top frame navigation moves to the redirect target), as in Remix.
    Navigations the runtime cannot route (an unknown `data-rmx-target`, a cross-origin,
@@ -161,7 +163,7 @@ crates:
    The browser runtime is checked by ports of Remix's `vdom.*`, mixin (on, attrs, ref,
    css, link), mixin SSR and server/client mix parity, stylesheet, diff-dom,
    document-state, form-navigation, navigation, frame request/resolver, frame css and
-   child frame reload test suites (`crates/component/tests/browser_*.rs`, 497 tests), plus
+   child frame reload test suites (`crates/component/tests/browser_*.rs`, 498 tests), plus
    Remix's nested client entry regressions (one listener per nested entry wherever it sits;
    removal of a component or nested entry waits for a `persist_node` exit at its top level).
    Frames inside a reloading frame get `reloadStart` with it and `reloadComplete` once

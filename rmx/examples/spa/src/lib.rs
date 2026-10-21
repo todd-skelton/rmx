@@ -400,7 +400,7 @@ mod tests {
     }
 
     fn render(url: &str, method: &str, form: Option<Vec<(String, String)>>) -> (Option<String>, String) {
-        let request = rmx::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None };
+        let request = rmx::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None, signal: rmx::Signal::never() };
         let res = block_on(rmx::spa::resolve(&router(), request)).expect("route renders");
         let html = match res.content {
             rmx::FrameContent::Node(node) => rmx::render_to_string(&node),

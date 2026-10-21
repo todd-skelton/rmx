@@ -86,6 +86,9 @@ pub struct FrameRequest {
     pub enc_type: Option<String>,
     /// The name of the frame asking, if it has one.
     pub target: Option<String>,
+    /// Aborts when a newer load of the frame supersedes this one or the frame goes away.
+    /// Forward it to `fetch` ([`FetchInit::signal`](crate::browser::FetchInit::signal)).
+    pub signal: crate::Signal,
 }
 
 /// Content a resolver produced: server-style HTML, or a node tree to render directly.

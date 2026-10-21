@@ -49,7 +49,7 @@ fn resolve_frame(request: FrameRequest) -> ResolveFuture {
             headers.push(("Content-Type".to_string(), "application/x-www-form-urlencoded".to_string()));
             url_encode(form)
         });
-        let res = browser::fetch(&request.url, FetchInit { method: request.method.clone(), headers, body, signal: None }).await?;
+        let res = browser::fetch(&request.url, FetchInit { method: request.method.clone(), headers, body, signal: Some(request.signal.clone()) }).await?;
 
         // A redirected response may contain document UI that is not valid for the requested
         // subframe. The destination opts into subframe rendering by returning the matching

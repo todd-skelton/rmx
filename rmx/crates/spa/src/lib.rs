@@ -181,7 +181,7 @@ mod tests {
     }
 
     fn request(url: &str, method: &str, form: Option<Vec<(String, String)>>) -> rmx::FrameRequest {
-        rmx::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None }
+        rmx::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None, signal: rmx::Signal::never() }
     }
 
     fn text(response: rmx::FrameResponse) -> String {

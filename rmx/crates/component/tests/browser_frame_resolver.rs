@@ -27,6 +27,8 @@ thread_local! {
 enum Answer {
     Html(String, Option<String>),
     Node,
+    /// Never resolves.
+    Pending,
 }
 
 fn answer(next: Answer) {
@@ -47,6 +49,7 @@ fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
         Ok(match next {
             Answer::Html(html, url) => FrameResponse { content: FrameContent::Html(html), url },
             Answer::Node => FrameResponse { content: FrameContent::Node(rsx! { <p id="node">"From a node"</p> }), url: None },
+            Answer::Pending => std::future::pending().await,
         })
     })
 }
@@ -252,4 +255,25 @@ async fn renders_node_results_when_a_client_frame_src_changes() {
     assert_eq!(m.text_of("#frame-error h2").as_deref(), Some("Frame Error"));
     assert_eq!(m.text_of("#frame-error p").as_deref(), Some("Retry the page."));
     assert_eq!(m.text_of("#stale"), None);
+}
+
+// frame.test.tsx: `resolveFrame` options carry the load's signal
+
+#[wasm_bindgen_test]
+async fn passes_each_load_a_signal_that_aborts_when_a_newer_load_supersedes_it() {
+    let m = mount("signal").await;
+    assert!(!requests()[0].signal.aborted());
+    answer(Answer::Pending);
+    frame("signal").reload();
+    tick().await;
+    assert_eq!(requests().len(), 2);
+    let stale = requests()[1].signal.clone();
+    assert!(!stale.aborted(), "the pending load is live");
+
+    answer(Answer::Html(r#"<p id="content">Fresh</p>"#.into(), None));
+    let current = frame("signal").reload_async(ReloadOptions::default()).await.expect("the current reload");
+    assert!(stale.aborted(), "the newer load aborts the stale resolver's signal");
+    assert!(!requests()[2].signal.aborted());
+    assert!(!current.aborted());
+    assert_eq!(m.text_of("#content").as_deref(), Some("Fresh"));
 }
