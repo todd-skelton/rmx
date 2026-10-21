@@ -330,7 +330,7 @@ Covered since phase 0b:
    All examples depend on `rmx` alone.
 
 7. Component runtime behavior is checked against Remix's own test suites, ported test by
-   test: 492 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
+   test: 494 browser tests in 29 files (`rmx/crates/component/tests/browser_*.rs`, run in
    headless Chromium) cover the vdom, hydration, mixins (on, attrs, ref, css, link, mixin
    SSR options and server/client parity), the style manager, diff-dom, document state
    (focus restore), form navigation, navigation interception, nested client entries,
@@ -346,7 +346,8 @@ Covered since phase 0b:
    frame, stale templates applied after a reload, and superseded response streams left
    open until their next chunk, and client frames inside client entries that kept stale
    content when an ancestor reload re-rendered the entry, and client frame reloads started
-   by a superseded ancestor reload that were left running.
+   by a superseded ancestor reload that were left running, and streamed templates cut
+   short before their end marker that never applied once the document finished parsing.
 
 Remaining gaps:
 
