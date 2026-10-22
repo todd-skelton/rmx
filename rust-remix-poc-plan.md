@@ -724,6 +724,17 @@ Remaining gaps:
    and no import maps), `assert` (`assert!`) and `test` (`cargo test`, plus
    `rmx_serve::test` and `rmx::test`). Every other Remix package has an rmx crate or module
    (`crates/rmx/tests/manifest.rs` checks that each crate is distributed through `rmx`).
+   The CLI's internal test files map as follows: `contained-path.test.ts` is the doctor fix
+   path check (`doctor_fix_skips_existing_files_and_refuses_paths_outside_the_app`, which
+   also follows symlinks); `controller-files.test.ts` and `controller-ownership.test.ts`
+   plan and scan `app/actions` controller files, which rmx replaces with the compile-time
+   `<Name>Actions` check; and `remix-config.test.ts` loads `remix.json`, which rmx does not
+   have. Its sections configure things rmx keeps elsewhere: `assets` is the asset server
+   built in the app's code, `test` is `cargo test`, `db` is left to data libraries, and
+   `doctor.strict` is the `--strict` flag (`--no-strict` is accepted like Remix's). The
+   one `spa-response.test.ts` case (`spaResponse.create` throws outside a browser) does
+   not apply: `rmx_spa::spa_response` only stores the node beside a response, and the
+   native tests build routes with it.
 5. `frame.test.tsx`'s streamed template parsing cases (a template parsed in two parts, with
    the observer watching or hydration starting mid-template, a sibling appended between the
    parts, and a template without its end marker waiting for parsing to finish) run in
