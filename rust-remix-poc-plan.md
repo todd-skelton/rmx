@@ -330,7 +330,9 @@ Covered since phase 0b:
    fragment gets them in a `<head>` in front, and the hydration data goes before the last
    `</body>` (else `</html>`, else the end). Empty `css("")` adds no class or rule. The
    styles group runs in `ssr_stream.rs` with CSS text in place of style objects (rsx has
-   no style objects; string `style` passes through). Divergence: an inlined blocking
+   no style objects; string `style` passes through). `style.test.ts` (4) is ported the same
+   way in `crates/component/src/mixin.rs`: `rmxc-` classes, cached identical text, nothing
+   for empty text, and nested selectors and media queries kept. Divergence: an inlined blocking
    frame's rules move to the page head, because rmx pins adopted server rules for the page
    instead of adopting them per frame; streamed frame templates still carry their own.
 3. `rmx-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
@@ -342,7 +344,9 @@ Covered since phase 0b:
    layout; frame cancellation needs a browser) and `hover-aim.test.ts` (12, with the session
    logic in a clock-driven `Core` the DOM tracker drives). Anchor offsets take `Offset::sized`
    functions of the floating element's size, as Remix's take functions, and hover aim takes
-   Remix's optional `onExpire`.
+   Remix's optional `onExpire`. `scroll-lock.test.tsx` (3, plus a no-scrollbar case) runs in
+   Chromium as `crates/ui/tests/browser_scroll_lock.rs` with Remix's window mocks; calling
+   one unlock twice has no counterpart, since a `ScrollLock` is released once, on drop.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,

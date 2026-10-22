@@ -34,3 +34,7 @@ web-sys = { workspace = true, features = [
     "ScrollLogicalPosition",
     "Window",
 ] }
+
+# Browser tests (`tests/browser_*.rs`): run with ../../test-browser.ps1 -Crate rmx-ui.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.79"

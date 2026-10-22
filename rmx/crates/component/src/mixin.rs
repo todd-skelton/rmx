@@ -516,6 +516,56 @@ mod tests {
         assert_eq!(rule_css(&ra), format!("@layer rmx.{0} {{ .{0} {{ color: red; padding: 4px }} }}", ra.class));
     }
 
+    fn style_rule(mixin: &Mixin) -> Rc<StyleRule> {
+        let MixinKind::Style(rule) = &mixin.0 else { panic!("not a style mixin") };
+        rule.clone()
+    }
+
+    // style.test.ts: returns class selectors and css text
+    #[test]
+    fn css_returns_a_class_and_its_rule() {
+        let rule = style_rule(&css("color: red; font-size: 16px"));
+        assert!(rule.class.starts_with("rmxc-"), "{}", rule.class);
+        let text = rule_css(&rule);
+        assert!(text.contains(&format!(".{}", rule.class)), "{text}");
+        assert!(text.contains("color: red") && text.contains("font-size: 16px"), "{text}");
+    }
+
+    // style.test.ts: deduplicates identical style objects
+    #[test]
+    fn css_deduplicates_identical_text() {
+        let first = style_rule(&css("color: red; &:hover { color: blue }"));
+        let second = style_rule(&css("color: red; &:hover { color: blue }"));
+        assert_eq!(first.class, second.class);
+        assert_eq!(rule_css(&first), rule_css(&second));
+        assert!(Rc::ptr_eq(&first, &second), "the second call reuses the cached rule");
+        assert_ne!(first.class, style_rule(&css("color: red; &:hover { color: green }")).class);
+    }
+
+    // style.test.ts: returns empty selector/css for empty objects
+    #[test]
+    fn css_of_empty_text_adds_nothing() {
+        for text in ["", "  \n "] {
+            let MixinKind::Many(list) = css(text).0 else { panic!("empty css made a rule") };
+            assert!(list.is_empty());
+        }
+    }
+
+    // style.test.ts: keeps nested selectors and media queries
+    #[test]
+    fn css_keeps_nested_selectors_and_media_queries() {
+        let rule = style_rule(&css(
+            "color: black;
+             :hover { color: red; }
+             & div { color: green; & p { color: blue; } @media (hover: hover) { & a { color: purple; } } }
+             @media (min-width: 768px) { font-size: 16px; }",
+        ));
+        let text = rule_css(&rule);
+        assert!(text.contains(":hover { color: red; }"), "{text}");
+        assert!(text.contains("& div { color: green; & p { color: blue; } @media (hover: hover) { & a { color: purple; } } }"), "{text}");
+        assert!(text.contains("@media (min-width: 768px) { font-size: 16px; }"), "{text}");
+    }
+
     #[test]
     fn hoists_keyframes_out_of_the_class_rule() {
         let rule = StyleRule {

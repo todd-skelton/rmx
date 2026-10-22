@@ -443,9 +443,11 @@ mod outside_click {
     }
 }
 
-/// Document scroll locking shared by every open surface (Remix's `lockScroll`).
+/// Document scroll locking shared by every open surface (Remix's `lockScroll`). Public only
+/// for the browser tests; Remix keeps it internal too.
 #[cfg(target_arch = "wasm32")]
-pub(crate) mod scroll_lock {
+#[doc(hidden)]
+pub mod scroll_lock {
     use std::cell::RefCell;
 
     struct Saved {
