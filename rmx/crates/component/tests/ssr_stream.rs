@@ -5,7 +5,9 @@
 
 extern crate rmx_component as rmx;
 
-use rmx::{css, render_to_string, rsx, unsafe_html, AttrValue, Component, Handle, Node};
+use std::cell::RefCell;
+
+use rmx::{css, render_to_string, rsx, unsafe_html, AttrValue, Children, Component, Handle, Node};
 
 fn html(node: Node) -> String {
     render_to_string(&node)
@@ -100,6 +102,236 @@ fn renders_textarea_value_as_escaped_text_content() {
 fn renders_fragments_and_lists() {
     let items = vec![rsx! { <li>"a"</li> }, rsx! { <li>"b"</li> }];
     assert_eq!(html(rsx! { <ul><>{"x"}{items}</></ul> }), "<ul>x<li>a</li><li>b</li></ul>");
+}
+
+// component nodes
+
+#[derive(Clone, Default)]
+struct GreetingProps {
+    name: &'static str,
+}
+
+struct Greeting;
+
+impl Component for Greeting {
+    type Props = GreetingProps;
+    fn setup(_: &GreetingProps, _: &Handle<Self>) -> Self {
+        Greeting
+    }
+    fn render(&self, props: &GreetingProps, _: &Handle<Self>) -> Node {
+        rsx! { <div>"Hello, " {props.name} "!"</div> }
+    }
+}
+
+#[test]
+fn renders_component_nodes() {
+    assert_eq!(html(rsx! { <Greeting name="World"/> }), "<div>Hello, World!</div>");
+}
+
+/// Setup-scope state read by render, like a Remix component's closure variables.
+struct Zero {
+    n: i32,
+}
+
+impl Component for Zero {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        Zero { n: 0 }
+    }
+    fn render(&self, _: &(), _: &Handle<Self>) -> Node {
+        rsx! { <span>{self.n}</span> }
+    }
+}
+
+#[test]
+fn renders_zero_from_component_state() {
+    assert_eq!(html(rsx! { <Zero/> }), "<span>0</span>");
+}
+
+#[derive(Clone, Default)]
+struct ChildProps {
+    children: Children,
+}
+
+struct Theme {
+    color: &'static str,
+    size: u32,
+}
+
+struct User {
+    name: &'static str,
+}
+
+/// Provides a value from setup and renders its children.
+macro_rules! provider {
+    ($name:ident, $value:expr) => {
+        struct $name;
+        impl Component for $name {
+            type Props = ChildProps;
+            fn setup(_: &ChildProps, h: &Handle<Self>) -> Self {
+                h.set_context($value);
+                $name
+            }
+            fn render(&self, props: &ChildProps, _: &Handle<Self>) -> Node {
+                rsx! { <>{&props.children}</> }
+            }
+        }
+    };
+}
+
+provider!(ThemeProvider, Theme { color: "blue", size: 16 });
+provider!(RedThemeProvider, Theme { color: "red", size: 0 });
+provider!(UserProvider, User { name: "John" });
+provider!(CountProvider, 42_i32);
+
+struct ThemedText {
+    theme: std::rc::Rc<Theme>,
+}
+
+impl Component for ThemedText {
+    type Props = ();
+    fn setup(_: &(), h: &Handle<Self>) -> Self {
+        ThemedText { theme: h.context::<Theme>().expect("theme") }
+    }
+    fn render(&self, _: &(), _: &Handle<Self>) -> Node {
+        let style = format!("color: {}; font-size: {}px", self.theme.color, self.theme.size);
+        rsx! { <p style={style}>"Themed!"</p> }
+    }
+}
+
+#[test]
+fn provides_and_reads_context() {
+    assert_eq!(
+        html(rsx! { <ThemeProvider><div><ThemedText/></div></ThemeProvider> }),
+        r#"<div><p style="color: blue; font-size: 16px">Themed!</p></div>"#
+    );
+}
+
+struct Display;
+
+impl Component for Display {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        Display
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        let (theme, user) = (h.context::<Theme>().expect("theme"), h.context::<User>().expect("user"));
+        rsx! { <p style={format!("color: {}", theme.color)}>"Hello, " {user.name} "!"</p> }
+    }
+}
+
+#[test]
+fn provides_and_reads_nested_context() {
+    assert_eq!(
+        html(rsx! { <RedThemeProvider><UserProvider><div><Display/></div></UserProvider></RedThemeProvider> }),
+        r#"<div><p style="color: red">Hello, John!</p></div>"#
+    );
+}
+
+#[test]
+fn reads_the_nearest_provider_of_a_context_type() {
+    assert_eq!(
+        html(rsx! { <ThemeProvider><RedThemeProvider><ThemedText/></RedThemeProvider><ThemedText/></ThemeProvider> }),
+        r#"<p style="color: red; font-size: 0px">Themed!</p><p style="color: blue; font-size: 16px">Themed!</p>"#
+    );
+}
+
+struct CountDisplay;
+
+impl Component for CountDisplay {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        CountDisplay
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        rsx! { <span>"Count: " {*h.context::<i32>().expect("count")}</span> }
+    }
+}
+
+struct DoubleDisplay {
+    count: i32,
+}
+
+impl Component for DoubleDisplay {
+    type Props = ();
+    fn setup(_: &(), h: &Handle<Self>) -> Self {
+        DoubleDisplay { count: *h.context::<i32>().expect("count") }
+    }
+    fn render(&self, _: &(), _: &Handle<Self>) -> Node {
+        rsx! { <span>"Double: " {self.count * 2}</span> }
+    }
+}
+
+#[test]
+fn provides_context_to_multiple_consumers() {
+    assert_eq!(
+        html(rsx! { <CountProvider><div><CountDisplay/><br/><DoubleDisplay/></div></CountProvider> }),
+        "<div><span>Count: 42</span><br><span>Double: 84</span></div>"
+    );
+}
+
+struct Leaf;
+
+impl Component for Leaf {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        Leaf
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        rsx! { <i id={h.dom_id()}></i> }
+    }
+}
+
+struct Mid;
+
+impl Component for Mid {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        Mid
+    }
+    fn render(&self, _: &(), _: &Handle<Self>) -> Node {
+        rsx! { <Leaf/> }
+    }
+}
+
+#[test]
+fn gives_sibling_components_unique_ids_after_nested_components() {
+    let out = html(rsx! { <div><Mid/><Mid/><Leaf/></div> });
+    let ids: Vec<&str> = out.split("id=\"").skip(1).map(|s| s.split('"').next().unwrap()).collect();
+    assert_eq!(ids.len(), 3, "{out}");
+    assert_eq!(ids.iter().collect::<std::collections::HashSet<_>>().len(), 3, "{out}");
+}
+
+thread_local! {
+    static SEEN: RefCell<Option<(String, String, bool)>> = const { RefCell::new(None) };
+}
+
+struct Inspect;
+
+impl Component for Inspect {
+    type Props = ();
+    fn setup(_: &(), h: &Handle<Self>) -> Self {
+        let (frame, top) = (h.frame(), h.frames().top());
+        SEEN.with(|s| *s.borrow_mut() = Some((frame.src(), top.src(), frame == top)));
+        Inspect
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        rsx! { <div>{h.frames().top().src()}</div> }
+    }
+}
+
+#[test]
+fn exposes_the_current_and_top_frame_src_during_ssr() {
+    rmx::set_server_frame_src("https://example.com/dashboard", "https://example.com/dashboard");
+    let out = html(rsx! { <Inspect/> });
+    let seen = SEEN.with(|s| s.borrow_mut().take());
+    assert_eq!(seen, Some(("https://example.com/dashboard".to_string(), "https://example.com/dashboard".to_string(), true)));
+    assert_eq!(out, "<div>https://example.com/dashboard</div>");
+
+    rmx::set_server_frame_src("https://example.com/sidebar", "https://example.com/dashboard");
+    html(rsx! { <Inspect/> });
+    let seen = SEEN.with(|s| s.borrow_mut().take());
+    assert_eq!(seen, Some(("https://example.com/sidebar".to_string(), "https://example.com/dashboard".to_string(), false)));
 }
 
 struct Seo;
