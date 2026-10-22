@@ -98,6 +98,13 @@ fn routes_assets_and_test_run_the_app_through_cargo() {
     assert_eq!(exec(&["routes", "--table"]), "cargo run --quiet -- routes --table");
     assert_eq!(exec(&["assets", "inspect", "/assets/app/x.js"]), "cargo run --quiet -- assets inspect /assets/app/x.js");
     assert_eq!(exec(&["test", "frame"]), "cargo test frame");
+    assert_eq!(exec(&["test", "--", "-h"]), "cargo test -- -h", "help flags after -- go to the test binaries");
+    assert_eq!(exec(&["test", "-p", "app", "--", "--nocapture", "--help"]), "cargo test -p app -- --nocapture --help");
+    assert_eq!(parse(&args(&["test", "frame", "-h", "--", "x"])), Ok(Invocation::Print(TEST_HELP.into())));
+    assert_eq!(parse(&args(&["help", "test"])), parse(&args(&["test", "--help"])));
+    // Help needs no project build (Remix prints it before looking for one).
+    assert_eq!(parse(&args(&["routes", "--json", "-h"])), Ok(Invocation::Print(ROUTES_HELP.into())));
+    assert_eq!(parse(&args(&["assets", "inspect", "--help"])), Ok(Invocation::Print(ASSETS_HELP.into())));
     assert_eq!(parse(&args(&["test", "--help"])), Ok(Invocation::Print(TEST_HELP.into())));
 }
 

@@ -221,9 +221,15 @@ Examples:
 
 const TEST_HELP: &str = "\
 Usage:
-  rmx test [filter]
+  rmx test [filter] [cargo test options] [-- <test binary options>]
 
-Run tests for the current project (`cargo test [filter]`).
+Run tests for the current project. The arguments go to `cargo test` unchanged, and
+everything after `--` (`-h` and `--help` too) goes to the test binaries.
+
+Examples:
+  rmx test
+  rmx test frame
+  rmx test -p my-app -- --nocapture
 ";
 
 /// The help text for `command`, or the root help.
@@ -306,6 +312,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             }
             parse_new(&args).map(Invocation::New)
         }
+        "routes" if wants_help => Ok(Invocation::Print(ROUTES_HELP.into())),
+        "assets" if wants_help => Ok(Invocation::Print(ASSETS_HELP.into())),
         "routes" | "assets" => {
             let mut argv: Vec<String> = ["cargo", "run", "--quiet", "--", command].map(String::from).to_vec();
             argv.extend(args.iter().map(|a| a.to_string()));
@@ -361,7 +369,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             Ok(Invocation::Doctor { json, strict, fix })
         }
         "test" => {
-            if wants_help {
+            // After a bare `--` the arguments belong to the test binaries (Remix `wantsHelp`).
+            if args.iter().take_while(|a| **a != "--").any(|a| matches!(*a, "-h" | "--help")) {
                 return Ok(Invocation::Print(TEST_HELP.into()));
             }
             let mut argv: Vec<String> = vec!["cargo".into(), "test".into()];
