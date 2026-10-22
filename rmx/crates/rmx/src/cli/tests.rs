@@ -85,6 +85,12 @@ fn reports_unknown_commands_and_arguments() {
     assert_eq!(parse(&args(&["new", "a", "b"])).unwrap_err().message, "Unexpected extra argument: b");
     assert_eq!(parse(&args(&["new", "a", "--app-name"])).unwrap_err().message, "--app-name requires a value.");
     assert_eq!(parse(&args(&["new", "a", "--app-name="])).unwrap_err().message, "--app-name requires a value.");
+    // parse-args.test.ts: a flag is not a value, and booleans take no value.
+    assert_eq!(parse(&args(&["new", "a", "--app-name", "--force"])).unwrap_err().message, "--app-name requires a value.");
+    assert_eq!(parse(&args(&["new", "a", "--force=true"])).unwrap_err().message, "Unknown argument: --force=true");
+    assert_eq!(parse(&args(&["doctor", "--json=true"])).unwrap_err().message, "Unknown argument: --json=true");
+    assert_eq!(parse(&args(&["new", "a", "b"])).unwrap_err().message, "Unexpected extra argument: b");
+    assert_eq!(parse(&args(&["new", "a", "--app-name=My App"])).map(|i| matches!(i, Invocation::New(NewOptions { app_name: Some(ref n), .. }) if n == "My App")), Ok(true));
     assert_eq!(parse(&args(&["new", "--force"])).unwrap_err().message, "A target directory is required.");
     assert_eq!(parse(&args(&["help", "nope"])).unwrap_err().message, "Unknown command: nope");
 }
