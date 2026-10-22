@@ -479,11 +479,57 @@ fn commands_open_with_the_header_on_a_terminal() {
     let colored = preamble("doctor", &Styles::new(true), true);
     assert!(colored.starts_with("\n\x1b[94mR\x1b[39m\x1b[93mM\x1b[39m\x1b[91mX\x1b[39m v"), "{colored:?}");
 
-    let report = doctor::Report { project_root: None, suites: Vec::new(), fixed: false };
-    let plain = report.render_styled(&Styles::new(false));
-    assert!(plain.starts_with('\n'));
-    assert_eq!(doctor_text(&report, &Styles::new(false), false), plain, "no second blank line");
-    assert_eq!(doctor_text(&report, &Styles::new(false), true), format!("\nRMX v{} - doctor\n\n{}", version(), &plain[1..]));
+}
+
+/// A status channel writing to a buffer, and the buffer.
+fn status_buffer(styles: Styles, live: bool) -> (status::Status, Arc<Mutex<Vec<u8>>>) {
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    (status::Status::new(buffer.clone(), styles, live), buffer)
+}
+
+fn text_of(buffer: &Arc<Mutex<Vec<u8>>>) -> String {
+    String::from_utf8(buffer.lock().unwrap().clone()).unwrap()
+}
+
+#[test]
+fn doctor_reports_each_suite_as_it_runs() {
+    let scratch = Scratch::new("doctor-progress");
+    let app = scaffold(&scratch);
+    std::fs::write(app.join("src/routes.rs"), "// nothing yet\n").unwrap();
+    for styles in [Styles::new(false), Styles::new(true)] {
+        let (mut status, buffer) = status_buffer(styles, false);
+        let mut running = None;
+        let report = doctor::run_doctor_reporting(&app, &ready(), false, &mut |event| report_doctor(&mut status, &mut running, event, &styles)).unwrap();
+        status.text(&report.summary());
+        drop(status);
+        // Streamed, the report reads like the one rendered at the end, without its preamble.
+        assert_eq!(format!("\n{}", text_of(&buffer)), report.render_styled(&styles));
+        let plain = report.render();
+        assert!(plain.contains("\u{2717} project\n") && plain.contains("\u{2022} client (skipped: Blocked by project warnings.)\n"), "{plain}");
+    }
+}
+
+#[test]
+fn status_redraws_a_running_step_on_a_terminal() {
+    // reporter.test.ts: live frames on an ANSI terminal, stable lines elsewhere.
+    let (status, buffer) = status_buffer(Styles::new(true), true);
+    let mut status = status.with_interval(std::time::Duration::from_millis(5));
+    status.line("\u{2022} Checking environment...");
+    std::thread::sleep(std::time::Duration::from_millis(40));
+    status.line("\u{2713} Checking environment");
+    drop(status);
+    let out = text_of(&buffer);
+    let frame = |dots: &str| format!("\r\x1b[2K\x1b[90m\u{2022} Checking environment{dots}\x1b[39m");
+    assert!(out.starts_with(&frame(".")), "{out:?}");
+    assert!(out.contains(&frame("..")) || out.contains(&frame("...")), "{out:?}");
+    assert!(out.ends_with("\r\x1b[2K\x1b[92m\u{2713}\x1b[39m \x1b[90mChecking environment\x1b[39m\n"), "{out:?}");
+
+    let (mut status, buffer) = status_buffer(Styles::new(false), false);
+    status.line("\u{2022} Checking project...");
+    status.line("\u{2717} Checking project");
+    status.line("\u{2022} client (skipped: Blocked by project warnings.)");
+    drop(status);
+    assert_eq!(text_of(&buffer), "\u{2022} Checking project...\n\u{2717} Checking project\n\u{2022} client (skipped: Blocked by project warnings.)\n");
 }
 
 #[test]

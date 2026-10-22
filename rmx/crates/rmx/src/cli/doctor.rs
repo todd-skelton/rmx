@@ -142,27 +142,19 @@ impl Report {
     pub fn render_styled(&self, styles: &Styles) -> String {
         let mut out = String::from("\n");
         for suite in &self.suites {
-            match &suite.status {
-                SuiteStatus::Skipped(reason) => out.push_str(&format!("{}\n", styles.gray(&format!("\u{2022} {} (skipped: {reason})", suite.name)))),
-                status => {
-                    out.push_str(&format!("{}\n", super::style_progress(&format!("\u{2022} Checking {}...", suite.name), styles)));
-                    let mark = if *status == SuiteStatus::Ok { '\u{2713}' } else { '\u{2717}' };
-                    out.push_str(&format!("{}\n", super::style_progress(&format!("{mark} {}", suite.name), styles)));
-                }
+            if !matches!(suite.status, SuiteStatus::Skipped(_)) {
+                out.push_str(&format!("{}\n", super::style_progress(&running_line(suite.name), styles)));
             }
-            for finding in &suite.findings {
-                let label = format!("[{}] {}", finding.severity.as_str().to_uppercase(), finding.message);
-                let label = if finding.severity == Severity::Warn { styles.yellow_bright(&label) } else { label };
-                out.push_str(&format!("  \u{2022} {label}\n"));
-            }
-            if !suite.applied_fixes.is_empty() {
-                out.push_str("  Applied fixes:\n");
-                for fix in &suite.applied_fixes {
-                    out.push_str(&format!("    \u{2022} {}\n", fix.describe()));
-                }
-            }
-            out.push('\n');
+            out.push_str(&format!("{}\n", super::style_progress(&suite.result_line(), styles)));
+            out.push_str(&suite.details(styles));
         }
+        out.push_str(&self.summary());
+        out
+    }
+
+    /// The closing lines: applied fixes, "no issues", and the warning and advice counts.
+    pub fn summary(&self) -> String {
+        let mut out = String::new();
         let warnings = self.warnings();
         let advice = self.findings().count() - warnings;
         let fixes = self.applied_fixes().count();
@@ -175,7 +167,43 @@ impl Report {
         out.push_str(&format!("Summary: {warnings} warnings, {advice} advice.\n"));
         out
     }
+}
 
+/// The progress line of a suite that starts (Remix's running label).
+pub fn running_line(name: &str) -> String {
+    format!("\u{2022} Checking {name}...")
+}
+
+impl Suite {
+    /// The progress line that ends the suite: `✓ name`, `✗ name` or `• name (skipped: why)`.
+    pub fn result_line(&self) -> String {
+        match &self.status {
+            SuiteStatus::Ok => format!("\u{2713} {}", self.name),
+            SuiteStatus::Issues => format!("\u{2717} {}", self.name),
+            SuiteStatus::Skipped(reason) => format!("\u{2022} {} (skipped: {reason})", self.name),
+        }
+    }
+
+    /// The findings and applied fixes under the result line, and the blank line after them.
+    pub fn details(&self, styles: &Styles) -> String {
+        let mut out = String::new();
+        for finding in &self.findings {
+            let label = format!("[{}] {}", finding.severity.as_str().to_uppercase(), finding.message);
+            let label = if finding.severity == Severity::Warn { styles.yellow_bright(&label) } else { label };
+            out.push_str(&format!("  \u{2022} {label}\n"));
+        }
+        if !self.applied_fixes.is_empty() {
+            out.push_str("  Applied fixes:\n");
+            for fix in &self.applied_fixes {
+                out.push_str(&format!("    \u{2022} {}\n", fix.describe()));
+            }
+        }
+        out.push('\n');
+        out
+    }
+}
+
+impl Report {
     /// The report as JSON (`--json`).
     pub fn to_json(&self) -> String {
         let applied = |f: &AppliedFix| format!(r#"{{"code":{},"kind":"{}","path":{},"suite":"{}"}}"#, json_string(f.code), f.kind.as_str(), json_string(&f.path), f.suite);
@@ -256,15 +284,38 @@ pub fn run_doctor(cwd: &Path, toolchain: &dyn Toolchain) -> Report {
 /// [`run_doctor`], applying each suite's fixes first when `fix` is set. Fails when a fix
 /// cannot be applied (a path outside the project root, or an I/O error).
 pub fn run_doctor_with(cwd: &Path, toolchain: &dyn Toolchain, fix: bool) -> Result<Report, String> {
+    run_doctor_reporting(cwd, toolchain, fix, &mut |_| {})
+}
+
+/// What [`run_doctor_reporting`] tells its caller as it goes.
+#[derive(Debug)]
+pub enum Progress<'a> {
+    /// A suite starts checking.
+    Start(&'static str),
+    /// A suite is done (or skipped).
+    Done(&'a Suite),
+}
+
+/// [`run_doctor_with`], reporting each suite as it starts and ends (Remix's doctor progress).
+pub fn run_doctor_reporting(cwd: &Path, toolchain: &dyn Toolchain, fix: bool, progress: &mut dyn FnMut(Progress)) -> Result<Report, String> {
+    fn done(suite: Suite, suites: &mut Vec<Suite>, progress: &mut dyn FnMut(Progress)) {
+        progress(Progress::Done(&suite));
+        suites.push(suite);
+    }
+    let mut suites = Vec::new();
     let project_root = cwd.ancestors().find(|dir| dir.join("Cargo.toml").is_file() && read(&dir.join("Cargo.toml")).contains("[package]"));
     let manifest = |root: &Path| read(&root.join("Cargo.toml"));
     let env_check = || suite("environment", environment(project_root, &project_root.map(manifest).unwrap_or_default(), toolchain));
-    let mut suites = vec![match project_root {
+    progress(Progress::Start("environment"));
+    let environment = match project_root {
         Some(root) if fix => fixed(root, env_check, environment_fixes)?,
         _ => env_check(),
-    }];
+    };
+    done(environment, &mut suites, progress);
     let Some(root) = project_root else {
-        suites.extend(["project", "client"].map(|name| skipped(name, "environment")));
+        for name in ["project", "client"] {
+            done(skipped(name, "environment"), &mut suites, progress);
+        }
         return Ok(Report { project_root: None, suites, fixed: fix });
     };
     type Check = fn(&Path, &str) -> Vec<Finding>;
@@ -272,11 +323,13 @@ pub fn run_doctor_with(cwd: &Path, toolchain: &dyn Toolchain, fix: bool) -> Resu
     for (name, check, fixes) in [("project", project as Check, project_fixes as Fixes), ("client", client, client_fixes)] {
         if let Some(blocker) = suites.iter().find(|s| s.status == SuiteStatus::Issues) {
             let blocker = blocker.name;
-            suites.push(skipped(name, blocker));
+            done(skipped(name, blocker), &mut suites, progress);
             continue;
         }
+        progress(Progress::Start(name));
         let run = || suite(name, check(root, &manifest(root)));
-        suites.push(if fix { fixed(root, run, fixes)? } else { run() });
+        let checked = if fix { fixed(root, run, fixes)? } else { run() };
+        done(checked, &mut suites, progress);
     }
     Ok(Report { project_root: Some(root.to_path_buf()), suites, fixed: fix })
 }

@@ -591,7 +591,9 @@ Remaining gaps:
    and no `--config` or `remix.json`), the global `--no-color`, Remix's terminal
    preamble (a blank line, then on a terminal `RMX v0.1.0 - doctor` with one color per
    letter) and closing ANSI reset on stdout or else stderr when either is a terminal that is
-   not `TERM=dumb`, help colored like Remix's `formatHelpText` on a color terminal (headings
+   not `TERM=dumb`, Remix's status channel (on such a terminal a running step redraws
+   `• Label.`, `..`, `...` every 250 ms and its result replaces it; elsewhere stable lines),
+   with `doctor` reporting each suite as it runs, help colored like Remix's `formatHelpText` on a color terminal (headings
    bold light blue; flags, `[names]` and `<values>` in usage, examples and option labels light
    yellow; help under an error follows stderr), `new` (writes `examples/template` as a
    standalone crate with the app's name, Remix's error codes and progress lines; an app made

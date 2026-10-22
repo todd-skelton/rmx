@@ -10,12 +10,14 @@
 use std::fmt;
 use std::io::IsTerminal;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use rmx_terminal::Styles;
 
 pub mod completion;
 pub mod dev;
 pub mod doctor;
+mod status;
 
 /// What a command line asks for.
 #[derive(Debug, PartialEq, Eq)]
@@ -432,7 +434,6 @@ fn parse_new(args: &[&str]) -> Result<NewOptions, CliError> {
 /// cargo.
 pub fn run(args: &[String], cwd: &Path) -> i32 {
     let code = run_command(args, cwd);
-    let ansi = |is_tty: bool| can_use_ansi(std::env::var("TERM").ok().as_deref(), is_tty);
     match restore_target(ansi(std::io::stdout().is_terminal()), ansi(std::io::stderr().is_terminal())) {
         Some(Stream::Stdout) => print!("{}", rmx_terminal::ansi::RESET),
         Some(Stream::Stderr) => eprint!("{}", rmx_terminal::ansi::RESET),
@@ -476,6 +477,11 @@ fn preamble(command: &str, styles: &Styles, is_tty: bool) -> String {
     format!("\n{wordmark} v{} - {command}\n\n", version())
 }
 
+/// Whether a stream that `is_tty` takes ANSI under this process's `TERM`.
+fn ansi(is_tty: bool) -> bool {
+    can_use_ansi(std::env::var("TERM").ok().as_deref(), is_tty)
+}
+
 fn run_command(args: &[String], cwd: &Path) -> i32 {
     let (args, global) = global_options(args);
     let args = &args[..];
@@ -503,8 +509,10 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
             let is_tty = std::io::stderr().is_terminal();
             let styles = Styles::new(colors(is_tty));
             eprint!("{}", preamble("new", &styles, is_tty));
-            let mut progress = |line: &str| eprintln!("{}", style_progress(line, &styles));
-            match new_project(&options, cwd, &mut progress) {
+            let mut status = status::Status::new(Arc::new(Mutex::new(std::io::stderr())), styles, ansi(is_tty));
+            let result = new_project(&options, cwd, &mut |line| status.line(line));
+            drop(status);
+            match result {
                 Ok(app) => {
                     eprintln!();
                     println!("Created {} at {}", app.display_name, display_path(&app.target_dir, cwd));
@@ -525,17 +533,34 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
             }
         },
         Ok(Invocation::Doctor { json, strict, fix }) => {
-            let report = match doctor::run_doctor_with(cwd, &doctor::SystemToolchain, fix) {
-                Ok(report) => report,
-                Err(message) => {
-                    eprint!("{}", CliError::internal(message).render(&error_help(DOCTOR_HELP)));
-                    return 1;
-                }
-            };
             let is_tty = std::io::stdout().is_terminal();
             let styles = Styles::new(colors(is_tty));
-            print!("{}", if json { report.to_json() } else { doctor_text(&report, &styles, is_tty) });
-            doctor_exit_code(strict, fix, report.warnings())
+            let result = if json {
+                doctor::run_doctor_with(cwd, &doctor::SystemToolchain, fix)
+            } else {
+                print!("{}", preamble("doctor", &styles, is_tty));
+                let mut status = status::Status::new(Arc::new(Mutex::new(std::io::stdout())), styles, ansi(is_tty));
+                let mut running = None;
+                let result = doctor::run_doctor_reporting(cwd, &doctor::SystemToolchain, fix, &mut |event| report_doctor(&mut status, &mut running, event, &styles));
+                match &result {
+                    Ok(report) => status.text(&report.summary()),
+                    // The suite whose fix failed ends like a failed step.
+                    Err(_) => running.into_iter().for_each(|name| status.line(&format!("\u{2717} {name}"))),
+                }
+                result
+            };
+            match result {
+                Ok(report) => {
+                    if json {
+                        print!("{}", report.to_json());
+                    }
+                    doctor_exit_code(strict, fix, report.warnings())
+                }
+                Err(message) => {
+                    eprint!("{}", CliError::internal(message).render(&error_help(DOCTOR_HELP)));
+                    1
+                }
+            }
         }
         Err(e) => {
             eprint!("{}", e.render(&error_help(help(args))));
@@ -622,10 +647,20 @@ fn syntax_token(b: &[u8], i: usize) -> Option<usize> {
     }
 }
 
-/// The doctor report under the command header.
-fn doctor_text(report: &doctor::Report, styles: &Styles, is_tty: bool) -> String {
-    let body = report.render_styled(styles);
-    format!("{}{}", preamble("doctor", styles, is_tty), body.strip_prefix('\n').unwrap_or(&body))
+/// Doctor progress on `status` as the suites run: the running line, then the result line and
+/// the suite's findings. `running` is the suite being checked.
+fn report_doctor(status: &mut status::Status, running: &mut Option<&'static str>, event: doctor::Progress, styles: &Styles) {
+    match event {
+        doctor::Progress::Start(name) => {
+            *running = Some(name);
+            status.line(&doctor::running_line(name));
+        }
+        doctor::Progress::Done(suite) => {
+            *running = None;
+            status.line(&suite.result_line());
+            status.text(&suite.details(styles));
+        }
+    }
 }
 
 /// Remix `run.ts`: warnings fail the command under `--strict` and under `--fix` (what
