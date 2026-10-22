@@ -82,7 +82,7 @@ async fn start() {
                const intercepted = options !== undefined;
                log.events.push({ intercepted, url: event.destination.url, type: event.navigationType,
                  scroll: options && options.scroll, focusReset: options && options.focusReset });
-               if (!intercepted && event.cancelable) event.preventDefault();
+               if (!intercepted && event.cancelable && !log.allow) event.preventDefault();
              });
              return log;",
         );
@@ -1212,6 +1212,94 @@ async fn keeps_scroll_anchoring_off_until_after_a_traversal_paints() {
     assert_eq!(finished, (count + 1, starting_min_height, "none".to_string(), "none".to_string()));
     assert_eq!(first_frame, count + 1);
     assert_eq!(second_frame, count);
+}
+
+/// Hide the Navigation API (`what` = "navigation") or `NavigateEvent.sourceElement`
+/// (`what` = "sourceElement") until the returned function runs.
+fn hide(what: &str) -> js_sys::Function {
+    let script = match what {
+        // Window is a global interface: `navigation` is an own property of `window`.
+        "navigation" => "const d = Object.getOwnPropertyDescriptor(window, 'navigation');
+             Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+             return () => Object.defineProperty(window, 'navigation', d)",
+        _ => "const proto = NavigateEvent.prototype;
+             const d = Object.getOwnPropertyDescriptor(proto, 'sourceElement');
+             delete proto.sourceElement;
+             return () => Object.defineProperty(proto, 'sourceElement', d)",
+    };
+    js(script).unchecked_into()
+}
+
+async fn hash_changed() {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        let once = web_sys::AddEventListenerOptions::new();
+        once.set_once(true);
+        window().add_event_listener_with_callback_and_add_event_listener_options("hashchange", &resolve, &once).unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+async fn popstate_back() {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        let once = web_sys::AddEventListenerOptions::new();
+        once.set_once(true);
+        window().add_event_listener_with_callback_and_add_event_listener_options("popstate", &resolve, &once).unwrap();
+    });
+    window().history().unwrap().back().unwrap();
+    let _ = JsFuture::from(promise).await;
+}
+
+/// `navigate()` without interception support: a document navigation (here to a fragment,
+/// so the test page stays), pushing an entry or replacing the current one.
+async fn falls_back_to_document_navigation(hidden: &str, replace: bool) {
+    let _page = Page::new().await;
+    let original = current_url();
+    let destination = format!("{}#fallback-{hidden}-{replace}", original.split('#').next().unwrap());
+    let index = || get(&get(&navigation(), "currentEntry"), "index").as_f64().unwrap();
+    let start_index = index();
+    let restore = hide(hidden);
+    let guard = GUARD.with(|g| g.borrow().clone().unwrap());
+    js_sys::Reflect::set(&guard, &"allow".into(), &JsValue::TRUE).unwrap();
+    let history = replace.then_some(rmx::History::Replace);
+    navigate(&destination, NavigateOptions { history, ..Default::default() });
+    hash_changed().await;
+    let (url, seen) = (current_url(), decisions());
+    restore.call0(&JsValue::NULL).unwrap();
+    let new_index = index();
+    // A fragment navigation carries the previous entry's state, if any; the runtime would
+    // have stored the destination as the entry's `src`.
+    let state = current_state();
+    // Leave the fragment again (the guard would cancel the traversal).
+    if replace {
+        window().history().unwrap().replace_state_with_url(&JsValue::NULL, "", Some(&original)).unwrap();
+    } else {
+        popstate_back().await;
+    }
+    js_sys::Reflect::set(&guard, &"allow".into(), &JsValue::FALSE).unwrap();
+    assert!(navigation().is_object(), "the Navigation API is back");
+    assert_eq!(new_index, if replace { start_index } else { start_index + 1.0 }, "replace keeps the entry, push adds one");
+    assert_eq!(current_url(), original);
+    assert_eq!(url, destination);
+    assert_eq!(seen, [false], "the runtime did not intercept it");
+    assert_ne!(get(&state, "src").as_string().as_deref(), Some(destination.as_str()), "no runtime state for the destination: {state:?}");
+}
+
+// navigation.test.ts: falls back to document navigation when the Navigation API is unavailable
+#[wasm_bindgen_test]
+async fn falls_back_to_document_navigation_when_the_navigation_api_is_unavailable() {
+    falls_back_to_document_navigation("navigation", false).await;
+}
+
+// navigation.test.ts: falls back to document navigation when sourceElement is unavailable
+#[wasm_bindgen_test]
+async fn falls_back_to_document_navigation_when_source_element_is_unavailable() {
+    falls_back_to_document_navigation("sourceElement", false).await;
+}
+
+// navigation.test.ts: replaces document history when the Navigation API is unavailable
+#[wasm_bindgen_test]
+async fn replaces_document_history_when_the_navigation_api_is_unavailable() {
+    falls_back_to_document_navigation("navigation", true).await;
 }
 
 #[wasm_bindgen_test]

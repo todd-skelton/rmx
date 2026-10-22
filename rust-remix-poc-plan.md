@@ -311,7 +311,9 @@ Covered since phase 0b:
    (or of a bottom the new page has had) are undone after the reset until 500 ms after the
    navigation finishes, the user interacts, or another navigation starts (9 cases in
    `browser_navigation.rs`), and a traversal keeps scroll anchoring off until the second
-   frame after it finishes, dropping only its `min-height` when it finishes. About 60 of the 77
+   frame after it finishes, dropping only its `min-height` when it finishes. Without the
+   Navigation API or `NavigateEvent.sourceElement`, `navigate()` falls back to a document
+   navigation that pushes or replaces like Remix's (3 cases, run with the API hidden). About 60 of the 77
    `navigation.test.ts` cases are covered by the 57 tests in `browser_navigation.rs`
    (some tests combine cases); the rest stub a missing Navigation API or `sourceElement`,
    check internal call arguments, or redirect the top frame, which would replace the test
