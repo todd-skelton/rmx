@@ -467,7 +467,12 @@ Covered since phase 0b:
    POST that redirects to GET drops its content type. `rmx_spa::render(transform)` is Remix's
    `render(transform)` middleware, and a redirect without `Location` is the response.
    `vdom.insert-remove.test.tsx` is ported (`browser_insert_remove.rs`); `bool` children
-   render nothing. Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and
+   render nothing. `client-entry.test.tsx`: the entry marker and ID cases are
+   `client_entry_marks_the_component_and_stores_its_id` in `tests/ssr.rs`, and an empty ID or
+   props that do not serialize fail the build (the `compile_fail` examples on
+   `client_entry!`, checked against compiling controls); `isEntry` on non-functions has no
+   counterpart, since only `Component` types carry the constant. `nested-client-entry.test.tsx`
+   is `browser_nested_entries.rs` (6 of 6). Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and
    `create-element.test.ts` (TypeScript types and JavaScript value validation that Rust's
    types enforce), `module-preloader` and `client-entry-boundary` (module ids; rmx ships one
    wasm bundle), `remix/assert` (Rust's `assert!`) and the `assets` module transform tests

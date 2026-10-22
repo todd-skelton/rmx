@@ -84,3 +84,15 @@ fn fragments_doctype_and_optional_attributes() {
     };
     assert_eq!(render_to_string(&node), r#"<!DOCTYPE html><p data-x="7">x</p>"#);
 }
+
+// client-entry.test.tsx: marks a component as an entry and stores its entry ID; isEntry
+// is false for regular components. (Its type, serializability and empty-ID cases are the
+// `compile_fail` examples on `client_entry!`.)
+#[test]
+fn client_entry_marks_the_component_and_stores_its_id() {
+    assert_eq!(<Counter as Component>::CLIENT_ENTRY, Some("Counter"));
+    assert_eq!(<Layout as Component>::CLIENT_ENTRY, None);
+    let props = CounterProps { initial: 5, label: "Count".into() };
+    assert_eq!(<Counter as Component>::props_json(&props).as_deref(), Some(r#"{"initial":5,"label":"Count"}"#));
+    assert_eq!(<Layout as Component>::props_json(&LayoutProps::default()), None);
+}

@@ -75,10 +75,44 @@ pub mod __private {
 ///     // setup / render ...
 /// }
 /// ```
+///
+/// The entry ID must not be empty (Remix's `clientEntry()` throws; here the build fails
+/// once the entry is used), and the props must serialize to JSON:
+///
+/// ```compile_fail
+/// # extern crate rmx_component as rmx;
+/// use rmx::{rsx, Component, Handle, Node};
+/// struct Empty;
+/// impl Component for Empty {
+///     type Props = ();
+///     rmx::client_entry!("");
+///     fn setup(_: &(), _: &Handle<Self>) -> Self { Empty }
+///     fn render(&self, _: &(), _: &Handle<Self>) -> Node { rsx! { <p>"x"</p> } }
+/// }
+/// let _ = <Empty as Component>::CLIENT_ENTRY;
+/// ```
+///
+/// ```compile_fail
+/// # extern crate rmx_component as rmx;
+/// use rmx::{rsx, Component, Handle, Node};
+/// #[derive(Clone)]
+/// struct NotSerializable(std::rc::Rc<()>);
+/// struct Entry;
+/// impl Component for Entry {
+///     type Props = NotSerializable;
+///     rmx::client_entry!("Entry");
+///     fn setup(_: &NotSerializable, _: &Handle<Self>) -> Self { Entry }
+///     fn render(&self, _: &NotSerializable, _: &Handle<Self>) -> Node { rsx! { <p>"x"</p> } }
+/// }
+/// ```
 #[macro_export]
 macro_rules! client_entry {
     ($name:literal) => {
-        const CLIENT_ENTRY: ::core::option::Option<&'static str> = ::core::option::Option::Some($name);
+        const CLIENT_ENTRY: ::core::option::Option<&'static str> = ::core::option::Option::Some(if $name.is_empty() {
+            ::core::panic!("client_entry!() requires an entry ID")
+        } else {
+            $name
+        });
 
         fn props_json(props: &Self::Props) -> ::core::option::Option<::std::string::String> {
             ::core::option::Option::Some(
