@@ -352,6 +352,8 @@ Covered since phase 0b:
    containers are removed one by one, since clearing the body would remove the test
    runner's output. `browser-only-mixins.test.tsx` (2) is in `crates/ui/src/lib.rs`, with
    Remix's internal `onKeyDown` and `onOutsideClick` written as plain `on` listeners.
+   `animate-mixins.test.tsx` (5) is `browser_animate_mixins.rs`; its `animate` mock returns
+   an object on `Animation.prototype`, since rmx checks that a tracked animation is one.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,
