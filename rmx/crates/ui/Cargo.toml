@@ -38,4 +38,4 @@ web-sys = { workspace = true, features = [
 # Browser tests (`tests/browser_*.rs`): run with ../../test-browser.ps1 -Crate rmx-ui.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.79"
-web-sys = { workspace = true, features = ["FocusEvent", "FocusEventInit", "KeyboardEvent", "KeyboardEventInit"] }
+web-sys = { workspace = true, features = ["FocusEvent", "FocusEventInit", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit"] }

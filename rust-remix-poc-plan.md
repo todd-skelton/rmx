@@ -373,8 +373,10 @@ Covered since phase 0b:
    750 ms where Remix advances fake timers).
    `animate-layout-mixin.test.tsx` (8) is `browser_animate_layout.rs` with Remix's animate,
    frame and bounding-rect mocks, plus a case that tells the on-screen box of a running
-   animation from its natural box, which Remix's sequence mocks cannot. Every `ui` test file
-   is now ported or recorded.
+   animation from its natural box, which Remix's sequence mocks cannot. `toggle.test.tsx` (3)
+   is `browser_toggle.rs`. The other component suites (accordion, tabs, popover, listbox,
+   select, menu, combobox; 107 cases) are covered by the ui gallery's e2e checks rather than
+   case by case, and are being ported to `crates/ui/tests/browser_*.rs`.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,
