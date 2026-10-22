@@ -354,6 +354,10 @@ Covered since phase 0b:
    Remix's internal `onKeyDown` and `onOutsideClick` written as plain `on` listeners.
    `animate-mixins.test.tsx` (5) is `browser_animate_mixins.rs`; its `animate` mock returns
    an object on `Animation.prototype`, since rmx checks that a tracked animation is one.
+   `animate-layout-mixin.test.tsx` (8) is `browser_animate_layout.rs` with Remix's animate,
+   frame and bounding-rect mocks, plus a case that tells the on-screen box of a running
+   animation from its natural box, which Remix's sequence mocks cannot. Every `ui` test file
+   is now ported or recorded.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,
