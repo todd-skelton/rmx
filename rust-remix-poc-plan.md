@@ -684,7 +684,8 @@ Remaining gaps:
    `remix` CLI's `db` command (data access is out of scope). The `rmx` binary (`rmx::cli`, in
    the `rmx` crate) has `completion` (Remix's bash/zsh script and `completion -- <index>
    <words>` protocol, with the global `--no-color` flag offered like Remix's; checked in Git Bash;
-   `completion.test.ts` and `commands/completion.test.ts` are in `cli/tests.rs`, and `routes`
+   `completion.test.ts` and `commands/completion.test.ts` are in `cli/tests.rs`, as is `progress.test.ts`
+   (`steps_report_running_then_success_or_failure`), and `routes`
    completion now drops flags that cannot combine with those given, like Remix's
    `completeRoutes`; the `db`, `test` runner flag and `--config` cases have no counterpart), the global `--no-color` (before any `--`; commands handed to cargo get `NO_COLOR=1` and `CARGO_TERM_COLOR=never`), `dev` (Remix's `npm run dev` / `hmr` as rebuild, restart and page reload:
    it polls `src/`, `app/`, `public/` and `Cargo.toml`, builds the client and server, runs

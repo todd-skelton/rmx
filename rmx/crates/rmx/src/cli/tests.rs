@@ -729,6 +729,21 @@ fn completion_offers_commands_subcommands_flags_and_files() {
     assert_eq!(complete(&["rmx", "routes", "--help", ""]), "mode:values\n");
 }
 
+/// progress.test.ts: a step reports its running then its complete label, and a failing
+/// step reports failure and passes the error through.
+#[test]
+fn steps_report_running_then_success_or_failure() {
+    let mut lines = Vec::new();
+    let result = step(&mut |line: &str| lines.push(line.to_string()), "Checking environment", || Ok(()));
+    assert!(result.is_ok());
+    assert_eq!(lines, ["\u{2022} Checking environment...", "\u{2713} Checking environment"]);
+
+    let mut lines = Vec::new();
+    let result = step(&mut |line: &str| lines.push(line.to_string()), "actions", || Err(CliError::internal("boom".to_string())));
+    assert_eq!(result.unwrap_err().message, "boom");
+    assert_eq!(lines, ["\u{2022} actions...", "\u{2717} actions"]);
+}
+
 #[test]
 fn progress_lines_use_the_reporter_colors() {
     let on = Styles::new(true);
