@@ -163,3 +163,26 @@ fn serialize_pattern_parts_returns_each_helper_as_a_single_object() {
     };
     assert_eq!(pattern.to_json(), expected);
 }
+
+// types/stringify.test.ts: the type-level Stringify<Parse<source>> cases, checked at run time
+// as a parse and serialize round trip.
+#[test]
+fn stringify_type_cases_round_trip() {
+    for (source, expected) in [
+        ("", "/"),
+        ("http", "/http"),
+        ("hello/world", "/hello/world"),
+        ("hello/world?q=1", "/hello/world?q=1"),
+        ("hello/world?q=1&q=2", "/hello/world?q=1&q=2"),
+        ("hello/world?q=1&a=2", "/hello/world?q=1&a=2"),
+        ("http://example.com", "http://example.com/"),
+        ("http:///", "http:///"),
+        ("https:///path", "https:///path"),
+        ("https://example.com/path", "https://example.com/path"),
+        ("https://example.com/path?q=1", "https://example.com/path?q=1"),
+        ("https://example.com/path?q=1&q=2", "https://example.com/path?q=1&q=2"),
+        ("https://example.com/path?q=1&a=2", "https://example.com/path?q=1&a=2"),
+    ] {
+        assert_round_trip(source, expected);
+    }
+}

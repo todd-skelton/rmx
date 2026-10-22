@@ -89,3 +89,44 @@ fn joins_complex_combinations() {
 
     assert_join("://(staging.)example.com/api(/:version)", "://*/resources/:id(.json)", "://(staging.)example.com/api(/:version)/resources/:id(.json)");
 }
+
+// types/join.test.ts: the type-level JoinPatterns cases, checked at run time. Remix's `never`
+// (a `:proto` protocol) is a parse error here.
+#[test]
+fn join_type_cases() {
+    for (a, b, expected) in [
+        ("", "", "/"),
+        ("/", "/", "/"),
+        ("hello", "", "/hello"),
+        ("", "hello", "/hello"),
+        ("http://example.com:8080", "https://remix.run", "https://remix.run:8080/"),
+        ("http://example.com:8080", "://remix.run", "http://remix.run:8080/"),
+        ("http://example.com", "://remix.run:8080", "http://remix.run:8080/"),
+        ("https://example.com:8080/base", "http:///next", "http://example.com:8080/base/next"),
+        ("https://remix.run", "api", "https://remix.run/api"),
+        ("https://remix.run/", "api", "https://remix.run/api"),
+        ("https://remix.run:8080", "api", "https://remix.run:8080/api"),
+        ("https://remix.run:8080/", "api", "https://remix.run:8080/api"),
+        ("/", "hello", "/hello"),
+        ("/", "/hello", "/hello"),
+        ("hello", "/", "/hello"),
+        ("/hello", "/", "/hello"),
+        ("hello", "/world", "/hello/world"),
+        ("/hello", "/world", "/hello/world"),
+        ("hello/", "/world", "/hello/world"),
+        ("/hello/", "/world", "/hello/world"),
+        ("hello", "world", "/hello/world"),
+        ("/hello", "world", "/hello/world"),
+        ("hello/", "world", "/hello/world"),
+        ("/hello/", "world", "/hello/world"),
+        ("", "(/:lang)/world", "(/:lang)/world"),
+        ("/", "(/:lang)/world", "(/:lang)/world"),
+        ("hello", "(/:lang)/world", "/hello(/:lang)/world"),
+        ("hello/", "(/:lang)/world", "/hello(/:lang)/world"),
+        ("https://remix.run", "?q=1", "https://remix.run/?q=1"),
+        ("https://remix.run?q=1", "?q=2", "https://remix.run/?q=1&q=2"),
+    ] {
+        assert_join(a, b, expected);
+    }
+    assert!(RoutePattern::parse(":proto://example.com/path").is_err());
+}

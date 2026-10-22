@@ -502,7 +502,11 @@ Covered since phase 0b:
    and `.ts` is `video/mp2t`, as in Remix.
    `remix/route-pattern` is ported with its tests (split, parse, serialize, route-pattern,
    join, specificity, href, match and match/limits; 355 cases in
-   `crates/route-pattern/src/tests` and `crates/route-pattern/tests`). The parser reports
+   `crates/route-pattern/src/tests` and `crates/route-pattern/tests`). The type-level
+   `types/stringify.test.ts` (13) and `types/join.test.ts` (31) run as parse, serialize and
+   join checks; `types/split`, `types/parse` and `types/params` test TypeScript inference of
+   the grammar the runtime split and parse tests already cover, and rmx params are runtime
+   values, so they do not apply. The parser reports
    Remix's ten `ParseError` types with UTF-16 indexes and normalizes sources the same way;
    static text is decoded and canonicalized; matching runs compiled part programs behind
    static prefix, suffix and anchor indexes with the `maxPatternSize`, `maxMatcherSize` and
