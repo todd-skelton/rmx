@@ -304,7 +304,12 @@ Covered since phase 0b:
    matches Remix's `spring.ts` byte for byte), combobox, listbox, menu (submenus, hover aim,
    context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,
    the two `demos/ui` cases (draggable and the Web Audio drummer) and the four component
-   runtime demos, each with browser checks.
+   runtime demos, each with browser checks. The browser-free logic is unit tested one test
+   per Remix case: `spring.test.ts` (25), `anchor.test.ts` (15 of 16, against the same mocked
+   layout; frame cancellation needs a browser) and `hover-aim.test.ts` (12, with the session
+   logic in a clock-driven `Core` the DOM tracker drives). Anchor offsets take `Offset::sized`
+   functions of the floating element's size, as Remix's take functions, and hover aim takes
+   Remix's optional `onExpire`.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,

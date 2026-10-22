@@ -1388,7 +1388,7 @@ impl HostMixin for SubmenuTrigger {
                     let source = this.node.borrow().as_ref().and_then(|n| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(n.element().clone()).ok());
                     let target = this.child.surface.borrow().clone();
                     if let (Some(source), Some(target)) = (source, target) {
-                        if parent.hover_aim.start(&source, &target, event.raw()) {
+                        if parent.hover_aim.start(&source, &target, Some(event.raw()), None) {
                             return;
                         }
                     }

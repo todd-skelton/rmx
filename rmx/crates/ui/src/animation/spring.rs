@@ -173,6 +173,13 @@ pub fn spring(options: impl Into<SpringOptions>) -> Spring {
     Spring { curve, settling_time, duration: js_round(settling_time), easing, t: 0.0, done: false }
 }
 
+/// [`SpringPreset::Snappy`], what Remix's `spring()` gives without arguments.
+impl Default for Spring {
+    fn default() -> Spring {
+        spring(SpringPreset::Snappy)
+    }
+}
+
 /// CSS transition entries for each property (`spring.transition`):
 /// `spring_transition(&["opacity", "transform"], SpringPreset::Snappy)`.
 pub fn spring_transition(properties: &[&str], options: impl Into<SpringOptions>) -> String {
@@ -298,59 +305,169 @@ fn adaptive_sample(curve: &Curve, duration: f64) -> Vec<(f64, f64)> {
 mod tests {
     use super::*;
 
-    // Ported from Remix's spring.test.ts, plus exact output checks against spring.ts.
+    // Ported from Remix's spring.test.ts one per case, plus exact output checks against
+    // spring.ts. ~spring()~ with no arguments is ~Spring::default()~.
+
+    fn custom() -> SpringOptions {
+        SpringOptions::default()
+    }
+
+    // interface
 
     #[test]
-    fn interface_duration_easing_and_display() {
-        let s = spring(SpringPreset::Snappy);
-        assert!(s.duration() > 0.0 && s.duration() < 20000.0);
-        assert!(s.easing().starts_with("linear(") && s.easing().ends_with(')'));
-        let css = format!("transform {s}");
-        assert!(css.starts_with(&format!("transform {}ms linear(", s.duration())), "{css}");
+    fn returns_an_iterator() {
+        fn iterator<I: Iterator<Item = f64>>(i: I) -> I {
+            i
+        }
+        assert!(iterator(Spring::default()).next().is_some());
     }
 
     #[test]
-    fn presets() {
-        for preset in [SpringPreset::Bouncy, SpringPreset::Snappy, SpringPreset::Smooth] {
-            assert!(spring(preset).duration() > 0.0);
-        }
+    fn has_duration_property() {
+        let s = Spring::default();
+        assert!(s.duration() > 0.0 && s.duration() < 20000.0);
+    }
+
+    #[test]
+    fn has_easing_property() {
+        let s = Spring::default();
+        assert!(s.easing().starts_with("linear(") && s.easing().ends_with(')'), "{}", s.easing());
+    }
+
+    #[test]
+    fn has_to_string_that_returns_css_value() {
+        let css = Spring::default().to_string();
+        let (ms, rest) = css.split_once("ms ").unwrap();
+        assert!(ms.bytes().all(|b| b.is_ascii_digit()) && rest.starts_with("linear(") && rest.ends_with(')'), "{css}");
+    }
+
+    #[test]
+    fn can_be_spread_for_waapi() {
+        // WAAPI timing takes the duration (a number) and easing (a string).
+        let s = Spring::default();
+        let (duration, easing): (f64, &str) = (s.duration(), s.easing());
+        assert!(duration > 0.0 && easing.starts_with("linear("));
+    }
+
+    #[test]
+    fn works_in_template_literals() {
+        let s = Spring::default();
+        assert!(format!("transform {s}").starts_with(&format!("transform {}ms linear(", s.duration())));
+    }
+
+    // presets
+
+    #[test]
+    fn accepts_bouncy_preset() {
+        assert!(spring(SpringPreset::Bouncy).duration() > 0.0);
+    }
+
+    #[test]
+    fn accepts_snappy_preset() {
+        assert!(spring(SpringPreset::Snappy).duration() > 0.0);
+    }
+
+    #[test]
+    fn accepts_smooth_preset() {
+        assert!(spring(SpringPreset::Smooth).duration() > 0.0);
+    }
+
+    #[test]
+    fn defaults_to_snappy_when_no_args() {
+        assert_eq!(Spring::default().duration(), spring(SpringPreset::Snappy).duration());
+        assert_eq!(Spring::default().easing(), spring(SpringPreset::Snappy).easing());
+    }
+
+    #[test]
+    fn allows_duration_override_on_presets() {
         assert!(spring(SpringPreset::Bouncy.duration(1000.0)).duration() > spring(SpringPreset::Bouncy).duration());
+    }
+
+    #[test]
+    fn exposes_preset_defaults_via_spring_presets() {
+        assert_eq!(SpringPreset::Smooth.defaults(), SpringOptions { duration: 400.0, bounce: -0.3, velocity: 0.0 });
+        assert_eq!(SpringPreset::Snappy.defaults(), SpringOptions { duration: 200.0, bounce: 0.0, velocity: 0.0 });
         assert_eq!(SpringPreset::Bouncy.defaults(), SpringOptions { duration: 400.0, bounce: 0.3, velocity: 0.0 });
     }
 
+    // custom options
+
     #[test]
-    fn custom_options() {
-        let short = spring(SpringOptions::default().duration(100.0));
-        let long = spring(SpringOptions::default().duration(500.0));
-        assert!(long.duration() > short.duration());
-        assert!(spring(SpringOptions::default().bounce(0.5)).duration() > 0.0);
-        assert!(spring(SpringOptions::default().velocity(5.0)).duration() > 0.0);
+    fn accepts_custom_duration() {
+        assert!(spring(custom().duration(500.0)).duration() > spring(custom().duration(100.0)).duration());
     }
 
     #[test]
-    fn physics_invariants() {
-        let mut s = spring(SpringPreset::Snappy);
-        assert!(s.next().unwrap().abs() < 0.05);
-        assert_eq!(spring(SpringPreset::Snappy).last(), Some(1.0));
-        assert!(spring(SpringOptions::default().bounce(0.5)).fold(0.0, f64::max) > 1.0);
-        assert!(spring(SpringOptions::default().bounce(0.0)).all(|v| v <= 1.001));
-        assert!(spring(SpringOptions::default().bounce(-0.5)).all(|v| v <= 1.001));
-        let low = spring(SpringOptions::default().bounce(0.1));
-        let high = spring(SpringOptions::default().bounce(0.7));
+    fn accepts_custom_bounce() {
+        assert!(spring(custom().bounce(0.5)).duration() > 0.0);
+    }
+
+    #[test]
+    fn accepts_custom_velocity() {
+        assert!(spring(custom().velocity(5.0)).duration() > 0.0);
+    }
+
+    // physics invariants
+
+    #[test]
+    fn starts_near_0() {
+        assert!(Spring::default().next().unwrap().abs() < 0.05);
+    }
+
+    #[test]
+    fn ends_at_1_when_iteration_completes() {
+        assert_eq!(Spring::default().last(), Some(1.0));
+    }
+
+    #[test]
+    fn underdamped_bounce_overshoots_target() {
+        assert!(spring(custom().bounce(0.5)).fold(0.0, f64::max) > 1.0);
+    }
+
+    #[test]
+    fn critically_damped_never_overshoots() {
+        assert!(spring(custom().bounce(0.0)).all(|v| v <= 1.001));
+    }
+
+    #[test]
+    fn overdamped_never_overshoots() {
+        assert!(spring(custom().bounce(-0.5)).all(|v| v <= 1.001));
+    }
+
+    #[test]
+    fn higher_bounce_means_longer_settling_time() {
+        let low = spring(custom().duration(300.0).bounce(0.1));
+        let high = spring(custom().duration(300.0).bounce(0.7));
         assert!(high.duration() > low.duration());
-        let mut still = spring(SpringOptions::default());
-        let mut moving = spring(SpringOptions::default().velocity(10.0));
+    }
+
+    #[test]
+    fn positive_velocity_causes_faster_initial_movement() {
+        let mut still = spring(custom().duration(300.0).bounce(0.0));
+        let mut moving = spring(custom().duration(300.0).bounce(0.0).velocity(10.0));
         still.next();
         moving.next();
         assert!(moving.next().unwrap() > still.next().unwrap());
     }
 
+    // spring.transition helper
+
     #[test]
-    fn transition_helper() {
+    fn formats_single_property() {
         let one = spring_transition(&["transform"], SpringPreset::Bouncy);
         assert!(one.starts_with("transform 550ms linear("), "{one}");
+    }
+
+    #[test]
+    fn formats_multiple_properties() {
         let two = spring_transition(&["transform", "opacity"], SpringPreset::Snappy);
         assert!(two.starts_with("transform 350ms linear(") && two.contains("), opacity 350ms linear("), "{two}");
+    }
+
+    #[test]
+    fn accepts_custom_options() {
+        let width = spring_transition(&["width"], custom().duration(500.0).bounce(0.2));
+        assert!(width.starts_with("width ") && width.contains("ms linear("), "{width}");
     }
 
     #[test]

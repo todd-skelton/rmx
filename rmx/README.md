@@ -262,8 +262,10 @@ crates:
 4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
    entrance, exit, FLIP layout), combobox, listbox, menu (submenus with hover aim, context
    menus), popover, select, tabs and toggle. The spring CSS output matches Remix's
-   `spring.ts` byte for byte (unit tested), and each module has the matching demo in
-   `examples/ui` with browser checks.
+   `spring.ts` byte for byte, Remix's spring, anchor and hover-aim tests are ported one per
+   case, anchor offsets can be functions of the floating element's size
+   (`Offset::sized`), and each module has the matching demo in `examples/ui` with browser
+   checks.
 
 ## Examples
 
