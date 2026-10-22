@@ -432,7 +432,11 @@ Covered since phase 0b:
    render nothing. Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and
    `create-element.test.ts` (TypeScript types and JavaScript value validation that Rust's
    types enforce), `module-preloader` and `client-entry-boundary` (module ids; rmx ships one
-   wasm bundle), `remix/assert` (Rust's `assert!`) and the `assets` module transform tests.
+   wasm bundle), `remix/assert` (Rust's `assert!`) and the `assets` module transform tests
+   (`target`, `module-store`, `loaders`, `scripts/cjs-check` and `scripts/transform`: browser
+   targets, the module graph and HMR, Node load hooks and CommonJS detection, none of which
+   rmx assets has, since it does not transform JavaScript). `mime/scripts/codegen.test.ts`
+   checks npm codegen output; rmx's table is generated once by `crates/mime/scripts/codegen.mjs`.
    `file.test.ts` is ported case by case (`crates/fetch/tests/response_file.rs`, 85 cases)
    against `response::file`, Remix's `createFileResponse` for any `FileLike` (an in-memory
    `File`, or a `LazyFile`, which streams only the requested range): ranges only for `GET`,
