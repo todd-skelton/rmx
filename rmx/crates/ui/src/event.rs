@@ -77,7 +77,7 @@ pub(crate) async fn sleep(ms: i32) {
 /// Resolve when a CSS transition on `node` ends, or after two frames if none started
 /// (Remix's `waitForCssTransition`). Resolves at once when `signal` aborts.
 #[cfg(target_arch = "wasm32")]
-pub(crate) async fn wait_for_css_transition(node: web_sys::HtmlElement, signal: web_sys::AbortSignal) {
+pub async fn wait_for_css_transition(node: web_sys::HtmlElement, signal: web_sys::AbortSignal) {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
     use wasm_bindgen::closure::Closure;

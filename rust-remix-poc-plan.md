@@ -347,6 +347,11 @@ Covered since phase 0b:
    Remix's optional `onExpire`. `scroll-lock.test.tsx` (3, plus a no-scrollbar case) runs in
    Chromium as `crates/ui/tests/browser_scroll_lock.rs` with Remix's window mocks; calling
    one unlock twice has no counterpart, since a `ScrollLock` is released once, on drop.
+   `wait-for-css-transition.test.ts` (4, plus descendant events) runs the same way in
+   `browser_wait_for_css_transition.rs` with Remix's mocked `requestAnimationFrame`; its
+   containers are removed one by one, since clearing the body would remove the test
+   runner's output. `browser-only-mixins.test.tsx` (2) is in `crates/ui/src/lib.rs`, with
+   Remix's internal `onKeyDown` and `onOutsideClick` written as plain `on` listeners.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,

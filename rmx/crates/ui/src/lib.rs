@@ -17,3 +17,47 @@ pub mod select;
 pub mod tabs;
 pub mod toggle;
 pub mod typeahead;
+
+/// Remix's internal `waitForCssTransition`, public only for the browser tests.
+#[cfg(target_arch = "wasm32")]
+#[doc(hidden)]
+pub use event::wait_for_css_transition;
+
+// browser-only-mixins.test.tsx: browser-only mixins render nothing on the server, and host
+// props and attribute mixins next to them survive. Remix's internal onKeyDown and
+// onOutsideClick helpers are plain `on` listeners here.
+#[cfg(test)]
+mod browser_only_mixins_tests {
+    use rmx::{attrs, on, render_to_string, rsx, AttrValue, EventHandler};
+
+    use crate::animation::{animate_entrance, animate_exit, animate_layout};
+    use crate::popover;
+    use crate::typeahead::hidden_typeahead;
+
+    #[test]
+    fn preserves_host_props_alongside_animation_and_event_helpers() {
+        let html = render_to_string(&rsx! {
+            <div id="host" mix={[
+                animate_entrance(true),
+                animate_exit(true),
+                animate_layout(true),
+                on("keydown", EventHandler::new(|_| {})),
+                on("pointerdown", EventHandler::new(|_| {})),
+                hidden_typeahead(|_| {}),
+                attrs(vec![("title", AttrValue::Str("server".into()))]),
+            ]}>"Child content"</div>
+        });
+        assert_eq!(html, r#"<div id="host" title="server">Child content</div>"#);
+    }
+
+    #[test]
+    fn keeps_popover_attributes_alongside_browser_only_focus_and_anchor_helpers() {
+        let html = render_to_string(&rsx! {
+            <popover::Context>
+                <button mix={[popover::anchor(crate::anchor::AnchorOptions::default()), popover::focus_on_hide()]}>"Open"</button>
+                <div mix={[popover::surface(popover::SurfaceOptions::new(false, |_| {})), popover::focus_on_show()]}>"Content"</div>
+            </popover::Context>
+        });
+        assert_eq!(html, r#"<button>Open</button><div popover="manual">Content</div>"#);
+    }
+}
