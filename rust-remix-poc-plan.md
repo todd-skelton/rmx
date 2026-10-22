@@ -588,7 +588,10 @@ Remaining gaps:
    adds `cdylib` to the crate types, making each file once, skipping files that exist and
    refusing paths that leave the app root, even through symlinks, then checks again and
    fails on what is left; no actions suite since controllers are checked at compile time,
-   and no `--config` or `remix.json`), the global `--no-color`, `new` (writes `examples/template` as a
+   and no `--config` or `remix.json`), the global `--no-color`, Remix's terminal
+   preamble (a blank line, then on a terminal `RMX v0.1.0 - doctor` with one color per
+   letter) and closing ANSI reset on stdout or else stderr when either is a terminal that is
+   not `TERM=dumb`, `new` (writes `examples/template` as a
    standalone crate with the app's name, Remix's error codes and progress lines; an app made
    this way passed `cargo test` and the template's 10 browser checks outside the workspace),
    `version`, `help`, and `routes`, `assets` and `test`, which run the app through cargo. The

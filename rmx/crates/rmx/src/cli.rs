@@ -429,6 +429,52 @@ fn parse_new(args: &[&str]) -> Result<NewOptions, CliError> {
 /// stderr, `new` reports its steps on stderr, and `routes`, `assets` and `test` hand over to
 /// cargo.
 pub fn run(args: &[String], cwd: &Path) -> i32 {
+    let code = run_command(args, cwd);
+    let ansi = |is_tty: bool| can_use_ansi(std::env::var("TERM").ok().as_deref(), is_tty);
+    match restore_target(ansi(std::io::stdout().is_terminal()), ansi(std::io::stderr().is_terminal())) {
+        Some(Stream::Stdout) => print!("{}", rmx_terminal::ansi::RESET),
+        Some(Stream::Stderr) => eprint!("{}", rmx_terminal::ansi::RESET),
+        None => {}
+    }
+    code
+}
+
+/// An output stream.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Stream {
+    Stdout,
+    Stderr,
+}
+
+/// Remix `canUseAnsi`: a terminal that is not `TERM=dumb` (colors may still be off).
+fn can_use_ansi(term: Option<&str>, is_tty: bool) -> bool {
+    term != Some("dumb") && is_tty
+}
+
+/// Where Remix's `restoreTerminalFormatting` writes the closing reset: stdout when it takes
+/// ANSI, else stderr when it does, else nowhere.
+fn restore_target(stdout_ansi: bool, stderr_ansi: bool) -> Option<Stream> {
+    if stdout_ansi {
+        Some(Stream::Stdout)
+    } else if stderr_ansi {
+        Some(Stream::Stderr)
+    } else {
+        None
+    }
+}
+
+/// Remix's command header (`REMIX v1.2.3 - doctor`) after the blank line that opens a
+/// command's output: the header only on a terminal, with the wordmark colored a letter at a
+/// time like Remix's (R blue, M yellow, X red).
+fn preamble(command: &str, styles: &Styles, is_tty: bool) -> String {
+    if !is_tty {
+        return "\n".into();
+    }
+    let wordmark = format!("{}{}{}", styles.blue_bright("R"), styles.yellow_bright("M"), styles.red_bright("X"));
+    format!("\n{wordmark} v{} - {command}\n\n", version())
+}
+
+fn run_command(args: &[String], cwd: &Path) -> i32 {
     let (args, global) = global_options(args);
     let args = &args[..];
     let colors = |is_tty: bool| !global.no_color && rmx_terminal::should_use_colors(|name| std::env::var(name).ok(), is_tty);
@@ -446,7 +492,9 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
             }
         },
         Ok(Invocation::New(options)) => {
-            let styles = Styles::new(colors(std::io::stderr().is_terminal()));
+            let is_tty = std::io::stderr().is_terminal();
+            let styles = Styles::new(colors(is_tty));
+            eprint!("{}", preamble("new", &styles, is_tty));
             let mut progress = |line: &str| eprintln!("{}", style_progress(line, &styles));
             match new_project(&options, cwd, &mut progress) {
                 Ok(app) => {
@@ -476,7 +524,9 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
                     return 1;
                 }
             };
-            print!("{}", if json { report.to_json() } else { report.render_styled(&Styles::new(colors(std::io::stdout().is_terminal()))) });
+            let is_tty = std::io::stdout().is_terminal();
+            let styles = Styles::new(colors(is_tty));
+            print!("{}", if json { report.to_json() } else { doctor_text(&report, &styles, is_tty) });
             doctor_exit_code(strict, fix, report.warnings())
         }
         Err(e) => {
@@ -484,6 +534,12 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
             1
         }
     }
+}
+
+/// The doctor report under the command header.
+fn doctor_text(report: &doctor::Report, styles: &Styles, is_tty: bool) -> String {
+    let body = report.render_styled(styles);
+    format!("{}{}", preamble("doctor", styles, is_tty), body.strip_prefix('\n').unwrap_or(&body))
 }
 
 /// Remix `run.ts`: warnings fail the command under `--strict` and under `--fix` (what

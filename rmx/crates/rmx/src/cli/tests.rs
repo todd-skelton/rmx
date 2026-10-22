@@ -437,6 +437,32 @@ fn doctor_fix_adds_cdylib_to_the_crate_types() {
 }
 
 #[test]
+fn commands_open_with_the_header_on_a_terminal() {
+    // reporter.test.ts: a blank line, then the header only on a TTY.
+    assert_eq!(preamble("doctor", &Styles::new(false), true), format!("\nRMX v{} - doctor\n\n", version()));
+    assert_eq!(preamble("new", &Styles::new(false), false), "\n");
+    // terminal.test.ts: one color per letter when colors are on.
+    let colored = preamble("doctor", &Styles::new(true), true);
+    assert!(colored.starts_with("\n\x1b[94mR\x1b[39m\x1b[93mM\x1b[39m\x1b[91mX\x1b[39m v"), "{colored:?}");
+
+    let report = doctor::Report { project_root: None, suites: Vec::new(), fixed: false };
+    let plain = report.render_styled(&Styles::new(false));
+    assert!(plain.starts_with('\n'));
+    assert_eq!(doctor_text(&report, &Styles::new(false), false), plain, "no second blank line");
+    assert_eq!(doctor_text(&report, &Styles::new(false), true), format!("\nRMX v{} - doctor\n\n{}", version(), &plain[1..]));
+}
+
+#[test]
+fn restores_terminal_formatting_where_ansi_works() {
+    // terminal.test.ts restoreTerminalFormatting: stdout first, then stderr, not on TERM=dumb.
+    assert!(can_use_ansi(Some("xterm-256color"), true) && can_use_ansi(None, true));
+    assert!(!can_use_ansi(Some("dumb"), true) && !can_use_ansi(Some("xterm"), false));
+    assert_eq!(restore_target(true, true), Some(Stream::Stdout));
+    assert_eq!(restore_target(false, true), Some(Stream::Stderr));
+    assert_eq!(restore_target(false, false), None);
+}
+
+#[test]
 fn doctor_fails_on_warnings_under_strict_or_fix() {
     assert_eq!(doctor_exit_code(false, false, 2), 0);
     assert_eq!(doctor_exit_code(true, false, 1), 1);
