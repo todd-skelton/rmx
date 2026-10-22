@@ -7,7 +7,7 @@ extern crate rmx_component as rmx;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{create_root, rsx, Component, Handle, Node, Root};
+use rmx::{create_root, on, rsx, Component, EventHandler, Handle, Node, Root};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
@@ -190,7 +190,215 @@ fn reports_handle_update_calls_during_render() {
     assert_eq!(el.inner_html(), "<div>ok</div>");
 }
 
+// failed setup and render: `Handle::fail` stands in for throwing
+
+/// Setup cannot fail in Rust; a component keeps the failure as state and fails its render.
+struct BadSetup {
+    error: Option<String>,
+}
+
+impl Component for BadSetup {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        BadSetup { error: Some("setup error".into()) }
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        match &self.error {
+            Some(e) => h.fail(e),
+            None => rsx! { <div>"ok"</div> },
+        }
+    }
+}
+
+#[wasm_bindgen_test]
+fn reports_a_failed_setup_and_leaves_the_dom_empty() {
+    let el = container();
+    let root = create_root(&el);
+    let seen = errors(&root);
+    root.render(rsx! { <BadSetup/> });
+    root.flush();
+    assert_eq!(*seen.borrow(), vec!["setup error".to_string()]);
+    assert_eq!(el.inner_html(), "");
+}
+
+struct BadChildParent;
+
+impl Component for BadChildParent {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        BadChildParent
+    }
+    fn render(&self, _: &(), _: &Handle<Self>) -> Node {
+        rsx! { <div><BadSetup/></div> }
+    }
+}
+
+#[wasm_bindgen_test]
+fn reports_a_failed_nested_component_setup() {
+    let el = container();
+    let root = create_root(&el);
+    let seen = errors(&root);
+    root.render(rsx! { <BadChildParent/> });
+    root.flush();
+    assert_eq!(*seen.borrow(), vec!["setup error".to_string()]);
+    assert_eq!(el.inner_html(), "<div></div>");
+}
+
+/// Fails a render partway through building its output, like a throw inside JSX.
+struct BadRender;
+
+impl Component for BadRender {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        BadRender
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        rsx! { <div>"partial" {h.fail("render error")}</div> }
+    }
+}
+
+#[wasm_bindgen_test]
+fn reports_a_failed_render_and_leaves_the_dom_empty() {
+    let el = container();
+    let root = create_root(&el);
+    let seen = errors(&root);
+    root.render(rsx! { <section><BadRender/></section> });
+    root.flush();
+    assert_eq!(*seen.borrow(), vec!["render error".to_string()]);
+    assert_eq!(el.inner_html(), "<section></section>");
+}
+
+thread_local! {
+    static FAIL_RENDER: Cell<bool> = const { Cell::new(false) };
+    static RENDER_COUNT: Cell<u32> = const { Cell::new(0) };
+    static UPDATE: RefCell<Option<Box<dyn Fn()>>> = RefCell::new(None);
+}
+
+struct Flaky;
+
+impl Component for Flaky {
+    type Props = ();
+    fn setup(_: &(), h: &Handle<Self>) -> Self {
+        let h = h.clone();
+        UPDATE.with(|u| *u.borrow_mut() = Some(Box::new(move || h.update())));
+        Flaky
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        let n = RENDER_COUNT.with(|c| {
+            c.set(c.get() + 1);
+            c.get()
+        });
+        if FAIL_RENDER.with(Cell::get) {
+            return h.fail("render update error");
+        }
+        rsx! { <div>"ok " {n}</div> }
+    }
+}
+
+fn update_flaky() {
+    UPDATE.with(|u| (u.borrow().as_ref().unwrap())());
+}
+
+#[wasm_bindgen_test]
+fn reports_a_failed_update_and_keeps_the_previous_dom() {
+    let el = container();
+    let root = create_root(&el);
+    let seen = errors(&root);
+    FAIL_RENDER.with(|f| f.set(false));
+    RENDER_COUNT.with(|c| c.set(0));
+    root.render(rsx! { <Flaky/> });
+    root.flush();
+    assert_eq!(el.inner_html(), "<div>ok 1</div>");
+    assert!(seen.borrow().is_empty());
+
+    FAIL_RENDER.with(|f| f.set(true));
+    update_flaky();
+    root.flush();
+    assert_eq!(*seen.borrow(), vec!["render update error".to_string()]);
+    assert_eq!(el.inner_html(), "<div>ok 1</div>", "the previous DOM is kept");
+
+    // The next successful render patches as usual.
+    FAIL_RENDER.with(|f| f.set(false));
+    update_flaky();
+    root.flush();
+    assert_eq!(el.inner_html(), "<div>ok 3</div>");
+    assert_eq!(seen.borrow().len(), 1);
+}
+
+// event handlers
+
+fn click(el: &web_sys::HtmlElement) {
+    el.query_selector("button").unwrap().unwrap().unchecked_into::<web_sys::HtmlElement>().click();
+}
+
+#[wasm_bindgen_test]
+fn runs_sync_event_handlers_attached_with_the_on_mixin_and_keeps_the_dom() {
+    let el = container();
+    let root = create_root(&el);
+    let clicks = Rc::new(Cell::new(0));
+    let c = clicks.clone();
+    root.render(rsx! { <button mix={on("click", EventHandler::new(move |_| c.set(c.get() + 1)))}>"Click"</button> });
+    root.flush();
+    assert_eq!(el.inner_html(), "<button>Click</button>");
+    click(&el);
+    assert_eq!(clicks.get(), 1);
+    assert_eq!(el.inner_html(), "<button>Click</button>");
+}
+
+#[wasm_bindgen_test]
+async fn runs_async_event_handlers_attached_with_the_on_mixin() {
+    let el = container();
+    let root = create_root(&el);
+    let calls = Rc::new(Cell::new(0));
+    let c = calls.clone();
+    root.render(rsx! {
+        <button mix={on("click", EventHandler::new(move |_| {
+            let c = c.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let _ = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::resolve(&JsValue::NULL)).await;
+                c.set(c.get() + 1);
+            });
+        }))}>"Click"</button>
+    });
+    root.flush();
+    click(&el);
+    sleep(0).await;
+    assert_eq!(calls.get(), 1);
+}
+
 // task errors: Rust tasks report failures instead of throwing
+
+struct UpdateTask;
+
+impl Component for UpdateTask {
+    type Props = ();
+    fn setup(_: &(), h: &Handle<Self>) -> Self {
+        let h = h.clone();
+        UPDATE.with(|u| {
+            *u.borrow_mut() = Some(Box::new(move || {
+                h.queue_task(|_, h| h.report_error("update task error"));
+                h.update();
+            }))
+        });
+        UpdateTask
+    }
+    fn render(&self, _: &(), _: &Handle<Self>) -> Node {
+        rsx! { <div>"ok"</div> }
+    }
+}
+
+#[wasm_bindgen_test]
+fn reports_errors_from_a_task_queued_with_an_update() {
+    let el = container();
+    let root = create_root(&el);
+    let seen = errors(&root);
+    root.render(rsx! { <UpdateTask/> });
+    root.flush();
+    assert!(seen.borrow().is_empty());
+    update_flaky();
+    root.flush();
+    assert_eq!(*seen.borrow(), vec!["update task error".to_string()]);
+}
 
 struct Bad;
 

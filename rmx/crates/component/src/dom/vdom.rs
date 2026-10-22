@@ -100,13 +100,24 @@ pub(crate) fn new_instance<C: Component>(props: C::Props, scope: &Scope) -> Rc<d
     })
 }
 
-fn rendered_list(inst: &dyn AnyInstance) -> Vec<Node> {
+/// Render an instance into a flat node list, or `None` when the render failed
+/// ([`crate::Handle::fail`]).
+fn render_output(inst: &dyn AnyInstance) -> Option<Vec<Node>> {
+    let node = inst.render_node();
+    if inst.shared().failed.take() {
+        return None;
+    }
     let mut flat = Vec::new();
-    flatten(inst.render_node(), &mut flat);
+    flatten(node, &mut flat);
     if flat.is_empty() {
         flat.push(empty_text());
     }
-    flat
+    Some(flat)
+}
+
+/// A first render's nodes: a failed one renders nothing.
+fn rendered_list(inst: &dyn AnyInstance) -> Vec<Node> {
+    render_output(inst).unwrap_or_else(|| vec![empty_text()])
 }
 
 /// Re-render an instance and patch its DOM in place.
@@ -118,7 +129,11 @@ pub(crate) fn rerender(inst: &dyn AnyInstance) {
     live.dirty.set(false);
     let hosts = live_hosts(live);
     hosts.iter().for_each(|h| h.before_update());
-    let new = rendered_list(inst);
+    // A failed render keeps the DOM of the last one.
+    let Some(new) = render_output(inst) else {
+        hosts.iter().for_each(|h| h.commit());
+        return;
+    };
     let (parent, end) = {
         let root = live.root.borrow();
         let first = root.first().expect("mounted component has DOM").first_dom();

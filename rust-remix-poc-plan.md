@@ -567,7 +567,11 @@ Remaining gaps:
    Remix import map and module preloader tests do not apply.
 2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
    module. Errors are reported explicitly (`Handle::report_error`) and reach
-   `Root::on_error` / `App::on_error` like Remix error events.
+   `Root::on_error` / `App::on_error` like Remix error events. A render returns
+   `h.fail(error)` where Remix's would throw: the error is reported, an update keeps the
+   previous DOM and a first render shows nothing, as in `vdom.errors.test.tsx` (setup
+   failures are kept as state and failed in render; `browser_errors.rs` 17). On the
+   server a failed component is reported and left out, where Remix rejects the stream.
 3. Tooling: hot module replacement (wasm modules cannot be swapped in place), and the
    `remix` CLI's `db` command (data access is out of scope). The `rmx` binary (`rmx::cli`, in
    the `rmx` crate) has `completion` (Remix's bash/zsh script and `completion -- <index>

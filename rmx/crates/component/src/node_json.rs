@@ -231,6 +231,24 @@ mod tests {
         }
     }
 
+    struct Failing;
+
+    impl Component for Failing {
+        type Props = ();
+        fn setup(_: &(), _: &Handle<Self>) -> Self {
+            Failing
+        }
+        fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+            rsx! { <p>{h.fail("bad")}</p> }
+        }
+    }
+
+    #[test]
+    fn a_failed_component_render_serializes_as_nothing() {
+        let node = rsx! { <div><Failing/>"after"</div> };
+        assert_eq!(crate::render_to_string(&Node::from_json(&node.to_json())), "<div>after</div>");
+    }
+
     #[test]
     fn unsafe_html_sets_content_and_survives_json() {
         let node = rsx! { <div class="md" innerHTML={crate::unsafe_html("<b>bold</b> &amp;")}>"ignored"</div> };

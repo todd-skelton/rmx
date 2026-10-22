@@ -89,6 +89,8 @@ pub(crate) struct HandleShared {
     /// The component's full type name (`std::any::type_name`), for runtime messages.
     type_name: &'static str,
     pub(crate) removed: Cell<bool>,
+    /// Set by [`Handle::fail`] during a render; the renderer takes it after the render.
+    pub(crate) failed: Cell<bool>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -132,6 +134,7 @@ impl HandleShared {
             committed: Cell::new(false),
             type_name,
             removed: Cell::new(false),
+            failed: Cell::new(false),
         })
     }
 
@@ -291,6 +294,25 @@ impl<C: Component> Handle<C> {
         crate::app::report_to(self.shared.scope.errors.as_ref(), error);
         #[cfg(not(target_arch = "wasm32"))]
         crate::report_error(error);
+    }
+
+    /// Fail this render: return it from `render`. This is the counterpart of throwing from a
+    /// Remix render function (a panic cannot be caught in WebAssembly): the error goes to the
+    /// error listeners like [`Handle::report_error`], and the component keeps the DOM of its
+    /// last render. A failed first render, and a failed render on the server, render nothing.
+    ///
+    /// ```ignore
+    /// fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+    ///     match &self.report {
+    ///         Ok(report) => rsx! { <p>{report.clone()}</p> },
+    ///         Err(e) => h.fail(e),
+    ///     }
+    /// }
+    /// ```
+    pub fn fail(&self, error: impl std::fmt::Display) -> Node {
+        self.shared.failed.set(true);
+        self.report_error(error);
+        Node::Empty
     }
 
     /// The latest props (`handle.props`), for callbacks that run outside `render`. `None`
@@ -588,13 +610,20 @@ impl<C: Component> ErasedComponent for PropsOf<C> {
 
     fn render_static(&self) -> Node {
         let handle = Handle::<C>::detached();
-        C::setup(&self.0, &handle).render(&self.0, &handle)
+        let node = C::setup(&self.0, &handle).render(&self.0, &handle);
+        if handle.shared.failed.get() {
+            return Node::Empty;
+        }
+        node
     }
 
     fn ssr(&self, out: &mut Ssr) {
         let handle = Handle::<C>::detached();
         let state = C::setup(&self.0, &handle);
         let node = state.render(&self.0, &handle);
+        if handle.shared.failed.get() {
+            return;
+        }
         let provides = !handle.shared.contexts.borrow().is_empty();
         if provides {
             SSR_CONTEXT.with(|s| s.borrow_mut().push(handle.shared.clone()));

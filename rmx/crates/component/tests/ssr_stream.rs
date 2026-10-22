@@ -334,6 +334,26 @@ fn exposes_the_current_and_top_frame_src_during_ssr() {
     assert_eq!(seen, Some(("https://example.com/sidebar".to_string(), "https://example.com/dashboard".to_string(), false)));
 }
 
+/// rmx has no throw: a render that fails returns `h.fail(error)`. Remix rejects the whole
+/// stream; rmx reports the error (stderr and the app's error listeners) and leaves the
+/// component out, so the rest of the page still renders.
+struct Failing;
+
+impl Component for Failing {
+    type Props = ();
+    fn setup(_: &(), _: &Handle<Self>) -> Self {
+        Failing
+    }
+    fn render(&self, _: &(), h: &Handle<Self>) -> Node {
+        rsx! { <p>"partial" {h.fail("Render error!")}</p> }
+    }
+}
+
+#[test]
+fn leaves_out_a_component_whose_render_fails() {
+    assert_eq!(html(rsx! { <main><h1>"Title"</h1><Failing/><footer>"Footer"</footer></main> }), "<main><h1>Title</h1><footer>Footer</footer></main>");
+}
+
 struct Seo;
 
 impl Component for Seo {
