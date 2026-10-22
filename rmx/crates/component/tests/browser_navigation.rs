@@ -296,6 +296,57 @@ async fn does_not_intercept_hash_only_navigations() {
     assert!(requests().is_empty());
 }
 
+// navigation.test.ts: does not intercept dialog forms or forms submitted to a new browsing
+// context. A real dialog submission fires no navigation and a `_blank` one navigates
+// another window, so, as in Remix, synthetic navigate events reach the runtime's listener.
+#[wasm_bindgen_test]
+async fn does_not_intercept_dialog_forms_or_forms_submitted_to_a_new_browsing_context() {
+    let page = Page::new().await;
+    let dialog = page.add(&format!(r#"<form method="dialog" action="{}"><button>Close</button></form>"#, page_url("dialog")));
+    let blank = page.add(&format!(r#"<form method="post" target="_blank" data-rmx-target="details" action="{}"><button>Open</button></form>"#, page_url("blank")));
+    let submitter_blank = page.add(&format!(r#"<form method="post" data-rmx-target="details" action="{}"><button formtarget="_blank">Open</button></form>"#, page_url("formtarget")));
+    let dispatch = js_sys::Function::new_with_args(
+        "form, url",
+        "const submitter = form.querySelector('button');
+         form.dispatchEvent(new SubmitEvent('submit', { submitter, bubbles: true, cancelable: true }));
+         const calls = [];
+         const event = Object.assign(new Event('navigate'), {
+           canIntercept: true, hashChange: false, downloadRequest: null, navigationType: 'push',
+           sourceElement: form, formData: new FormData(form), info: undefined,
+           signal: new AbortController().signal,
+           destination: { url, getState: () => undefined },
+           intercept: (options) => calls.push(options),
+         });
+         navigation.dispatchEvent(event);
+         return calls.length;",
+    );
+    let mut intercepted = Vec::new();
+    for (form, case) in [(&dialog, "dialog"), (&blank, "blank"), (&submitter_blank, "formtarget")] {
+        let count = dispatch.call2(&JsValue::NULL, form, &page_url(case).into()).unwrap();
+        intercepted.push(count.as_f64().unwrap());
+    }
+    tick().await;
+    assert_eq!(intercepted, [0.0, 0.0, 0.0]);
+    assert!(requests().is_empty());
+}
+
+// navigation.test.ts: leaves invalid forms to native constraint validation
+#[wasm_bindgen_test]
+async fn leaves_invalid_forms_to_native_constraint_validation() {
+    let page = Page::new().await;
+    js("window.__submits = 0; return 0");
+    page.submit(
+        &format!(r#"<form method="post" data-rmx-target="details" action="{}" onsubmit="window.__submits++"><input required name="title"></form>"#, page_url("invalid")),
+        None,
+    )
+    .await;
+    let invalid = js("return document.querySelector('form[action$=\"case=invalid\"] input').matches(':invalid')");
+    assert_eq!(js("return window.__submits").as_f64(), Some(0.0), "no submit event");
+    assert_eq!(invalid, JsValue::TRUE);
+    assert!(decisions().is_empty(), "no navigation started");
+    assert!(requests().is_empty());
+}
+
 #[wasm_bindgen_test]
 async fn does_not_intercept_anchors_marked_for_download() {
     let page = Page::new().await;
@@ -1369,6 +1420,7 @@ async fn does_not_reconcile_unsafe_frame_sources_restored_from_navigation_histor
     back().await;
     js_sys::Reflect::delete_property(navigation().unchecked_ref::<js_sys::Object>(), &"reload".into()).unwrap();
     assert_eq!(reloads.to_vec(), [JsValue::from_str("remix-document-reload")]);
+    assert_eq!(resets(), resets_of(&[("manual", "")]), "Remix's traversal case: no scroll before the reload");
     assert!(requests().is_empty(), "the unsafe source is not loaded");
 }
 
@@ -1418,4 +1470,281 @@ async fn replays_same_location_post_submissions_as_replace_navigations_without_p
     assert_eq!(requests[0].method, "POST");
     assert_eq!(requests[0].target.as_deref(), Some("details"));
     assert_eq!(requests[0].form, Some(vec![("displayName".to_string(), "Ada".to_string())]));
+}
+
+// navigation.test.ts: accepts after-transition scroll and focus options
+#[wasm_bindgen_test]
+async fn accepts_after_transition_scroll_and_focus_options() {
+    let _page = Page::new().await;
+    let after = Some(rmx::Reset::AfterTransition);
+    navigate(&page_url("after-state"), NavigateOptions { target: Some("details".into()), reset_scroll: after, reset_focus: after, ..Default::default() });
+    settle().await;
+    let state = current_state();
+    assert_eq!(get(&state, "resetScroll").as_string().as_deref(), Some(AFTER));
+    assert_eq!(get(&state, "resetFocus").as_string().as_deref(), Some(AFTER));
+    assert_eq!(resets(), resets_of(&[(AFTER, AFTER)]));
+}
+
+/// A promise the next resolve waits for, and the function that releases it.
+fn hold_next_resolve() -> js_sys::Function {
+    let mut release = None;
+    let hold = js_sys::Promise::new(&mut |resolve, _| release = Some(resolve));
+    HOLD.with(|h| *h.borrow_mut() = Some(hold));
+    release.unwrap()
+}
+
+async fn wait_for_request() {
+    for _ in 0..50 {
+        if !requests().is_empty() {
+            break;
+        }
+        tick().await;
+    }
+    assert!(!requests().is_empty(), "the frame load started");
+}
+
+// navigation.test.ts: resets focus after the transition by default
+#[wasm_bindgen_test]
+async fn resets_focus_after_the_transition_by_default() {
+    let page = Page::new().await;
+    let input: web_sys::HtmlElement = page.add("<input>").unchecked_into();
+    input.focus().unwrap();
+    let release = hold_next_resolve();
+    let options = NavigateOptions { target: Some("details".into()), history: Some(rmx::History::Replace), reset_scroll: Some(rmx::Reset::Manual), ..Default::default() };
+    navigate(&page_url("focus-default"), options);
+    wait_for_request().await;
+    let during = document().active_element();
+    release.call0(&JsValue::NULL).unwrap();
+    settle().await;
+    let after = document().active_element();
+    assert_eq!(during.as_ref(), Some(input.as_ref()), "focus stays while the frame loads");
+    assert_eq!(after, document().body().map(Into::into), "focus resets once the navigation finishes");
+}
+
+/// Start the navigation listeners with `what` hidden (see [`hide`]) and return the
+/// listener registrations and entry updates they made.
+fn start_listeners_without(what: &str) -> Vec<String> {
+    let spies = js("const calls = [];
+        const restores = [];
+        const spy = (target, name) => {
+          target[name] = function (...args) {
+            calls.push(name + ' ' + (typeof args[0] === 'string' ? args[0] : ''));
+            return Object.getPrototypeOf(target)[name].apply(this, args);
+          };
+          restores.push(() => delete target[name]);
+        };
+        spy(document, 'addEventListener');
+        spy(navigation, 'addEventListener');
+        spy(navigation, 'updateCurrentEntry');
+        return { calls, restore: () => restores.forEach((restore) => restore()) };");
+    let restore = hide(what);
+    rmx::test::start_navigation_listener();
+    restore.call0(&JsValue::NULL).unwrap();
+    get(&spies, "restore").unchecked_into::<js_sys::Function>().call0(&JsValue::NULL).unwrap();
+    get(&spies, "calls").unchecked_into::<js_sys::Array>().iter().map(|c| c.as_string().unwrap()).collect()
+}
+
+// navigation.test.ts: skips navigation listeners when the Navigation API is unavailable
+#[wasm_bindgen_test]
+async fn skips_navigation_listeners_when_the_navigation_api_is_unavailable() {
+    start().await;
+    assert_eq!(start_listeners_without("navigation"), Vec::<String>::new());
+}
+
+// navigation.test.ts: skips navigation listeners when sourceElement is unavailable
+#[wasm_bindgen_test]
+async fn skips_navigation_listeners_when_source_element_is_unavailable() {
+    start().await;
+    assert_eq!(start_listeners_without("sourceElement"), Vec::<String>::new());
+}
+
+// navigation.test.ts: suppresses Chromium scroll anchoring until after a push navigation paints
+#[wasm_bindgen_test]
+async fn suppresses_chromium_scroll_anchoring_until_after_a_push_navigation_paints() {
+    let page = Page::new().await;
+    next_frame().await;
+    next_frame().await;
+    let count = adopted_sheets();
+    let starting_min_height = computed("documentElement", "min-height");
+    let release = hold_next_resolve();
+    let a: web_sys::HtmlElement = page.add(&link("anchoring-push", r#"data-rmx-target="details""#)).unchecked_into();
+    a.click();
+    wait_for_request().await;
+    let during = (adopted_sheets(), computed("documentElement", "overflow-anchor"), computed("body", "overflow-anchor"), computed("documentElement", "min-height"));
+    let finished = get(&get(&navigation(), "transition"), "finished").unchecked_into::<js_sys::Promise>();
+    release.call0(&JsValue::NULL).unwrap();
+    let _ = JsFuture::from(finished).await;
+    JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await.unwrap();
+    let after_finish = adopted_sheets();
+    next_frame().await;
+    let first_frame = adopted_sheets();
+    next_frame().await;
+    let second_frame = adopted_sheets();
+    drop(page);
+
+    assert_eq!(decisions(), [true]);
+    assert_eq!(during, (count + 1, "none".to_string(), "none".to_string(), starting_min_height), "only the anchoring rule");
+    assert_eq!((after_finish, first_frame, second_frame), (count + 1, count + 1, count));
+}
+
+// navigation.test.ts: removes traversal scroll styles as soon as the navigation fails
+#[wasm_bindgen_test]
+async fn removes_traversal_scroll_styles_as_soon_as_the_navigation_fails() {
+    let page = Page::new().await;
+    page.click(&link("fail-a", r#"data-rmx-target="details" data-rmx-src="/fail-a""#)).await;
+    page.click(&link("fail-b", r#"data-rmx-target="details" data-rmx-src="/fail-b""#)).await;
+    clear();
+    next_frame().await;
+    next_frame().await;
+    let count = adopted_sheets();
+    // With an error listener a failed load fails the navigation (instead of loading the
+    // document).
+    let app = APP.with(|a| a.borrow().clone()).expect("app");
+    let listener = app.on_error(|_| {});
+    let release = hold_next_resolve();
+    RESOLVE_NEXT.with(|n| {
+        *n.borrow_mut() = Some(Box::new(|_| {
+            let hold = HOLD.with(|h| h.borrow_mut().take()).unwrap();
+            Box::pin(async move {
+                let _ = JsFuture::from(hold).await;
+                Err("offline".into())
+            })
+        }))
+    });
+    let back: js_sys::Function = get(&navigation(), "back").unchecked_into();
+    let result = back.call0(&navigation()).unwrap();
+    wait_for_request().await;
+    let during = adopted_sheets();
+    release.call0(&JsValue::NULL).unwrap();
+    let failed = JsFuture::from(get(&result, "finished").unchecked_into::<js_sys::Promise>()).await.is_err();
+    JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await.unwrap();
+    let after = adopted_sheets();
+    app.remove_error_listener(listener);
+    settle().await;
+
+    assert!(failed, "the traversal failed");
+    assert_eq!(during, count + 1, "the traversal styles while it runs");
+    assert_eq!(after, count, "removed without waiting for a frame");
+}
+
+/// Dispatch a synthetic `navigate` event from `source` to `url` with `extra` fields (as
+/// Remix's tests do) and return how many times the runtime intercepted it.
+fn dispatch_navigate(source: &JsValue, url: &str, extra: &str) -> f64 {
+    let dispatch = js_sys::Function::new_with_args(
+        "source, url",
+        &format!(
+            "const calls = [];
+             const controller = new AbortController();
+             const event = Object.assign(new Event('navigate'), {{
+               canIntercept: true, hashChange: false, downloadRequest: null, navigationType: 'push',
+               sourceElement: source, formData: null, info: undefined, signal: controller.signal,
+               destination: {{ url, getState: () => undefined }},
+               intercept: (options) => calls.push(options),
+             }}, {extra});
+             navigation.dispatchEvent(event);
+             controller.abort();
+             return calls.length;"
+        ),
+    );
+    dispatch.call2(&JsValue::NULL, source, &url.into()).unwrap().as_f64().unwrap()
+}
+
+// navigation.test.ts: does not intercept download requests with filenames, and with empty
+// filenames (a plain anchor, so only the event's downloadRequest marks the download)
+#[wasm_bindgen_test]
+async fn does_not_intercept_download_requests_with_or_without_filenames() {
+    let page = Page::new().await;
+    let anchor = page.add(&link("download-request", r#"data-rmx-target="details""#));
+    let url = page_url("download-request");
+    let named = dispatch_navigate(&anchor, &url, "{ downloadRequest: 'report.csv' }");
+    let empty = dispatch_navigate(&anchor, &url, "{ downloadRequest: '' }");
+    tick().await;
+    assert_eq!((named, empty), (0.0, 0.0));
+    assert!(requests().is_empty());
+}
+
+// navigation.test.ts: replaces marked anchor history without precommit support
+#[wasm_bindgen_test]
+async fn replaces_marked_anchor_history_without_precommit_support() {
+    let page = Page::new().await;
+    js("window.__precommit = window.NavigationPrecommitController; delete window.NavigationPrecommitController;");
+    let entries = entry_count();
+    let anchor: web_sys::HtmlElement = page
+        .add(&link("anchor-replace", r#"data-rmx-target="details" data-rmx-history="replace" data-rmx-reset-focus="false""#))
+        .unchecked_into();
+    anchor.focus().unwrap();
+    anchor.click();
+    settle().await;
+    js("window.NavigationPrecommitController = window.__precommit; delete window.__precommit;");
+
+    // The push is cancelled and replayed as a replace navigation (recorded first).
+    assert_eq!(decisions(), [true, false]);
+    assert_eq!(entry_count(), entries, "the entry is replaced");
+    assert_eq!(current_url(), page_url("anchor-replace"));
+    assert_eq!(requests().len(), 1);
+    assert_eq!(document().active_element().as_ref(), Some(anchor.as_ref()), "focus stays");
+}
+
+fn absolute(path: &str) -> String {
+    web_sys::Url::new_with_base(path, &current_url()).unwrap().href()
+}
+
+// navigation.test.ts: does not replace the navigation URL when a non-top frame reload
+// follows a redirect
+#[wasm_bindgen_test]
+async fn does_not_replace_the_navigation_url_when_a_named_frame_load_follows_a_redirect() {
+    let _page = Page::new().await;
+    let entries = entry_count();
+    let redirected = absolute("/redirected-frame");
+    RESOLVE_NEXT.with(|n| {
+        *n.borrow_mut() = Some(Box::new(move |_| {
+            Box::pin(async move { Ok(FrameResponse { content: FrameContent::Html(r#"<p id="loaded">Redirected</p>"#.into()), url: Some(redirected) }) })
+        }))
+    });
+    let requested = absolute("/requested-frame");
+    navigate(&page_url("named-redirect"), NavigateOptions { target: Some("details".into()), src: Some(requested.clone()), ..Default::default() });
+    settle().await;
+    let state = current_state();
+
+    assert_eq!(decisions(), [true], "no frame-redirect navigation");
+    assert_eq!(requests().len(), 1);
+    assert_eq!(entry_count(), entries + 1);
+    assert_eq!(current_url(), page_url("named-redirect"));
+    assert_eq!(get(&state, "target").as_string().as_deref(), Some("details"));
+    assert_eq!(get(&state, "src").as_string(), Some(requested));
+    assert_eq!(get(&state, "resetScroll").as_string().as_deref(), Some(AFTER));
+    assert_eq!(get(&state, "resetFocus").as_string().as_deref(), Some(AFTER));
+}
+
+// navigation.test.ts: preserves same-origin relative sources for custom frame resolvers
+#[wasm_bindgen_test]
+async fn preserves_same_origin_relative_sources_for_custom_frame_resolvers() {
+    let page = Page::new().await;
+    let base = document().create_element("base").unwrap();
+    base.set_attribute("href", &absolute("/partials/")).unwrap();
+    document().head().unwrap().prepend_with_node_1(&base).unwrap();
+    page.click(&link("relative-src", r#"data-rmx-target="details" data-rmx-src="../details?tab=one#summary""#)).await;
+    base.remove();
+    assert_eq!(decisions(), [true]);
+    assert_eq!(Frames.get("details").unwrap().src(), "../details?tab=one#summary");
+    let requests = requests();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].url.starts_with(&absolute("/details?tab=one")), "{}", requests[0].url);
+}
+
+// navigation.test.ts: honors legacy true settings on traverse navigations
+#[wasm_bindgen_test]
+async fn honors_legacy_true_settings_on_traverse_navigations() {
+    let _page = Page::new().await;
+    let state = r#"{ $rmx: true, target: 'details', src: '/legacy-true', resetScroll: true, resetFocus: true }"#;
+    navigate_raw(&page_url("legacy-true"), &format!("{{ state: {state} }}"));
+    settle().await;
+    navigate(&page_url("legacy-true-next"), NavigateOptions { target: Some("details".into()), ..Default::default() });
+    settle().await;
+    back().await;
+    assert_eq!(decisions(), [true, true, true]);
+    assert_eq!(resets(), resets_of(&[(AFTER, AFTER), (AFTER, AFTER), (AFTER, AFTER)]));
+    assert_eq!(scrolls().len(), 3);
+    let requests = requests();
+    assert!(requests[2].url.ends_with("/legacy-true"), "{}", requests[2].url);
 }

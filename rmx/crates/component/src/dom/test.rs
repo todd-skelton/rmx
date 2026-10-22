@@ -27,6 +27,13 @@ pub use super::document_state::DocumentState;
 /// for tests.
 #[doc(hidden)]
 pub use super::form_navigation::{FormNavigation, FormNavigationResolver, FormSubmission, PendingSubmission};
+
+/// Start the runtime's navigation listeners (Remix's `startNavigationListener`), for tests
+/// that check they stay off without the Navigation API. [`crate::run`] starts them.
+#[doc(hidden)]
+pub fn start_navigation_listener() {
+    super::navigation::start();
+}
 use crate::node::IntoNode;
 
 /// Options for [`render_with`].

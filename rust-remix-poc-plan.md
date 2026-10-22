@@ -313,11 +313,16 @@ Covered since phase 0b:
    `browser_navigation.rs`), and a traversal keeps scroll anchoring off until the second
    frame after it finishes, dropping only its `min-height` when it finishes. Without the
    Navigation API or `NavigateEvent.sourceElement`, `navigate()` falls back to a document
-   navigation that pushes or replaces like Remix's (3 cases, run with the API hidden). About 60 of the 77
-   `navigation.test.ts` cases are covered by the 57 tests in `browser_navigation.rs`
-   (some tests combine cases); the rest stub a missing Navigation API or `sourceElement`,
-   check internal call arguments, or redirect the top frame, which would replace the test
-   page (the demo e2e scripts cover top frame redirects). The two `frame.test.ts` reload
+   navigation that pushes or replaces like Remix's (3 cases, run with the API hidden), and
+   the listeners are not started at all (2 cases). 83 of the 87 `navigation.test.ts` cases
+   (upstream `2968b1e`) are covered by the 83 tests in `browser_navigation.rs` (some tests
+   combine cases; dialog, `_blank` and download-request cases dispatch synthetic navigate
+   events like Remix's). The other four load or redirect the top frame, which would replace
+   the test page: the top frame redirect URL replacement, the public destination when the
+   top frame ignores a source override, legacy state kept across a traversal redirect, and
+   a marked GET form replaced across a redirect (run here without the redirect). The demo
+   e2e scripts cover top frame redirects. Upstream's umbrella default-export fix
+   (`remix/assert`, `remix/headers`) is JavaScript module packaging and does not apply. The two `frame.test.ts` reload
    abort cases run there as navigations stopped with `window.stop()`: the resolver's signal
    aborts and an answer it gives after the abort is not applied, and a streamed response
    is cancelled. The top frame attribute preservation case runs in the frames demo e2e
