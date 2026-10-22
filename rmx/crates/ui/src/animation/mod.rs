@@ -33,6 +33,28 @@ mod web;
 pub use spring::{spring, spring_transition, Spring, SpringOptions, SpringPreset};
 pub use tween::{easings, tween, BezierCurve, Tween, TweenOptions, TweenStep};
 
+/// Whether the user asked for reduced motion (`prefers-reduced-motion: reduce`), read
+/// fresh on each call. `false` during server rendering or when `matchMedia` is
+/// unavailable, so render functions can call it (Remix's `prefersReducedMotion`):
+///
+/// ```ignore
+/// mix={animate_layout(if prefers_reduced_motion() { LayoutConfig::from(false) } else { Layout::spring(SpringPreset::Snappy).into() })}
+/// ```
+pub fn prefers_reduced_motion() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        let Some(window) = web_sys::window() else { return false };
+        // Read matchMedia as a property so a missing or replaced one is handled like Remix.
+        let Ok(match_media) = js_sys::Reflect::get(&window, &"matchMedia".into()) else { return false };
+        let Some(match_media) = match_media.dyn_ref::<js_sys::Function>() else { return false };
+        let Ok(list) = match_media.call1(&window, &"(prefers-reduced-motion: reduce)".into()) else { return false };
+        js_sys::Reflect::get(&list, &"matches".into()).ok().and_then(|m| m.as_bool()).unwrap_or(false)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    false
+}
+
 use rmx::{mixin, Element, HostMixin, Mixin, MixinHandle, NodeHandle};
 
 /// How animation effects combine with the underlying value (WAAPI `composite`).
@@ -358,6 +380,11 @@ mod tests {
             ]}>"Saved"</div>
         });
         assert_eq!(html, "<div>Saved</div>");
+    }
+
+    #[test]
+    fn prefers_reduced_motion_is_false_on_the_server() {
+        assert!(!prefers_reduced_motion());
     }
 
     #[test]

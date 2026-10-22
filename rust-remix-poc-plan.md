@@ -354,6 +354,8 @@ Covered since phase 0b:
    Remix's internal `onKeyDown` and `onOutsideClick` written as plain `on` listeners.
    `animate-mixins.test.tsx` (5) is `browser_animate_mixins.rs`; its `animate` mock returns
    an object on `Animation.prototype`, since rmx checks that a tracked animation is one.
+   `prefers_reduced_motion()` is Remix's new `prefersReducedMotion` (upstream 2026-10-21), with
+   `prefers-reduced-motion.test.ts` (3) in `browser_prefers_reduced_motion.rs`.
    `animate-layout-mixin.test.tsx` (8) is `browser_animate_layout.rs` with Remix's animate,
    frame and bounding-rect mocks, plus a case that tells the on-screen box of a running
    animation from its natural box, which Remix's sequence mocks cannot. Every `ui` test file
