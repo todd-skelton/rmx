@@ -717,8 +717,12 @@ Remaining gaps:
    and no import maps), `assert` (`assert!`) and `test` (`cargo test`, plus
    `rmx_serve::test` and `rmx::test`). Every other Remix package has an rmx crate or module
    (`crates/rmx/tests/manifest.rs` checks that each crate is distributed through `rmx`).
-5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
-   a document still being parsed (`document.write` splitting a template). Cases that load
+5. `frame.test.tsx`'s streamed template parsing cases (a template parsed in two parts, with
+   the observer watching or hydration starting mid-template, a sibling appended between the
+   parts, and a template without its end marker waiting for parsing to finish) run in
+   `browser_frame_reloads.rs` with `document.readyState` reporting `loading` and the
+   template's content appended in two steps, as the parser does; `document.write` would
+   replace the test page. Cases that load
    entry modules asynchronously (a provider module arriving after its consumer, cached
    modules, `loadModule` errors) do not apply: one wasm bundle holds every entry. Top
    frame reload cases replace the whole page, so the browser tests run them on a named

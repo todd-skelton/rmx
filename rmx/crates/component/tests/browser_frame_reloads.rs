@@ -1351,6 +1351,113 @@ async fn applies_a_frame_template_without_an_end_marker_once_the_document_is_par
     assert!(by_id("nm1").is_none(), "the template is consumed");
 }
 
+/// Make the page report `document.readyState === "loading"`, as while the parser runs.
+fn parsing(on: bool) {
+    let script = if on {
+        "Object.defineProperty(document, 'readyState', { configurable: true, get: () => 'loading' })"
+    } else {
+        "delete document.readyState"
+    };
+    js_sys::Function::new_no_args(script).call0(&JsValue::NULL).unwrap();
+}
+
+/// The parser's second step on a template: append `html` to its content.
+fn continue_template(template: &web_sys::HtmlTemplateElement, html: &str) {
+    let rest = document().create_element("template").unwrap().unchecked_into::<web_sys::HtmlTemplateElement>();
+    rest.set_inner_html(html);
+    template.content().append_child(&rest.content()).unwrap();
+}
+
+fn items(prefix: &str) -> Vec<String> {
+    let list = document().query_selector_all(&format!("[data-item^=\"{prefix}\"]")).unwrap();
+    (0..list.length()).filter_map(|i| list.item(i)).filter_map(|n| n.text_content()).collect()
+}
+
+async fn sleep(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        web_sys::window().unwrap().set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms).unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+/// Remix's `renderSplitFrameTemplate`: a frame whose template arrives in two parts while
+/// the document is still parsing. With `before_watch`, the first part is in the document
+/// before the frame starts watching for it (hydration starts during template parsing);
+/// otherwise the frame's observer sees it arrive. `mid_template` runs between the parts.
+async fn split_template(prefix: &str, before_watch: bool, mid_template: impl FnOnce()) {
+    let server = start().await;
+    let id = format!("{prefix}1");
+    let fallback = format!("{prefix}-fallback");
+    let parent = format!(
+        r#"{}{}{}"#,
+        region(&id, &format!(r#"<p id="{fallback}">Loading...</p>"#)),
+        data(&[(&id, &format!("/{prefix}-child"), &format!("{prefix}-child"), true)]),
+        flush()
+    );
+    server.route(&format!("/{prefix}-parent"), vec![Part::Html(parent)]);
+    let first = format!(r#"<p data-item="{prefix}-1">First</p>"#);
+    let rest = format!(r#"<p data-item="{prefix}-2">Second</p><!--{TEMPLATE_END}-->"#);
+    parsing(true);
+    let early = before_watch.then(|| insert_template(&id, &first));
+    let _m = mount(&format!("{prefix}-parent"), &format!("/{prefix}-parent"), &fallback).await;
+    let template = early.unwrap_or_else(|| insert_template(&id, &first));
+    sleep(50).await;
+    let waiting = (text(&fallback), items(prefix).len());
+    mid_template();
+    sleep(20).await;
+    continue_template(&template, &rest);
+    until("the whole template", || !items(prefix).is_empty()).await;
+    parsing(false);
+    assert_eq!(waiting, (Some("Loading...".to_string()), 0), "nothing applies before the end marker");
+    assert_eq!(items(prefix), ["First", "Second"]);
+    assert!(by_id(&fallback).is_none());
+}
+
+// frame.test.tsx: renders every sibling when an observed frame template is parsed in two parts
+#[wasm_bindgen_test]
+async fn renders_every_sibling_when_an_observed_frame_template_is_parsed_in_two_parts() {
+    split_template("so", false, || {}).await;
+}
+
+// frame.test.tsx: renders every sibling when hydration starts during frame template parsing
+#[wasm_bindgen_test]
+async fn renders_every_sibling_when_hydration_starts_during_frame_template_parsing() {
+    split_template("sh", true, || {}).await;
+}
+
+// frame.test.tsx: preserves every streamed frame item when a script appends a sibling mid-template
+#[wasm_bindgen_test]
+async fn preserves_every_streamed_frame_item_when_a_script_appends_a_sibling_mid_template() {
+    let sibling = document().create_element("div").unwrap();
+    let appended = sibling.clone();
+    split_template("sa", false, move || {
+        document().body().unwrap().append_child(&appended).unwrap();
+    })
+    .await;
+    sibling.remove();
+}
+
+// frame.test.tsx: waits for document parsing to finish when a frame template has no end marker
+#[wasm_bindgen_test]
+async fn waits_for_document_parsing_to_finish_when_a_frame_template_has_no_end_marker() {
+    let server = start().await;
+    let parent = format!(r#"{}{}{}"#, region("wp1", r#"<p id="wp-fallback">Loading...</p>"#), data(&[("wp1", "/wp-child", "wp-child", true)]), flush());
+    server.route("/wp-parent", vec![Part::Html(parent)]);
+    parsing(true);
+    let _m = mount("wp-parent", "/wp-parent", "wp-fallback").await;
+    insert_template("wp1", r#"<p id="wp-loaded">Loaded</p>"#);
+    let following = document().create_element("div").unwrap();
+    document().body().unwrap().append_child(&following).unwrap();
+    sleep(60).await;
+    let waiting = (text("wp-fallback"), by_id("wp-loaded").is_none());
+    parsing(false);
+    until("the template once parsing finishes", || by_id("wp-loaded").is_some()).await;
+    following.remove();
+    assert_eq!(waiting, (Some("Loading...".to_string()), true));
+    assert_eq!(text("wp-loaded").as_deref(), Some("Loaded"));
+    assert!(by_id("wp-fallback").is_none());
+}
+
 #[wasm_bindgen_test]
 async fn preserves_application_templates_while_waiting_for_a_streamed_frame() {
     let server = start().await;
