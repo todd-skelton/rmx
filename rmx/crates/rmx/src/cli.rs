@@ -27,7 +27,7 @@ pub enum Invocation {
     /// Create an app.
     New(NewOptions),
     /// Check the toolchain and the app (`--json`, `--strict`).
-    Doctor { json: bool, strict: bool },
+    Doctor { json: bool, strict: bool, fix: bool },
     /// Build, run and rebuild the app on changes; the arguments go to the app.
     Dev(Vec<String>),
 }
@@ -178,7 +178,7 @@ List or inspect browser-reachable assets (runs `cargo run --quiet -- assets`).
 
 const DOCTOR_HELP: &str = "\
 Usage:
-  rmx doctor [--json] [--strict]
+  rmx doctor [--json] [--strict] [--fix] [--no-color]
 
 Check the toolchain and rmx app conventions for the current project.
 
@@ -186,11 +186,13 @@ Options:
   --json       Print doctor findings as JSON
   --strict     Exit with status 1 when warning-level findings are present
   --no-strict  Do not exit with status 1 when warning-level findings are present
+  --fix        Apply available low-risk fixes
 
 Examples:
   rmx doctor
   rmx doctor --json
   rmx doctor --strict
+  rmx doctor --fix
 ";
 
 const DEV_HELP: &str = "\
@@ -345,9 +347,10 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             if wants_help {
                 return Ok(Invocation::Print(DOCTOR_HELP.into()));
             }
-            let (mut json, mut strict) = (false, false);
+            let (mut json, mut strict, mut fix) = (false, false, false);
             for arg in &args {
                 match *arg {
+                    "--fix" => fix = true,
                     "--json" => json = true,
                     "--strict" => strict = true,
                     "--no-strict" => strict = false,
@@ -355,7 +358,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
                     other => return Err(CliError::unexpected_extra_argument(other)),
                 }
             }
-            Ok(Invocation::Doctor { json, strict })
+            Ok(Invocation::Doctor { json, strict, fix })
         }
         "test" => {
             if wants_help {
@@ -456,16 +459,28 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
                 1
             }
         },
-        Ok(Invocation::Doctor { json, strict }) => {
-            let report = doctor::run_doctor(cwd, &doctor::SystemToolchain);
+        Ok(Invocation::Doctor { json, strict, fix }) => {
+            let report = match doctor::run_doctor_with(cwd, &doctor::SystemToolchain, fix) {
+                Ok(report) => report,
+                Err(message) => {
+                    eprint!("{}", CliError::internal(message).render(DOCTOR_HELP));
+                    return 1;
+                }
+            };
             print!("{}", if json { report.to_json() } else { report.render_styled(&Styles::new(colors(std::io::stdout().is_terminal()))) });
-            i32::from(strict && report.warnings() > 0)
+            doctor_exit_code(strict, fix, report.warnings())
         }
         Err(e) => {
             eprint!("{}", e.render(help(args)));
             1
         }
     }
+}
+
+/// Remix `run.ts`: warnings fail the command under `--strict` and under `--fix` (what
+/// the fixes could not repair).
+fn doctor_exit_code(strict: bool, fix: bool, warnings: usize) -> i32 {
+    i32::from((strict || fix) && warnings > 0)
 }
 
 /// The command `rmx` hands over to (`cargo run`, `cargo test`); `--no-color` reaches it
@@ -523,10 +538,7 @@ pub fn new_project(options: &NewOptions, cwd: &Path, progress: &mut dyn FnMut(&s
     }
     let display_name = options.app_name.clone().unwrap_or_else(|| humanize_name(&raw_name));
     let package_name = to_package_name(&raw_name)?;
-    let dependency = match std::env::var("RMX_VERSION").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
-        Some(version) => format!("rmx = {}", toml_string(&version)),
-        None => format!("rmx = {{ path = {} }}", toml_string(&env!("CARGO_MANIFEST_DIR").replace('\\', "/"))),
-    };
+    let dependency = rmx_dependency();
 
     step(progress, "Prepare target directory", || prepare_target_directory(&target_dir, options.force))?;
     step(progress, "Generate scaffold files", || {
@@ -585,6 +597,15 @@ fn prepare_target_directory(dir: &Path, force: bool) -> Result<(), CliError> {
         Err(e) => return Err(io_error(dir, e)),
     }
     std::fs::create_dir_all(dir).map_err(|e| io_error(dir, e))
+}
+
+/// The `rmx = ...` dependency line for new apps and `doctor --fix`: the version in
+/// `RMX_VERSION`, or this checkout of rmx by path.
+pub(crate) fn rmx_dependency() -> String {
+    match std::env::var("RMX_VERSION").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
+        Some(version) => format!("rmx = {}", toml_string(&version)),
+        None => format!("rmx = {{ path = {} }}", toml_string(&env!("CARGO_MANIFEST_DIR").replace('\\', "/"))),
+    }
 }
 
 fn write_file(path: &Path, content: &str) -> Result<(), CliError> {

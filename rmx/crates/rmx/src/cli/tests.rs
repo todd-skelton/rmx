@@ -248,10 +248,12 @@ fn scaffold(scratch: &Scratch) -> PathBuf {
 
 #[test]
 fn doctor_parses_its_flags() {
-    assert_eq!(parse(&args(&["doctor"])), Ok(Invocation::Doctor { json: false, strict: false }));
-    assert_eq!(parse(&args(&["doctor", "--json", "--strict"])), Ok(Invocation::Doctor { json: true, strict: true }));
-    assert_eq!(parse(&args(&["doctor", "--strict", "--no-strict"])), Ok(Invocation::Doctor { json: false, strict: false }));
-    assert_eq!(parse(&args(&["doctor", "--fix"])).unwrap_err().message, "Unknown argument: --fix");
+    assert_eq!(parse(&args(&["doctor"])), Ok(Invocation::Doctor { json: false, strict: false, fix: false }));
+    assert_eq!(parse(&args(&["doctor", "--json", "--strict"])), Ok(Invocation::Doctor { json: true, strict: true, fix: false }));
+    assert_eq!(parse(&args(&["doctor", "--strict", "--no-strict"])), Ok(Invocation::Doctor { json: false, strict: false, fix: false }));
+    assert_eq!(parse(&args(&["doctor", "--fix"])), Ok(Invocation::Doctor { json: false, strict: false, fix: true }));
+    assert_eq!(parse(&args(&["doctor", "--bad-flag"])).unwrap_err().message, "Unknown argument: --bad-flag");
+    assert!(DOCTOR_HELP.contains("  --fix        Apply available low-risk fixes\n"));
     assert_eq!(parse(&args(&["doctor", "--help"])), Ok(Invocation::Print(DOCTOR_HELP.into())));
     assert!(HELP.contains("doctor            Check project health for the current project"));
 }
@@ -330,6 +332,153 @@ fn doctor_checks_the_route_map_and_the_client_crate_type() {
     assert!(json.contains(r#""suites":[{"name":"environment","status":"ok","findings":[]}"#), "{json}");
     assert!(json.contains(r#"{"name":"client","status":"skipped","reason":"Blocked by project warnings.","findings":[]}"#), "{json}");
     assert!(json.contains(r#""code":"routes-missing","severity":"warn","suite":"project""#), "{json}");
+}
+
+// doctor --fix (doctor.test.ts fix cases and doctor/fixes.test.ts)
+
+fn fix(app: &Path) -> doctor::Report {
+    doctor::run_doctor_with(app, &ready(), true).unwrap()
+}
+
+fn built(app: &Path) {
+    std::fs::create_dir_all(app.join("app/actions/public/pkg")).unwrap();
+    std::fs::write(app.join("app/actions/public/pkg/doc_app_bg.wasm"), "\0asm").unwrap();
+}
+
+#[test]
+fn doctor_fix_applies_no_fixes_to_a_clean_app() {
+    let scratch = Scratch::new("doctor-fix-clean");
+    let app = scaffold(&scratch);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    built(&app);
+    let before = read(&app, "Cargo.toml");
+    let report = fix(&app);
+    let text = report.render();
+    assert!(!text.contains("Applied"), "{text}");
+    assert!(text.contains("Doctor found no issues."), "{text}");
+    assert_eq!(read(&app, "Cargo.toml"), before);
+    let json = report.to_json();
+    assert!(json.contains(r#""appliedFixes":[],"remainingFindings":[]}"#), "{json}");
+}
+
+#[test]
+fn doctor_fix_adds_the_rmx_dependency() {
+    let scratch = Scratch::new("doctor-fix-dep");
+    let app = scaffold(&scratch);
+    let manifest = read(&app, "Cargo.toml");
+    let rmx_line = manifest.lines().find(|l| l.starts_with("rmx = ")).unwrap().to_string();
+    std::fs::write(app.join("Cargo.toml"), manifest.replace(&format!("{rmx_line}\n"), "")).unwrap();
+    assert!(doctor::run_doctor(&app, &ready()).render().contains("[WARN] Cargo.toml does not declare an rmx dependency."));
+
+    let report = fix(&app);
+    let text = report.render();
+    assert!(text.contains("\u{2713} environment\n  Applied fixes:\n    \u{2022} Updated Cargo.toml\n"), "{text}");
+    assert!(text.contains("Applied 1 fix.\n"), "{text}");
+    let manifest = read(&app, "Cargo.toml");
+    assert!(manifest.contains(&format!("[dependencies]\n{}\n", super::rmx_dependency())), "{manifest}");
+    assert_eq!(report.warnings(), 0, "{text}");
+}
+
+#[test]
+fn doctor_fix_creates_the_route_map_and_declares_it() {
+    let scratch = Scratch::new("doctor-fix-routes");
+    let app = scaffold(&scratch);
+    std::fs::remove_file(app.join("src/routes.rs")).unwrap();
+    let lib = read(&app, "src/lib.rs").replace("pub mod routes;\n", "");
+    std::fs::write(app.join("src/lib.rs"), &lib).unwrap();
+
+    let report = fix(&app);
+    let text = report.render();
+    assert!(text.contains("\u{2713} project\n  Applied fixes:\n    \u{2022} Created src/routes.rs\n    \u{2022} Updated src/lib.rs\n"), "{text}");
+    assert!(read(&app, "src/routes.rs").contains("#[derive(RouteMap)]\npub struct Routes {\n    pub home: Route,\n}"));
+    assert!(read(&app, "src/lib.rs").ends_with("\npub mod routes;\n"));
+    let json = report.to_json();
+    assert!(json.contains(r#"{"code":"routes-missing","kind":"create-file","path":"src/routes.rs","suite":"project"}"#), "{json}");
+
+    // A routes file with only comments is replaced; lib.rs already declares it.
+    std::fs::write(app.join("src/routes.rs"), "// TODO: define routes\n\n/* routes coming soon */\n").unwrap();
+    let text = fix(&app).render();
+    assert!(text.contains("\u{2713} project\n  Applied fixes:\n    \u{2022} Updated src/routes.rs\n\n"), "{text}");
+    assert!(read(&app, "src/routes.rs").contains("derive(RouteMap)"));
+
+    // Real code without a route map is left to the developer.
+    std::fs::write(app.join("src/routes.rs"), "pub struct Routes;\n").unwrap();
+    let report = fix(&app);
+    assert!(report.render().contains("\u{2717} project\n  \u{2022} [WARN] Project has no route map"), "{}", report.render());
+    assert_eq!(report.applied_fixes().count(), 0);
+    assert_eq!(read(&app, "src/routes.rs"), "pub struct Routes;\n");
+    let json = report.to_json();
+    assert!(json.contains(r#""appliedFixes":[],"remainingFindings":[{"code":"routes-missing""#), "{json}");
+}
+
+#[test]
+fn doctor_fix_adds_cdylib_to_the_crate_types() {
+    let scratch = Scratch::new("doctor-fix-cdylib");
+    let app = scaffold(&scratch);
+    let manifest = read(&app, "Cargo.toml");
+    std::fs::write(app.join("Cargo.toml"), manifest.replace("[\"cdylib\", \"rlib\"]", "[\"rlib\"]")).unwrap();
+    let text = fix(&app).render();
+    assert!(text.contains("client\n  \u{2022} [ADVICE] The client has not been built"), "{text}");
+    assert!(text.contains("  Applied fixes:\n    \u{2022} Updated Cargo.toml\n"), "{text}");
+    assert!(read(&app, "Cargo.toml").contains("crate-type = [\"cdylib\", \"rlib\"]"));
+
+    let without_lib = manifest.replace("[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n", "");
+    assert_ne!(without_lib, manifest);
+    std::fs::write(app.join("Cargo.toml"), without_lib).unwrap();
+    fix(&app);
+    assert!(read(&app, "Cargo.toml").contains("[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n[dependencies]"), "{}", read(&app, "Cargo.toml"));
+}
+
+#[test]
+fn doctor_fails_on_warnings_under_strict_or_fix() {
+    assert_eq!(doctor_exit_code(false, false, 2), 0);
+    assert_eq!(doctor_exit_code(true, false, 1), 1);
+    assert_eq!(doctor_exit_code(false, true, 1), 1);
+    assert_eq!(doctor_exit_code(true, true, 0), 0);
+}
+
+#[test]
+fn doctor_fix_skips_existing_files_and_refuses_paths_outside_the_app() {
+    use doctor::{apply_fix_plans, FixKind, FixPlan};
+    let scratch = Scratch::new("doctor-fix-plans");
+    let app = scratch.0.join("app");
+    std::fs::create_dir_all(app.join("src")).unwrap();
+    std::fs::write(app.join("src/routes.rs"), "kept\n").unwrap();
+    let plan = |kind, path: &str| FixPlan { code: "routes-missing", suite: "project", kind, path: path.into(), contents: "new\n".into() };
+
+    let applied = apply_fix_plans(&app, &[plan(FixKind::CreateFile, "src/routes.rs")]).unwrap();
+    assert!(applied.is_empty(), "a skipped creation is not an applied fix");
+    assert_eq!(read(&app, "src/routes.rs"), "kept\n");
+    let applied = apply_fix_plans(&app, &[plan(FixKind::UpdateFile, "src/a.rs"), plan(FixKind::UpdateFile, "src/a.rs"), plan(FixKind::CreateFile, "src/b.rs")]).unwrap();
+    assert_eq!(applied.len(), 2, "duplicate plans run once");
+    assert_eq!(read(&app, "src/a.rs"), "new\n");
+
+    let err = apply_fix_plans(&app, &[plan(FixKind::CreateFile, "../escape.rs")]).unwrap_err();
+    assert_eq!(err, "Doctor fix path resolves outside the app root: ../escape.rs");
+    assert!(!scratch.0.join("escape.rs").exists());
+    assert!(apply_fix_plans(&app, &[plan(FixKind::CreateFile, "src/../../escape.rs")]).is_err());
+    let absolute = scratch.0.join("abs.rs").display().to_string();
+    assert!(apply_fix_plans(&app, &[plan(FixKind::CreateFile, &absolute)]).is_err());
+    assert!(!scratch.0.join("abs.rs").exists());
+
+    // Through symlinks (where this machine allows creating them).
+    let external = scratch.0.join("external");
+    std::fs::create_dir_all(&external).unwrap();
+    std::fs::write(external.join("Cargo.toml"), "external\n").unwrap();
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_dir(&external, app.join("linked")).is_ok() && std::os::windows::fs::symlink_file(external.join("Cargo.toml"), app.join("Linked.toml")).is_ok();
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(&external, app.join("linked")).is_ok() && std::os::unix::fs::symlink(external.join("Cargo.toml"), app.join("Linked.toml")).is_ok();
+    if linked {
+        for (kind, path) in [(FixKind::CreateFile, "linked/routes.rs"), (FixKind::CreateDirectory, "linked/actions"), (FixKind::UpdateFile, "Linked.toml")] {
+            let err = apply_fix_plans(&app, &[plan(kind, path)]).unwrap_err();
+            assert!(err.contains("outside the app root"), "{err}");
+        }
+        assert!(!external.join("routes.rs").exists() && !external.join("actions").exists());
+        assert_eq!(read(&external, "Cargo.toml"), "external\n");
+    } else {
+        eprintln!("symlinks unavailable: skipped the symlink cases");
+    }
 }
 
 // rmx dev
@@ -431,9 +580,9 @@ fn completion_offers_commands_subcommands_flags_and_files() {
     assert_eq!(complete(&["rmx", "new", "my-app", "--"]), "mode:values\n--app-name\n--force\n--help\n--no-color\n");
     assert_eq!(complete(&["rmx", "new", "my-app", "--app-name", ""]), "mode:none\n");
     assert_eq!(complete(&["rmx", "new", "--app-name", "X", ""]), "mode:files\n", "the name is not the target");
-    assert_eq!(complete(&["rmx", "doctor", "--json", "--"]), "mode:values\n--strict\n--no-strict\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "doctor", "--json", "--"]), "mode:values\n--fix\n--strict\n--no-strict\n--help\n--no-color\n");
     // A used --no-color is not offered again, before or after the command.
-    assert_eq!(complete(&["rmx", "--no-color", "doctor", "--"]), "mode:values\n--json\n--strict\n--no-strict\n--help\n");
+    assert_eq!(complete(&["rmx", "--no-color", "doctor", "--"]), "mode:values\n--fix\n--json\n--strict\n--no-strict\n--help\n");
     assert_eq!(complete(&["rmx", "--no-color", ""]), format!("mode:values\n{commands}-h\n--help\n-v\n--version\n"));
     assert_eq!(complete(&["rmx", "routes", "--no-color", "--n"]), "mode:values\n--no-headers\n");
     assert_eq!(complete(&["rmx", "routes", "--t"]), "mode:values\n--table\n");
@@ -461,7 +610,9 @@ fn doctor_colors_marks_and_warnings_only_when_enabled() {
             name: "environment",
             status: SuiteStatus::Issues,
             findings: vec![Finding { code: "x", severity: Severity::Warn, message: "Missing target".into() }, Finding { code: "y", severity: Severity::Advice, message: "Consider it".into() }],
+            applied_fixes: Vec::new(),
         }],
+        fixed: false,
     };
     let colored = report.render_styled(&Styles::new(true));
     assert!(colored.contains("\x1b[91m\u{2717}\x1b[39m \x1b[90menvironment\x1b[39m"), "{colored:?}");

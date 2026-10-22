@@ -583,8 +583,12 @@ Remaining gaps:
    later, 17 s of it the server rebuild), `doctor` (Remix's suites and output with rmx
    checks: environment for the `rmx` dependency, the wasm32 target and the pinned
    wasm-bindgen; project for a `RouteMap`; client for `cdylib` and a built, current wasm;
-   `--json`, `--strict`; no `--fix`, and no actions suite since controllers are checked at
-   compile time), `new` (writes `examples/template` as a
+   `--json`, `--strict`, and `--fix` like Remix's `applyDoctorFixPlans`: it adds the `rmx`
+   dependency, creates or fills an empty `src/routes.rs` and declares it in `lib.rs`, and
+   adds `cdylib` to the crate types, making each file once, skipping files that exist and
+   refusing paths that leave the app root, even through symlinks, then checks again and
+   fails on what is left; no actions suite since controllers are checked at compile time,
+   and no `--config` or `remix.json`), the global `--no-color`, `new` (writes `examples/template` as a
    standalone crate with the app's name, Remix's error codes and progress lines; an app made
    this way passed `cargo test` and the template's 10 browser checks outside the workspace),
    `version`, `help`, and `routes`, `assets` and `test`, which run the app through cargo. The

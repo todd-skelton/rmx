@@ -89,7 +89,7 @@ pub fn complete(words: &[String], index: usize) -> Completion {
                 Completion::Files
             }
         }
-        "doctor" => flags(&["--json", "--strict", "--no-strict"]),
+        "doctor" => flags(&["--fix", "--json", "--strict", "--no-strict"]),
         "routes" => flags(&["--json", "--table", "--no-headers"]),
         "dev" if !rest.contains(&"--") => flags(&["--"]),
         "version" => flags(&[]),
