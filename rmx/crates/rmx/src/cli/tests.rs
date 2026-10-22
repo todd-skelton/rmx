@@ -37,12 +37,12 @@ fn new_app(cwd: &Path, list: &[&str]) -> (Result<NewApp, CliError>, Vec<String>)
 
 #[test]
 fn prints_help_and_the_version() {
-    assert_eq!(parse(&[]), Ok(Invocation::Print(HELP.into())));
-    assert_eq!(parse(&args(&["--help"])), Ok(Invocation::Print(HELP.into())));
+    assert_eq!(parse(&[]), Ok(Invocation::Help(HELP)));
+    assert_eq!(parse(&args(&["--help"])), Ok(Invocation::Help(HELP)));
     assert!(HELP.contains("new <name>        Create a new rmx project"));
-    assert_eq!(parse(&args(&["help", "new"])), Ok(Invocation::Print(NEW_HELP.into())));
-    assert_eq!(parse(&args(&["new"])), Ok(Invocation::Print(NEW_HELP.into())), "new without arguments prints its help");
-    assert_eq!(parse(&args(&["new", "--help"])), Ok(Invocation::Print(NEW_HELP.into())));
+    assert_eq!(parse(&args(&["help", "new"])), Ok(Invocation::Help(NEW_HELP)));
+    assert_eq!(parse(&args(&["new"])), Ok(Invocation::Help(NEW_HELP)), "new without arguments prints its help");
+    assert_eq!(parse(&args(&["new", "--help"])), Ok(Invocation::Help(NEW_HELP)));
     assert!(NEW_HELP.contains("Create a new rmx project in the target directory."));
     let version = format!("{}\n", env!("CARGO_PKG_VERSION"));
     assert_eq!(parse(&args(&["version"])), Ok(Invocation::Print(version.clone())));
@@ -55,7 +55,7 @@ fn accepts_the_global_no_color_flag_before_a_separator() {
     let version = Ok(Invocation::Print(format!("{}\n", env!("CARGO_PKG_VERSION"))));
     assert_eq!(parse(&args(&["--no-color", "version"])), version);
     assert_eq!(parse(&args(&["--no-color", "--", "--version"])), version, "a separator after global options");
-    assert_eq!(parse(&args(&["--", "--help"])), Ok(Invocation::Print(HELP.into())), "a leading separator");
+    assert_eq!(parse(&args(&["--", "--help"])), Ok(Invocation::Help(HELP)), "a leading separator");
     assert_eq!(parse(&args(&["version", "--no-color"])), version, "anywhere before a separator");
     assert!(HELP.contains("  --no-color     Disable ANSI color output\n"));
 
@@ -100,12 +100,12 @@ fn routes_assets_and_test_run_the_app_through_cargo() {
     assert_eq!(exec(&["test", "frame"]), "cargo test frame");
     assert_eq!(exec(&["test", "--", "-h"]), "cargo test -- -h", "help flags after -- go to the test binaries");
     assert_eq!(exec(&["test", "-p", "app", "--", "--nocapture", "--help"]), "cargo test -p app -- --nocapture --help");
-    assert_eq!(parse(&args(&["test", "frame", "-h", "--", "x"])), Ok(Invocation::Print(TEST_HELP.into())));
+    assert_eq!(parse(&args(&["test", "frame", "-h", "--", "x"])), Ok(Invocation::Help(TEST_HELP)));
     assert_eq!(parse(&args(&["help", "test"])), parse(&args(&["test", "--help"])));
     // Help needs no project build (Remix prints it before looking for one).
-    assert_eq!(parse(&args(&["routes", "--json", "-h"])), Ok(Invocation::Print(ROUTES_HELP.into())));
-    assert_eq!(parse(&args(&["assets", "inspect", "--help"])), Ok(Invocation::Print(ASSETS_HELP.into())));
-    assert_eq!(parse(&args(&["test", "--help"])), Ok(Invocation::Print(TEST_HELP.into())));
+    assert_eq!(parse(&args(&["routes", "--json", "-h"])), Ok(Invocation::Help(ROUTES_HELP)));
+    assert_eq!(parse(&args(&["assets", "inspect", "--help"])), Ok(Invocation::Help(ASSETS_HELP)));
+    assert_eq!(parse(&args(&["test", "--help"])), Ok(Invocation::Help(TEST_HELP)));
 }
 
 #[test]
@@ -261,7 +261,7 @@ fn doctor_parses_its_flags() {
     assert_eq!(parse(&args(&["doctor", "--fix"])), Ok(Invocation::Doctor { json: false, strict: false, fix: true }));
     assert_eq!(parse(&args(&["doctor", "--bad-flag"])).unwrap_err().message, "Unknown argument: --bad-flag");
     assert!(DOCTOR_HELP.contains("  --fix        Apply available low-risk fixes\n"));
-    assert_eq!(parse(&args(&["doctor", "--help"])), Ok(Invocation::Print(DOCTOR_HELP.into())));
+    assert_eq!(parse(&args(&["doctor", "--help"])), Ok(Invocation::Help(DOCTOR_HELP)));
     assert!(HELP.contains("doctor            Check project health for the current project"));
 }
 
@@ -437,6 +437,40 @@ fn doctor_fix_adds_cdylib_to_the_crate_types() {
 }
 
 #[test]
+fn colors_help_headings_and_syntax_tokens() {
+    // help-text.test.ts: plain without colors, headings bold light blue, tokens light yellow.
+    assert_eq!(style_help(HELP, &Styles::new(false)), HELP);
+    let text = "Usage:\n  rmx demo [options]\n\nRun the demo command.\n\nOptions:\n  --dir <path>  Print JSON to <file>\n  -h, --help    Show help\n\nExamples:\n  rmx demo --json\n  rmx new ./my-rmx-app --force\n  rmx new ./foo--bar --force\n  rmx dev -- --port 4000\n";
+    let out = style_help(text, &Styles::new(true));
+    let y = |s: &str| format!("\x1b[93m{s}\x1b[39m");
+    assert!(out.starts_with("\x1b[1m\x1b[94mUsage\x1b[39m\x1b[22m:\n"), "{out:?}");
+    assert!(out.contains(&format!("  rmx demo {}\n\nRun the demo command.\n\n", y("[options]"))), "{out:?}");
+    assert!(out.contains(&format!("  {} {}  Print JSON to <file>\n", y("--dir"), y("<path>"))), "only the label: {out:?}");
+    assert!(out.contains(&format!("  {}, {}    Show help\n", y("-h"), y("--help"))), "{out:?}");
+    assert!(out.contains(&format!("  rmx demo {}\n", y("--json"))), "{out:?}");
+    assert!(out.contains(&format!("  rmx new ./foo--bar {}\n", y("--force"))), "{out:?}");
+    assert!(out.contains(&format!("  rmx dev -- {} 4000\n", y("--port"))), "a bare -- is not a flag: {out:?}");
+    assert!(!out.contains("Run the \x1b"), "descriptions stay plain");
+    // Every help text keeps its words once the colors are stripped.
+    for help in [HELP, NEW_HELP, VERSION_HELP, ROUTES_HELP, ASSETS_HELP, DOCTOR_HELP, DEV_HELP, COMPLETION_HELP, TEST_HELP] {
+        assert_eq!(strip_sgr(&style_help(help, &Styles::new(true))), help);
+    }
+}
+
+/// `text` without its `ESC [ ... m` sequences.
+fn strip_sgr(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find('\x1b') {
+        out.push_str(&rest[..start]);
+        rest = &rest[start..];
+        rest = rest.find('m').map_or("", |end| &rest[end + 1..]);
+    }
+    out.push_str(rest);
+    out
+}
+
+#[test]
 fn commands_open_with_the_header_on_a_terminal() {
     // reporter.test.ts: a blank line, then the header only on a TTY.
     assert_eq!(preamble("doctor", &Styles::new(false), true), format!("\nRMX v{} - doctor\n\n", version()));
@@ -520,7 +554,7 @@ fn doctor_fix_skips_existing_files_and_refuses_paths_outside_the_app() {
 fn dev_parses_app_arguments_after_a_separator() {
     assert_eq!(parse(&args(&["dev"])), Ok(Invocation::Dev(vec![])));
     assert_eq!(parse(&args(&["dev", "--", "--port", "4000"])), Ok(Invocation::Dev(args(&["--port", "4000"]))));
-    assert_eq!(parse(&args(&["dev", "--help"])), Ok(Invocation::Print(DEV_HELP.into())));
+    assert_eq!(parse(&args(&["dev", "--help"])), Ok(Invocation::Help(DEV_HELP)));
     assert_eq!(parse(&args(&["dev", "--", "--help"])), Ok(Invocation::Dev(args(&["--help"]))), "after -- it is the app's");
     assert_eq!(parse(&args(&["dev", "--watch"])).unwrap_err().message, "Unknown argument: --watch");
     assert_eq!(parse(&args(&["dev", "extra"])).unwrap_err().message, "Unexpected extra argument: extra");
@@ -591,7 +625,7 @@ fn completion_prints_the_script_for_bash_and_zsh() {
     assert!(bash.contains("complete -o default -F _rmx_completion rmx") && bash.contains("compdef _rmx_completion rmx"));
     assert!(bash.contains(r#"output=$(rmx completion -- "$cword" "${words[@]}" 2>/dev/null)"#), "{bash}");
     assert_eq!(parse(&args(&["completion", "fish"])).unwrap_err().message, "Unknown completion shell: fish");
-    assert_eq!(parse(&args(&["completion"])), Ok(Invocation::Print(COMPLETION_HELP.into())));
+    assert_eq!(parse(&args(&["completion"])), Ok(Invocation::Help(COMPLETION_HELP)));
     assert!(HELP.contains("completion        Print shell completion scripts for rmx"));
 }
 

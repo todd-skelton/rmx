@@ -20,8 +20,10 @@ pub mod doctor;
 /// What a command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Invocation {
-    /// Print to stdout and exit 0 (help, version).
+    /// Print to stdout and exit 0 (version, completion).
     Print(String),
+    /// Print a help text to stdout and exit 0, colored on a terminal (Remix `formatHelpText`).
+    Help(&'static str),
     /// Run a program in the current directory and exit with its status.
     Exec(Vec<String>),
     /// Create an app.
@@ -286,19 +288,19 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
     let (args, _) = global_options(args);
     let mut args: Vec<&str> = args.iter().map(String::as_str).skip_while(|a| *a == "--").collect();
     if args.is_empty() || matches!(args[0], "-h" | "--help") {
-        return Ok(Invocation::Print(HELP.into()));
+        return Ok(Invocation::Help(HELP));
     }
     let command = args.remove(0);
     let wants_help = args.iter().any(|a| matches!(*a, "-h" | "--help"));
     match command {
         "help" => match args.as_slice() {
-            [] => Ok(Invocation::Print(HELP.into())),
-            [command] => Ok(Invocation::Print(help_for(Some(command))?.into())),
+            [] => Ok(Invocation::Help(HELP)),
+            [command] => Ok(Invocation::Help(help_for(Some(command))?)),
             [_, extra, ..] => Err(CliError::unexpected_extra_argument(extra)),
         },
         "-v" | "--version" | "version" => {
             if wants_help && command == "version" {
-                return Ok(Invocation::Print(VERSION_HELP.into()));
+                return Ok(Invocation::Help(VERSION_HELP));
             }
             match args.first() {
                 Some(arg) if arg.starts_with('-') => Err(CliError::unknown_argument(arg)),
@@ -308,12 +310,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
         }
         "new" => {
             if args.is_empty() || wants_help {
-                return Ok(Invocation::Print(NEW_HELP.into()));
+                return Ok(Invocation::Help(NEW_HELP));
             }
             parse_new(&args).map(Invocation::New)
         }
-        "routes" if wants_help => Ok(Invocation::Print(ROUTES_HELP.into())),
-        "assets" if wants_help => Ok(Invocation::Print(ASSETS_HELP.into())),
+        "routes" if wants_help => Ok(Invocation::Help(ROUTES_HELP)),
+        "assets" if wants_help => Ok(Invocation::Help(ASSETS_HELP)),
         "routes" | "assets" => {
             let mut argv: Vec<String> = ["cargo", "run", "--quiet", "--", command].map(String::from).to_vec();
             argv.extend(args.iter().map(|a| a.to_string()));
@@ -326,8 +328,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
                 let words: Vec<String> = words.iter().map(|w| w.to_string()).collect();
                 Ok(Invocation::Print(completion::complete(&words, index).render()))
             }
-            [] => Ok(Invocation::Print(COMPLETION_HELP.into())),
-            _ if wants_help => Ok(Invocation::Print(COMPLETION_HELP.into())),
+            [] => Ok(Invocation::Help(COMPLETION_HELP)),
+            _ if wants_help => Ok(Invocation::Help(COMPLETION_HELP)),
             [shell] if completion::SHELLS.contains(shell) => Ok(Invocation::Print(completion::script().into())),
             [shell] if shell.starts_with('-') => Err(CliError::unknown_argument(shell)),
             [shell] => Err(CliError::usage(
@@ -344,7 +346,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
                 None => (&args[..], &[][..]),
             };
             if before.iter().any(|a| matches!(*a, "-h" | "--help")) {
-                return Ok(Invocation::Print(DEV_HELP.into()));
+                return Ok(Invocation::Help(DEV_HELP));
             }
             if let Some(arg) = before.first() {
                 return Err(if arg.starts_with('-') { CliError::unknown_argument(arg) } else { CliError::unexpected_extra_argument(arg) });
@@ -353,7 +355,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
         }
         "doctor" => {
             if wants_help {
-                return Ok(Invocation::Print(DOCTOR_HELP.into()));
+                return Ok(Invocation::Help(DOCTOR_HELP));
             }
             let (mut json, mut strict, mut fix) = (false, false, false);
             for arg in &args {
@@ -371,7 +373,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
         "test" => {
             // After a bare `--` the arguments belong to the test binaries (Remix `wantsHelp`).
             if args.iter().take_while(|a| **a != "--").any(|a| matches!(*a, "-h" | "--help")) {
-                return Ok(Invocation::Print(TEST_HELP.into()));
+                return Ok(Invocation::Help(TEST_HELP));
             }
             let mut argv: Vec<String> = vec!["cargo".into(), "test".into()];
             argv.extend(args.iter().map(|a| a.to_string()));
@@ -479,7 +481,13 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
     let args = &args[..];
     let colors = |is_tty: bool| !global.no_color && rmx_terminal::should_use_colors(|name| std::env::var(name).ok(), is_tty);
     let help = |args: &[String]| help_for(args.first().map(String::as_str).filter(|c| *c != "help")).unwrap_or(HELP);
+    // Help under an error goes to stderr, so it follows stderr's colors.
+    let error_help = |text: &str| style_help(text, &Styles::new(colors(std::io::stderr().is_terminal())));
     match parse(args) {
+        Ok(Invocation::Help(text)) => {
+            print!("{}", style_help(text, &Styles::new(colors(std::io::stdout().is_terminal()))));
+            0
+        }
         Ok(Invocation::Print(text)) => {
             print!("{text}");
             0
@@ -504,7 +512,7 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
                 }
                 Err(e) => {
                     eprintln!();
-                    eprint!("{}", e.render(NEW_HELP));
+                    eprint!("{}", e.render(&error_help(NEW_HELP)));
                     1
                 }
             }
@@ -512,7 +520,7 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
         Ok(Invocation::Dev(app_args)) => match dev::run_dev(cwd, &app_args) {
             Ok(()) => 0,
             Err(e) => {
-                eprint!("{}", e.render(DEV_HELP));
+                eprint!("{}", e.render(&error_help(DEV_HELP)));
                 1
             }
         },
@@ -520,7 +528,7 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
             let report = match doctor::run_doctor_with(cwd, &doctor::SystemToolchain, fix) {
                 Ok(report) => report,
                 Err(message) => {
-                    eprint!("{}", CliError::internal(message).render(DOCTOR_HELP));
+                    eprint!("{}", CliError::internal(message).render(&error_help(DOCTOR_HELP)));
                     return 1;
                 }
             };
@@ -530,9 +538,87 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
             doctor_exit_code(strict, fix, report.warnings())
         }
         Err(e) => {
-            eprint!("{}", e.render(help(args)));
+            eprint!("{}", e.render(&error_help(help(args))));
             1
         }
+    }
+}
+
+/// Remix `formatHelpText` colors: the section headings bold light blue, and in usage lines,
+/// examples and the labels of option and command rows, flags (`--json`, `-h`), bracketed
+/// names (`[options]`) and angle-bracketed values (`<path>`) light yellow.
+fn style_help(text: &str, styles: &Styles) -> String {
+    if !styles.enabled() {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len() * 2);
+    let mut section = "";
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_end_matches('\n');
+        match body.strip_suffix(':') {
+            Some(title @ ("Usage" | "Commands" | "Options" | "Examples")) => {
+                section = title;
+                out.push_str(&styles.format(title, &[rmx_terminal::Style::Bold, rmx_terminal::Style::BlueBright]));
+                out.push(':');
+            }
+            _ => match (section, body.strip_prefix("  ")) {
+                ("Usage" | "Examples", Some(rest)) => {
+                    out.push_str("  ");
+                    out.push_str(&highlight_syntax(rest, styles));
+                }
+                ("Commands" | "Options", Some(rest)) => {
+                    // The label, padded to the description column.
+                    let label_end = rest.find("  ").map_or(rest.len(), |gap| gap + rest[gap..].len() - rest[gap..].trim_start().len());
+                    out.push_str("  ");
+                    out.push_str(&highlight_syntax(&rest[..label_end], styles));
+                    out.push_str(&rest[label_end..]);
+                }
+                _ => out.push_str(body),
+            },
+        }
+        out.push_str(&line[body.len()..]);
+    }
+    out
+}
+
+/// `text` with Remix's help syntax tokens in light yellow.
+fn highlight_syntax(text: &str, styles: &Styles) -> String {
+    let bytes = text.as_bytes();
+    let (mut out, mut plain, mut i) = (String::new(), 0, 0);
+    while i < bytes.len() {
+        match syntax_token(bytes, i) {
+            Some(end) => {
+                out.push_str(&text[plain..i]);
+                out.push_str(&styles.yellow_bright(&text[i..end]));
+                (plain, i) = (end, end);
+            }
+            None => i += 1,
+        }
+    }
+    out.push_str(&text[plain..]);
+    out
+}
+
+/// The end of the token at `i`, as Remix's pattern
+/// `(?<![^\s[,|])(--[A-Za-z0-9-]+|-[A-Za-z])(?=$|[\s,\]|])|\[[A-Za-z][A-Za-z0-9-]*\]|<[^>\n]+>`.
+fn syntax_token(b: &[u8], i: usize) -> Option<usize> {
+    let name_end = |mut j: usize| {
+        while j < b.len() && (b[j].is_ascii_alphanumeric() || b[j] == b'-') {
+            j += 1;
+        }
+        j
+    };
+    let ends_flag = |j: usize| j == b.len() || b[j].is_ascii_whitespace() || matches!(b[j], b',' | b']' | b'|');
+    let starts_flag = i == 0 || b[i - 1].is_ascii_whitespace() || matches!(b[i - 1], b'[' | b',' | b'|');
+    match b[i] {
+        b'-' if starts_flag && b.get(i + 1) == Some(&b'-') => Some(name_end(i + 2)).filter(|&j| j > i + 2 && ends_flag(j)),
+        b'-' if starts_flag && b.get(i + 1).is_some_and(u8::is_ascii_alphabetic) => Some(i + 2).filter(|&j| ends_flag(j)),
+        b'[' if b.get(i + 1).is_some_and(u8::is_ascii_alphabetic) => Some(name_end(i + 2)).filter(|&j| b.get(j) == Some(&b']')).map(|j| j + 1),
+        b'<' => {
+            let close = b[i + 1..].iter().position(|&c| c == b'>' || c == b'\n').map(|p| i + 1 + p)?;
+            (close > i + 1 && b[close] == b'>').then_some(close + 1)
+        }
+        _ => None,
     }
 }
 
