@@ -1,7 +1,7 @@
 //! Let HTML forms send PUT/PATCH/DELETE via a hidden `_method` field.
 
 use http::Method;
-use rmx_router::{Context, Middleware, Next};
+use rmx_fetch_router::{Context, Middleware, Next};
 
 use rmx_form_data_middleware::FormDataExt;
 
@@ -43,9 +43,9 @@ fn request_method(m: &str) -> Option<Method> {
 #[cfg(test)]
 mod tests {
     use rmx_fetch::{block_on, Body};
-    use rmx_router::{Context, Router};
+    use rmx_fetch_router::{Context, Router};
 
-    fn router(mw: impl rmx_router::Middleware + 'static) -> Router {
+    fn router(mw: impl rmx_fetch_router::Middleware + 'static) -> Router {
         let mut router = Router::new().with(rmx_form_data_middleware::form_data()).with(mw);
         router.post("/", |_: Context| async { "Created" });
         router.delete("/", |_: Context| async { "Deleted" });

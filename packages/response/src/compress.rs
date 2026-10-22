@@ -14,7 +14,7 @@ use flate2::write::{GzEncoder, ZlibEncoder};
 use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use rmx_headers::{AcceptEncoding, CacheControl, Vary};
 
-use crate::{Body, Response};
+use rmx_fetch::{Body, Response};
 
 /// A content coding [compress_response] can produce.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

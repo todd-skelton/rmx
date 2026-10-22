@@ -1,8 +1,8 @@
 //! A router built on [`rmx_fetch::Request`] / [`rmx_fetch::Response`] (Remix's `fetch-router`).
 //!
 //! ```
-//! use rmx_router::{Router, Context};
-//! use rmx_fetch::response;
+//! use rmx_fetch_router::{Router, Context};
+//! use rmx_response as response;
 //!
 //! let mut router = Router::new();
 //! router.get("/", |_ctx: Context| async { response::text("Home") });
@@ -29,7 +29,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
-use rmx_fetch::{request_url, response, AbortError, AbortSignal, Body, Request, RequestExt, Response};
+use rmx_fetch::{request_url, AbortError, AbortSignal, Body, Request, RequestExt, Response};
+use rmx_response as response;
 use rmx_route_pattern::{specificity, Matcher, MultiMatcher, Params, RoutePattern};
 use rmx_url::Url;
 
@@ -402,7 +403,7 @@ where
 /// Middleware: runs code before and/or after the rest of the chain.
 ///
 /// ```
-/// use rmx_router::{Context, Next};
+/// use rmx_fetch_router::{Context, Next};
 /// async fn timing(ctx: Context, next: Next) -> rmx_fetch::Response {
 ///     let start = std::time::Instant::now();
 ///     let mut res = next.run(ctx).await;
@@ -441,7 +442,7 @@ enum Endpoint {
 /// return a `Response`, so one that neither answers nor calls `next` does not compile either.
 ///
 /// ```compile_fail,E0382
-/// use rmx_router::{Context, Next};
+/// use rmx_fetch_router::{Context, Next};
 /// async fn twice(ctx: Context, next: Next) -> rmx_fetch::Response {
 ///     let _ = next.run(ctx).await;
 ///     next.run(todo!()).await
@@ -449,7 +450,7 @@ enum Endpoint {
 /// ```
 ///
 /// ```compile_fail,E0277
-/// use rmx_router::{action, Context, Next};
+/// use rmx_fetch_router::{action, Context, Next};
 /// // error: the middleware's future yields `()`, not a `Response` (Remix rejects with
 /// // "Middleware must return a Response or call next()").
 /// let _ = action(|_: Context| async { "OK" }).with(|_: Context, _: Next| async {});
@@ -728,7 +729,7 @@ impl Router {
     }
 
     fn inner_mut(&mut self) -> &mut Inner {
-        Arc::get_mut(&mut self.inner).expect("rmx-router: register routes and middleware before the router is cloned or serving")
+        Arc::get_mut(&mut self.inner).expect("rmx-fetch-router: register routes and middleware before the router is cloned or serving")
     }
 
     /// Add router middleware (runs for every request, in the order added).

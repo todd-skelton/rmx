@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use http::header::{HeaderValue, SET_COOKIE};
 use rmx_cookie::{Cookie, CookieProperties};
-use rmx_router::{Context, Error, IntoResponse, Middleware, Next};
+use rmx_fetch_router::{Context, Error, IntoResponse, Middleware, Next};
 use rmx_session::{Session, SessionStorage};
 use serde_json::json;
 
@@ -129,7 +129,7 @@ impl SessionExt for Context {
 mod tests {
     use rmx_cookie::Cookie;
     use rmx_fetch::{block_on, Body, Response};
-    use rmx_router::{Context, Router};
+    use rmx_fetch_router::{Context, Router};
     use rmx_session::MemoryStorage;
 
     use super::*;

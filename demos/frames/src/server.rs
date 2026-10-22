@@ -4,12 +4,12 @@ use frames_demo::scroll_reload::*;
 use frames_demo::*;
 use http::StatusCode;
 use rmx::{css, rsx, Frame, Node};
-use rmx::fetch::response;
+use rmx::response;
 use rmx::middleware::compression::compression;
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::render::Render;
+use rmx::middleware::render::Render;
 use frames_demo::routes::{FramesActions, RoutesActions, ROUTES};
 use rmx::router::{action, Context, Router};
 
@@ -21,7 +21,7 @@ pub fn main() {
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let addr = format!("{host}:{port}");
     println!("frames demo on http://{addr}");
-    rt.block_on(rmx::serve::listen(&addr, router)).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router)).expect("serve");
 }
 
 pub fn router(public: &str) -> Router {
@@ -249,10 +249,10 @@ fn home_page() -> Node {
         nav.push(rsx! { <a href={href} mix={link_style()}>{label}</a> });
     }
     rsx! {
-        <Document title="Frames + rmx-router demo" max_width="980px">
+        <Document title="Frames + rmx-fetch-router demo" max_width="980px">
             <h1 mix={css("margin: 0; letter-spacing: -0.02em;")}>"Full-stack Frames"</h1>
             <p mix={css("margin-top: 8px; color: #b9c6ff;")}>
-                "Server routes are handled by " <code>"rmx-router"</code> "; UI is streamed with "
+                "Server routes are handled by " <code>"rmx-fetch-router"</code> "; UI is streamed with "
                 <code>"rmx"</code> " Frames and client entries."
             </p>
             <p mix={css("margin-top: 0; margin-bottom: 16px;")}>{nav}</p>

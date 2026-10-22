@@ -1,0 +1,15 @@
+[package]
+name = "rmx-cli"
+description = "Command-line interface for rmx (remix cli): new, dev, doctor, completion, routes, assets, test"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+# `cargo install --path packages/cli` installs the `rmx` command.
+[[bin]]
+name = "rmx"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+rmx-terminal.workspace = true

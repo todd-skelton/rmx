@@ -15,8 +15,8 @@ use std::time::Duration;
 use http::{Method, StatusCode, Version};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use rmx_fetch::{AbortError, Body, Request, RequestExt};
-use rmx_router::{Context, Router};
-use rmx_serve::{create_request, serve_with, ClientAddress, ServeError, ServeOptions};
+use rmx_fetch_router::{Context, Router};
+use rmx_node_fetch_server::{create_request, serve_with, ClientAddress, ServeError, ServeOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -83,7 +83,7 @@ fn body_of(raw: &str) -> String {
 }
 
 /// A router that answers every `GET` (and `POST`) to `/` and `/*path` with `handler`.
-fn router<H: rmx_router::Handler + Clone>(handler: H) -> Router {
+fn router<H: rmx_fetch_router::Handler + Clone>(handler: H) -> Router {
     let mut router = Router::new();
     router.any("/", handler.clone());
     router.any("/*path", handler);
@@ -233,7 +233,7 @@ async fn drops_the_response_without_writing_when_the_request_was_aborted_before_
             let _ = started.send(());
             // Resolve with a normal-looking response after the abort, as an outer catch would.
             ctx.signal().until_aborted().await;
-            rmx_fetch::response::status(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+            rmx_response::status(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
         }
     };
     let addr = start(router(handler), options).await;
@@ -245,7 +245,7 @@ async fn drops_the_response_without_writing_when_the_request_was_aborted_before_
 }
 
 /// A handler that answers only when the test sends the response, without reading the signal.
-fn late_handler(started: tokio::sync::mpsc::UnboundedSender<()>, release: Arc<tokio::sync::Notify>, finished: Arc<AtomicBool>) -> impl rmx_router::Handler + Clone {
+fn late_handler(started: tokio::sync::mpsc::UnboundedSender<()>, release: Arc<tokio::sync::Notify>, finished: Arc<AtomicBool>) -> impl rmx_fetch_router::Handler + Clone {
     move |_: Context| {
         let (started, release, finished) = (started.clone(), release.clone(), finished.clone());
         async move {
@@ -338,7 +338,7 @@ async fn does_not_send_an_error_response_when_a_response_stream_errors_after_hea
     let log = errors.clone();
     let options = ServeOptions::default().on_error(move |error| {
         log.lock().unwrap().push(error.clone());
-        Some(rmx_fetch::response::status(StatusCode::INTERNAL_SERVER_ERROR, "fallback"))
+        Some(rmx_response::status(StatusCode::INTERNAL_SERVER_ERROR, "fallback"))
     });
     let addr = start(router(|_: Context| async { failing_body() }), options).await;
 
@@ -381,7 +381,7 @@ type BodyRead = (Result<String, String>, bool);
 
 /// A handler that reads the body with `read` in a task (so the read finishes even when the
 /// connection goes away) and reports the outcome.
-fn body_reader(reads: tokio::sync::mpsc::UnboundedSender<BodyRead>, wait_for_abort: bool, buffered: bool) -> impl rmx_router::Handler + Clone {
+fn body_reader(reads: tokio::sync::mpsc::UnboundedSender<BodyRead>, wait_for_abort: bool, buffered: bool) -> impl rmx_fetch_router::Handler + Clone {
     move |mut ctx: Context| {
         let reads = reads.clone();
         async move {
@@ -598,7 +598,7 @@ async fn construction_error_server(handler_called: Arc<AtomicBool>, reads_client
     let counted = calls.clone();
     let options = ServeOptions::default().on_error(move |_| {
         counted.fetch_add(1, Ordering::SeqCst);
-        Some(rmx_fetch::response::status(StatusCode::INTERNAL_SERVER_ERROR, "boom"))
+        Some(rmx_response::status(StatusCode::INTERNAL_SERVER_ERROR, "boom"))
     });
     let handler = move |ctx: Context| {
         let called = handler_called.clone();
@@ -925,7 +925,7 @@ fn throws_when_host_and_authority_identify_different_hosts() {
 // createRequest abort behavior
 
 /// A handler that reports when its signal aborts, and answers when `answer` is notified.
-fn abort_watcher(aborted: Arc<AtomicBool>) -> impl rmx_router::Handler + Clone {
+fn abort_watcher(aborted: Arc<AtomicBool>) -> impl rmx_fetch_router::Handler + Clone {
     move |ctx: Context| {
         let (aborted, signal) = (aborted.clone(), ctx.signal().clone());
         async move {

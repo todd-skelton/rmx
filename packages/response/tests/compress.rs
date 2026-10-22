@@ -24,7 +24,7 @@ use std::task::{Context, Poll, Waker};
 
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue, Method, StatusCode};
-use rmx_fetch::response::compress::{compress_response, compress_stream, create_compression_options, BrotliOptions, CompressOptions, Compressor, Encoding, ZlibOptions};
+use rmx_response::compress::{compress_response, compress_stream, create_compression_options, BrotliOptions, CompressOptions, Compressor, Encoding, ZlibOptions};
 use rmx_fetch::{block_on, Body, BoxError, Request, Response};
 use rmx_headers::Vary;
 

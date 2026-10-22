@@ -1,15 +1,15 @@
 //! The compression middleware (Remix's `remix/middleware/compression`): compresses
 //! responses with a compressible media type through [`compress_response`] (Remix's
-//! `remix/response/compress`, which lives in `rmx_fetch::response::compress` and is
+//! `remix/response/compress`, which lives in `rmx_response::compress` and is
 //! re-exported here).
 
 use std::sync::Arc;
 
 use http::header;
 use rmx_fetch::Response;
-use rmx_router::{BoxFuture, Context, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
 
-pub use rmx_fetch::response::compress::{
+pub use rmx_response::compress::{
     compress_response, compress_stream, create_compression_options, BrotliOptions, CompressOptions, Compressor, Encoding, ZlibOptions, DEFAULT_ENCODINGS,
 };
 

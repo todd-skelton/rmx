@@ -2,7 +2,8 @@
 //! `requireAuth()`.
 
 use rmx::{css, rsx, Node};
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::middleware::session::SessionExt;
 use rmx::router::{action, Context, Controller, Router};
 

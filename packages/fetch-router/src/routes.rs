@@ -6,7 +6,7 @@
 //!
 //! ```
 //! use std::sync::LazyLock;
-//! use rmx_router::routes::{form, get, prefix, Form, Route};
+//! use rmx_fetch_router::routes::{form, get, prefix, Form, Route};
 //!
 //! pub struct Routes { pub home: Route, pub contact: Form, pub blog: Blog }
 //! pub struct Blog { pub index: Route, pub show: Route }

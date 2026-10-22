@@ -18,7 +18,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use http::StatusCode;
-use rmx::fetch::{block_on, response, Body, Request, Response};
+use rmx::fetch::{block_on, Body, Request, Response};
+use rmx::response;
 use rmx::route_pattern::{Match, Matcher, MatcherResourceError, MultiMatcher, RoutePattern};
 use rmx::router::routes::{any, get, post, prefix, Route, RouteMap};
 use rmx::router::{action, catch_panic, Action, BoxFuture, Context, Controller, IntoResponse, Next, RouteEntry, Router};

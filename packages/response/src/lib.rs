@@ -4,7 +4,7 @@ use http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
 
 use bytes::Bytes;
 
-use crate::{Body, File, Response};
+use rmx_fetch::{Body, File, Response};
 
 #[cfg(feature = "compress")]
 pub mod compress;

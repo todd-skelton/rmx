@@ -15,7 +15,7 @@ fn read(path: impl AsRef<Path>) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-/// The `packages/*` workspace members' package names (`rmx-router`, ...).
+/// The `packages/*` workspace members' package names (`rmx-fetch-router`, ...).
 fn library_crates() -> BTreeSet<String> {
     let workspace = read(root().join("Cargo.toml"));
     let members = workspace.split("members = [").nth(1).and_then(|s| s.split(']').next()).expect("workspace members");
@@ -37,6 +37,7 @@ fn library_crates() -> BTreeSet<String> {
 fn module_name(package: &str) -> String {
     let name = package.strip_prefix("rmx-").expect("rmx- prefix");
     match name {
+        "fetch-router" => "router".into(),
         "static-middleware" => "middleware::static_files".into(),
         _ => match name.strip_suffix("-middleware") {
             Some(middleware) => format!("middleware::{}", middleware.replace('-', "_")),

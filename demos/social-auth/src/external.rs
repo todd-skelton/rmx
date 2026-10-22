@@ -7,7 +7,8 @@ use rmx::auth::{
     finish_external_auth, github_provider, google_provider, start_external_auth, x_provider, ClientOptions, Fetch, FinishExternalAuthOptions, GitHubProfile,
     GitHubProvider, OAuthProvider, OidcProfile, OidcProvider, StartExternalAuthOptions, XProfile, XProvider,
 };
-use rmx::fetch::{response, BoxError, BoxFuture, Request, Response};
+use rmx::fetch::{BoxError, BoxFuture, Request, Response};
+use rmx::response;
 use rmx::middleware::auth::complete_auth;
 use rmx::middleware::session::SessionExt;
 use rmx::router::{action, Context, Router};

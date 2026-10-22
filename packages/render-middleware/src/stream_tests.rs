@@ -13,8 +13,9 @@ use std::task::{Context as TaskContext, Waker};
 use rmx::__private::serde_json;
 
 use rmx::{css, rsx, Component, Frame, Handle, Node};
-use rmx_fetch::{block_on, response, Body, BodySender};
-use rmx_router::{Context, Router};
+use rmx_fetch::{block_on, Body, BodySender};
+use rmx_response as response;
+use rmx_fetch_router::{Context, Router};
 
 use super::Render;
 

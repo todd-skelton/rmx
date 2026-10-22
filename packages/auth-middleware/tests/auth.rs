@@ -17,7 +17,7 @@ use rmx_auth_middleware::{
     FailureCode, SchemeResult,
 };
 use rmx_session_middleware::session;
-use rmx_router::{middleware, Context, IntoResponse, Middleware, Next, Router};
+use rmx_fetch_router::{middleware, Context, IntoResponse, Middleware, Next, Router};
 use rmx_session::{MemoryStorage, Session};
 
 #[derive(Clone, Debug, PartialEq)]

@@ -8,7 +8,7 @@ use common::*;
 use rmx_fetch::Body;
 use rmx_auth_middleware::{credentials_provider, verify_credentials};
 use rmx_form_data_middleware::FormDataExt;
-use rmx_router::{middleware, Context, Router};
+use rmx_fetch_router::{middleware, Context, Router};
 use serde_json::json;
 
 /// `router.post('/login', { middleware: [formData()], handler })`.

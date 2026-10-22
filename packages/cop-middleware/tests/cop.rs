@@ -5,7 +5,7 @@ use rmx_fetch::{block_on, Body, Response};
 use rmx_cop_middleware::{cop, Cop};
 use rmx_form_data_middleware::form_data;
 use rmx_method_override_middleware::method_override;
-use rmx_router::{Context, IntoResponse, Router};
+use rmx_fetch_router::{Context, IntoResponse, Router};
 
 async fn ok(_ctx: Context) -> &'static str {
     "ok"

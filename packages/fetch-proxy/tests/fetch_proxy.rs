@@ -8,12 +8,12 @@
 //! per-request and per-call `redirect`.
 //!
 //! Remix's default `fetch` decodes compressed bodies, and the proxy strips `Content-Encoding`
-//! and `Content-Length` to match. rmx's `rmx_serve::fetch` does not decode, so that behavior is
+//! and `Content-Length` to match. rmx's `rmx_node_fetch_server::fetch` does not decode, so that behavior is
 //! opt-in (`fetch_decodes_content`); the cases written for a decoding fetch turn it on.
 //!
 //! Remix reads responses back through a real server and undici to prove the headers frame the
-//! body correctly; here `round_trip` serves them with `rmx_serve` and reads them with
-//! `rmx_serve::fetch` (hyper on both ends).
+//! body correctly; here `round_trip` serves them with `rmx_node_fetch_server` and reads them with
+//! `rmx_node_fetch_server::fetch` (hyper on both ends).
 
 use std::sync::{Arc, Mutex};
 
@@ -21,7 +21,7 @@ use http::{HeaderMap, Method, StatusCode};
 use rmx_fetch::{block_on, Body, BoxError, Request, Response};
 use rmx_fetch_proxy::{FetchProxy, FetchProxyOptions, Redirect};
 use rmx_compression_middleware::{compress_response, CompressOptions, Encoding};
-use rmx_router::{Context, Router};
+use rmx_fetch_router::{Context, Router};
 use tokio::net::TcpListener;
 
 /// What the upstream fetch received.
@@ -154,7 +154,7 @@ fn x_forwarded() -> FetchProxyOptions {
 async fn listen(router: Router) -> (std::net::SocketAddr, tokio::task::JoinHandle<std::io::Result<()>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    (addr, tokio::spawn(rmx_serve::serve(listener, router)))
+    (addr, tokio::spawn(rmx_node_fetch_server::serve(listener, router)))
 }
 
 /// Remix's `readResponseWithUndici`: serve `response` over HTTP and read it back as a client.
@@ -167,7 +167,7 @@ async fn round_trip(response: Response, method: Method) -> Result<(StatusCode, H
     });
     let (addr, server) = listen(router).await;
     let result = async {
-        let response = rmx_serve::fetch(request(method, &format!("http://{addr}/"), &[], Body::empty())).await?;
+        let response = rmx_node_fetch_server::fetch(request(method, &format!("http://{addr}/"), &[], Body::empty())).await?;
         let (parts, body) = response.into_parts();
         Ok::<_, BoxError>((parts.status, parts.headers, body.bytes().await?.to_vec()))
     }
@@ -338,7 +338,7 @@ async fn forwards_a_streamed_body_through_default_fetch_with_fresh_framing() {
     });
     let (addr, server) = listen(router).await;
 
-    let proxy = FetchProxy::new(&format!("http://{addr}"), rmx_serve::fetch, FetchProxyOptions::default()).unwrap();
+    let proxy = FetchProxy::new(&format!("http://{addr}"), rmx_node_fetch_server::fetch, FetchProxyOptions::default()).unwrap();
     let headers = [
         ("connection", "keep-alive, X-First-Hop"),
         ("x-first-hop", "local-only"),
@@ -420,14 +420,14 @@ async fn returns_redirects_to_the_client_by_default_and_follows_them_when_config
     let (addr, server) = listen(router).await;
     let target = format!("http://{addr}");
 
-    let proxy = FetchProxy::new(&target, rmx_serve::fetch, FetchProxyOptions::default()).unwrap();
+    let proxy = FetchProxy::new(&target, rmx_node_fetch_server::fetch, FetchProxyOptions::default()).unwrap();
     let response = proxy.fetch(get("http://shopify.com/login")).await.unwrap();
     assert_eq!(response.status(), 303);
     assert_eq!(header(&response, "location"), Some("/account"));
     assert_eq!(set_cookies(&response), ["session=abc; HttpOnly; Path=/"]);
     response.into_body().text().await.unwrap();
 
-    let following = FetchProxy::new(&target, rmx_serve::fetch, FetchProxyOptions { redirect: Redirect::Follow, ..Default::default() }).unwrap();
+    let following = FetchProxy::new(&target, rmx_node_fetch_server::fetch, FetchProxyOptions { redirect: Redirect::Follow, ..Default::default() }).unwrap();
     let followed = following.fetch(get("http://shopify.com/login")).await.unwrap();
     assert_eq!(followed.status(), 200);
     assert_eq!(followed.into_body().text().await.unwrap(), "account page");
@@ -448,9 +448,9 @@ async fn preserves_browser_origins_and_auth_redirects_through_a_trusted_developm
     });
     let app_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let app_addr = app_listener.local_addr().unwrap();
-    let app_server = tokio::spawn(rmx_serve::serve_with(app_listener, app, rmx_serve::ServeOptions::default().trust_proxy(true)));
+    let app_server = tokio::spawn(rmx_node_fetch_server::serve_with(app_listener, app, rmx_node_fetch_server::ServeOptions::default().trust_proxy(true)));
 
-    let proxy = FetchProxy::new(&format!("http://{app_addr}"), rmx_serve::fetch, x_forwarded()).unwrap();
+    let proxy = FetchProxy::new(&format!("http://{app_addr}"), rmx_node_fetch_server::fetch, x_forwarded()).unwrap();
     let mut front = Router::new();
     front.any("/*path", move |ctx: Context| {
         let proxy = proxy.clone();
@@ -459,7 +459,7 @@ async fn preserves_browser_origins_and_auth_redirects_through_a_trusted_developm
     let (front_addr, front_server) = listen(front).await;
 
     let public_origin = format!("http://{front_addr}");
-    let response = rmx_serve::fetch(request(Method::POST, &format!("{public_origin}/signup"), &[("origin", &public_origin)], Body::empty())).await.unwrap();
+    let response = rmx_node_fetch_server::fetch(request(Method::POST, &format!("{public_origin}/signup"), &[("origin", &public_origin)], Body::empty())).await.unwrap();
     assert_eq!(response.status(), 303);
     assert_eq!(header(&response, "location"), Some("/account"));
     assert_eq!(set_cookies(&response), ["session=abc; HttpOnly; Path=/"]);

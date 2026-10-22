@@ -1,6 +1,6 @@
 use rmx_cookie::Cookie;
 use rmx_fetch::{block_on, Body};
-use rmx_router::{middleware, Context, Router};
+use rmx_fetch_router::{middleware, Context, Router};
 use rmx_session::MemoryStorage;
 
 use super::*;
@@ -36,7 +36,7 @@ fn app(schemes: Vec<Arc<dyn AuthScheme<User>>>) -> Router {
         r.get("/private", |_ctx: Context| async { "secret" });
     });
     router.group(
-        vec![middleware(require_auth::<User>().on_failure(|_, _| rmx_fetch::response::redirect("/login")))],
+        vec![middleware(require_auth::<User>().on_failure(|_, _| rmx_response::redirect("/login")))],
         |r| {
             r.get("/page", |_ctx: Context| async { "page" });
         },

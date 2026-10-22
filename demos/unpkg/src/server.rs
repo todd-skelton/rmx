@@ -2,9 +2,10 @@
 
 use std::sync::LazyLock;
 
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::file_storage::FileStorage;
-use rmx::render::{render_with, Renderer, RendererExt, ResponseInit};
+use rmx::middleware::render::{render_with, Renderer, RendererExt, ResponseInit};
 use rmx::router::routes::{get, Route, RouteMap};
 use rmx::router::{action, Context, Router};
 

@@ -3,11 +3,11 @@
 
 use http::StatusCode;
 use rmx::{css, rsx, IntoNode, Node};
-use rmx::fetch::response::{self, FileResponseOptions};
+use rmx::response::{self, FileResponseOptions};
 use rmx::fetch::Response;
 use rmx::file_storage::FileStorage;
 use rmx::middleware::session::SessionExt;
-use rmx::render::ResponseInit;
+use rmx::middleware::render::ResponseInit;
 use rmx::router::routes::FormActions;
 use rmx::router::{action, Context, Router};
 

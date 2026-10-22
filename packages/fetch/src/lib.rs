@@ -19,7 +19,6 @@ pub use rmx_url::{SearchParams, Url};
 
 pub mod abort;
 pub mod form_data;
-pub mod response;
 
 pub use abort::{AbortController, AbortError, AbortSignal, RequestExt};
 pub use form_data::{File, FileUpload, FormData, FormDataError, FormLimits, FormValue, UploadResult};
@@ -36,7 +35,7 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 /// Something that performs HTTP requests, like the web's `fetch()`. Implemented for async
 /// functions and closures from [`Request`] to `Result<Response, BoxError>`. Libraries that
 /// call out over HTTP (`rmx-fetch-proxy`, `rmx-auth`) take one, so the app chooses the client
-/// (`rmx_serve::fetch` for `http://`, or any HTTPS client) and tests can answer in memory.
+/// (`rmx_node_fetch_server::fetch` for `http://`, or any HTTPS client) and tests can answer in memory.
 pub trait Fetch: Send + Sync + 'static {
     fn fetch(&self, request: Request) -> BoxFuture<Result<Response, BoxError>>;
 }

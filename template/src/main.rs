@@ -24,7 +24,7 @@ fn main() {
     let addr = format!("{host}:{port}");
     println!("Server listening on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router)).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router)).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

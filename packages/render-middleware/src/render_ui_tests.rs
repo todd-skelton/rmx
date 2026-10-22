@@ -10,8 +10,9 @@ use std::sync::{Arc, Mutex};
 
 use http::{HeaderMap, Method};
 use rmx::{rsx, Component, Frame, Handle, Node};
-use rmx_fetch::{block_on, response, AbortController, Body, BoxError, Response};
-use rmx_router::{Context, Router};
+use rmx_fetch::{block_on, AbortController, Body, BoxError, Response};
+use rmx_response as response;
+use rmx_fetch_router::{Context, Router};
 
 use super::{render, Render, RenderOptions, ResponseInit};
 

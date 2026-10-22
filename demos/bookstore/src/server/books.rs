@@ -2,7 +2,7 @@
 
 use rmx::{css, rsx, Frame, Node};
 use rmx::fetch::Response;
-use rmx::render::ResponseInit;
+use rmx::middleware::render::ResponseInit;
 use rmx::router::{action, Context, Router};
 
 use super::data::Book;

@@ -11,11 +11,12 @@ use std::time::UNIX_EPOCH;
 use http::{header, HeaderValue, StatusCode};
 use rmx::{rsx, Children, Component, Handle, Node};
 use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::headers::{AcceptLanguage, Vary};
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::render::Render;
+use rmx::middleware::render::Render;
 use rmx::router::routes::{get, post, Route, RouteMap};
 use rmx::router::{action, Context, Controller, Middleware, Next, Router};
 use serde_json::Value;
@@ -33,7 +34,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("i18n demo running at http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------

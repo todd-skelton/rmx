@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
 use rmx_fetch::{Body, Response};
-use rmx_router::{BoxFuture, Context, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
 
 /// The event stream's path.
 pub const LIVE_RELOAD_PATH: &str = "/__rmx/live-reload";
@@ -124,8 +124,9 @@ fn append_to_documents(mut body: Body) -> Body {
 
 #[cfg(test)]
 mod tests {
-    use rmx_fetch::{block_on, response};
-    use rmx_router::Router;
+    use rmx_fetch::block_on;
+use rmx_response as response;
+    use rmx_fetch_router::Router;
 
     use super::*;
 

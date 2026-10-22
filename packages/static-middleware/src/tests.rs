@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use rmx_fetch::{block_on, Body, Response};
-use rmx_router::{Context, Router};
+use rmx_fetch_router::{Context, Router};
 
 use super::*;
 
@@ -36,7 +36,7 @@ impl Drop for TempDir {
 fn router(root: &std::path::Path, options: StaticOptions) -> Router {
     let mut router = Router::new().with(static_files(root, options));
     router.get("/", |_: Context| async { "home" });
-    router.get("/*path", |_: Context| async { rmx_fetch::response::status(http::StatusCode::NOT_FOUND, "Fallback Handler") });
+    router.get("/*path", |_: Context| async { rmx_response::status(http::StatusCode::NOT_FOUND, "Fallback Handler") });
     router
 }
 

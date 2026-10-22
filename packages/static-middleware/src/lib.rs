@@ -7,14 +7,15 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use http::{Method, StatusCode};
-use rmx_fetch::response::{self, FileResponseOptions};
+use rmx_response as response;
+use rmx_response::FileResponseOptions;
 use rmx_fetch::Response;
 use rmx_fs::{open_lazy_file, OpenLazyFileOptions};
 use rmx_html_template::escape_html;
 use rmx_lazy_file::LazyFile;
-use rmx_router::{Context, Middleware, Next};
+use rmx_fetch_router::{Context, Middleware, Next};
 
-pub use rmx_fetch::response::{Digest, DigestFn, ETag};
+pub use rmx_response::{Digest, DigestFn, ETag};
 
 /// Decides per file whether to serve byte ranges (Remix's `AcceptRangesFunction`).
 pub type AcceptRangesFn = Arc<dyn Fn(&LazyFile) -> bool + Send + Sync>;

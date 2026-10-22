@@ -4,7 +4,7 @@
 use std::future::{ready, Ready};
 
 use rmx_auth_middleware::credentials_provider;
-use rmx_router::Context;
+use rmx_fetch_router::Context;
 
 fn parse(ctx: &Context) -> String {
     ctx.url().search_params().get("email").unwrap_or_default().to_string()

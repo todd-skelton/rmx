@@ -6,7 +6,7 @@ use http::{HeaderValue, StatusCode};
 use rmx_fetch::{block_on, Body, Response};
 use rmx_headers::Vary;
 use rmx_cors_middleware::{cors, Cors};
-use rmx_router::{Context, Router};
+use rmx_fetch_router::{Context, Router};
 
 fn router(cors: Cors) -> Router {
     let mut router = Router::new().with(cors);

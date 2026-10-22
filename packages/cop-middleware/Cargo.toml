@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 http.workspace = true
 rmx-fetch.workspace = true
-rmx-router.workspace = true
+rmx-fetch-router.workspace = true
 rmx-url.workspace = true
 
 [dev-dependencies]

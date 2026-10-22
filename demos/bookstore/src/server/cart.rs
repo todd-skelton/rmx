@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use http::StatusCode;
 use rmx::{rsx, Frame};
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::data_schema::{self as s, form_data as f};
 use rmx::middleware::session::SessionExt;
 use rmx::router::{action, Context, Router};

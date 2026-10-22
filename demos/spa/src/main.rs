@@ -8,7 +8,7 @@
 fn main() {
     use std::path::PathBuf;
 
-    use rmx::fetch::response::{self, FileResponseOptions};
+    use rmx::response::{self, FileResponseOptions};
     use rmx::fs::{open_lazy_file, OpenLazyFileOptions};
     use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
     use rmx::router::{Context, Router};
@@ -34,7 +34,7 @@ fn main() {
     let addr = format!("{host}:{port}");
     println!("spa demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router)).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router)).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

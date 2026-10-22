@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use rmx_fetch::{block_on, Body, FormData, FormLimits, FormValue, Response};
 use rmx_form_data_middleware::{form_data, FileUpload, FormDataExt};
-use rmx_router::{action, Context, Middleware, Next, Router};
+use rmx_fetch_router::{action, Context, Middleware, Next, Router};
 
 const BOUNDARY: &str = "----WebKitFormBoundary1234567890";
 

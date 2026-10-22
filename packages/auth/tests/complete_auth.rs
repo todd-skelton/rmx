@@ -5,7 +5,7 @@ mod common;
 use common::*;
 use rmx_fetch::Body;
 use rmx_auth_middleware::complete_auth;
-use rmx_router::Context;
+use rmx_fetch_router::Context;
 use rmx_session::Session;
 use serde_json::{json, Value};
 

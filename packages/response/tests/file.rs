@@ -8,7 +8,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use http::Method;
 use rmx_crypto::DigestAlgorithm;
-use rmx_fetch::response::{file as create_file_response, Digest, ETag, FileLike, FileResponseOptions};
+use rmx_response::{file as create_file_response, Digest, ETag, FileLike, FileResponseOptions};
 use rmx_fetch::{block_on, Body, File, Request, Response};
 use rmx_headers::format_http_date;
 use rmx_lazy_file::{BlobPart, LazyFile, LazyFileOptions};

@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use http::{header, Method, StatusCode};
 use rmx_assets::*;
 use rmx_fetch::{Body, File, Response};
-use rmx_router::Context;
+use rmx_fetch_router::Context;
 
 struct Dir(PathBuf);
 
@@ -1739,7 +1739,7 @@ fn uses_a_custom_response_returned_from_on_error() {
     let dir = Dir::new();
     dir.write("app/entry.js", "import './missing.js'\nexport const entry = true");
     let s = server(AssetOptions {
-        on_error: Some(Arc::new(|_| Some(rmx_fetch::response::status(StatusCode::IM_A_TEAPOT, "Custom build error")))),
+        on_error: Some(Arc::new(|_| Some(rmx_response::status(StatusCode::IM_A_TEAPOT, "Custom build error")))),
         ..options(&dir)
     });
     let res = get_ok(&s, "/assets/app/entry.js");

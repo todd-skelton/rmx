@@ -2,7 +2,7 @@
 //!
 //! ```
 //! use rmx_logger_middleware::{logger, LoggerExt};
-//! use rmx_router::{Context, Router};
+//! use rmx_fetch_router::{Context, Router};
 //!
 //! let router = Router::new().with(logger().format("%method %path %status %duration ms").colors(false));
 //! # let mut router = router;
@@ -19,7 +19,7 @@ use http::header;
 use rmx_headers::UtcDateTime;
 use rmx_terminal::Styles;
 use rmx_fetch::Response;
-use rmx_router::{BoxFuture, Context, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
 
 /// Remix's default format.
 pub const DEFAULT_FORMAT: &str = "[%date] %method %path %status %contentLength";

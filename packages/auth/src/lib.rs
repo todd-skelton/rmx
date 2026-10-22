@@ -23,7 +23,7 @@
 //! ```
 //! use rmx_auth::{github_provider, start_external_auth, ClientOptions, StartExternalAuthOptions};
 //! use rmx_fetch::{BoxError, Request, Response};
-//! use rmx_router::Context;
+//! use rmx_fetch_router::Context;
 //!
 //! async fn https_fetch(_req: Request) -> Result<Response, BoxError> {
 //!     unimplemented!("any HTTPS client")
@@ -39,7 +39,7 @@
 //!         let return_to = ctx.url().search_params().get("returnTo").map(str::to_string);
 //!         start_external_auth(&*github, &ctx, StartExternalAuthOptions { return_to, ..Default::default() })
 //!             .await
-//!             .unwrap_or_else(|_| rmx_fetch::response::redirect("/"))
+//!             .unwrap_or_else(|_| rmx_response::redirect("/"))
 //!     }
 //! };
 //! # let _ = login;
@@ -53,7 +53,7 @@ use std::future::Future;
 use std::time::SystemTime;
 
 use rmx_fetch::Response;
-use rmx_router::Context;
+use rmx_fetch_router::Context;
 use rmx_session::Session;
 use rmx_url::Url;
 use serde::{Deserialize, Serialize};
@@ -215,7 +215,7 @@ pub fn start_external_auth<'a, P: OAuthProvider>(provider: &'a P, ctx: &Context,
         let mut transaction = create_transaction(provider.name(), sanitize_return_to(options.return_to.as_deref()));
         let url = provider.authorization_url(&mut transaction).await?;
         session.set(options.transaction_key.as_deref().unwrap_or(DEFAULT_TRANSACTION_KEY), &transaction);
-        Ok(rmx_fetch::response::redirect_with(&url.href(), http::StatusCode::FOUND))
+        Ok(rmx_response::redirect_with(&url.href(), http::StatusCode::FOUND))
     }
 }
 

@@ -257,7 +257,7 @@ async fn google_fetch(req: rmx::fetch::Request) -> Result<Response, rmx::fetch::
         }),
         _ => panic!("Unexpected fetch: {url}"),
     };
-    Ok(rmx::fetch::response::json(&json))
+    Ok(rmx::response::json(&json))
 }
 
 #[test]

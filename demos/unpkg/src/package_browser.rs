@@ -3,7 +3,7 @@
 use http::StatusCode;
 use rmx::fetch::Response;
 use rmx_html_template::{html, SafeHtml};
-use rmx::render::{Renderer, ResponseInit};
+use rmx::middleware::render::{Renderer, ResponseInit};
 
 use crate::format_bytes::format_bytes;
 use crate::mime_type::{detect_file_mime_type, image_mime_type, is_text_content};

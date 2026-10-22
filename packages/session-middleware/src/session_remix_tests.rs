@@ -8,7 +8,7 @@ use http::header::SET_COOKIE;
 use rmx_cookie::Cookie;
 use rmx_fetch::{Body, Response};
 use rmx_headers::SetCookie;
-use rmx_router::{Context, Router};
+use rmx_fetch_router::{Context, Router};
 use rmx_session::{CookieStorage, Error, FsStorage, MemoryStorage, Session, SessionStorage};
 
 use super::{session, SessionExt, MOCK_NOW};

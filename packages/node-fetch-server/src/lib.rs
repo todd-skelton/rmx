@@ -1,10 +1,10 @@
-//! Serve an [`rmx_router::Router`] over TCP (Remix's `node-fetch-server`).
+//! Serve an [`rmx_fetch_router::Router`] over TCP (Remix's `node-fetch-server`).
 //!
 //! ```no_run
-//! # async fn run(router: rmx_router::Router) -> std::io::Result<()> {
+//! # async fn run(router: rmx_fetch_router::Router) -> std::io::Result<()> {
 //! let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-//! let options = rmx_serve::ServeOptions::default().trust_proxy(true);
-//! rmx_serve::serve_with(listener, router, options).await
+//! let options = rmx_node_fetch_server::ServeOptions::default().trust_proxy(true);
+//! rmx_node_fetch_server::serve_with(listener, router, options).await
 //! # }
 //! ```
 //!
@@ -41,7 +41,7 @@ use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
 use rmx_fetch::{AbortController, AbortError, Body, Request, RequestExt, Response};
-use rmx_router::Router;
+use rmx_fetch_router::Router;
 use rmx_url::Url;
 use tokio::net::TcpListener;
 
@@ -164,7 +164,7 @@ impl ServeOptions {
             }
         };
         custom.unwrap_or_else(|| match error {
-            ServeError::ConflictingAuthority => rmx_fetch::response::status(StatusCode::BAD_REQUEST, "Bad Request"),
+            ServeError::ConflictingAuthority => rmx_response::status(StatusCode::BAD_REQUEST, "Bad Request"),
             _ => internal_server_error(),
         })
     }
@@ -191,7 +191,7 @@ pub async fn serve_with(listener: TcpListener, router: Router, options: ServeOpt
             // Transient accept errors (too many open files, aborted handshakes) should not
             // take the server down.
             Err(e) => {
-                eprintln!("rmx-serve: accept failed: {e}");
+                eprintln!("rmx-node-fetch-server: accept failed: {e}");
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                 continue;
             }
@@ -476,7 +476,7 @@ async fn handle(router: &Router, options: &ServeOptions, req: Request, remote: S
     };
     let signal = req.signal();
     // A panicking handler answers 500 instead of dropping the connection.
-    match rmx_router::catch_panic(router.fetch(req)).await {
+    match rmx_fetch_router::catch_panic(router.fetch(req)).await {
         Ok(res) => res,
         // A handler that fails because the client went away is not a server error, and no
         // one is left to read the response (Remix's `isRequestAbortError`).
@@ -652,7 +652,7 @@ fn unquote(value: &str) -> String {
 pub async fn fetch(request: rmx_fetch::Request) -> Result<rmx_fetch::Response, rmx_fetch::BoxError> {
     let (mut parts, body) = request.into_parts();
     if parts.uri.scheme_str() != Some("http") {
-        return Err(format!("rmx_serve::fetch only supports http:// URLs, got {}", parts.uri).into());
+        return Err(format!("rmx_node_fetch_server::fetch only supports http:// URLs, got {}", parts.uri).into());
     }
     let authority = parts.uri.authority().cloned().ok_or("request URI has no host")?;
     let host = authority.host().trim_start_matches('[').trim_end_matches(']');
@@ -718,8 +718,8 @@ pub mod test {
     /// Dropping the server closes it too.
     ///
     /// ```no_run
-    /// # async fn run(router: rmx_router::Router) -> std::io::Result<()> {
-    /// let server = rmx_serve::test::create_test_server(router).await?;
+    /// # async fn run(router: rmx_fetch_router::Router) -> std::io::Result<()> {
+    /// let server = rmx_node_fetch_server::test::create_test_server(router).await?;
     /// let url = format!("{}/books", server.base_url);
     /// // ... drive the app at `url` ...
     /// server.close().await;

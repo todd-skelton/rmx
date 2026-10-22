@@ -1,11 +1,11 @@
 //! The `rmx` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `completion`, `routes`, `assets`, `test`,
-//! `version` and `help`. Install it with `cargo install --path packages/rmx`.
+//! `version` and `help`. Install it with `cargo install --path packages/cli`.
 //!
 //! `new` writes the starter app (`template/`, like Remix's `template`) as a standalone
 //! crate. `routes` and `assets` need the app's own route map and asset server, so they run
 //! the app binary (`cargo run --quiet -- routes`), whose `main` handles them with
-//! [`routes_command`](crate::router::routes::routes_command) and
-//! [`assets_command`](crate::assets::assets_command). `test` runs `cargo test`.
+//! `rmx::router::routes::routes_command` and `rmx::assets::assets_command`. `test` runs
+//! `cargo test`.
 
 use std::fmt;
 use std::io::IsTerminal;
@@ -786,11 +786,14 @@ fn prepare_target_directory(dir: &Path, force: bool) -> Result<(), CliError> {
 }
 
 /// The `rmx = ...` dependency line for new apps and `doctor --fix`: the version in
-/// `RMX_VERSION`, or this checkout of rmx by path.
+/// `RMX_VERSION`, or this checkout's `packages/rmx` by path.
 pub(crate) fn rmx_dependency() -> String {
     match std::env::var("RMX_VERSION").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
         Some(version) => format!("rmx = {}", toml_string(&version)),
-        None => format!("rmx = {{ path = {} }}", toml_string(&env!("CARGO_MANIFEST_DIR").replace('\\', "/"))),
+        None => {
+            let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("packages/").join("rmx");
+            format!("rmx = {{ path = {} }}", toml_string(&checkout.display().to_string().replace('\\', "/")))
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-//! Request-scoped rendering for rmx-router (Remix's `render-middleware`).
+//! Request-scoped rendering for rmx-fetch-router (Remix's `render-middleware`).
 //!
 //! `ctx.render(node)` turns a component tree into an HTML [`Response`]. `<Frame>`s in the
 //! tree resolve through the current router, as internal `GET` subrequests like Remix's
@@ -19,7 +19,7 @@
 //! frame reload or a soft navigation receives HTML the runtime can reconcile.
 //!
 //! ```ignore
-//! use rmx_render::Render;
+//! use rmx_render_middleware::Render;
 //!
 //! router.get("/", |ctx: Context| async move {
 //!     ctx.render(rsx! { <Layout><Frame src="/activity" fallback={rsx! { <p>"Loading"</p> }}/></Layout> })
@@ -34,7 +34,7 @@ use http::{header, HeaderMap, HeaderName, HeaderValue, Method};
 use rmx::ssr::{self, Segment};
 use rmx::Node;
 use rmx_fetch::{AbortError, AbortSignal, Body, BoxError, Response};
-use rmx_router::{Context, Middleware, Next, Router};
+use rmx_fetch_router::{Context, Middleware, Next, Router};
 use rmx_url::Url;
 use std::sync::Arc;
 
@@ -123,9 +123,9 @@ fn reporter(ctx: &Context) -> ErrorReporter {
 }
 
 /// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
-pub use rmx_fetch::response::ResponseInit;
+pub use rmx_response::ResponseInit;
 
-/// `ctx.render(node)` for rmx-router handlers.
+/// `ctx.render(node)` for rmx-fetch-router handlers.
 pub trait Render {
     /// Render a component tree to a `200 text/html` response.
     fn render(&self, node: Node) -> Response {

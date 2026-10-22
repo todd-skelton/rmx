@@ -3,7 +3,8 @@
 
 use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Handle, Node};
-use rmx::fetch::{response, Body, Response};
+use rmx::fetch::{Body, Response};
+use rmx::response;
 use rmx::router::{action, Context, Router};
 use rmx::data_schema::checks::{max_length, min_length};
 use rmx::data_schema::{self as s, Issue, PathSegment, Schema};

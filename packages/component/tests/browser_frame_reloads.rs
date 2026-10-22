@@ -3,7 +3,7 @@
 //! frame; here the parent is a named client-created `<Frame>`, since a top frame reload
 //! would replace the test runner's page. The parent loads through `fetch`, stubbed with
 //! routes that stream their chunks and can hold one back until the test releases it. The
-//! responses are written the way `rmx-render` streams them: frame regions, the
+//! responses are written the way `rmx-render-middleware` streams them: frame regions, the
 //! `rmx-data` script, the flush marker, then `<template>`s. Remix's client entries that
 //! trigger the reloads are replaced by frame handles from `Frames.get(name)`. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_frame_reloads`.

@@ -2,10 +2,10 @@ use std::sync::LazyLock;
 
 use http::StatusCode;
 use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
-use rmx::fetch::response;
+use rmx::response;
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::render::{Render, ResponseInit};
+use rmx::middleware::render::{Render, ResponseInit};
 use rmx::router::routes::{get, Route, RouteMap};
 use rmx::router::{action, Context, Router};
 use ui_demo::demos::*;
@@ -19,7 +19,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("ui demos on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 // config/routes.ts

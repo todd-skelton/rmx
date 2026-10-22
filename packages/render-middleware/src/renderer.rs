@@ -2,9 +2,10 @@
 //! per-request renderer for any input type into the request context.
 //!
 //! ```
-//! use rmx_fetch::{block_on, response, Body};
-//! use rmx_render::{render_with, RendererExt, ResponseInit};
-//! use rmx_router::{Context, Router};
+//! use rmx_fetch::{block_on, Body};
+//! use rmx_response as response;
+//! use rmx_render_middleware::{render_with, RendererExt, ResponseInit};
+//! use rmx_fetch_router::{Context, Router};
 //!
 //! struct Page { title: String }
 //!
@@ -21,7 +22,7 @@
 use std::sync::Arc;
 
 use rmx_fetch::Response;
-use rmx_router::{Context, Middleware, Next};
+use rmx_fetch_router::{Context, Middleware, Next};
 
 use crate::ResponseInit;
 
@@ -80,7 +81,7 @@ impl RendererExt for Context {
 mod tests {
     use super::*;
     use rmx_fetch::{block_on, Body};
-    use rmx_router::Router;
+    use rmx_fetch_router::Router;
 
     fn fetch(router: &Router, url: &str) -> Response {
         block_on(router.fetch(http::Request::get(url).body(Body::empty()).unwrap()))

@@ -14,7 +14,8 @@
 //! | `remix/mime` | [`rmx::mime`](mime) | browser and server |
 //! | `URL`, `URLSearchParams` | [`rmx::url`](url) | browser and server |
 //! | `remix/router` (fetch-router) | [`rmx::router`](router) | browser (route maps, hrefs) and server |
-//! | `remix/response`, `Request`, `Response`, `FormData` | [`rmx::fetch`](fetch) | browser (types) and server |
+//! | `remix/response/*` (`html`, `redirect`, `file`, `compress`) | [`rmx::response`](response) | browser and server |
+//! | `Request`, `Response`, `FormData`, `AbortSignal` (the Fetch API) | [`rmx::fetch`](fetch) | browser (types) and server |
 //! | `remix/middleware/auth` | `rmx::middleware::auth` | server |
 //! | `remix/middleware/compression` | `rmx::middleware::compression` | server |
 //! | `remix/middleware/cop` | `rmx::middleware::cop` | server |
@@ -26,8 +27,9 @@
 //! | `remix/middleware/session` | `rmx::middleware::session` | server |
 //! | `remix/middleware/static` | `rmx::middleware::static_files` | server |
 //! | the browser side of `npm run hmr` | `rmx::middleware::live_reload` (page reloads under `rmx dev`) | server |
-//! | `remix/middleware/render`, `remix/component/server` | `rmx::render` | server |
-//! | `remix/node-fetch-server` | `rmx::serve` | server |
+//! | `remix/middleware/render` | `rmx::middleware::render` | server |
+//! | `remix/middleware/async-context` | `rmx::middleware::async_context` (lives in fetch-router: the router's `Context` keeps its scope in step) | server |
+//! | `remix/node-fetch-server` | `rmx::node_fetch_server` | server |
 //! | `remix/auth` | `rmx::auth` | server |
 //! | `remix/cookie` | `rmx::cookie` | server |
 //! | `remix/session` | `rmx::session` | server |
@@ -40,7 +42,7 @@
 //! | `remix/form-data-parser`, `remix/multipart-parser` | `rmx::fetch`, `rmx::multipart_parser` | server |
 //! | `remix/html-template` | `rmx::html_template` | server |
 //! | `remix/tar-parser` | `rmx::tar_parser` | server |
-//! | Web Crypto helpers | `rmx::crypto` | server |
+//! | Web Crypto (Rust has no platform one) | `rmx::crypto` | server |
 //! | `remix/terminal` | `rmx::terminal` | server |
 //! | `remix/cli` (`remix new`, `routes`, `assets`, `test`, `version`) | `rmx::cli`, the `rmx` binary | native |
 //!
@@ -57,7 +59,7 @@
 //!
 //! let mut router = Router::new();
 //! router.get("/hello/:name", |ctx: Context| async move {
-//!     rmx::fetch::response::text(rmx::render_to_string(&page(ctx.param("name").unwrap_or("world"))))
+//!     rmx::response::text(rmx::render_to_string(&page(ctx.param("name").unwrap_or("world"))))
 //! });
 //! let res = rmx::fetch::block_on(router.fetch(http::Request::get("http://x/hello/rust").body(rmx::fetch::Body::empty()).unwrap()));
 //! assert!(rmx::fetch::block_on(res.into_body().text()).unwrap().starts_with("<h1>Hello, rust</h1>"));
@@ -67,24 +69,22 @@ pub use rmx_component::*;
 
 pub use rmx_data_schema as data_schema;
 pub use rmx_fetch as fetch;
+pub use rmx_response as response;
 pub use rmx_headers as headers;
 pub use rmx_lazy_file as lazy_file;
 pub use rmx_mime as mime;
 pub use rmx_route_pattern as route_pattern;
-pub use rmx_router as router;
+pub use rmx_fetch_router as router;
 pub use rmx_spa as spa;
 #[cfg(feature = "ui")]
 pub use rmx_ui as ui;
 pub use rmx_url as url;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub mod cli;
-
-#[cfg(not(target_arch = "wasm32"))]
 pub use {
-    rmx_assets as assets, rmx_auth as auth, rmx_cookie as cookie, rmx_crypto as crypto, rmx_fetch_proxy as fetch_proxy,
+    rmx_assets as assets, rmx_auth as auth, rmx_cli as cli, rmx_cookie as cookie, rmx_crypto as crypto, rmx_fetch_proxy as fetch_proxy,
     rmx_file_storage as file_storage, rmx_fs as fs, rmx_html_template as html_template, rmx_multipart_parser as multipart_parser,
-    rmx_render as render, rmx_serve as serve, rmx_session as session, rmx_tar_parser as tar_parser, rmx_terminal as terminal,
+    rmx_node_fetch_server as node_fetch_server, rmx_session as session, rmx_tar_parser as tar_parser, rmx_terminal as terminal,
 };
 
 /// Remix's `remix/middleware/*` subpaths. Each is its own crate, `rmx-<name>-middleware`
@@ -99,6 +99,8 @@ pub use {
 /// | [`cop`](rmx_cop_middleware) | `remix/middleware/cop` |
 /// | [`cors`](rmx_cors_middleware) | `remix/middleware/cors` |
 /// | [`csrf`](rmx_csrf_middleware) | `remix/middleware/csrf` |
+/// | [`async_context`](rmx_fetch_router::async_context) | `remix/middleware/async-context` |
+/// | [`render`](rmx_render_middleware) | `remix/middleware/render` |
 /// | [`form_data`](rmx_form_data_middleware) | `remix/middleware/form-data` |
 /// | [`live_reload`](rmx_live_reload_middleware) | the browser side of `npm run hmr` (page reloads under `rmx dev`) |
 /// | [`logger`](rmx_logger_middleware) | `remix/middleware/logger` |
@@ -107,6 +109,10 @@ pub use {
 /// | [`static_files`](rmx_static_middleware) | `remix/middleware/static` (`static` is a Rust keyword) |
 #[cfg(not(target_arch = "wasm32"))]
 pub mod middleware {
+    pub use rmx_fetch_router::async_context;
+    pub use rmx_fetch_router::async_context::async_context;
+    pub use rmx_render_middleware as render;
+    pub use rmx_render_middleware::{render, RenderOptions};
     pub use rmx_auth_middleware as auth;
     pub use rmx_auth_middleware::{auth, require_auth, Auth, AuthExt};
     pub use rmx_compression_middleware as compression;

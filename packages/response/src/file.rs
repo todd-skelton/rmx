@@ -10,7 +10,7 @@ use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use rmx_crypto::DigestAlgorithm;
 use rmx_headers::{format_http_date, parse_http_date, ContentRange, IfMatch, IfNoneMatch, IfRange, Range};
 
-use crate::{Body, BoxError, File, Request, Response};
+use rmx_fetch::{Body, BoxError, File, Request, Response};
 
 /// What [file] can serve (Remix's `FileLike`): the in-memory [File], or a lazy file that
 /// reads its content only when streamed (`rmx_lazy_file::LazyFile`).

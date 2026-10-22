@@ -6,7 +6,7 @@ use rmx_csrf_middleware::{csrf, csrf_token, Csrf};
 use rmx_form_data_middleware::form_data;
 use rmx_method_override_middleware::method_override;
 use rmx_session_middleware::session;
-use rmx_router::{Context, Middleware, Router};
+use rmx_fetch_router::{Context, Middleware, Router};
 use rmx_session::CookieStorage;
 
 fn session_mw() -> impl Middleware {

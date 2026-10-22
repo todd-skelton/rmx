@@ -4,9 +4,10 @@ use std::sync::{Arc, LazyLock};
 use http::StatusCode;
 use rmx::{rsx, Component, Handle, Node};
 use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, FilesOptions, FsFileCache, FsFileCacheOptions, GlobalTransform, Param, TransformContext, Transformed, DEFAULT_CACHE_DIRECTORY};
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::middleware::logger::logger;
-use rmx::render::Render;
+use rmx::middleware::render::Render;
 use rmx::router::routes::{get, Route, RouteMap};
 use rmx::router::{action, Context, Router};
 
@@ -22,7 +23,7 @@ pub fn main() {
     println!("assets demo is running on http://{addr}");
     println!("Edit a client file and refresh to verify the client code updates.");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(assets))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(assets))).expect("serve");
 }
 
 // app/routes.ts

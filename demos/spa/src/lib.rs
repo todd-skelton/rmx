@@ -1,7 +1,7 @@
 //! The spa demo: a client-only app whose router runs in the browser.
 //!
 //! `routes`, `router` and the pages are ordinary rmx code; the same router could run on a
-//! server with `rmx-render`. In the page, [`start`] hands it to `rmx::spa::run`.
+//! server with `rmx-render-middleware`. In the page, [`start`] hands it to `rmx::spa::run`.
 
 use std::sync::LazyLock;
 

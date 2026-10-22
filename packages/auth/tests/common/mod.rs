@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use rmx_auth::{finish_external_auth, start_external_auth, ClientOptions, Fetch, FinishExternalAuthOptions, OAuthProvider, StartExternalAuthOptions};
 use rmx_cookie::Cookie;
 use rmx_fetch::{block_on, Body, BoxError, Request, Response};
-use rmx_router::{Context, Router};
+use rmx_fetch_router::{Context, Router};
 use rmx_session::{MemoryStorage, Session};
 use rmx_url::{SearchParams, Url};
 use serde_json::{json, Value};
@@ -62,7 +62,7 @@ pub fn mock(respond: impl Fn(&Seen) -> Response + Send + Sync + 'static) -> (imp
 
 /// `Response.json(value)`.
 pub fn json_response(value: Value) -> Response {
-    rmx_fetch::response::json(&value)
+    rmx_response::json(&value)
 }
 
 /// `Response.json(value, { status })`.

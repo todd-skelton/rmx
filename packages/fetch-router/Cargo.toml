@@ -1,5 +1,5 @@
 [package]
-name = "rmx-router"
+name = "rmx-fetch-router"
 description = "A composable router on Request/Response with route maps, middleware and typed request context (port of remix fetch-router)"
 edition.workspace = true
 version.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 http.workspace = true
 rmx-fetch.workspace = true
+rmx-response.workspace = true
 rmx-macros.workspace = true
 rmx-route-pattern.workspace = true
 rmx-url.workspace = true

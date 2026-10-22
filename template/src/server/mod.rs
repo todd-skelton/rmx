@@ -8,10 +8,10 @@ use std::path::Path;
 
 use http::StatusCode;
 use rmx::assets::{AssetError, AssetOptions, AssetServer};
-use rmx::fetch::response;
+use rmx::response;
 use rmx::middleware::live_reload::live_reload;
 use rmx::middleware::static_files::{static_files, StaticOptions};
-use rmx::render::Render;
+use rmx::middleware::render::Render;
 use rmx::router::{action, Context, Router};
 
 use crate::routes::{RoutesActions, ROUTES};

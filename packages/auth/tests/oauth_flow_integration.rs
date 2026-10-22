@@ -1,6 +1,6 @@
 //! Port of Remix's `oauth-flow.integration.test.ts`: the whole browser OIDC flow against a
 //! fake provider listening on a loopback port (`startFakeOAuthServer` in `test-utils.ts`). The
-//! app's OIDC provider talks to it over HTTP through `rmx_serve::fetch`, and the "browser"
+//! app's OIDC provider talks to it over HTTP through `rmx_node_fetch_server::fetch`, and the "browser"
 //! follows the authorize redirect by hand (`redirect: 'manual'`).
 
 mod common;
@@ -11,7 +11,7 @@ use common::*;
 use rmx_auth::{code_challenge, finish_external_auth, oidc_provider, start_external_auth, ClientOptions, FinishExternalAuthOptions, OidcOptions, StartExternalAuthOptions};
 use rmx_fetch::Body;
 use rmx_auth_middleware::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
-use rmx_router::{middleware, Context, Router};
+use rmx_fetch_router::{middleware, Context, Router};
 use rmx_url::{SearchParams, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -51,7 +51,7 @@ fn fake_oauth_server(origin: String, profile: Value) -> Router {
             query.set("code", "fake-authorization-code");
             query.set("state", state);
             url.set_search_params(&query);
-            rmx_fetch::response::redirect_with(&url.href(), http::StatusCode::FOUND)
+            rmx_response::redirect_with(&url.href(), http::StatusCode::FOUND)
         }
     });
     router.post("/token", move |mut ctx: Context| {
@@ -102,11 +102,11 @@ fn auth_json(state: &Auth<User>) -> Value {
 async fn completes_the_full_browser_oidc_flow_against_a_local_fake_provider() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
-    let server = tokio::spawn(rmx_serve::serve(listener, fake_oauth_server(origin.clone(), json!({ "sub": "oauth-user-1", "email": "oauth@example.com", "name": "OAuth User" }))));
+    let server = tokio::spawn(rmx_node_fetch_server::serve(listener, fake_oauth_server(origin.clone(), json!({ "sub": "oauth-user-1", "email": "oauth@example.com", "name": "OAuth User" }))));
 
     let provider = Arc::new(oidc_provider(
         OidcOptions { name: "fake".into(), ..OidcOptions::new(origin.clone(), ClientOptions::new("fake-client-id", "fake-client-secret", "https://app.example.com/auth/fake/callback")) },
-        rmx_serve::fetch,
+        rmx_node_fetch_server::fetch,
     ));
     let users = Arc::new(vec![User { id: "oauth-user-1".into(), email: "oauth@example.com".into() }]);
     let session_auth = session_scheme(
@@ -132,7 +132,7 @@ async fn completes_the_full_browser_oidc_flow_against_a_local_fake_provider() {
         async move {
             let finished = finish_external_auth(&*provider, &ctx, FinishExternalAuthOptions::default()).await.unwrap();
             complete_auth(&ctx).set("auth", AuthSession { user_id: finished.result.profile.sub.clone() });
-            rmx_fetch::response::redirect_with(finished.return_to.as_deref().unwrap_or("/"), http::StatusCode::FOUND)
+            rmx_response::redirect_with(finished.return_to.as_deref().unwrap_or("/"), http::StatusCode::FOUND)
         }
     });
     router.group(vec![middleware(require_auth::<User>())], |r| {
@@ -148,7 +148,7 @@ async fn completes_the_full_browser_oidc_flow_against_a_local_fake_provider() {
     assert_eq!(params.get("response_type"), Some("code"));
     assert_eq!(params.get("scope"), Some("openid profile email"));
 
-    let provider_authorize = rmx_serve::fetch(http::Request::get(authorize_url.href()).body(Body::empty()).unwrap()).await.unwrap();
+    let provider_authorize = rmx_node_fetch_server::fetch(http::Request::get(authorize_url.href()).body(Body::empty()).unwrap()).await.unwrap();
     let callback_url = provider_authorize.headers().get("location").map(|v| v.to_str().unwrap().to_string());
 
     assert_eq!(provider_authorize.status(), 302);

@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context as TaskContext, Poll};
 use std::time::Duration;
 
-use rmx::fetch::{block_on, response, AbortController, AbortError, AbortSignal, Body, Request, RequestExt, Response};
+use rmx::fetch::{block_on, AbortController, AbortError, AbortSignal, Body, Request, RequestExt, Response};
+use rmx::response;
 use rmx::router::{Context, Next, Router};
 
 /// A timer future backed by a thread, so the tests need no runtime.

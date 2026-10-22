@@ -30,7 +30,7 @@ fn main() {
     let addr = format!("{host}:{port}");
     println!("Timeboxer is running on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(options))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(options))).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

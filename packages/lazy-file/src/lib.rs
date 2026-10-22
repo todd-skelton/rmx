@@ -435,7 +435,7 @@ impl fmt::Debug for LazyFile {
     }
 }
 
-impl rmx_fetch::response::FileLike for LazyFile {
+impl rmx_response::FileLike for LazyFile {
     fn name(&self) -> &str {
         &self.name
     }

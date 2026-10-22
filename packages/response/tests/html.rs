@@ -3,7 +3,7 @@
 //! and `DataView` bodies are `Bytes`, `Vec<u8>` and `&[u8]`; a `ReadableStream` is a `Body`.
 
 use http::StatusCode;
-use rmx_fetch::response::{html, html_with, ResponseInit};
+use rmx_response::{html, html_with, ResponseInit};
 use rmx_fetch::{block_on, Body, File, Response};
 use rmx_html_template::html as safe_html;
 

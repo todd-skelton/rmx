@@ -7,7 +7,7 @@ use rmx::fetch::{Body, Response};
 use rmx::middleware::compression::compression;
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::render::Render;
+use rmx::middleware::render::Render;
 use rmx::router::routes::{get, Route, RouteMap};
 use rmx::router::{action, Context, Router};
 use rmx::data_schema::{self as s, coerce, form_data as f};
@@ -22,7 +22,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("Server-Sent Events demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(&public, Duration::from_secs(1)))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public, Duration::from_secs(1)))).expect("serve");
 }
 
 // app/routes.ts

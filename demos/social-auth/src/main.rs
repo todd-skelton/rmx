@@ -62,5 +62,5 @@ fn main() {
     }
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(cookie, storage, Db::seeded(), &public, providers))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(cookie, storage, Db::seeded(), &public, providers))).expect("serve");
 }

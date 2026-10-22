@@ -1,6 +1,6 @@
 [package]
 name = "rmx-fetch"
-description = "Request, Response and streaming Body types for rmx, on the standard http crate"
+description = "The Fetch API for rmx: Request, Response, streaming Body, FormData and AbortSignal on the standard http crate"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -9,14 +9,8 @@ license.workspace = true
 bytes.workspace = true
 http.workspace = true
 http-body.workspace = true
-rmx-crypto.workspace = true
-rmx-headers.workspace = true
-rmx-html-template.workspace = true
-rmx-mime.workspace = true
 rmx-multipart-parser.workspace = true
 rmx-url.workspace = true
-brotli = { version = "9", default-features = false, features = ["std"], optional = true }
-flate2 = { version = "1", optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
@@ -26,15 +20,3 @@ js-sys.workspace = true
 [features]
 default = ["json"]
 json = ["dep:serde", "dep:serde_json"]
-# `response::compress` (br, gzip and deflate).
-compress = ["dep:flate2", "dep:brotli"]
-
-[dev-dependencies]
-brotli = { version = "9", default-features = false, features = ["std"] }
-flate2 = "1"
-rmx-lazy-file.workspace = true
-tokio = { workspace = true }
-
-[[test]]
-name = "response_compress"
-required-features = ["compress"]

@@ -4,11 +4,12 @@ use frame_navigation_demo::*;
 use http::{header, HeaderValue, StatusCode};
 use rmx::{css, rsx, Component, Frame, Handle, Mixin, Node};
 use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
 use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::render::{Render, ResponseInit};
+use rmx::middleware::render::{Render, ResponseInit};
 use rmx::middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
 use frame_navigation_demo::routes::{AccountActions, AuthActions, MainActions, SettingsActions, ROUTES};
 use rmx::router::routes::FormActions;
@@ -21,7 +22,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("frame-navigation demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------

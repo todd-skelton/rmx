@@ -6,6 +6,7 @@ members = [
     "packages/url",
     "packages/route-pattern",
     "packages/fetch",
+    "packages/response",
     "packages/fetch-router",
     "packages/node-fetch-server",
     "packages/mime",
@@ -33,6 +34,7 @@ members = [
     "packages/headers",
     "packages/fetch-proxy",
     "packages/auth",
+    "packages/cli",
     "packages/component",
     "packages/rmx",
     "packages/component/macros",
@@ -72,8 +74,9 @@ rmx-url = { path = "packages/url" }
 rmx-terminal = { path = "packages/terminal" }
 rmx-route-pattern = { path = "packages/route-pattern" }
 rmx-fetch = { path = "packages/fetch" }
-rmx-router = { path = "packages/fetch-router" }
-rmx-serve = { path = "packages/node-fetch-server" }
+rmx-response = { path = "packages/response" }
+rmx-fetch-router = { path = "packages/fetch-router" }
+rmx-node-fetch-server = { path = "packages/node-fetch-server" }
 rmx-mime = { path = "packages/mime" }
 rmx-auth-middleware = { path = "packages/auth-middleware" }
 rmx-compression-middleware = { path = "packages/compression-middleware" }
@@ -86,7 +89,7 @@ rmx-logger-middleware = { path = "packages/logger-middleware" }
 rmx-method-override-middleware = { path = "packages/method-override-middleware" }
 rmx-session-middleware = { path = "packages/session-middleware" }
 rmx-static-middleware = { path = "packages/static-middleware" }
-rmx-render = { path = "packages/render-middleware" }
+rmx-render-middleware = { path = "packages/render-middleware" }
 rmx-spa = { path = "packages/spa" }
 rmx-assets = { path = "packages/assets" }
 rmx-crypto = { path = "packages/crypto" }
@@ -98,6 +101,7 @@ rmx-html-template = { path = "packages/html-template" }
 rmx-headers = { path = "packages/headers" }
 rmx-fetch-proxy = { path = "packages/fetch-proxy" }
 rmx-auth = { path = "packages/auth" }
+rmx-cli = { path = "packages/cli" }
 rmx-cookie = { path = "packages/cookie" }
 rmx-ui = { path = "packages/ui" }
 rmx-data-schema = { path = "packages/data-schema" }
@@ -122,8 +126,8 @@ opt-level = 3
 
 # Compression runs per request; unoptimized brotli is several times slower (quality 11 on a
 # 450 KB wasm file: about 10 s against 1.6 s). Its generic encoder is instantiated in
-# rmx-fetch (`response::compress`), so that crate is optimized too.
-[profile.dev.package.rmx-fetch]
+# rmx-response (`compress`), so that crate is optimized too.
+[profile.dev.package.rmx-response]
 opt-level = 3
 
 [profile.dev.package.rmx-compression-middleware]

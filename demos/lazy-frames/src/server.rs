@@ -6,13 +6,13 @@ use http::{header, HeaderValue, StatusCode};
 use lazy_frames_demo::*;
 use rmx::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
 use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::fetch::response::{self, FileResponseOptions};
+use rmx::response::{self, FileResponseOptions};
 use rmx::fetch::Response;
 use rmx::middleware::form_data::{form_data, FormDataExt};
 use rmx::middleware::logger::logger;
 use rmx::fs::{open_lazy_file, OpenLazyFileOptions};
 use rmx::middleware::static_files::{static_files, StaticOptions};
-use rmx::render::{Render, ResponseInit};
+use rmx::middleware::render::{Render, ResponseInit};
 use rmx::router::routes::{get, post, prefix, Route, RouteMap};
 use rmx::router::{action, Context, Next, Router};
 
@@ -24,7 +24,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("lazy-frames demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::serve::listen(&addr, router(Config::from_env(root)))).expect("serve");
+    rt.block_on(rmx::node_fetch_server::listen(&addr, router(Config::from_env(root)))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------

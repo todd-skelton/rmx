@@ -2,7 +2,7 @@
 //! `response::redirect` and `redirect_with`).
 
 use http::{header, HeaderMap, HeaderValue, StatusCode};
-use rmx_fetch::response::{redirect, redirect_with, ResponseInit};
+use rmx_response::{redirect, redirect_with, ResponseInit};
 use rmx_fetch::Url;
 
 #[test]

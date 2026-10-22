@@ -5,12 +5,6 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
-# `cargo install --path packages/rmx` installs the `rmx` command (`rmx::cli`).
-[[bin]]
-name = "rmx"
-path = "src/bin/rmx.rs"
-doc = false
-
 [features]
 default = ["ui"]
 # The rmx-ui component library (accordion, menu, popover, ...).
@@ -20,11 +14,12 @@ ui = ["dep:rmx-ui"]
 rmx-component.workspace = true
 rmx-data-schema.workspace = true
 rmx-fetch.workspace = true
+rmx-response.workspace = true
 rmx-headers.workspace = true
 rmx-lazy-file.workspace = true
 rmx-mime.workspace = true
 rmx-route-pattern.workspace = true
-rmx-router.workspace = true
+rmx-fetch-router.workspace = true
 rmx-spa.workspace = true
 rmx-ui = { workspace = true, optional = true }
 rmx-url.workspace = true
@@ -35,6 +30,7 @@ rmx-url.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rmx-assets.workspace = true
 rmx-auth.workspace = true
+rmx-cli.workspace = true
 rmx-cookie.workspace = true
 rmx-crypto.workspace = true
 rmx-fetch-proxy.workspace = true
@@ -53,8 +49,8 @@ rmx-method-override-middleware.workspace = true
 rmx-session-middleware.workspace = true
 rmx-static-middleware.workspace = true
 rmx-multipart-parser.workspace = true
-rmx-render.workspace = true
-rmx-serve.workspace = true
+rmx-render-middleware.workspace = true
+rmx-node-fetch-server.workspace = true
 rmx-session.workspace = true
 rmx-tar-parser.workspace = true
 rmx-terminal.workspace = true

@@ -2,7 +2,7 @@
 //! `remix/middleware/async-context`, built on `AsyncLocalStorage`).
 //!
 //! ```
-//! use rmx_router::{async_context::{async_context, get_context}, Context, Router};
+//! use rmx_fetch_router::{async_context::{async_context, get_context}, Context, Router};
 //!
 //! fn current_user_id() -> String {
 //!     get_context().expect("async_context() is installed").param("id").unwrap_or_default()

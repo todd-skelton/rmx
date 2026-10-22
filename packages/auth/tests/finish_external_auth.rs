@@ -4,7 +4,7 @@ mod common;
 
 use common::*;
 use rmx_auth::{finish_external_auth, google_provider, AuthError, FinishExternalAuthOptions, OAuthAccount, OAuthProvider, OAuthResult, OAuthTokens, OAuthTransaction};
-use rmx_router::Context;
+use rmx_fetch_router::Context;
 use rmx_session::Session;
 use rmx_url::Url;
 use serde_json::json;
@@ -41,7 +41,7 @@ fn drops_authority_references_from_previously_stored_return_targets() {
         let transaction = json!({ "provider": "test", "state": "test-state", "codeVerifier": "test-verifier", "returnTo": "//other.example" });
         ctx.get::<Session>().unwrap().set("__auth", transaction);
         let finished = finish_external_auth(&TestProvider, &ctx, FinishExternalAuthOptions::default()).await.unwrap();
-        rmx_fetch::response::redirect_with(finished.return_to.as_deref().unwrap_or("/"), http::StatusCode::FOUND)
+        rmx_response::redirect_with(finished.return_to.as_deref().unwrap_or("/"), http::StatusCode::FOUND)
     });
 
     let response = get(&router, "/?state=test-state", None);

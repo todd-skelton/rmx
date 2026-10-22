@@ -6,7 +6,7 @@ use std::sync::Arc;
 use http::{header, StatusCode};
 pub use rmx_fetch::form_data::FileUpload;
 use rmx_fetch::{BoxError, FormData, FormDataError, FormLimits, FormValue, UploadResult};
-use rmx_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
 
 type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Result<Option<FormValue>, BoxError>> + Send + Sync>;
 
@@ -127,7 +127,7 @@ fn is_form_request(method: &http::Method, content_type: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use rmx_fetch::{block_on, Body, Request};
-    use rmx_router::Router;
+    use rmx_fetch_router::Router;
 
     use super::*;
 
@@ -138,11 +138,11 @@ mod tests {
         http::Request::post("http://x/").header("content-type", "multipart/form-data; boundary=b").body(Body::from(body)).unwrap()
     }
 
-    fn echo() -> impl rmx_router::Handler {
+    fn echo() -> impl rmx_fetch_router::Handler {
         |ctx: Context| async move {
             let form = ctx.form_data();
             let files: Vec<String> = form.iter().filter_map(|(k, v)| v.as_file().map(|f| format!("{k}={}", f.name))).collect();
-            rmx_fetch::response::text(format!("{:?} {:?}", form.to_search_params().to_string(), files))
+            rmx_response::text(format!("{:?} {:?}", form.to_search_params().to_string(), files))
         }
     }
 
@@ -163,7 +163,7 @@ mod tests {
         router.post("/", |mut ctx: Context| async move {
             let fields = ctx.form_data().iter().count();
             let body = ctx.take_body().text().await.unwrap();
-            rmx_fetch::response::text(format!("{fields} {body}"))
+            rmx_response::text(format!("{fields} {body}"))
         });
         let req = http::Request::post("http://x/").header("content-type", "application/json").body(Body::from("{\"a\":1}")).unwrap();
         let text = block_on(block_on(router.fetch(req)).into_body().text()).unwrap();

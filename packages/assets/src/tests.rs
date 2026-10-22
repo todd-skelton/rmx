@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use rmx_router::Router;
+use rmx_fetch_router::Router;
 
 use super::*;
 
@@ -75,7 +75,7 @@ fn router(assets: AssetServer) -> Router {
     let mut router = Router::new();
     router.get("/assets/*path", move |ctx: Context| {
         let assets = assets.clone();
-        async move { assets.fetch(&ctx).unwrap_or_else(rmx_fetch::response::not_found) }
+        async move { assets.fetch(&ctx).unwrap_or_else(rmx_response::not_found) }
     });
     router
 }

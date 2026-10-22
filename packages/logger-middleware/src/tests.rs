@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use rmx_fetch::{block_on, Body};
-use rmx_router::Router;
+use rmx_fetch_router::Router;
 
 use super::*;
 
@@ -21,7 +21,7 @@ fn log_request(logger: LoggerMiddleware, method: &str, respond: fn() -> Response
     let messages = Arc::new(Mutex::new(Vec::new()));
     let sink = messages.clone();
     let mut router = Router::new().with(logger.log(move |m| sink.lock().unwrap().push(m.to_string())));
-    router.route(rmx_router::routes::any("/"), move |_: Context| async move { respond() });
+    router.route(rmx_fetch_router::routes::any("/"), move |_: Context| async move { respond() });
     let req = http::Request::builder().method(method).uri("https://remix.run/").body(Body::empty()).unwrap();
     block_on(router.fetch(req));
     let messages = messages.lock().unwrap();
@@ -30,7 +30,7 @@ fn log_request(logger: LoggerMiddleware, method: &str, respond: fn() -> Response
 }
 
 fn with_headers(status: u16, headers: &[(&'static str, &'static str)]) -> Response {
-    let mut res = rmx_fetch::response::text("Home");
+    let mut res = rmx_response::text("Home");
     *res.status_mut() = http::StatusCode::from_u16(status).unwrap();
     for (name, value) in headers {
         res.headers_mut().insert(*name, value.parse().unwrap());

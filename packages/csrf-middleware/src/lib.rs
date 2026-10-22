@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use http::{Method, StatusCode};
 use rmx_fetch::Response;
-use rmx_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
 use rmx_session::Session;
 
 use rmx_form_data_middleware::FormDataExt;
@@ -210,7 +210,7 @@ fn request_origin(ctx: &Context) -> Option<String> {
 mod tests {
     use rmx_cookie::Cookie;
     use rmx_fetch::{block_on, Body};
-    use rmx_router::{Context, Router};
+    use rmx_fetch_router::{Context, Router};
     use rmx_session::MemoryStorage;
 
     use super::*;

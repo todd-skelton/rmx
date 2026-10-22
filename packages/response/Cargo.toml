@@ -1,0 +1,36 @@
+[package]
+name = "rmx-response"
+description = "Response helpers for rmx (remix response): html, redirect, file and compress"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+bytes.workspace = true
+http.workspace = true
+rmx-crypto.workspace = true
+rmx-fetch.workspace = true
+rmx-headers.workspace = true
+rmx-html-template.workspace = true
+rmx-mime.workspace = true
+brotli = { version = "9", default-features = false, features = ["std"], optional = true }
+flate2 = { version = "1", optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["json"]
+# `json(value)`.
+json = ["dep:serde", "dep:serde_json", "rmx-fetch/json"]
+# `compress` (br, gzip and deflate), Remix's `remix/response/compress`.
+compress = ["dep:flate2", "dep:brotli"]
+
+[dev-dependencies]
+http-body.workspace = true
+brotli = { version = "9", default-features = false, features = ["std"] }
+flate2 = "1"
+rmx-lazy-file.workspace = true
+
+[[test]]
+name = "compress"
+required-features = ["compress"]

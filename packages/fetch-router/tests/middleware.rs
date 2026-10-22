@@ -9,7 +9,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use rmx::fetch::{block_on, response, Body, Response};
+use rmx::fetch::{block_on, Body, Response};
+use rmx::response;
 use rmx::router::{action, catch_panic, Action, BoxFuture, Context, Next, Router};
 
 /// Run `action`'s middleware and handler for a `GET https://remix.run`.

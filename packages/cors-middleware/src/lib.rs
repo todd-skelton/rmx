@@ -5,7 +5,7 @@ use std::sync::Arc;
 use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 use http::{Method, StatusCode};
 use rmx_fetch::{Body, Response};
-use rmx_router::{BoxFuture, Context, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
 
 type OriginFn = dyn Fn(&str, &Context) -> Option<String> + Send + Sync;
 type HeadersFn = dyn Fn(&Context) -> Option<Vec<String>> + Send + Sync;
@@ -295,7 +295,7 @@ impl Middleware for Cors {
 #[cfg(test)]
 mod tests {
     use rmx_fetch::block_on;
-    use rmx_router::Router;
+    use rmx_fetch_router::Router;
 
     use super::*;
 

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use http::{Method, StatusCode};
 use rmx_fetch::Response;
-use rmx_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
 
 /// Why [`Cop`] rejected a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -218,7 +218,7 @@ fn matches_bypass(p: &BypassPattern, ctx: &Context) -> bool {
 #[cfg(test)]
 mod tests {
     use rmx_fetch::{block_on, Body};
-    use rmx_router::Router;
+    use rmx_fetch_router::Router;
 
     use super::*;
 

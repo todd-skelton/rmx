@@ -1,11 +1,12 @@
 //! Forward requests to another server (Remix's `fetch-proxy`).
 //!
 //! ```
-//! use rmx_fetch::{response, Body, BoxError, Request, Response};
+//! use rmx_fetch::{Body, BoxError, Request, Response};
+//! use rmx_response as response;
 //! use rmx_fetch_proxy::{FetchProxy, FetchProxyOptions};
 //!
 //! // Any async function from Request to Response can do the forwarding; servers usually pass
-//! // `rmx_serve::fetch`, an HTTP/1 client for `http://` targets.
+//! // `rmx_node_fetch_server::fetch`, an HTTP/1 client for `http://` targets.
 //! async fn upstream(req: Request) -> Result<Response, BoxError> {
 //!     Ok(response::text(format!("{} {}", req.method(), req.uri())))
 //! }

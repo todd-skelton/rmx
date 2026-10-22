@@ -1155,6 +1155,7 @@ dependencies = [
  "rmx-assets",
  "rmx-auth",
  "rmx-auth-middleware",
+ "rmx-cli",
  "rmx-component",
  "rmx-compression-middleware",
  "rmx-cookie",
@@ -1165,6 +1166,7 @@ dependencies = [
  "rmx-data-schema",
  "rmx-fetch",
  "rmx-fetch-proxy",
+ "rmx-fetch-router",
  "rmx-file-storage",
  "rmx-form-data-middleware",
  "rmx-fs",
@@ -1176,10 +1178,10 @@ dependencies = [
  "rmx-method-override-middleware",
  "rmx-mime",
  "rmx-multipart-parser",
- "rmx-render",
+ "rmx-node-fetch-server",
+ "rmx-render-middleware",
+ "rmx-response",
  "rmx-route-pattern",
- "rmx-router",
- "rmx-serve",
  "rmx-session",
  "rmx-session-middleware",
  "rmx-spa",
@@ -1197,10 +1199,11 @@ dependencies = [
  "http",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-file-storage",
  "rmx-headers",
  "rmx-mime",
- "rmx-router",
+ "rmx-response",
  "rmx-url",
  "serde_json",
 ]
@@ -1214,10 +1217,11 @@ dependencies = [
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-form-data-middleware",
  "rmx-headers",
- "rmx-router",
- "rmx-serve",
+ "rmx-node-fetch-server",
+ "rmx-response",
  "rmx-session",
  "rmx-session-middleware",
  "rmx-url",
@@ -1233,10 +1237,18 @@ dependencies = [
  "http",
  "rmx-cookie",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-form-data-middleware",
- "rmx-router",
+ "rmx-response",
  "rmx-session",
  "rmx-session-middleware",
+]
+
+[[package]]
+name = "rmx-cli"
+version = "0.1.0"
+dependencies = [
+ "rmx-terminal",
 ]
 
 [[package]]
@@ -1261,8 +1273,9 @@ dependencies = [
  "flate2",
  "http",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-mime",
- "rmx-router",
+ "rmx-response",
 ]
 
 [[package]]
@@ -1279,9 +1292,9 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-form-data-middleware",
  "rmx-method-override-middleware",
- "rmx-router",
  "rmx-url",
 ]
 
@@ -1291,8 +1304,8 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-headers",
- "rmx-router",
 ]
 
 [[package]]
@@ -1307,9 +1320,9 @@ dependencies = [
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-form-data-middleware",
  "rmx-method-override-middleware",
- "rmx-router",
  "rmx-session",
  "rmx-session-middleware",
  "rmx-url",
@@ -1328,22 +1341,14 @@ dependencies = [
 name = "rmx-fetch"
 version = "0.1.0"
 dependencies = [
- "brotli",
  "bytes",
- "flate2",
  "http",
  "http-body",
  "js-sys",
- "rmx-crypto",
- "rmx-headers",
- "rmx-html-template",
- "rmx-lazy-file",
- "rmx-mime",
  "rmx-multipart-parser",
  "rmx-url",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -1354,11 +1359,26 @@ dependencies = [
  "http-body",
  "rmx-compression-middleware",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-headers",
- "rmx-router",
- "rmx-serve",
+ "rmx-node-fetch-server",
+ "rmx-response",
  "rmx-url",
  "tokio",
+]
+
+[[package]]
+name = "rmx-fetch-router"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx",
+ "rmx-fetch",
+ "rmx-macros",
+ "rmx-response",
+ "rmx-route-pattern",
+ "rmx-terminal",
+ "rmx-url",
 ]
 
 [[package]]
@@ -1378,7 +1398,8 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
- "rmx-router",
+ "rmx-fetch-router",
+ "rmx-response",
 ]
 
 [[package]]
@@ -1411,6 +1432,7 @@ dependencies = [
  "bytes",
  "js-sys",
  "rmx-fetch",
+ "rmx-response",
 ]
 
 [[package]]
@@ -1419,7 +1441,8 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
- "rmx-router",
+ "rmx-fetch-router",
+ "rmx-response",
 ]
 
 [[package]]
@@ -1428,8 +1451,9 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-headers",
- "rmx-router",
+ "rmx-response",
  "rmx-terminal",
  "rmx-url",
 ]
@@ -1450,8 +1474,8 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-form-data-middleware",
- "rmx-router",
 ]
 
 [[package]]
@@ -1470,38 +1494,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmx-render"
-version = "0.1.0"
-dependencies = [
- "http",
- "rmx-component",
- "rmx-fetch",
- "rmx-router",
- "rmx-url",
-]
-
-[[package]]
-name = "rmx-route-pattern"
-version = "0.1.0"
-dependencies = [
- "rmx-url",
-]
-
-[[package]]
-name = "rmx-router"
-version = "0.1.0"
-dependencies = [
- "http",
- "rmx",
- "rmx-fetch",
- "rmx-macros",
- "rmx-route-pattern",
- "rmx-terminal",
- "rmx-url",
-]
-
-[[package]]
-name = "rmx-serve"
+name = "rmx-node-fetch-server"
 version = "0.1.0"
 dependencies = [
  "http",
@@ -1510,9 +1503,48 @@ dependencies = [
  "hyper-util",
  "rmx-fetch",
  "rmx-fetch-proxy",
- "rmx-router",
+ "rmx-fetch-router",
+ "rmx-response",
  "rmx-url",
  "tokio",
+]
+
+[[package]]
+name = "rmx-render-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-component",
+ "rmx-fetch",
+ "rmx-fetch-router",
+ "rmx-response",
+ "rmx-url",
+]
+
+[[package]]
+name = "rmx-response"
+version = "0.1.0"
+dependencies = [
+ "brotli",
+ "bytes",
+ "flate2",
+ "http",
+ "http-body",
+ "rmx-crypto",
+ "rmx-fetch",
+ "rmx-headers",
+ "rmx-html-template",
+ "rmx-lazy-file",
+ "rmx-mime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "rmx-route-pattern"
+version = "0.1.0"
+dependencies = [
+ "rmx-url",
 ]
 
 [[package]]
@@ -1534,8 +1566,8 @@ dependencies = [
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-headers",
- "rmx-router",
  "rmx-session",
  "serde_json",
  "tokio",
@@ -1548,7 +1580,8 @@ dependencies = [
  "http",
  "rmx-component",
  "rmx-fetch",
- "rmx-router",
+ "rmx-fetch-router",
+ "rmx-response",
  "rmx-url",
  "tokio",
  "wasm-bindgen",
@@ -1561,13 +1594,14 @@ version = "0.1.0"
 dependencies = [
  "http",
  "rmx-fetch",
+ "rmx-fetch-router",
  "rmx-form-data-middleware",
  "rmx-fs",
  "rmx-html-template",
  "rmx-lazy-file",
  "rmx-method-override-middleware",
  "rmx-mime",
- "rmx-router",
+ "rmx-response",
  "rmx-url",
 ]
 

@@ -51,7 +51,7 @@ use std::time::SystemTime;
 use http::{header, HeaderValue, Method, StatusCode};
 use rmx_fetch::{Body, File, Response};
 use rmx_headers::IfNoneMatch;
-use rmx_router::Context;
+use rmx_fetch_router::Context;
 
 pub use cache::{FsFileCache, FsFileCacheOptions, DEFAULT_CACHE_DIRECTORY};
 pub use glob::glob_match;

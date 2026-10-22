@@ -2,7 +2,8 @@
 //! `requireAuth()` and `requireAdmin()`.
 
 use rmx::{css, rsx, Mixin, Node};
-use rmx::fetch::{response, Response};
+use rmx::fetch::Response;
+use rmx::response;
 use rmx::middleware::form_data::FormDataExt;
 use rmx::router::routes::ResourcesActions;
 use rmx::router::{action, Context, Controller, Router};

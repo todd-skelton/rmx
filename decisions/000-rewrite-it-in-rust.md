@@ -403,7 +403,7 @@ Covered since phase 0b:
    limits) and form data with Remix's defaults and upload handlers, and `rmx-auth` (OAuth 2
    and OpenID Connect with PKCE: GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and
    generic OIDC). The social-auth demo now logs in through Google, GitHub and X when their
-   client credentials are set. `rmx-serve` has `node-fetch-server`'s listener options (host,
+   client credentials are set. `rmx-node-fetch-server` has `node-fetch-server`'s listener options (host,
    protocol, trusted proxy headers, error handler, client address) and answers handler
    panics with 500; the logger has Remix's format tokens and colors.
 5. Validation: `rmx-data-schema` (`rmx::data_schema`) ports `remix/data-schema`: the
@@ -425,7 +425,7 @@ Covered since phase 0b:
    `router.test.ts` is ported (`packages/fetch-router/tests/router.rs`: map, verbs with action
    middleware, 404, 405 with Remix's Allow order and body, HEAD falling back to GET by
    specificity, trailing slashes, mounts), as are `router-abort.test.ts` and
-   `request-abort.test.ts`: `request.signal` is an `rmx_fetch::AbortSignal` that `rmx-serve`
+   `request-abort.test.ts`: `request.signal` is an `rmx_fetch::AbortSignal` that `rmx-node-fetch-server`
    aborts when the client leaves before the response finished, and an aborted request skips
    the rest of the chain and answers 499 with `AbortError` where Remix rejects. The `remix new` starter (`reference/remix/template`)
    is ported as `template` with its controller test and a browser e2e.
@@ -444,7 +444,7 @@ Covered since phase 0b:
    names, methods, paths and order; the two "both only and exclude" error cases have no
    struct equivalent and are not ported.
    `remix/response`'s `redirect.test.ts` and the init and stream cases of `html.test.ts` are
-   ported in `packages/fetch/src/response.rs`: one `ResponseInit` (status, headers) is shared by
+   ported in `packages/response/src/lib.rs`: one `ResponseInit` (status, headers) is shared by
    `redirect_with`, `html_with`, `ctx.render_with` and the SPA `render_with`, and a `Location`
    or `Content-Type` in an init replaces the constructor's. `createMixin(setup, { ssr })` is
    `HostMixin` with `mixin_with(args, MixinOptions { ssr })`.
@@ -482,7 +482,7 @@ Covered since phase 0b:
    targets, the module graph and HMR, Node load hooks and CommonJS detection, none of which
    rmx assets has, since it does not transform JavaScript). `mime/scripts/codegen.test.ts`
    checks npm codegen output; rmx's table is generated once by `packages/mime/scripts/codegen.mjs`.
-   `file.test.ts` is ported case by case (`packages/fetch/tests/response_file.rs`, 85 cases)
+   `file.test.ts` is ported case by case (`packages/response/tests/file.rs`, 85 cases)
    against `response::file`, Remix's `createFileResponse` for any `FileLike` (an in-memory
    `File`, or a `LazyFile`, which streams only the requested range): ranges only for `GET`,
    an empty type sends no `Content-Type`, and strong ETags take a `DigestAlgorithm`
@@ -511,7 +511,7 @@ Covered since phase 0b:
    `compression.test.ts` (9) is ported too.
    `node-fetch-server`'s `request-listener.test.ts` (52) and `request-listener.http2.test.ts`
    (12) are ported case by case against real loopback servers (raw TCP and HTTP/2 clients
-   for Node's mocked request events). Porting changed `rmx-serve`: request bodies are read
+   for Node's mocked request events). Porting changed `rmx-node-fetch-server`: request bodies are read
    by a task at most 16 KiB ahead of the handler (Node's `highWaterMark`), so a client that
    leaves mid-upload aborts the signal while the handler is not reading, and reads then fail
    with `AbortError` (a malformed body keeps its own error); a handler that panics after the
@@ -519,7 +519,7 @@ Covered since phase 0b:
    that fails after headers were sent is reported as `ServeError::ResponseBody`. `rmx-url`
    now serializes IPv6 hosts as WHATWG URL does (`[2001:db8::1]`), so equivalent `Host` and
    `:authority` values match. `node-fetch-server/test`'s `createTestServer` is
-   `rmx::serve::test::create_test_server(router)`: a server on a free `127.0.0.1` port with
+   `rmx::node_fetch_server::test::create_test_server(router)`: a server on a free `127.0.0.1` port with
    `base_url` and `close()` (dropping it closes it too). Remix's `remix/test` runner itself
    (describe/it, mocks, fake timers, coverage, watch mode) is not ported: `cargo test` is the
    runner, browser tests use the wasm-bindgen harness and Playwright scripts, and mocks and
@@ -592,19 +592,19 @@ Covered since phase 0b:
    `sameSite` strings have no counterpart: `SameSite` is an enum.
    `remix/session` and `remix/session-middleware` run their Remix tests (41 session and
    storage cases in `packages/session/tests/`, 23 middleware cases in
-   `packages/middleware/src/session_remix_tests.rs`, with `Date.now` mocked by a test-only
+   `packages/session-middleware/src/session_remix_tests.rs`, with `Date.now` mocked by a test-only
    clock). Errors and warnings use Remix's text. Remix checks after `next()` that the
    context still holds its session; rmx contexts move down the chain, so the middleware
    stores the session with `Context::set_sealed` instead, and a later `set` or `get_mut`
    of `Session` panics with the same message. Logging the `httpOnly: false` warning is
    checked through the message builder, since tests cannot capture stderr in-process.
    The middleware packages run their Remix tests as integration tests under
-   `packages/middleware/tests/`: `cors` (21 cases, RegExp and boolean origin resolvers written
+   `packages/<name>-middleware/tests/`: `cors` (21 cases, RegExp and boolean origin resolvers written
    as `origin_fn` closures), `csrf` (14), `cop` (15, every configuration message checked),
    `auth` (32 across `auth`, `requireAuth` and the bearer, API key and session schemes;
    `auth-types.test.ts` is TypeScript inference, which `Auth<I>` gives for free) and
    `form_data` (21); `logger` (10) and `html-template` (17) are one test per Remix case in
-   place. `method-override.test.ts` (1 case) is in `packages/middleware/src/method_override.rs`, and
+   place. `method-override.test.ts` (1 case) is in `packages/method-override-middleware/src/lib.rs`, and
    the middleware now matches Remix: it overrides any request that carries a form (not only
    POST), uses the first `_method` value only when it is text, uppercases it without trimming,
    and accepts only the router's methods (`isRequestMethod`). `async-context.test.ts` (1 case)
@@ -627,7 +627,7 @@ Covered since phase 0b:
    missing boundary), `tar-parser` (21 `tar.test.ts` cases with the lodash and npm fixtures,
    49 name and 70 of 73 size cases; the other three need values the types rule out; bodies
    grow from received bytes, and `TarParser::parse` reuses one parser across archives) and
-   `fetch-proxy` (42 cases against real `rmx_serve` servers; a new `redirect` option,
+   `fetch-proxy` (42 cases against real `rmx_node_fetch_server` servers; a new `redirect` option,
    `Manual` by default, follows redirects with fetch's rules when set to `Follow`).
    `remix/auth` runs all 17 test files (50 cases, `packages/auth/tests/`), including the
    browser OIDC flow against a fake provider on a loopback port. They forced:
@@ -651,7 +651,7 @@ Covered since phase 0b:
    (focus restore), form navigation, navigation interception, nested client entries,
    frame CSS, child frames during parent reloads, and frame requests and resolvers; native ports cover
    server streaming (`ssr_stream.rs`, `ssr_mixins.rs`, `ssr_hydration.rs`, and the
-   frames section in `rmx-render`, where frames resolve through the router). Porting found and fixed real
+   frames section in `rmx-render-middleware`, where frames resolve through the router). Porting found and fixed real
    gaps: host-element listeners, the constructed stylesheet, link mixin options, focus
    restore, detached form submitters, submitter encodings and `text/plain` bodies, frame
    sources after redirects, and runaway mixin expansion, document-relative origins, deferred removal of
@@ -757,7 +757,7 @@ Remaining gaps:
    compiled by `rustc`), `node-hmr` and `component-hmr` (`rmx dev` rebuilds, restarts and
    reloads the page instead), `multiple-import-maps-polyfill` (rmx ships one wasm bundle
    and no import maps), `assert` (`assert!`) and `test` (`cargo test`, plus
-   `rmx_serve::test` and `rmx::test`). Every other Remix package has an rmx crate or module
+   `rmx_node_fetch_server::test` and `rmx::test`). Every other Remix package has an rmx crate or module
    (`packages/rmx/tests/manifest.rs` checks that each crate is distributed through `rmx`).
    The CLI's internal test files map as follows: `contained-path.test.ts` is the doctor fix
    path check (`doctor_fix_skips_existing_files_and_refuses_paths_outside_the_app`, which
@@ -807,10 +807,12 @@ Remaining gaps:
 Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22).
 
 1. Packages: upstream has 50. The 37 in scope each have an rmx crate or module, distributed
-   through the `rmx` crate (`packages/rmx/tests/manifest.rs`): the middleware packages are
-   `rmx-middleware` (async context is `router/src/async_context.rs`), `fetch-router` is
-   `rmx-router`, `response` is `fetch/src/response.rs`, `node-fetch-server` is `rmx-serve`,
-   `render-middleware` is `rmx-render` and `remix` is `rmx`. The other 13 are out of scope:
+   through the `rmx` crate (`packages/rmx/tests/manifest.rs`): since the 2026-10-22
+   reorganization each one is a crate in a directory of the same name under `packages/`
+   (`rmx-<name>`), with three exceptions: `async-context-middleware` lives in `fetch-router`
+   (`async_context`, since the router's `Context` keeps the scope in step), `form-data-parser`
+   is `FormData::parse` in `fetch` (the Fetch API's `FormData` lives there), and `remix` is
+   `rmx`. The other 13 are out of scope:
    data access (`data-table` and its three adapters, the memcache and redis session
    stores, `file-storage-s3`), which existing libraries cover, and JavaScript tooling with
    no Rust counterpart (`node-tsx`, `node-hmr`, `component-hmr`,

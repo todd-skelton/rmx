@@ -87,10 +87,11 @@ A proc macro built on `rstml`. Templates live inside `.rs` files; there is no se
 Each Remix 3 package is a crate under `packages/`, and, like the `remix` package with its
 subpath exports, the `rmx` crate (`packages/rmx`) puts them behind one dependency: the
 component model at the root (`rmx::rsx`, `rmx::Component`), the rest as modules
-(`rmx::router`, `rmx::middleware`, `rmx::auth`, `rmx::session`, `rmx::ui`, ...). Server
-modules exist only in native builds; a wasm build of the same crate gets the component
-runtime plus `ui`, `router`, `fetch`, `spa`, `url`, `headers`, `mime` and
-`route_pattern`. Every example depends on `rmx` alone (unpkg also uses
+(`rmx::router`, `rmx::middleware::session`, `rmx::auth`, `rmx::ui`, ...), at the same
+paths as Remix's subpath exports (`remix/middleware/session` is `rmx::middleware::session`).
+Server modules exist only in native builds; a wasm build of the same crate gets the
+component runtime plus `ui`, `router`, `fetch`, `response`, `spa`, `url`, `headers`, `mime`
+and `route_pattern`. Every demo depends on `rmx` alone (unpkg also uses
 `rmx-html-template` directly, since its `html!` macro expands to that crate's path). The
 crates:
 
@@ -184,7 +185,7 @@ crates:
    reported to the app's error listeners. Server streaming is checked by ports of `stream.test.tsx`
    (`packages/component/tests/ssr_*.rs`, and `packages/render-middleware/src/stream_tests.rs` for frames,
    which resolve through the router).
-2. Server: `rmx-router` (routes, middleware, nested mounts, controllers, and
+2. Server: `rmx-fetch-router` (routes, middleware, nested mounts, controllers, and
    `async_context` for reading the request context deeper in the call stack; route maps
    derive `RouteMap`, which generates a `<Name>Actions` struct so `router.map(&ROUTES,
    Controller::new(RoutesActions { .. }).with(require_auth()))` checks at compile time
@@ -212,7 +213,7 @@ crates:
    with `html.test.ts`, `redirect.test.ts` and `file.test.ts` ported one per case; and `AbortController` / `AbortSignal` for
    `request.signal`: the router checks it before each middleware step and races it like
    Remix's `raceRequestAbort`, answering an aborted request with a 499 that carries
-   `AbortError`), `rmx-serve` (hyper server with
+   `AbortError`), `rmx-node-fetch-server` (hyper server with
    `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
    `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; each
    request's signal aborts when the client leaves before the response finished, request
@@ -222,8 +223,9 @@ crates:
    loopback servers; plus an HTTP/1 `fetch` client), `rmx-fetch-proxy` (Remix's `fetch-proxy.test.ts` ported one per case, including real
    servers for streamed bodies, redirects and a trusted development proxy; a `redirect`
    option, overridable per request, returns redirects by default or follows them with
-   fetch's rules), `rmx-render`, `rmx-middleware` (compression with
-   br/gzip/deflate negotiation through `rmx_fetch::response::compress`, Remix's
+   fetch's rules), `rmx-render-middleware`, one crate per Remix middleware package
+   (`rmx-compression-middleware` with
+   br/gzip/deflate negotiation through `rmx_response::compress`, Remix's
    `remix/response/compress`, which reads a source chunk only after the previous output was
    taken; `compress.test.ts` and the middleware's tests ported one per case), static files served as Remix does (each
    file opened as a `LazyFile` and answered by `response::file`, typed by the requested path,
@@ -267,14 +269,14 @@ crates:
    (`Offset::sized`), and each module has the matching demo in `demos/ui` with browser
    checks.
 
-## Examples
+## Demos
 
 Every Remix 3 demo has a port under `demos/`, each with a Playwright e2e script
 (`demos/<name>/e2e.mjs`): assets, bookstore, frame-navigation, frames, i18n,
 lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `template` ports the
 `remix new` starter app (`reference/remix/template`): the home page, the copy-to-clipboard
 `PromptButton` client entry, the asset server and the controller test; `rmx new <dir>` writes
-it out as a standalone crate (`cargo install --path packages/rmx` installs the `rmx` command;
+it out as a standalone crate (`cargo install --path packages/cli` installs the `rmx` command;
 the generated app depends on this checkout's `rmx` by path, or on `RMX_VERSION`). Every demo
 binary lists its route map with `-- routes`, and `rmx routes` / `rmx assets` run those
 commands for the app in the current directory. `bench/rmx-app` is the benchmark app used in
@@ -287,10 +289,10 @@ and `wasm-opt` (the build script finds the copies cargo-leptos downloaded).
 
 ```powershell
 ./scripts/build-client.ps1 -Crate frames-demo -Out demos/frames/public/pkg   # wasm client
-cargo run -p frames-demo                                               # http://127.0.0.1:44110/
-node demos/frames/e2e.mjs                                            # browser checks
+cargo run -p frames-demo                                                       # http://127.0.0.1:44110/
+node demos/frames/e2e.mjs                                                      # browser checks
 cargo test --workspace
-./scripts/test-browser.ps1                                                      # component tests in headless Chromium
+./scripts/test-browser.ps1                                                     # component tests in headless Chromium
 ```
 
 `test-browser.ps1` runs each `tests/browser_*.rs` file of a crate with `wasm-bindgen-test`

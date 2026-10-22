@@ -2,7 +2,7 @@
 //!
 //! ```
 //! use rmx_auth_middleware::{auth, require_auth, scheme, session_scheme};
-//! use rmx_router::{middleware, Context, Router};
+//! use rmx_fetch_router::{middleware, Context, Router};
 //!
 //! #[derive(Clone)]
 //! struct User { name: String }
@@ -27,7 +27,7 @@ use std::sync::Arc;
 use http::header::{HeaderValue, WWW_AUTHENTICATE};
 use http::StatusCode;
 use rmx_fetch::Response;
-use rmx_router::{BoxFuture, Context, IntoResponse, MaybeSend, MaybeSync, Middleware, Next};
+use rmx_fetch_router::{BoxFuture, Context, IntoResponse, MaybeSend, MaybeSync, Middleware, Next};
 use rmx_session::Session;
 
 /// Why authentication failed.

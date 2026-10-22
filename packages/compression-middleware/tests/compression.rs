@@ -9,7 +9,7 @@ use std::sync::Arc;
 use http::HeaderValue;
 use rmx_fetch::{block_on, Body, Response};
 use rmx_compression_middleware::{compression, BrotliOptions, Encoding, ZlibOptions};
-use rmx_router::{Context, Router};
+use rmx_fetch_router::{Context, Router};
 
 fn response(body: &'static str, headers: &[(&'static str, &'static str)]) -> Response {
     let mut response = Response::new(Body::from(body));

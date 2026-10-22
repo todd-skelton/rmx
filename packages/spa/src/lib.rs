@@ -20,10 +20,10 @@ use std::sync::Arc;
 use http::header;
 use rmx::Node;
 use rmx_fetch::{Body, Response};
-use rmx_router::{Context, Middleware, Next};
+use rmx_fetch_router::{Context, Middleware, Next};
 
 /// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
-pub use rmx_fetch::response::ResponseInit;
+pub use rmx_response::ResponseInit;
 
 /// `ctx.render(node)` for routes running in the browser.
 pub trait Render {
@@ -136,7 +136,7 @@ fn form_body(fields: &[(String, String)], enc_type: Option<&str>) -> (String, Bo
 /// `303` (and a `301`/`302` after a POST) turns into a `GET` without a body or content
 /// type, and `307`/`308` repeat the request. A redirect without a `Location` is the
 /// response.
-pub async fn resolve(router: &rmx_router::Router, request: rmx::FrameRequest) -> Result<rmx::FrameResponse, String> {
+pub async fn resolve(router: &rmx_fetch_router::Router, request: rmx::FrameRequest) -> Result<rmx::FrameResponse, String> {
     let mut url = rmx_url::Url::parse(&request.url).map_err(|e| format!("invalid frame URL {}: {e}", request.url))?;
     let origin = url.origin();
     let mut method = request.method.to_ascii_uppercase();
@@ -188,7 +188,7 @@ pub struct RunOptions {
 /// Start a client-rendered app: render `fallback`, then the route for the current URL,
 /// and route every same-origin navigation through `router`.
 #[cfg(target_arch = "wasm32")]
-pub fn run(router: rmx_router::Router, options: RunOptions) {
+pub fn run(router: rmx_fetch_router::Router, options: RunOptions) {
     use std::rc::Rc;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -217,7 +217,7 @@ mod tests {
     use super::*;
     use http::StatusCode;
     use rmx::rsx;
-    use rmx_router::Router;
+    use rmx_fetch_router::Router;
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
         tokio::runtime::Builder::new_current_thread().build().expect("runtime").block_on(f)
@@ -245,7 +245,7 @@ mod tests {
         router.post("/greet", |mut ctx: Context| async move {
             let form = ctx.take_body().form().await.expect("form");
             let name = form.get("name").unwrap_or("friend").to_string();
-            rmx_fetch::response::redirect_with(&format!("/greet?name={name}"), StatusCode::SEE_OTHER)
+            rmx_response::redirect_with(&format!("/greet?name={name}"), StatusCode::SEE_OTHER)
         });
         router.get("/plain", |_: Context| async { "not a node" });
 
@@ -285,7 +285,7 @@ mod tests {
                     let body = ctx.take_body().text().await.unwrap_or_default();
                     log.lock().unwrap().push((method, content_type, body));
                     if ctx.url().pathname() == "/save" {
-                        return rmx_fetch::response::redirect_with("/saved", StatusCode::SEE_OTHER);
+                        return rmx_response::redirect_with("/saved", StatusCode::SEE_OTHER);
                     }
                     ctx.render(rsx! { <p>"Saved"</p> })
                 }
@@ -341,14 +341,14 @@ mod tests {
         router.any("/r/:status", move |ctx: Context| {
             log.lock().unwrap().push(ctx.method().to_string());
             let status: u16 = ctx.param("status").unwrap().parse().unwrap();
-            async move { rmx_fetch::response::redirect_with("/done", StatusCode::from_u16(status).unwrap()) }
+            async move { rmx_response::redirect_with("/done", StatusCode::from_u16(status).unwrap()) }
         });
         let log = methods.clone();
         router.any("/done", move |ctx: Context| {
             log.lock().unwrap().push(ctx.method().to_string());
             async move { ctx.render(rsx! { <h1>"Redirected"</h1> }) }
         });
-        router.get("/away", |_: Context| async move { rmx_fetch::response::redirect("https://elsewhere.example/") });
+        router.get("/away", |_: Context| async move { rmx_response::redirect("https://elsewhere.example/") });
         router.get("/bare", |_: Context| async move {
             let mut res = Response::new(Body::empty());
             *res.status_mut() = StatusCode::FOUND;
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn stops_after_ten_redirects() {
         let mut router = Router::new();
-        router.get("/loop", |_: Context| async move { rmx_fetch::response::redirect("/loop") });
+        router.get("/loop", |_: Context| async move { rmx_response::redirect("/loop") });
         let err = block_on(resolve(&router, request("http://localhost/loop", "GET", None))).err().unwrap();
         assert_eq!(err, "SPA route exceeded 10 redirects");
     }
