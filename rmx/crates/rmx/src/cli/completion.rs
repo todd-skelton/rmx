@@ -90,7 +90,22 @@ pub fn complete(words: &[String], index: usize) -> Completion {
             }
         }
         "doctor" => flags(&["--fix", "--json", "--strict", "--no-strict"]),
-        "routes" => flags(&["--json", "--table", "--no-headers"]),
+        "routes" => {
+            // As Remix's `completeRoutes`: no flag that cannot combine with those given, and
+            // nothing after an unknown token.
+            if rest.iter().any(|t| !matches!(*t, "--json" | "--table" | "--no-headers")) {
+                return Completion::Values(Vec::new());
+            }
+            let (json, table) = (rest.contains(&"--json"), rest.contains(&"--table"));
+            let mut offered = Vec::new();
+            if !json && !table {
+                offered.extend(["--json", "--table"]);
+            }
+            if table {
+                offered.push("--no-headers");
+            }
+            flags(&offered)
+        }
         "dev" if !rest.contains(&"--") => flags(&["--"]),
         "version" => flags(&[]),
         _ => Completion::Values(Vec::new()),

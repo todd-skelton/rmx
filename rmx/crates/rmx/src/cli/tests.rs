@@ -678,6 +678,13 @@ fn completion_prints_the_script_for_bash_and_zsh() {
     assert!(bash.contains(r#"output=$(rmx completion -- "$cword" "${words[@]}" 2>/dev/null)"#), "{bash}");
     assert_eq!(parse(&args(&["completion", "fish"])).unwrap_err().message, "Unknown completion shell: fish");
     assert_eq!(parse(&args(&["completion"])), Ok(Invocation::Help(COMPLETION_HELP)));
+    // commands/completion.test.ts: help, also when it follows the shell.
+    assert_eq!(parse(&args(&["completion", "--help"])), Ok(Invocation::Help(COMPLETION_HELP)));
+    assert_eq!(parse(&args(&["completion", "bash", "--help"])), Ok(Invocation::Help(COMPLETION_HELP)));
+    // completion.test.ts: the script asks the plumbing mode from bash and zsh, and bash
+    // keeps `=` inside words.
+    assert!(bash.contains(r#"rmx completion -- "$((CURRENT - 1))" "${words[@]}""#), "{bash}");
+    assert!(bash.contains("_get_comp_words_by_ref -n = -w words -i cword"));
     assert!(HELP.contains("completion        Print shell completion scripts for rmx"));
 }
 
@@ -703,8 +710,21 @@ fn completion_offers_commands_subcommands_flags_and_files() {
     // A used --no-color is not offered again, before or after the command.
     assert_eq!(complete(&["rmx", "--no-color", "doctor", "--"]), "mode:values\n--fix\n--json\n--strict\n--no-strict\n--help\n");
     assert_eq!(complete(&["rmx", "--no-color", ""]), format!("mode:values\n{commands}-h\n--help\n-v\n--version\n"));
-    assert_eq!(complete(&["rmx", "routes", "--no-color", "--n"]), "mode:values\n--no-headers\n");
+    assert_eq!(complete(&["rmx", "routes", "--table", "--no-color", "--n"]), "mode:values\n--no-headers\n");
     assert_eq!(complete(&["rmx", "routes", "--t"]), "mode:values\n--table\n");
+    // completion.test.ts: filters invalid routes flag combinations (rmx has no --verbose).
+    assert_eq!(complete(&["rmx", "routes", "--json", ""]), "mode:values\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "routes", "--table", ""]), "mode:values\n--no-headers\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "routes", "--table", "--no-headers", ""]), "mode:values\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "routes", "--no-headers", ""]), "mode:values\n--json\n--table\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "routes", "extra", ""]), "mode:values\n");
+    // Keeps --no-color available until it is used, and offers version flags only before a
+    // command.
+    assert_eq!(complete(&["rmx", "routes", ""]), "mode:values\n--json\n--table\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "routes", "--no-color", ""]), "mode:values\n--json\n--table\n-h\n--help\n");
+    assert!(!complete(&["rmx", "doctor", ""]).contains("--version"));
+    // commands/completion.test.ts: plumbing mode stays active when the words include help.
+    assert_eq!(parse(&args(&["completion", "--", "2", "rmx", "--help"])), Ok(Invocation::Print("mode:values\n".into())));
     assert_eq!(complete(&["rmx", "test", ""]), "mode:values\n");
     assert_eq!(complete(&["rmx", "routes", "--help", ""]), "mode:values\n");
 }
