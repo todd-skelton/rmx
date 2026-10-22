@@ -51,6 +51,30 @@ fn prints_help_and_the_version() {
 }
 
 #[test]
+fn accepts_the_global_no_color_flag_before_a_separator() {
+    let version = Ok(Invocation::Print(format!("{}\n", env!("CARGO_PKG_VERSION"))));
+    assert_eq!(parse(&args(&["--no-color", "version"])), version);
+    assert_eq!(parse(&args(&["--no-color", "--", "--version"])), version, "a separator after global options");
+    assert_eq!(parse(&args(&["--", "--help"])), Ok(Invocation::Print(HELP.into())), "a leading separator");
+    assert_eq!(parse(&args(&["version", "--no-color"])), version, "anywhere before a separator");
+    assert!(HELP.contains("  --no-color     Disable ANSI color output\n"));
+
+    let (rest, global) = global_options(&args(&["--no-color", "doctor", "--json"]));
+    assert_eq!((rest, global.no_color), (args(&["doctor", "--json"]), true));
+    // After `--` it belongs to the app: `rmx dev -- --no-color` passes it on.
+    let (rest, global) = global_options(&args(&["dev", "--", "--no-color"]));
+    assert_eq!((rest, global.no_color), (args(&["dev", "--", "--no-color"]), false));
+    assert_eq!(parse(&args(&["dev", "--", "--no-color"])), Ok(Invocation::Dev(args(&["--no-color"]))));
+
+    let envs = |global: &GlobalOptions| -> Vec<(String, String)> {
+        let command = exec_command(&args(&["cargo", "test"]), Path::new("."), global);
+        command.get_envs().map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|v| v.to_string_lossy().into_owned()).unwrap_or_default())).collect()
+    };
+    assert_eq!(envs(&GlobalOptions { no_color: true }), vec![("CARGO_TERM_COLOR".to_string(), "never".to_string()), ("NO_COLOR".to_string(), "1".to_string())]);
+    assert!(envs(&GlobalOptions::default()).is_empty());
+}
+
+#[test]
 fn reports_unknown_commands_and_arguments() {
     let err = parse(&args(&["deploy"])).unwrap_err();
     assert_eq!((err.code, err.message.as_str()), ("RMX_UNKNOWN_COMMAND", "Unknown command: deploy"));
@@ -391,18 +415,27 @@ fn completion_prints_the_script_for_bash_and_zsh() {
 
 #[test]
 fn completion_offers_commands_subcommands_flags_and_files() {
-    assert_eq!(complete(&["rmx", ""]), "mode:values\nassets\ncompletion\ndev\ndoctor\nhelp\nnew\nroutes\ntest\nversion\n");
+    let commands = "assets\ncompletion\ndev\ndoctor\nhelp\nnew\nroutes\ntest\nversion\n";
+    assert_eq!(complete(&["rmx", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n-v\n--version\n"));
+    assert_eq!(complete(&["rmx", "-"]), "mode:values\n-h\n--help\n--no-color\n-v\n--version\n");
     assert_eq!(complete(&["rmx", "d"]), "mode:values\ndev\ndoctor\n");
     assert_eq!(complete(&["rmx", "--v"]), "mode:values\n--version\n");
+    assert_eq!(complete(&["rmx", "--version", ""]), "mode:values\n");
+    assert_eq!(complete(&["rmx", "help", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n"));
     assert_eq!(complete(&["rmx", "help", "ro"]), "mode:values\nroutes\n");
-    assert_eq!(complete(&["rmx", "completion", ""]), "mode:values\nbash\nzsh\n");
-    assert_eq!(complete(&["rmx", "assets", ""]), "mode:values\ninspect\n");
+    assert_eq!(complete(&["rmx", "completion", ""]), "mode:values\nbash\nzsh\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rmx", "assets", ""]), "mode:values\ninspect\n-h\n--help\n--no-color\n");
     assert_eq!(complete(&["rmx", "assets", "inspect", "app/"]), "mode:files\n");
+    assert_eq!(complete(&["rmx", "assets", "inspect", "-"]), "mode:values\n-h\n--help\n--no-color\n");
     assert_eq!(complete(&["rmx", "new", ""]), "mode:files\n");
-    assert_eq!(complete(&["rmx", "new", "my-app", "--"]), "mode:values\n--app-name\n--force\n--help\n");
+    assert_eq!(complete(&["rmx", "new", "my-app", "--"]), "mode:values\n--app-name\n--force\n--help\n--no-color\n");
     assert_eq!(complete(&["rmx", "new", "my-app", "--app-name", ""]), "mode:none\n");
     assert_eq!(complete(&["rmx", "new", "--app-name", "X", ""]), "mode:files\n", "the name is not the target");
-    assert_eq!(complete(&["rmx", "doctor", "--json", "--"]), "mode:values\n--strict\n--no-strict\n--help\n");
+    assert_eq!(complete(&["rmx", "doctor", "--json", "--"]), "mode:values\n--strict\n--no-strict\n--help\n--no-color\n");
+    // A used --no-color is not offered again, before or after the command.
+    assert_eq!(complete(&["rmx", "--no-color", "doctor", "--"]), "mode:values\n--json\n--strict\n--no-strict\n--help\n");
+    assert_eq!(complete(&["rmx", "--no-color", ""]), format!("mode:values\n{commands}-h\n--help\n-v\n--version\n"));
+    assert_eq!(complete(&["rmx", "routes", "--no-color", "--n"]), "mode:values\n--no-headers\n");
     assert_eq!(complete(&["rmx", "routes", "--t"]), "mode:values\n--table\n");
     assert_eq!(complete(&["rmx", "test", ""]), "mode:values\n");
     assert_eq!(complete(&["rmx", "routes", "--help", ""]), "mode:values\n");

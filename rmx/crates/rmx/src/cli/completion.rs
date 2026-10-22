@@ -40,28 +40,40 @@ fn values(candidates: &[&str], current: &str, used: &[&str]) -> Completion {
     Completion::Values(candidates.iter().filter(|c| c.starts_with(current) && !used.contains(c)).map(|c| c.to_string()).collect())
 }
 
-/// Candidates for `words[index]`, where `words[0]` is the program name.
+/// Candidates for `words[index]`, where `words[0]` is the program name. As in Remix, every
+/// list ends with the global flags not used yet (`-h`, `--help`, `--no-color`, and at the
+/// top level `-v`, `--version`).
 pub fn complete(words: &[String], index: usize) -> Completion {
     let current = words.get(index).map_or("", String::as_str);
-    let tokens: Vec<&str> = words.iter().take(index).skip(1).map(String::as_str).collect();
+    let all: Vec<&str> = words.iter().take(index).skip(1).map(String::as_str).collect();
+    // `--no-color` is global: it may come before or after the command.
+    let no_color = all.contains(&"--no-color");
+    let tokens: Vec<&str> = all.into_iter().filter(|t| *t != "--no-color").collect();
+    fn with_global<'a>(list: &[&'a str], no_color: bool, top: bool) -> Vec<&'a str> {
+        let mut out = list.to_vec();
+        out.extend(["-h", "--help"]);
+        if !no_color {
+            out.push("--no-color");
+        }
+        if top {
+            out.extend(["-v", "--version"]);
+        }
+        out
+    }
     let Some((&command, rest)) = tokens.split_first() else {
-        return if current.starts_with('-') { values(&["-h", "--help", "-v", "--version"], current, &[]) } else { values(&ROOT_COMMANDS, current, &[]) };
+        return values(&with_global(&ROOT_COMMANDS, no_color, true), current, &[]);
     };
-    if rest.iter().any(|t| matches!(*t, "-h" | "--help")) {
+    if matches!(command, "-h" | "--help" | "-v" | "--version") || rest.iter().any(|t| matches!(*t, "-h" | "--help")) {
         return Completion::Values(Vec::new());
     }
-    let flags = |list: &[&str]| {
-        let mut all = list.to_vec();
-        all.extend(["-h", "--help"]);
-        values(&all, current, rest)
-    };
+    let flags = |list: &[&str]| values(&with_global(list, no_color, false), current, rest);
     match command {
-        "help" if rest.is_empty() => values(&ROOT_COMMANDS, current, &[]),
-        "completion" if rest.is_empty() => values(&SHELLS, current, &[]),
+        "help" if rest.is_empty() => flags(&ROOT_COMMANDS),
+        "completion" if rest.is_empty() => flags(&SHELLS),
         "assets" => match rest {
-            [] if current.starts_with('-') => flags(&[]),
-            [] => values(&["inspect"], current, &[]),
+            [] => flags(&["inspect"]),
             ["inspect"] if !current.starts_with('-') => Completion::Files,
+            ["inspect"] => flags(&[]),
             _ => Completion::Values(Vec::new()),
         },
         "new" => {

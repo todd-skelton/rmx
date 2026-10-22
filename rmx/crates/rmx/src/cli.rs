@@ -122,6 +122,7 @@ Commands:
 
 Options:
   -h, --help     Show help
+  --no-color     Disable ANSI color output
   -v, --version  Show version
 
 Examples:
@@ -245,8 +246,36 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// Parse a command line (without the program name).
+/// Options that apply to every command, taken out of the command line before it is
+/// parsed (Remix's `extractGlobalOptions`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GlobalOptions {
+    /// `--no-color`: no ANSI styling, here or in the cargo commands `rmx` runs.
+    pub no_color: bool,
+}
+
+/// Split the global options from the rest of a command line. Arguments from the first
+/// `--` on are left alone.
+pub fn global_options(args: &[String]) -> (Vec<String>, GlobalOptions) {
+    let mut rest = Vec::with_capacity(args.len());
+    let mut options = GlobalOptions::default();
+    for (i, arg) in args.iter().enumerate() {
+        match arg.as_str() {
+            "--" => {
+                rest.extend_from_slice(&args[i..]);
+                break;
+            }
+            "--no-color" => options.no_color = true,
+            _ => rest.push(arg.clone()),
+        }
+    }
+    (rest, options)
+}
+
+/// Parse a command line (without the program name). Global options are accepted and
+/// ignored here; [`run`] applies them.
 pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
+    let (args, _) = global_options(args);
     let mut args: Vec<&str> = args.iter().map(String::as_str).skip_while(|a| *a == "--").collect();
     if args.is_empty() || matches!(args[0], "-h" | "--help") {
         return Ok(Invocation::Print(HELP.into()));
@@ -388,13 +417,16 @@ fn parse_new(args: &[&str]) -> Result<NewOptions, CliError> {
 /// stderr, `new` reports its steps on stderr, and `routes`, `assets` and `test` hand over to
 /// cargo.
 pub fn run(args: &[String], cwd: &Path) -> i32 {
+    let (args, global) = global_options(args);
+    let args = &args[..];
+    let colors = |is_tty: bool| !global.no_color && rmx_terminal::should_use_colors(|name| std::env::var(name).ok(), is_tty);
     let help = |args: &[String]| help_for(args.first().map(String::as_str).filter(|c| *c != "help")).unwrap_or(HELP);
     match parse(args) {
         Ok(Invocation::Print(text)) => {
             print!("{text}");
             0
         }
-        Ok(Invocation::Exec(argv)) => match std::process::Command::new(&argv[0]).args(&argv[1..]).current_dir(cwd).status() {
+        Ok(Invocation::Exec(argv)) => match exec_command(&argv, cwd, &global).status() {
             Ok(status) => status.code().unwrap_or(1),
             Err(e) => {
                 eprint!("{}", CliError::internal(format!("Could not run {}: {e}", argv[0])).render(""));
@@ -402,7 +434,7 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
             }
         },
         Ok(Invocation::New(options)) => {
-            let styles = Styles::new(rmx_terminal::should_use_colors(|name| std::env::var(name).ok(), std::io::stderr().is_terminal()));
+            let styles = Styles::new(colors(std::io::stderr().is_terminal()));
             let mut progress = |line: &str| eprintln!("{}", style_progress(line, &styles));
             match new_project(&options, cwd, &mut progress) {
                 Ok(app) => {
@@ -426,7 +458,7 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
         },
         Ok(Invocation::Doctor { json, strict }) => {
             let report = doctor::run_doctor(cwd, &doctor::SystemToolchain);
-            print!("{}", if json { report.to_json() } else { report.render_styled(&Styles::detect()) });
+            print!("{}", if json { report.to_json() } else { report.render_styled(&Styles::new(colors(std::io::stdout().is_terminal()))) });
             i32::from(strict && report.warnings() > 0)
         }
         Err(e) => {
@@ -434,6 +466,17 @@ pub fn run(args: &[String], cwd: &Path) -> i32 {
             1
         }
     }
+}
+
+/// The command `rmx` hands over to (`cargo run`, `cargo test`); `--no-color` reaches it
+/// as `NO_COLOR` (read by the app and `rmx_terminal`) and `CARGO_TERM_COLOR=never`.
+pub fn exec_command(argv: &[String], cwd: &Path, global: &GlobalOptions) -> std::process::Command {
+    let mut command = std::process::Command::new(&argv[0]);
+    command.args(&argv[1..]).current_dir(cwd);
+    if global.no_color {
+        command.env("NO_COLOR", "1").env("CARGO_TERM_COLOR", "never");
+    }
+    command
 }
 
 /// The result of [`new_project`].
