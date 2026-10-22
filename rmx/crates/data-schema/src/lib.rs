@@ -906,7 +906,8 @@ impl<T: TupleItems> Schema for Tuple<T> {
 /// ```
 ///
 /// Missing keys are `undefined`. Keys the shape does not read are ignored (Remix's default
-/// `unknownKeys: 'strip'`); [`Object::strict`] reports them instead.
+/// `unknownKeys: 'strip'`); [`Fields::rest`] keeps them (`'passthrough'`) and
+/// [`Object::strict`] reports them (`'error'`).
 pub fn object<T, F: Fn(&mut Fields<'_, '_>) -> T>(build: F) -> Object<F> {
     Object { build, strict: false }
 }
@@ -941,6 +942,22 @@ impl Fields<'_, '_> {
         S::Output: Default,
     {
         self.try_field(key, schema).unwrap_or_default()
+    }
+
+    /// The entries the shape has not read so far, unchanged (Remix's `unknownKeys:
+    /// 'passthrough'`). Call it after the fields it should leave out:
+    ///
+    /// ```
+    /// use rmx_data_schema::{self as s, Value};
+    ///
+    /// let schema = s::object(|o| (o.field("name", s::string()), o.rest()));
+    /// let (name, rest) = s::parse(&schema, Value::object([("name", "Ada"), ("extra", "x")])).unwrap();
+    /// assert_eq!((name.as_str(), rest), ("Ada", vec![("extra".to_string(), Value::from("x"))]));
+    /// ```
+    pub fn rest(&mut self) -> Vec<(String, Value)> {
+        let rest: Vec<(String, Value)> = self.input.iter().filter(|(k, _)| !self.read.contains(k)).cloned().collect();
+        self.read.extend(rest.iter().map(|(k, _)| k.clone()));
+        rest
     }
 
     /// Like [`field`](Fields::field), returning `None` on failure (for outputs without a

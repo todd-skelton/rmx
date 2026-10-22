@@ -317,9 +317,12 @@ Covered since phase 0b:
    panics with 500; the logger has Remix's format tokens and colors.
 5. Validation: `rmx-data-schema` (`rmx::data_schema`) ports `remix/data-schema`: the
    schema combinators, `pipe`/`refine`/`transform`, checks, coercion, `abortEarly`, error
-   maps with locale, and the form-data reader, checked by ports of its test files (31 unit
-   tests). Objects build Rust values through a closure instead of returning plain
-   objects; JavaScript-only schemas (bigint, symbol, Map, Set, Date) are left out. Every
+   maps with locale, and the form-data reader. Its eight test files are ported one per case
+   (125 of 149: schema 74 of 92, coerce 16 of 22, form-data 14, parse 9, checks 5, variant
+   4, lazy 2, pipe 1); the 24 left out need JavaScript-only values (bigint, symbol, Map,
+   Set, Date, sparse arrays, custom iterators, class hierarchies). Objects build Rust values
+   through a closure instead of returning plain objects; `Fields::rest` is
+   `unknownKeys: 'passthrough'` and `Object::strict` is `'error'`. Every
    form and JSON body a Remix demo validates with `data-schema` is validated with it in
    the rmx port (timeboxer, bookstore, social-auth, sse), except the bookstore admin book
    form, which keeps accepting `on` for its checkbox.
@@ -360,7 +363,8 @@ Covered since phase 0b:
    it as Remix's `static.ts` is (`open_lazy_file` plus `response::file`), with
    `static.test.ts` ported case by case (43, symlinks included); `file_response` and
    `file_response_for` are gone.
-   `remix/terminal` is `rmx-terminal` with its four test files ported; the logger's colors and
+   `remix/terminal` is `rmx-terminal` with its test files ported one per case (18 of 20; the
+   entrypoint re-export and `getDefaultEnvironment` cases do not apply); the logger's colors and
    detection now come from it. Cursor helpers take unsigned and signed integers, so Remix's
    NaN and fraction normalization has nothing to port. The `rmx` CLI colors `new` progress and
    `doctor` like Remix's reporter (gray steps, green `✓`, red `✗`, yellow warnings) when
