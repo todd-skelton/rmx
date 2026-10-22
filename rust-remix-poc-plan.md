@@ -557,7 +557,14 @@ Remaining gaps:
    and `remix assets` exists as `rmx::assets::assets_command` over the asset server's
    `assets()` / `asset_details()` inspection (list, `inspect <url-or-file>`, with statuses
    reachable, denied, not-allowed, missing and unmapped), run by the assets and template
-   demos for `-- assets`.
+   demos for `-- assets`. The asset server's mounts compile through `rmx::assets::routes`
+   (Remix's `compileRoutes`, with `paths` for Windows, UNC and POSIX file paths): mount keys
+   canonicalize as URL pathnames, absolute directories, query strings, fragments, encoded dot
+   segments and overlapping roots are rejected with Remix's messages, and file names are
+   percent-encoded like `encodeURIComponent`. `routes.test.ts` (20), `paths.test.ts` (9) and
+   the fingerprint format and parse cases of `fingerprint.test.ts` are ported one per case;
+   the module graph, script transforms and CommonJS checks are the TypeScript side of
+   Remix's asset server, which rmx apps (Rust compiled to wasm) do not have.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
    a document still being parsed (`document.write` splitting a template). Cases that load

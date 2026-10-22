@@ -30,7 +30,9 @@
 
 mod glob;
 mod inspect;
+pub mod paths;
 mod rewrite;
+pub mod routes;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -226,15 +228,14 @@ impl AssetServer {
         }
         let root = options.root_dir.canonicalize().map_err(|e| AssetError::Config(format!("root_dir: {e}")))?;
         let base = format!("/{}", options.base_path.trim_matches('/'));
+        let root_dir = paths::strip_verbatim(&root.to_string_lossy());
+        let config = routes::MountConfig { mounts: options.mounts.clone(), root_dir };
+        let compiled = routes::compile_routes(&base, &[config]).map_err(AssetError::Config)?;
         let mut mounts = Vec::new();
-        for (url, dir) in &options.mounts {
-            let dir_path = root.join(dir);
+        for mount in compiled.mounts {
+            let dir_path = root.join(&mount.file_root_value);
             let dir_path = dir_path.canonicalize().unwrap_or(dir_path);
-            let url_root = format!("{base}/{}", url.trim_matches('/')).trim_end_matches('/').to_string();
-            if mounts.iter().any(|m: &Mount| overlaps(&m.url_root, &url_root) || m.dir.starts_with(&dir_path) || dir_path.starts_with(&m.dir)) {
-                return Err(AssetError::Config(format!("mount {url} overlaps another mount")));
-            }
-            mounts.push(Mount { url_root, dir: dir_path, file_root: dir.clone() });
+            mounts.push(Mount { url_root: mount.url_root, dir: dir_path, file_root: mount.file_root_value });
         }
         mounts.sort_by_key(|m| std::cmp::Reverse(m.url_root.len()));
         let mut transforms = HashMap::new();
@@ -376,7 +377,7 @@ impl Inner {
     fn url_for_file(&self, file: &Path) -> Option<String> {
         self.mounts.iter().find_map(|Mount { url_root, dir, .. }| {
             let rel = file.strip_prefix(dir).ok()?;
-            let segments: Vec<String> = rel.components().map(|c| encode_segment(&c.as_os_str().to_string_lossy())).collect();
+            let segments: Vec<String> = rel.components().map(|c| rmx_url::encode_component(&c.as_os_str().to_string_lossy())).collect();
             Some(format!("{url_root}/{}", segments.join("/")))
         })
     }
@@ -501,26 +502,10 @@ fn accepts(extensions: &[String], extension: &str) -> bool {
     extensions.is_empty() || extensions.iter().any(|e| e.eq_ignore_ascii_case(extension))
 }
 
-fn overlaps(a: &str, b: &str) -> bool {
-    a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
-}
-
 fn status(status: StatusCode, message: &str) -> Response {
     let mut res = rmx_fetch::response::text(message.to_string());
     *res.status_mut() = status;
     res
-}
-
-fn encode_segment(segment: &str) -> String {
-    let mut out = String::new();
-    for b in segment.bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~' | b'@') {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
 }
 
 /// A short content hash for URLs: 64-bit FNV-1a in base64url. It only needs to change
@@ -536,16 +521,34 @@ fn hash_content(bytes: &[u8]) -> String {
 }
 
 /// `dir/name.@hash.ext` -> (`dir/name.ext`, `Some(hash)`).
+/// The pathname without its fingerprint, and the fingerprint (Remix's
+/// `parseFingerprintSuffix`): `name.@hash.ext` with a single-part extension, or
+/// `name.@hash`.
 fn parse_fingerprint(pathname: &str) -> (String, Option<String>) {
     let (dir, base) = pathname.rsplit_once('/').map_or(("", pathname), |(d, b)| (d, b));
-    let Some(at) = base.find(".@") else { return (pathname.to_string(), None) };
-    let rest = &base[at + 2..];
-    let (hash, ext) = rest.split_once('.').map_or((rest, ""), |(h, e)| (h, e));
-    if hash.is_empty() || !hash.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
-        return (pathname.to_string(), None);
+    let is_hash = |h: &str| !h.is_empty() && h.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    let is_ext = |e: &str| !e.is_empty() && !e.contains(['.', '/']);
+    let split = |name: &str, hash: &str, ext: Option<&str>| {
+        let name = match ext {
+            Some(ext) => format!("{name}.{ext}"),
+            None => name.to_string(),
+        };
+        let path = if pathname.contains('/') { format!("{dir}/{name}") } else { name };
+        (path, Some(hash.to_string()))
+    };
+    if let Some((stem, ext)) = base.rsplit_once('.') {
+        if let Some((name, hash)) = stem.rsplit_once(".@") {
+            if !name.is_empty() && is_hash(hash) && is_ext(ext) {
+                return split(name, hash, Some(ext));
+            }
+        }
     }
-    let name = if ext.is_empty() { base[..at].to_string() } else { format!("{}.{ext}", &base[..at]) };
-    (format!("{dir}/{name}"), Some(hash.to_string()))
+    if let Some((name, hash)) = base.rsplit_once(".@") {
+        if !name.is_empty() && is_hash(hash) {
+            return split(name, hash, None);
+        }
+    }
+    (pathname.to_string(), None)
 }
 
 fn format_fingerprint(url: &str, hash: &str) -> String {

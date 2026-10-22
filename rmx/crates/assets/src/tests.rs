@@ -312,3 +312,54 @@ fn the_assets_command_reports_no_assets() {
     .unwrap();
     assert_eq!(assets_command_output(&empty, &[]).unwrap(), "No assets.\n");
 }
+
+// Remix's fingerprint.test.ts. hashContent's typed-array view, shared-memory and snapshot
+// cases are JavaScript memory semantics; a Rust slice is already a view of its bytes.
+
+#[test]
+fn hash_content_accepts_byte_content() {
+    assert_ne!(hash_content(&[0, 1, 2, 3]), hash_content(&[0, 1, 2, 4]));
+}
+
+#[test]
+fn hash_content_hashes_only_the_bytes_within_a_view() {
+    let bytes = b"before hello after";
+    assert_eq!(hash_content(&bytes[7..12]), hash_content(b"hello"));
+}
+
+#[test]
+fn inserts_the_fingerprint_before_the_file_extension() {
+    assert_eq!(format_fingerprint("/assets/app/entry.ts", "abc123"), "/assets/app/entry.@abc123.ts");
+    assert_eq!(format_fingerprint("/assets/app/styles.css.js", "abc123"), "/assets/app/styles.css.@abc123.js");
+}
+
+#[test]
+fn appends_the_fingerprint_when_there_is_no_file_extension() {
+    assert_eq!(format_fingerprint("/assets/app/entry", "abc123"), "/assets/app/entry.@abc123");
+}
+
+#[test]
+fn parses_fingerprints_inserted_before_the_file_extension() {
+    assert_eq!(parse_fingerprint("/assets/app/entry.@abc123.ts"), ("/assets/app/entry.ts".to_string(), Some("abc123".to_string())));
+    assert_eq!(parse_fingerprint("/assets/app/styles.css.@abc123.js"), ("/assets/app/styles.css.js".to_string(), Some("abc123".to_string())));
+}
+
+#[test]
+fn parses_fingerprints_appended_to_extensionless_paths() {
+    assert_eq!(parse_fingerprint("/assets/app/entry.@abc123"), ("/assets/app/entry".to_string(), Some("abc123".to_string())));
+}
+
+#[test]
+fn fingerprints_use_the_last_marker_and_a_single_part_extension() {
+    assert_eq!(parse_fingerprint("/a/x.@one.@two.js"), ("/a/x.@one.js".to_string(), Some("two".to_string())));
+    assert_eq!(parse_fingerprint("/a/types.@abc.d.ts"), ("/a/types.@abc.d.ts".to_string(), None));
+    assert_eq!(parse_fingerprint("/a/.@abc.js"), ("/a/.@abc.js".to_string(), None));
+}
+
+#[test]
+fn file_names_with_at_signs_are_encoded_in_urls() {
+    let fixture = Fixture::new("at-sign");
+    std::fs::write(fixture.root.join("app/public/a@b.css"), "a{}").unwrap();
+    let server = fixture.server(false);
+    assert_eq!(server.href("app/public/a@b.css").unwrap(), "/assets/app/public/a%40b.css");
+}
