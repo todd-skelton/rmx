@@ -1,11 +1,17 @@
-//! Ports of Remix's `terminal` tests (ansi, env, styles, terminal).
+//! Ports of Remix's `terminal` tests (index, ansi, env, styles, terminal), one test per case.
+//!
+//! Remix's `cursorTo(-1, NaN)` and fractional positions have no Rust counterpart, since
+//! positions are `usize` and `isize`. `getDefaultEnvironment` returning `process.env` is
+//! covered by `Terminal::new` reading the process environment when `env` is `None`. The
+//! index.test.ts case (the entrypoint re-exports each module's APIs) does not apply: the
+//! crate defines them at its root.
 
 use std::sync::{Arc, Mutex};
 
 use super::*;
 
 #[test]
-fn exposes_raw_sequences() {
+fn exposes_raw_style_and_control_sequences() {
     assert_eq!(ansi::RESET, "\x1b[0m");
     assert_eq!(Style::Red.open(), "\x1b[31m");
     assert_eq!(Style::GreenBright.open(), "\x1b[92m");
@@ -14,10 +20,14 @@ fn exposes_raw_sequences() {
 }
 
 #[test]
-fn cursor_sequences() {
+fn generates_cursor_position_sequences() {
     assert_eq!(ansi::cursor_to(0, None), "\x1b[1G");
     assert_eq!(ansi::cursor_to(4, Some(2)), "\x1b[3;5H");
     assert_eq!(ansi::cursor_to(0, Some(0)), "\x1b[1;1H");
+}
+
+#[test]
+fn generates_cursor_movement_sequences() {
     assert_eq!(ansi::move_cursor(2, 3), "\x1b[2C\x1b[3B");
     assert_eq!(ansi::move_cursor(-2, -3), "\x1b[2D\x1b[3A");
     assert_eq!(ansi::move_cursor(2, -3), "\x1b[2C\x1b[3A");
@@ -25,7 +35,7 @@ fn cursor_sequences() {
 }
 
 #[test]
-fn strips_csi_and_osc_sequences() {
+fn strips_csi_and_osc_escape_sequences() {
     assert_eq!(strip_ansi("\x1b[31mError\x1b[0m"), "Error");
     assert_eq!(strip_ansi("\x1b[1;31mError\x1b[0m"), "Error");
     assert_eq!(strip_ansi("\x1b]8;;https://remix.run\x07Remix\x1b]8;;\x07"), "Remix");
@@ -38,20 +48,36 @@ fn env(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option
 }
 
 #[test]
-fn color_detection() {
+fn disables_colors_with_no_color() {
     assert!(!should_use_colors(env(&[("NO_COLOR", "")]), true));
+}
+
+#[test]
+fn respects_force_color() {
     assert!(should_use_colors(env(&[("FORCE_COLOR", "1")]), false));
     assert!(should_use_colors(env(&[("FORCE_COLOR", "true")]), false));
     assert!(!should_use_colors(env(&[("FORCE_COLOR", "0")]), true));
     assert!(!should_use_colors(env(&[("FORCE_COLOR", "false")]), true));
+}
+
+#[test]
+fn disables_colors_in_ci() {
     assert!(!should_use_colors(env(&[("CI", "true")]), true));
+}
+
+#[test]
+fn disables_colors_for_dumb_terminals() {
     assert!(!should_use_colors(env(&[("TERM", "dumb")]), true));
+}
+
+#[test]
+fn falls_back_to_tty_support() {
     assert!(should_use_colors(env(&[]), true));
     assert!(!should_use_colors(env(&[]), false));
 }
 
 #[test]
-fn every_named_style() {
+fn formats_values_with_every_named_style_helper() {
     let styles = Styles::new(true);
     let cases = [
         (Style::Bold, "\x1b[1mx\x1b[22m"),
@@ -109,31 +135,43 @@ fn every_named_style() {
 }
 
 #[test]
-fn multiple_styles() {
+fn formats_values_with_multiple_styles() {
     let styles = Styles::new(true);
     assert_eq!(styles.format("warning", &[]), "warning");
     assert_eq!(styles.format("warning", &[Style::Dim, Style::Yellow]), "\x1b[2m\x1b[33mwarning\x1b[39m\x1b[22m");
 }
 
 #[test]
-fn explicit_colors_win_over_detection() {
-    let options = |colors| TerminalOptions { colors: Some(colors), env: Some(vec![("CI".into(), "true".into()), ("NO_COLOR".into(), String::new())]), stdin_tty: Some(false), stdout: Some(Output::new(Vec::new(), false)), stderr: Some(Output::new(Vec::new(), false)), color_tty: None };
-    assert!(Terminal::new(options(true)).styles.enabled());
-    assert!(!Terminal::new(options(false)).styles.enabled());
+fn uses_explicit_color_options_before_automatic_detection() {
+    let options = |colors, env: &[(&str, &str)], tty| TerminalOptions {
+        colors: Some(colors),
+        env: Some(env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+        stdin_tty: Some(false),
+        stdout: Some(Output::new(Vec::new(), false)),
+        stderr: Some(Output::new(Vec::new(), false)),
+        color_tty: Some(tty),
+    };
+    assert!(Terminal::new(options(true, &[("CI", "true"), ("NO_COLOR", ""), ("TERM", "dumb")], false)).styles.enabled());
+    assert!(!Terminal::new(options(false, &[("FORCE_COLOR", "1")], true)).styles.enabled());
 }
 
 #[test]
-fn restores_outer_styles_after_nested_ones() {
+fn restores_outer_styles_after_nested_styles_close() {
     let s = Styles::new(true);
     assert_eq!(s.red(&format!("Error: {} retrying", s.bold("fatal"))), "\x1b[31mError: \x1b[1mfatal\x1b[22m retrying\x1b[39m");
     assert_eq!(s.red(&format!("Error: {} retrying", s.green("fatal"))), "\x1b[31mError: \x1b[32mfatal\x1b[39m\x1b[31m retrying\x1b[39m");
     assert_eq!(s.bold(&format!("Error: {} retrying", s.dim("maybe"))), "\x1b[1mError: \x1b[2mmaybe\x1b[22m\x1b[1m retrying\x1b[22m");
     assert_eq!(s.bg_red(&format!("Error: {} retrying", s.bg_blue("fatal"))), "\x1b[41mError: \x1b[44mfatal\x1b[49m\x1b[41m retrying\x1b[49m");
+}
+
+#[test]
+fn restores_outer_styles_after_nested_resets() {
+    let s = Styles::new(true);
     assert_eq!(s.red(&format!("Error: {}retrying", ansi::RESET)), "\x1b[31mError: \x1b[0m\x1b[31mretrying\x1b[39m");
 }
 
 #[test]
-fn passes_through_when_disabled() {
+fn passes_values_through_when_colors_are_disabled() {
     let s = Styles::new(false);
     assert_eq!((s.enabled(), s.reset()), (false, ""));
     assert_eq!(s.red("Error"), "Error");
@@ -166,7 +204,7 @@ fn terminal(stdin_tty: bool, stdout_tty: bool, colors: Option<bool>, color_tty: 
 }
 
 #[test]
-fn writes_to_injected_streams() {
+fn writes_to_injected_output_streams() {
     let (mut t, out, err) = terminal(true, true, Some(true), None);
     assert!(t.is_tty() && t.is_interactive());
     let ok = t.styles.green("ok");
@@ -182,7 +220,7 @@ fn writes_to_injected_streams() {
 }
 
 #[test]
-fn uses_the_color_detection_stream() {
+fn uses_the_configured_color_detection_stream() {
     let (mut t, out, _) = terminal(false, false, None, Some(true));
     assert!(t.styles.enabled());
     let ok = t.styles.green("ok");
@@ -191,7 +229,7 @@ fn uses_the_color_detection_stream() {
 }
 
 #[test]
-fn reports_tty_and_interactivity() {
+fn reports_tty_and_interactivity_from_injected_streams() {
     assert!(terminal(true, true, None, None).0.is_interactive());
     assert!(!terminal(false, true, None, None).0.is_interactive());
     assert!(!terminal(true, false, None, None).0.is_tty());
