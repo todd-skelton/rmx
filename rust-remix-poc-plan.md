@@ -707,7 +707,16 @@ Remaining gaps:
    `io::Result` and a failure reaches `on_error` as `EMIT_FAILED`; the default directory is
    `target/.cache/rmx/assets` rather than `node_modules/.cache/remix/assets`. The assets demo
    caches transformed SVGs this way, like Remix's.
-4. Data access (`data-table`) is intentionally left to existing Rust libraries.
+4. Data access (`data-table`, `data-table-mysql`, `data-table-postgres`,
+   `data-table-sqlite`) is intentionally left to existing Rust libraries, and so are the
+   storage backends `file-storage-s3`, `session-storage-redis` and
+   `session-storage-memcache` (rmx's `FileStorage` and `SessionStorage` traits take any
+   backend). The JavaScript tooling packages have no Rust counterpart: `node-tsx` (rsx is
+   compiled by `rustc`), `node-hmr` and `component-hmr` (`rmx dev` rebuilds, restarts and
+   reloads the page instead), `multiple-import-maps-polyfill` (rmx ships one wasm bundle
+   and no import maps), `assert` (`assert!`) and `test` (`cargo test`, plus
+   `rmx_serve::test` and `rmx::test`). Every other Remix package has an rmx crate or module
+   (`crates/rmx/tests/manifest.rs` checks that each crate is distributed through `rmx`).
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
    a document still being parsed (`document.write` splitting a template). Cases that load
    entry modules asynchronously (a provider module arriving after its consumer, cached
