@@ -404,6 +404,17 @@ Covered since phase 0b:
    signal, which also cancels the page body. A non-HTML frame response, a failed one without
    a body and too many redirects fail the page body and go to `render(RenderOptions::on_error)`
    (stderr by default) once, from the render that started the request.
+   `remix/spa`: `spa.test.browser.tsx`'s resolver cases run natively in `crates/spa` against
+   `resolve` (the runtime cases, initial URL and interactive fallback, are covered by the spa
+   demo e2e). SPA form submissions now follow `getRequestBody`: `multipart/form-data`,
+   `text/plain` (`name=value\r\n` lines) or URL encoding, with `\r\n` line breaks, and a
+   POST that redirects to GET drops its content type. `rmx_spa::render(transform)` is Remix's
+   `render(transform)` middleware, and a redirect without `Location` is the response.
+   `vdom.insert-remove.test.tsx` is ported (`browser_insert_remove.rs`); `bool` children
+   render nothing. Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and
+   `create-element.test.ts` (TypeScript types and JavaScript value validation that Rust's
+   types enforce), `module-preloader` and `client-entry-boundary` (module ids; rmx ships one
+   wasm bundle), `remix/assert` (Rust's `assert!`) and the `assets` module transform tests.
    `file.test.ts` is ported case by case (`crates/fetch/tests/response_file.rs`, 85 cases)
    against `response::file`, Remix's `createFileResponse` for any `FileLike` (an in-memory
    `File`, or a `LazyFile`, which streams only the requested range): ranges only for `GET`,

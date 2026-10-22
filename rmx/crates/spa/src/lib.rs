@@ -15,10 +15,12 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
+use std::sync::Arc;
+
 use http::header;
 use rmx::Node;
 use rmx_fetch::{Body, Response};
-use rmx_router::Context;
+use rmx_router::{Context, Middleware, Next};
 
 /// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
 pub use rmx_fetch::response::ResponseInit;
@@ -36,7 +38,29 @@ pub trait Render {
 
 impl Render for Context {
     fn render_with(&self, node: Node, init: ResponseInit) -> Response {
+        let node = match self.get::<RenderTransform>() {
+            Some(transform) => (transform.0)(node, self),
+            None => node,
+        };
         spa_response(node, init)
+    }
+}
+
+/// A route node transform.
+type Transform = Arc<dyn Fn(Node, &Context) -> Node + Send + Sync>;
+
+/// The transform [`render`] installs.
+#[derive(Clone)]
+struct RenderTransform(Transform);
+
+/// Remix's SPA `render(transform)` middleware: `ctx.render(node)` renders
+/// `transform(node, ctx)` instead, so a layout can wrap every route with the request in hand.
+/// `ctx.render` works without it.
+pub fn render(transform: impl Fn(Node, &Context) -> Node + Send + Sync + 'static) -> impl Middleware {
+    let transform = RenderTransform(Arc::new(transform));
+    move |mut ctx: Context, next: Next| {
+        ctx.set(transform.clone());
+        next.run(ctx)
     }
 }
 
@@ -75,8 +99,43 @@ fn discard(res: &Response) {
 
 const MAX_REDIRECTS: usize = 10;
 
+/// The boundary of SPA multipart bodies.
+const MULTIPART_BOUNDARY: &str = "----rmx-spa-form-boundary";
+
+/// Remix's `normalizeLineBreaks`: form values travel with `\r\n` line breaks.
+fn normalize_line_breaks(value: &str) -> String {
+    value.replace("\r\n", "\n").replace('\r', "\n").replace('\n', "\r\n")
+}
+
+/// A form's body and content type for `enc_type` (Remix's `getRequestBody`):
+/// `multipart/form-data`, `text/plain` (`name=value\r\n` lines), or URL encoding (the default).
+fn form_body(fields: &[(String, String)], enc_type: Option<&str>) -> (String, Body) {
+    let fields = fields.iter().map(|(k, v)| (normalize_line_breaks(k), normalize_line_breaks(v)));
+    match enc_type.map(str::to_ascii_lowercase).as_deref() {
+        Some("multipart/form-data") => {
+            let mut body = String::new();
+            for (name, value) in fields {
+                let name = name.replace('"', "%22");
+                body.push_str(&format!("--{MULTIPART_BOUNDARY}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"));
+            }
+            body.push_str(&format!("--{MULTIPART_BOUNDARY}--\r\n"));
+            (format!("multipart/form-data; boundary={MULTIPART_BOUNDARY}"), Body::from(body))
+        }
+        Some("text/plain") => ("text/plain".into(), Body::from(fields.map(|(k, v)| format!("{k}={v}\r\n")).collect::<String>())),
+        _ => {
+            let mut params = rmx_url::SearchParams::new();
+            for (k, v) in fields {
+                params.append(&k, &v);
+            }
+            ("application/x-www-form-urlencoded".into(), Body::from(params.to_string()))
+        }
+    }
+}
+
 /// Send a frame request through the router, following redirects like `fetch` does: a
-/// `303` (and a `301`/`302` after a POST) turns into a `GET` without a body.
+/// `303` (and a `301`/`302` after a POST) turns into a `GET` without a body or content
+/// type, and `307`/`308` repeat the request. A redirect without a `Location` is the
+/// response.
 pub async fn resolve(router: &rmx_router::Router, request: rmx::FrameRequest) -> Result<rmx::FrameResponse, String> {
     let mut url = rmx_url::Url::parse(&request.url).map_err(|e| format!("invalid frame URL {}: {e}", request.url))?;
     let origin = url.origin();
@@ -90,25 +149,22 @@ pub async fn resolve(router: &rmx_router::Router, request: rmx::FrameRequest) ->
         }
         let body = match (&form, method.as_str()) {
             (Some(fields), m) if m != "GET" && m != "HEAD" => {
-                builder = builder.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
-                let mut params = rmx_url::SearchParams::new();
-                for (k, v) in fields {
-                    params.append(k, v);
-                }
-                Body::from(params.to_string())
+                let (content_type, body) = form_body(fields, request.enc_type.as_deref());
+                builder = builder.header(header::CONTENT_TYPE, content_type);
+                body
             }
             _ => Body::empty(),
         };
         let req = builder.body(body).map_err(|e| e.to_string())?;
         let res = router.fetch(req).await;
         let status = res.status().as_u16();
-        if !matches!(status, 301 | 302 | 303 | 307 | 308) {
+        let location = res.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).map(str::to_string);
+        let Some(location) = location.filter(|_| matches!(status, 301 | 302 | 303 | 307 | 308)) else {
             let node = take_node(&res).ok_or_else(|| format!("expected an rmx SPA response from {} ({status})", url.href()))?;
             return Ok(rmx::FrameResponse { content: rmx::FrameContent::Node(node), url: redirected });
-        }
+        };
         discard(&res);
-        let location = res.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).ok_or("redirect without Location")?;
-        let next = url.join(location).map_err(|e| e.to_string())?;
+        let next = url.join(&location).map_err(|e| e.to_string())?;
         if next.origin() != origin {
             return Err("SPA routes cannot redirect to another origin".into());
         }
@@ -204,6 +260,142 @@ mod tests {
 
         let plain = block_on(resolve(&router, request("http://localhost/plain", "GET", None)));
         assert!(plain.is_err(), "a response without a node cannot be rendered");
+    }
+
+    fn post(url: &str, fields: &[(&str, &str)], enc_type: Option<&str>) -> rmx::FrameRequest {
+        let form = fields.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        rmx::FrameRequest { enc_type: enc_type.map(str::to_string), ..request(url, "POST", Some(form)) }
+    }
+
+    /// A router that records each request's method, content type and body, and answers
+    /// `/save` with a 303 to `/saved`.
+    /// Requests seen: method, content type, body.
+    type Seen = std::sync::Arc<std::sync::Mutex<Vec<(String, Option<String>, String)>>>;
+
+    fn recording() -> (Router, Seen) {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut router = Router::new();
+        for path in ["/save", "/saved", "/echo"] {
+            let log = seen.clone();
+            router.any(path, move |mut ctx: Context| {
+                let log = log.clone();
+                async move {
+                    let content_type = ctx.header("content-type").map(str::to_string);
+                    let method = ctx.method().to_string();
+                    let body = ctx.take_body().text().await.unwrap_or_default();
+                    log.lock().unwrap().push((method, content_type, body));
+                    if ctx.url().pathname() == "/save" {
+                        return rmx_fetch::response::redirect_with("/saved", StatusCode::SEE_OTHER);
+                    }
+                    ctx.render(rsx! { <p>"Saved"</p> })
+                }
+            });
+        }
+        (router, seen)
+    }
+
+    // spa.test.browser.tsx, against the resolver the runtime calls.
+
+    #[test]
+    fn defaults_post_form_data_to_url_encoding() {
+        let (router, seen) = recording();
+        block_on(resolve(&router, post("http://localhost/echo", &[("name", "Ada Lovelace")], None))).unwrap();
+        assert_eq!(seen.lock().unwrap()[0], ("POST".into(), Some("application/x-www-form-urlencoded".into()), "name=Ada+Lovelace".into()));
+    }
+
+    #[test]
+    fn encodes_text_plain_form_submissions_with_normalized_line_breaks() {
+        let (router, seen) = recording();
+        let fields = [("note", "first\nsecond"), ("city", "Paris")];
+        block_on(resolve(&router, post("http://localhost/echo", &fields, Some("text/plain")))).unwrap();
+        assert_eq!(seen.lock().unwrap()[0], ("POST".into(), Some("text/plain".into()), "note=first\r\nsecond\r\ncity=Paris\r\n".into()));
+    }
+
+    #[test]
+    fn encodes_multipart_form_submissions() {
+        let (router, seen) = recording();
+        block_on(resolve(&router, post("http://localhost/echo", &[("name", "Ada"), ("note", "a\rb")], Some("multipart/form-data")))).unwrap();
+        let (method, content_type, body) = seen.lock().unwrap()[0].clone();
+        assert_eq!(method, "POST");
+        assert_eq!(content_type.as_deref(), Some(format!("multipart/form-data; boundary={MULTIPART_BOUNDARY}").as_str()));
+        let part = |name: &str, value: &str| format!("--{MULTIPART_BOUNDARY}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n");
+        assert_eq!(body, format!("{}{}--{MULTIPART_BOUNDARY}--\r\n", part("name", "Ada"), part("note", "a\r\nb")));
+    }
+
+    #[test]
+    fn drops_the_body_and_its_content_type_when_a_post_redirects_to_get() {
+        let (router, seen) = recording();
+        let res = block_on(resolve(&router, post("http://localhost/save", &[("name", "Ada")], None))).unwrap();
+        assert_eq!(res.url.as_deref(), Some("http://localhost/saved"));
+        assert_eq!(text(res), "<p>Saved</p>");
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0], ("POST".into(), Some("application/x-www-form-urlencoded".into()), "name=Ada".into()));
+        assert_eq!(seen[1], ("GET".into(), None, String::new()));
+    }
+
+    #[test]
+    fn follows_same_origin_redirects_with_fetch_method_semantics() {
+        let mut router = Router::new();
+        let methods = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = methods.clone();
+        router.any("/r/:status", move |ctx: Context| {
+            log.lock().unwrap().push(ctx.method().to_string());
+            let status: u16 = ctx.param("status").unwrap().parse().unwrap();
+            async move { rmx_fetch::response::redirect_with("/done", StatusCode::from_u16(status).unwrap()) }
+        });
+        let log = methods.clone();
+        router.any("/done", move |ctx: Context| {
+            log.lock().unwrap().push(ctx.method().to_string());
+            async move { ctx.render(rsx! { <h1>"Redirected"</h1> }) }
+        });
+        router.get("/away", |_: Context| async move { rmx_fetch::response::redirect("https://elsewhere.example/") });
+        router.get("/bare", |_: Context| async move {
+            let mut res = Response::new(Body::empty());
+            *res.status_mut() = StatusCode::FOUND;
+            res
+        });
+        for (status, method, then) in [(302, "GET", "GET"), (302, "POST", "GET"), (301, "PUT", "PUT"), (303, "PUT", "GET"), (307, "POST", "POST"), (308, "POST", "POST")] {
+            methods.lock().unwrap().clear();
+            let req = rmx::FrameRequest { form: Some(vec![("a".into(), "1".into())]), ..request(&format!("http://localhost/r/{status}"), method, None) };
+            let res = block_on(resolve(&router, req)).unwrap();
+            assert_eq!(text(res), "<h1>Redirected</h1>");
+            assert_eq!(*methods.lock().unwrap(), [method, then], "{status} after {method}");
+        }
+        let away = block_on(resolve(&router, request("http://localhost/away", "GET", None)));
+        assert_eq!(away.err().as_deref(), Some("SPA routes cannot redirect to another origin"));
+        let bare = block_on(resolve(&router, request("http://localhost/bare", "GET", None)));
+        assert!(bare.err().unwrap().starts_with("expected an rmx SPA response"), "a redirect without Location is the response");
+    }
+
+    #[test]
+    fn stops_after_ten_redirects() {
+        let mut router = Router::new();
+        router.get("/loop", |_: Context| async move { rmx_fetch::response::redirect("/loop") });
+        let err = block_on(resolve(&router, request("http://localhost/loop", "GET", None))).err().unwrap();
+        assert_eq!(err, "SPA route exceeded 10 redirects");
+    }
+
+    #[test]
+    fn adds_a_request_aware_node_renderer_to_the_router_context() {
+        let mut router = Router::new().with(render(|node, ctx: &Context| {
+            let path = ctx.url().pathname().to_string();
+            rsx! { <h1>{path} ": " {node}</h1> }
+        }));
+        router.get("/hello", |ctx: Context| async move { ctx.render_with(rsx! { "Hello" }, ResponseInit::status(StatusCode::CREATED)) });
+        router.not_found(|ctx: Context| async move { ctx.render_with(rsx! { "Not Found" }, ResponseInit::status(StatusCode::NOT_FOUND)) });
+        let res = block_on(router.fetch(http::Request::get("http://localhost/hello").body(Body::empty()).unwrap()));
+        assert_eq!(res.status(), 201);
+        assert_eq!(take_node(&res).map(|n| rmx::render_to_string(&n)).as_deref(), Some("<h1>/hello: Hello</h1>"));
+        // The default handler gets the renderer too.
+        let missing = block_on(resolve(&router, request("http://localhost/missing", "GET", None))).unwrap();
+        assert_eq!(text(missing), "<h1>/missing: Not Found</h1>");
+    }
+
+    // component spa.test.tsx
+
+    #[test]
+    fn rejects_responses_not_created_by_spa_response() {
+        assert!(take_node(&Response::new(Body::from("<p>html</p>"))).is_none());
     }
 
     #[test]
