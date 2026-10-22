@@ -1404,6 +1404,7 @@ dependencies = [
  "rmx-fetch",
  "rmx-macros",
  "rmx-route-pattern",
+ "rmx-terminal",
  "rmx-url",
 ]
 

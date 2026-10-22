@@ -549,23 +549,39 @@ impl RouteTree {
         lines.iter().map(|l| format!("{}\n", l.trim_end())).collect()
     }
 
-    /// The flat table of `remix routes --table`: route name, method and path.
+    /// The flat table of `remix routes --table`: route name, method and path. Like Remix's
+    /// reporter table, every cell is padded to its column's width.
     pub fn format_table(&self, headers: bool) -> String {
-        let mut rows: Vec<[String; 3]> = Vec::new();
-        if headers {
-            rows.push(["Route".into(), "Method".into(), "Path".into()]);
-        }
-        for n in self.routes() {
-            let path = n.route.as_ref().map(|r| r.pattern().to_string()).unwrap_or_default();
-            rows.push([n.name.clone(), n.method().unwrap_or_default(), path]);
-        }
-        let widths: Vec<usize> = (0..3).map(|c| rows.iter().map(|r| r[c].chars().count()).max().unwrap_or(0)).collect();
-        rows.iter()
-            .map(|r| {
-                let line = format!("{:w0$}  {:w1$}  {}", r[0], r[1], r[2], w0 = widths[0], w1 = widths[1]);
-                format!("{}\n", line.trim_end())
+        self.format_table_with(headers, &|header| header.to_string())
+    }
+
+    /// [`RouteTree::format_table`] with each padded header cell passed through `header`
+    /// (`routes_command` makes them bold on a color terminal, as Remix does).
+    pub fn format_table_with(&self, headers: bool, header: &dyn Fn(&str) -> String) -> String {
+        const HEADERS: [&str; 3] = ["Route", "Method", "Path"];
+        let rows: Vec<[String; 3]> = self
+            .routes()
+            .into_iter()
+            .map(|n| {
+                let path = n.route.as_ref().map(|r| r.pattern().to_string()).unwrap_or_default();
+                [n.name.clone(), n.method().unwrap_or_default(), path]
             })
-            .collect()
+            .collect();
+        let widths: Vec<usize> =
+            (0..3).map(|c| rows.iter().map(|r| r[c].chars().count()).max().unwrap_or(0).max(HEADERS[c].len())).collect();
+        let pad = |cell: &str, c: usize| format!("{cell:w$}", w = widths[c]);
+        let mut out = String::new();
+        if headers {
+            let cells: Vec<String> = HEADERS.iter().enumerate().map(|(c, h)| header(&pad(h, c))).collect();
+            out.push_str(&cells.join("  "));
+            out.push('\n');
+        }
+        for row in &rows {
+            let cells: Vec<String> = row.iter().enumerate().map(|(c, cell)| pad(cell, c)).collect();
+            out.push_str(&cells.join("  "));
+            out.push('\n');
+        }
+        out
     }
 
     /// The tree as JSON, shaped like `remix routes --json`'s `tree` (without controller
@@ -625,7 +641,8 @@ pub fn routes_command(map: &impl RouteMap) {
         return;
     }
     let args: Vec<String> = args.collect();
-    match routes_command_output(map, &args) {
+    let styles = rmx_terminal::Styles::detect();
+    match routes_command_output_with(map, &args, &|header| styles.bold(header)) {
         Ok(out) => {
             print!("{out}");
             std::process::exit(0);
@@ -650,8 +667,13 @@ Options:
 ";
 
 /// What [`routes_command`] prints for `args` (the arguments after `routes`), or the
-/// usage error.
+/// usage error, without colors.
 pub fn routes_command_output(map: &impl RouteMap, args: &[String]) -> Result<String, String> {
+    routes_command_output_with(map, args, &|header| header.to_string())
+}
+
+/// [`routes_command_output`] with table header cells passed through `header`.
+pub fn routes_command_output_with(map: &impl RouteMap, args: &[String], header: &dyn Fn(&str) -> String) -> Result<String, String> {
     let (mut json, mut table, mut no_headers) = (false, false, false);
     for arg in args {
         match arg.as_str() {
@@ -673,7 +695,7 @@ pub fn routes_command_output(map: &impl RouteMap, args: &[String]) -> Result<Str
     Ok(if json {
         format!("{}\n", tree.to_json())
     } else if table {
-        tree.format_table(!no_headers)
+        tree.format_table_with(!no_headers, header)
     } else {
         tree.format_tree()
     })

@@ -664,7 +664,8 @@ Remaining gaps:
    `version`, `help`, and `routes`, `assets` and `test`, which run the app through cargo. The
    `remix/component/test` render helper exists as `rmx::test`; `remix routes` exists as
    `rmx::router::routes::routes_command`, which every demo binary runs for `-- routes`
-   (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files);
+   (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files;
+   the table pads every cell like Remix's reporter and bolds the headers on a color terminal);
    and `remix assets` exists as `rmx::assets::assets_command` over the asset server's
    `assets()` / `asset_details()` inspection (list, `inspect <url-or-file>`, with statuses
    reachable, denied, not-allowed, missing, unmapped and unsupported), run by the assets and template

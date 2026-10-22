@@ -12,6 +12,10 @@ rmx-macros.workspace = true
 rmx-route-pattern.workspace = true
 rmx-url.workspace = true
 
+# Bold table headers in `routes_command` on a color terminal.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rmx-terminal.workspace = true
+
 # Doctests and tests use `#[derive(RouteMap)]`, which expands to `::rmx::router` paths.
 [dev-dependencies]
 rmx = { path = "../rmx", default-features = false }

@@ -125,15 +125,34 @@ books
 fn lists_a_route_map_as_a_table() {
     let table = app().route_tree().format_table(true);
     let lines: Vec<&str> = table.lines().collect();
-    assert_eq!(lines[0], "Route              Method  Path");
-    assert_eq!(lines[1], "home               ANY     /");
-    assert_eq!(lines[2], "auth.login.index   GET     /login");
-    assert_eq!(lines[3], "auth.login.action  POST    /login");
-    assert_eq!(lines[11], "books.destroy      DELETE  /books/:bookId");
+    // Cells are padded to their column, the last one too, as Remix's reporter table does.
+    // The widest path is /books/:bookId/edit (19 characters).
+    assert_eq!(lines[0], format!("Route              Method  {:19}", "Path"));
+    assert_eq!(lines[1], format!("home               ANY     {:19}", "/"));
+    assert_eq!(lines[2], format!("auth.login.index   GET     {:19}", "/login"));
+    assert_eq!(lines[3], format!("auth.login.action  POST    {:19}", "/login"));
+    assert_eq!(lines[11], format!("books.destroy      DELETE  {:19}", "/books/:bookId"));
     assert_eq!(lines.len(), 12);
     let no_headers = app().route_tree().format_table(false);
     assert!(no_headers.starts_with("home "));
     assert_eq!(no_headers.lines().count(), 11);
+}
+
+#[test]
+fn headers_set_the_minimum_column_widths() {
+    let table = get("/").route_tree().format_table(true);
+    assert_eq!(table, "Route  Method  Path\nroute  GET     /   \n");
+}
+
+#[test]
+fn routes_command_styles_each_padded_header_cell() {
+    use rmx::router::routes::routes_command_output_with;
+    let args = ["--table".to_string()];
+    let bold = |header: &str| format!("\x1b[1m{header}\x1b[22m");
+    let table = routes_command_output_with(&get("/"), &args, &bold).unwrap();
+    assert_eq!(table, "\x1b[1mRoute\x1b[22m  \x1b[1mMethod\x1b[22m  \x1b[1mPath\x1b[22m\nroute  GET     /   \n");
+    let rows = routes_command_output_with(&get("/"), &["--table".to_string(), "--no-headers".to_string()], &bold).unwrap();
+    assert_eq!(rows, "route  GET     /   \n");
 }
 
 #[test]
