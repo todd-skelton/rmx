@@ -368,6 +368,9 @@ Covered since phase 0b:
    an object on `Animation.prototype`, since rmx checks that a tracked animation is one.
    `prefers_reduced_motion()` is Remix's new `prefersReducedMotion` (upstream 2026-10-21), with
    `prefers-reduced-motion.test.ts` (3) in `browser_prefers_reduced_motion.rs`.
+   `typeahead.test.tsx`: the two matching cases are unit tests in `src/typeahead.rs` and the
+   four `hidden_typeahead` cases are `browser_typeahead.rs` (the timeout case waits the real
+   750 ms where Remix advances fake timers).
    `animate-layout-mixin.test.tsx` (8) is `browser_animate_layout.rs` with Remix's animate,
    frame and bounding-rect mocks, plus a case that tells the on-screen box of a running
    animation from its natural box, which Remix's sequence mocks cannot. Every `ui` test file

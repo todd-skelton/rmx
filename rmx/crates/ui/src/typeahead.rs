@@ -121,6 +121,30 @@ impl HostMixin for HiddenTypeahead {
 mod tests {
     use super::*;
 
+    // typeahead.test.tsx: matches search text case-insensitively against string and array values
+    #[test]
+    fn matches_search_text_case_insensitively_against_string_and_array_values() {
+        let string_item = ["Remix framework".to_string()];
+        let array_item = ["Beta".to_string(), "Workbench".to_string()];
+        assert!(matches_search_text(&string_item, "re"));
+        assert!(!matches_search_text(&string_item, "FRAME"));
+        assert!(matches_search_text(&array_item, "be"));
+        assert!(matches_search_text(&array_item, "work"));
+        assert!(!matches_search_text(&array_item, "prod"));
+    }
+
+    // typeahead.test.tsx: starts after fromIndex, wraps around, and returns null for empty or
+    // missing matches
+    #[test]
+    fn starts_after_from_index_wraps_around_and_returns_none_for_empty_or_missing_matches() {
+        let items: [(&str, &[&str]); 3] = [("Remix", &["remix"]), ("Staging", &["beta", "staging"]), ("Local", &["dev", "local"])];
+        let values = |item: &(&str, &[&str])| item.1.iter().map(|v| v.to_string()).collect();
+        assert_eq!(match_next_by_search_text("de", &items, Some(1), values).map(|i| i.0), Some("Local"));
+        assert_eq!(match_next_by_search_text("re", &items, Some(2), values).map(|i| i.0), Some("Remix"));
+        assert_eq!(match_next_by_search_text("", &items, Some(0), values), None);
+        assert_eq!(match_next_by_search_text("zz", &items, Some(0), values), None);
+    }
+
     #[test]
     fn matches_from_the_next_item_and_wraps() {
         let items = ["Remix", "React Router", "React", "Archived"].map(String::from);
