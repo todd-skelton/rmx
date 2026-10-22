@@ -529,7 +529,12 @@ Covered since phase 0b:
    `auth` (32 across `auth`, `requireAuth` and the bearer, API key and session schemes;
    `auth-types.test.ts` is TypeScript inference, which `Auth<I>` gives for free) and
    `form_data` (21); `logger` (10) and `html-template` (17) are one test per Remix case in
-   place. Changes they forced: Remix's error text throughout, the bearer and API key schemes
+   place. `method-override.test.ts` (1 case) is in `crates/middleware/src/method_override.rs`, and
+   the middleware now matches Remix: it overrides any request that carries a form (not only
+   POST), uses the first `_method` value only when it is text, uppercases it without trimming,
+   and accepts only the router's methods (`isRequestMethod`). `async-context.test.ts` (1 case)
+   is `async_context_follows_the_request_into_helpers`; `get_context()` returns `None` where
+   Remix's `getContext()` throws. Changes they forced: Remix's error text throughout, the bearer and API key schemes
    default to `Authorization` and `X-Api-Key` and read the header trimmed as fetch `Headers`
    does, `SchemeResult::failure()` is Remix's empty `{ status: 'failure' }`, and the file
    storage directory error reads `Path ".." is not a directory`. `remix/file-storage` runs

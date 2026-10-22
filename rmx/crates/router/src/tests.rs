@@ -193,6 +193,8 @@ fn describe_request() -> String {
     format!("{} {} id={} user={}", ctx.method(), ctx.url().pathname(), ctx.param("id").unwrap_or_default(), ctx.get::<User>().map_or("-", |u| u.0))
 }
 
+// async-context.test.ts: stores the request context in AsyncLocalStorage (the handler sees the
+// request's context through get_context())
 #[test]
 fn async_context_follows_the_request_into_helpers() {
     let mut router = Router::new().with(async_context::async_context()).with(|mut ctx: Context, next: Next| async move {
