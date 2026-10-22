@@ -392,6 +392,18 @@ Covered since phase 0b:
    `redirect_with`, `html_with`, `ctx.render_with` and the SPA `render_with`, and a `Location`
    or `Content-Type` in an init replaces the constructor's. `createMixin(setup, { ssr })` is
    `HostMixin` with `mixin_with(args, MixinOptions { ssr })`.
+   `render-middleware`'s `render-ui.test.ts` is ported in `crates/render/src/render_ui_tests.rs`
+   (12 of 15 cases plus a redirect limit and top frame header case; the client entry and
+   styles cases do not apply or run elsewhere, and render errors use frame resolution errors
+   since a failed component is omitted). Frame subrequests now follow `render-ui.ts`: the
+   original headers minus body, conditional, hop-by-hop and `sec-fetch-*` headers (before,
+   only cookies, authorization, language and host), `Accept: text/html` and
+   `Accept-Encoding: identity`, `X-Remix-Top-Frame-Src` (renamed from `x-remix-top-frame`)
+   honored only on frame requests, cross-origin frames get only the accept and frame headers,
+   only 301, 302, 303, 307 and 308 redirect (at most 20), and the original request's abort
+   signal, which also cancels the page body. A non-HTML frame response, a failed one without
+   a body and too many redirects fail the page body and go to `render(RenderOptions::on_error)`
+   (stderr by default) once, from the render that started the request.
    `file.test.ts` is ported case by case (`crates/fetch/tests/response_file.rs`, 85 cases)
    against `response::file`, Remix's `createFileResponse` for any `FileLike` (an in-memory
    `File`, or a `LazyFile`, which streams only the requested range): ranges only for `GET`,
