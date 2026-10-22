@@ -73,3 +73,59 @@ impl RendererExt for Context {
             .unwrap_or_else(|| panic!("no render_with() middleware installed a renderer for {}", std::any::type_name::<I>()))
     }
 }
+
+/// Ports of Remix's `render.test.ts`. The type cases hold by construction: `renderer::<I>()`
+/// only renders an `I`. Remix's custom init types become fields of the input.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmx_fetch::{block_on, Body};
+    use rmx_router::Router;
+
+    fn fetch(router: &Router, url: &str) -> Response {
+        block_on(router.fetch(http::Request::get(url).body(Body::empty()).unwrap()))
+    }
+
+    #[test]
+    fn adds_a_renderer_to_request_context() {
+        let mut router = Router::new().with(render_with(|_: &Context| |value: String, init: ResponseInit| init.apply(Response::new(Body::from(value)))));
+        router.get("/", |ctx: Context| async move { ctx.renderer::<String>().render_with("Hello".into(), ResponseInit::status(http::StatusCode::CREATED)) });
+        let res = fetch(&router, "https://remix.run/");
+        assert_eq!(res.status(), 201);
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "Hello");
+    }
+
+    #[test]
+    fn creates_a_request_scoped_renderer_from_the_current_request_context() {
+        let mut router = Router::new().with(render_with(|ctx: &Context| {
+            let path = ctx.url().pathname().to_string();
+            move |value: &'static str, init: ResponseInit| init.apply(Response::new(Body::from(format!("{path}:{value}"))))
+        }));
+        router.get("/rendered", |ctx: Context| async move { ctx.renderer::<&'static str>().render("OK") });
+        let res = fetch(&router, "https://remix.run/rendered");
+        assert_eq!(res.status(), 200);
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "/rendered:OK");
+    }
+
+    struct Json {
+        ok: bool,
+        pretty: bool,
+    }
+
+    #[test]
+    fn preserves_custom_renderer_input_and_options_types() {
+        let mut router = Router::new().with(render_with(|_: &Context| {
+            |value: Json, init: ResponseInit| {
+                let body = if value.pretty { format!("{{\n  \"ok\": {}\n}}", value.ok) } else { format!("{{\"ok\":{}}}", value.ok) };
+                let mut res = Response::new(Body::from(body));
+                res.headers_mut().insert(http::header::CONTENT_TYPE, http::HeaderValue::from_static("application/json"));
+                init.apply(res)
+            }
+        }));
+        router.get("/json", |ctx: Context| async move { ctx.renderer::<Json>().render(Json { ok: true, pretty: true }) });
+        let res = fetch(&router, "https://remix.run/json");
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.headers()["content-type"], "application/json");
+        assert_eq!(block_on(res.into_body().text()).unwrap(), "{\n  \"ok\": true\n}");
+    }
+}
