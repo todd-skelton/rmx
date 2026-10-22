@@ -300,6 +300,17 @@ Covered since phase 0b:
    context, typed event targets, host mixins with reclaim, app error events, and scroll
    handling that matches Remix (traversal restore after reconciliation shrinks the page,
    `resetScroll: false`, anchoring suppression).
+   The navigation listener follows Remix's `navigation.ts`: a frame load started by a
+   navigation is aborted with the navigation's signal, `event.scroll()` runs once the new
+   content commits (not for a superseded load), WebKit's scroll position is resynchronized
+   after a reset, Safari traversals read their state from `navigation.entries()`, frame
+   redirects keep `resetFocus` and the stored history state, legacy boolean resets in
+   history state are honored, and without `NavigationPrecommitController` a same-location
+   POST is replayed as a replace navigation into the frame chosen first. About 60 of the 77
+   `navigation.test.ts` cases are covered by the 55 tests in `browser_navigation.rs`
+   (some tests combine cases); the rest stub a missing Navigation API or `sourceElement`,
+   check internal call arguments, or redirect the top frame, which would replace the test
+   page (the demo e2e scripts cover top frame redirects).
 3. `rmx-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
    matches Remix's `spring.ts` byte for byte), combobox, listbox, menu (submenus, hover aim,
    context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,

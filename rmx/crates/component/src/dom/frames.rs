@@ -313,10 +313,18 @@ impl FrameState {
         }
     }
 
-    /// Fetch the frame's `src` and reconcile the response into the page. Resolves to the
-    /// final URL when the server redirected. A newer load of the same frame aborts this one.
-    pub(crate) async fn load(self: &Rc<Self>, submission: Submission) -> Result<Option<String>, JsValue> {
-        self.load_following(submission, None).await.map(|(redirected, _)| redirected)
+    /// Fetch the frame's `src` and reconcile the response into the page for a navigation
+    /// (Remix `reloadFrameForNavigation`). It is aborted with the navigation's `signal` or by a
+    /// newer load of the same frame, and calls `on_commit` with the load's signal once the
+    /// new content is in the page (before blocking frames inside it finish). Resolves to the
+    /// final URL when the server redirected, and the load's signal.
+    pub(crate) async fn load_for_navigation(
+        self: &Rc<Self>,
+        submission: Submission,
+        signal: Option<web_sys::AbortSignal>,
+        on_commit: impl FnOnce(&web_sys::AbortSignal) + 'static,
+    ) -> Result<(Option<String>, web_sys::AbortSignal), JsValue> {
+        self.load_committing(submission, signal, Some(Box::new(on_commit))).await
     }
 
     /// [`load`](Self::load), aborted as well when `ancestor` aborts: the signal of the
@@ -326,6 +334,15 @@ impl FrameState {
         self: &Rc<Self>,
         submission: Submission,
         ancestor: Option<web_sys::AbortSignal>,
+    ) -> Result<(Option<String>, web_sys::AbortSignal), JsValue> {
+        self.load_committing(submission, ancestor, None).await
+    }
+
+    async fn load_committing(
+        self: &Rc<Self>,
+        submission: Submission,
+        ancestor: Option<web_sys::AbortSignal>,
+        on_commit: Option<OnCommit>,
     ) -> Result<(Option<String>, web_sys::AbortSignal), JsValue> {
         self.queued.set(false);
         let controller = web_sys::AbortController::new()?;
@@ -350,6 +367,9 @@ impl FrameState {
         let tracker = Tracker::default();
         *self.tracker.borrow_mut() = Some(tracker.clone());
         let mut result = self.fetch_and_apply(submission, &signal).await;
+        if let (Ok(_), Some(on_commit)) = (&result, on_commit) {
+            on_commit(&signal);
+        }
         if result.is_ok() {
             // Blocking frames the new content created; their own loads wait for theirs.
             loop {
@@ -1125,6 +1145,9 @@ pub(crate) fn in_server_reload() -> bool {
 
 /// Load a frame in the background. A blocking frame (no fallback) created or retargeted
 /// while a frame load applies its content joins that load's tracker.
+/// Called once a load's content is in the page, with the load's signal.
+type OnCommit = Box<dyn FnOnce(&web_sys::AbortSignal)>;
+
 pub(crate) fn spawn_reload(frame: Rc<FrameState>, blocking: bool) {
     frame.queued.set(true);
     let (tracker, ancestor) = APPLYING.with(|a| match a.borrow().last() {

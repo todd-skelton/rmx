@@ -156,12 +156,13 @@ fn fallback_to_document(event: &JsValue, nav_type: &str) {
         return;
     }
     let signal = get(event, "signal");
-    let handler = Closure::once_into_js(move || {
+    let handler = Box::new(move || {
         if get(&signal, "aborted").as_bool() != Some(true) {
             reload_document();
         }
+        JsValue::UNDEFINED
     });
-    intercept(event, handler, false);
+    intercept_navigation(event, nav_type, "", false, vec![("scroll", behavior(false))], handler, None);
 }
 
 thread_local! {
@@ -179,26 +180,34 @@ struct Plan {
     reset_focus: bool,
     /// A non-GET form submission; its data is read when the navigation handler runs.
     submission: Option<PendingSubmission>,
+    /// The history state the plan was read from, kept as stored (legacy boolean resets
+    /// included) when a redirect rewrites its `src`.
+    stored: Option<JsValue>,
+}
+
+/// `navigate` events with this `info.type` commit the URL a frame load redirected to.
+const FRAME_REDIRECT_INFO: &str = "frame-redirect";
+/// `navigate` events with this `info.type` replay a POST submission as a replace navigation.
+const FORM_REPLAY_INFO: &str = "rmx-form-submission";
+
+thread_local! {
+    /// The submission being replayed, with the frame chosen before its push was cancelled
+    /// (browsers without `NavigationPrecommitController`).
+    static REPLAY: std::cell::RefCell<Option<(Plan, Rc<frames::FrameState>)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// `"after-transition"` or `"manual"`; anything else is not a redirect's reset value.
+fn reset_value(v: &JsValue) -> Option<bool> {
+    match v.as_string().as_deref() {
+        Some("after-transition") => Some(true),
+        Some("manual") => Some(false),
+        _ => None,
+    }
 }
 
 fn on_navigate(event: JsValue) {
     let info = get(&event, "info");
     if info.as_string().as_deref() == Some(DOCUMENT_RELOAD_INFO) {
-        return;
-    }
-    if get(&info, "type").as_string().as_deref() == Some("rmx-redirect") {
-        // The content for this URL is already in the page; just commit the URL.
-        let reset_scroll = get(&info, "resetScroll").as_bool().unwrap_or(true);
-        let nav_type = get(&event, "navigationType").as_string().unwrap_or_default();
-        let dest = get(&get(&event, "destination"), "url").as_string().unwrap_or_default();
-        let styles = ScrollStyles::install(&event, &nav_type, &dest, reset_scroll);
-        let handler = Closure::once_into_js(move || {
-            if let (Some(styles), Some(nav)) = (styles, navigation()) {
-                styles.bind(&nav);
-            }
-            JsValue::UNDEFINED
-        });
-        intercept(&event, handler, false);
         return;
     }
     let can_intercept = get(&event, "canIntercept").as_bool().unwrap_or(false);
@@ -213,72 +222,134 @@ fn on_navigate(event: JsValue) {
         return;
     }
     let nav_type = get(&event, "navigationType").as_string().unwrap_or_default();
-    let Some(plan) = plan(&event, &destination, &dest, &nav_type) else { return };
+    let info_type = get(&info, "type").as_string();
+    if info_type.as_deref() == Some(FRAME_REDIRECT_INFO) {
+        if let (Some(reset_scroll), Some(reset_focus)) = (reset_value(&get(&info, "resetScroll")), reset_value(&get(&info, "resetFocus"))) {
+            // The content for this URL is already in the page and scrolled: commit the URL.
+            let options = vec![("scroll", behavior(false)), ("focusReset", behavior(reset_focus))];
+            intercept_navigation(&event, &nav_type, &dest, reset_scroll, options, Box::new(|| JsValue::UNDEFINED), None);
+            return;
+        }
+    }
+    let replayed = if info_type.as_deref() == Some(FORM_REPLAY_INFO) { REPLAY.with(|r| r.borrow_mut().take()) } else { None };
+    let (plan, chosen) = match replayed {
+        Some((plan, frame)) => (plan, Some(frame)),
+        None => match plan(&event, &destination, &dest, &nav_type) {
+            Some(plan) => (plan, None),
+            None => return,
+        },
+    };
     if !same_origin(&plan.src) {
         return fallback_to_document(&event, &nav_type);
     }
 
     let top = frames::top();
-    let frame = match &plan.target {
-        Some(name) => match frames::by_name(name) {
+    let is_replay = chosen.is_some();
+    let frame = match (chosen, &plan.target) {
+        (Some(frame), _) => frame,
+        (None, Some(name)) => match frames::by_name(name) {
             Some(f) => f,
             None => return fallback_to_document(&event, &nav_type),
         },
-        None => top.clone(),
+        (None, None) => top.clone(),
     };
 
     let Some(nav) = navigation() else { return };
     let cancelable = get(&event, "cancelable").as_bool().unwrap_or(false);
     let entry_state = state(plan.target.as_deref(), &plan.src, plan.reset_scroll, plan.reset_focus);
-    if plan.replace && nav_type == "push" && plan.submission.is_none() && cancelable {
-        let _ = call(&event, "preventDefault", &[]);
-        let opts = object(&[("state", entry_state), ("history", JsValue::from_str("replace"))]);
-        let _ = call(&nav, "navigate", &[&JsValue::from_str(&dest), &opts]);
-        return;
+    let mut precommit: Option<Box<dyn FnOnce(JsValue)>> = None;
+    if plan.replace && nav_type == "push" && !is_replay {
+        if plan.submission.is_none() {
+            // A link or GET form that replaces history: replay the push as a replace.
+            if cancelable {
+                let _ = call(&event, "preventDefault", &[]);
+                let opts = object(&[("state", entry_state), ("history", JsValue::from_str("replace"))]);
+                let _ = call(&nav, "navigate", &[&JsValue::from_str(&dest), &opts]);
+                return;
+            }
+        } else if get(&window().into(), "NavigationPrecommitController").is_function() {
+            // A form submission that replaces history: rewrite the entry before it commits.
+            let url = destination.clone();
+            precommit = Some(Box::new(move |controller: JsValue| {
+                let _ = call(&controller, "redirect", &[&get(&url, "url"), &object(&[("history", JsValue::from_str("replace"))])]);
+            }));
+        } else if cancelable {
+            // Without precommit support (Safari), replay the submission as a replace
+            // navigation into the frame chosen here.
+            let _ = call(&event, "preventDefault", &[]);
+            let opts = object(&[
+                ("state", entry_state),
+                ("history", JsValue::from_str("replace")),
+                ("info", object(&[("type", JsValue::from_str(FORM_REPLAY_INFO))])),
+            ]);
+            REPLAY.with(|r| *r.borrow_mut() = Some((plan, frame)));
+            let _ = call(&nav, "navigate", &[&JsValue::from_str(&dest), &opts]);
+            // The replay's navigate event runs synchronously; drop the plan if it did not.
+            REPLAY.with(|r| r.borrow_mut().take());
+            return;
+        }
     }
-    // A form submission that replaces history: rewrite the entry before it commits.
-    let precommit_replace = plan.replace
-        && plan.submission.is_some()
-        && nav_type == "push"
-        && !get(&window().into(), "NavigationPrecommitController").is_undefined();
 
     let traverse = nav_type == "traverse";
     let (reset_scroll, reset_focus) = if traverse { (true, true) } else { (plan.reset_scroll, plan.reset_focus) };
-    let styles = ScrollStyles::install(&event, &nav_type, &dest, reset_scroll);
-    let handler_styles = styles.clone();
     NEEDS_FRAME_RELOAD.with(|n| n.set(true));
-    let event_signal = get(&event, "signal");
-    let handler = Closure::once_into_js(move || -> JsValue {
-        if let Some(styles) = handler_styles {
-            styles.bind(&nav);
-        }
+    let event_signal: web_sys::AbortSignal = get(&event, "signal").unchecked_into();
+    let scroll_event = event.clone();
+    let (handler_dest, dest) = (dest.clone(), dest);
+    let handler = Box::new(move || -> JsValue {
+        let dest = handler_dest;
         wasm_bindgen_futures::future_to_promise(async move {
-            if !traverse {
-                let _ = call(&nav, "updateCurrentEntry", &[&object(&[("state", entry_state)])]);
-            }
-            top.set_src(&dest);
-            if !Rc::ptr_eq(&frame, &top) {
-                frame.set_src(&plan.src);
+            if event_signal.aborted() {
+                return Ok(JsValue::UNDEFINED);
             }
             let submission = plan.submission.map(|pending| {
                 let s = pending.get();
                 Submission { method: Some(s.method.to_ascii_uppercase()), form_data: s.form_data, enc_type: Some(s.enc_type) }
             });
-            let result = frame.load(submission.unwrap_or_default()).await;
-            if result.is_ok() && get(&event_signal, "aborted").as_bool() != Some(true) {
-                NEEDS_FRAME_RELOAD.with(|n| n.set(false));
+            if !traverse {
+                let _ = call(&nav, "updateCurrentEntry", &[&object(&[("state", entry_state.clone())])]);
             }
-            match result {
-                Ok(Some(redirected)) if Rc::ptr_eq(&frame, &top) => {
-                    top.set_src(&redirected);
-                    let opts = object(&[
-                        ("state", state(None, &redirected, reset_scroll, reset_focus)),
-                        ("history", JsValue::from_str("replace")),
-                        ("info", object(&[("type", JsValue::from_str("rmx-redirect")), ("resetScroll", JsValue::from_bool(reset_scroll))])),
-                    ]);
-                    let _ = call(&nav, "navigate", &[&JsValue::from_str(&redirected), &opts]);
+            top.set_src(&dest);
+            if !Rc::ptr_eq(&frame, &top) {
+                frame.set_src(&plan.src);
+            }
+            // Scroll once the new content is in, unless this navigation or its load was
+            // superseded (Remix calls `event.scroll()` after `reload.committed`).
+            let nav_signal = event_signal.clone();
+            let on_commit = move |load: &web_sys::AbortSignal| {
+                if reset_scroll && !nav_signal.aborted() && !load.aborted() {
+                    let _ = call(&scroll_event, "scroll", &[]);
                 }
-                Ok(_) => {}
+            };
+            let result = frame.load_for_navigation(submission.unwrap_or_default(), Some(event_signal.clone()), on_commit).await;
+            match result {
+                Ok((redirected, load_signal)) => {
+                    if event_signal.aborted() || load_signal.aborted() {
+                        return Ok(JsValue::UNDEFINED);
+                    }
+                    NEEDS_FRAME_RELOAD.with(|n| n.set(false));
+                    if let Some(redirected) = redirected.filter(|_| Rc::ptr_eq(&frame, &top)) {
+                        top.set_src(&redirected);
+                        // Keep the stored state (a traversal's legacy settings included) with
+                        // the new src; the redirect itself uses this navigation's resets.
+                        let next = js_sys::Object::assign(&js_sys::Object::new(), plan.stored.as_ref().unwrap_or(&entry_state).unchecked_ref());
+                        let _ = Reflect::set(&next, &JsValue::from_str("src"), &JsValue::from_str(&redirected));
+                        let opts = object(&[
+                            ("state", next.into()),
+                            ("history", JsValue::from_str("replace")),
+                            (
+                                "info",
+                                object(&[
+                                    ("type", JsValue::from_str(FRAME_REDIRECT_INFO)),
+                                    ("resetScroll", behavior(reset_scroll)),
+                                    ("resetFocus", behavior(reset_focus)),
+                                ]),
+                            ),
+                        ]);
+                        // Not awaited: this handler must settle before the replacement can finish.
+                        let _ = call(&nav, "navigate", &[&JsValue::from_str(&redirected), &opts]);
+                    }
+                }
                 Err(e) => {
                     let message = frames::js_error(&e);
                     if crate::app::has_listeners() {
@@ -293,20 +364,110 @@ fn on_navigate(event: JsValue) {
         })
         .into()
     });
-    let mut opts = vec![("handler", handler), ("scroll", behavior(reset_scroll)), ("focusReset", behavior(reset_focus))];
-    if precommit_replace {
-        let url = get(&get(&event, "destination"), "url");
-        let precommit = Closure::once_into_js(move |controller: JsValue| {
-            let _ = call(&controller, "redirect", &[&url, &object(&[("history", JsValue::from_str("replace"))])]);
-        });
-        opts.push(("precommitHandler", precommit));
+    let options = vec![("scroll", behavior(reset_scroll)), ("focusReset", behavior(reset_focus))];
+    intercept_navigation(&event, &nav_type, &dest, reset_scroll, options, handler, precommit);
+}
+
+/// Intercept `event` (Remix `interceptNavigation`): install the scroll style workarounds,
+/// and once a handler runs, tie them and the WebKit scroll resync to the transition.
+fn intercept_navigation(
+    event: &JsValue,
+    nav_type: &str,
+    dest: &str,
+    reset_scroll: bool,
+    mut options: Vec<(&'static str, JsValue)>,
+    handler: Box<dyn FnOnce() -> JsValue>,
+    precommit: Option<Box<dyn FnOnce(JsValue)>>,
+) {
+    let styles = ScrollStyles::install(event, nav_type, dest, reset_scroll);
+    let bound = Rc::new(Cell::new(false));
+    let bind = {
+        let (event, nav_type, dest, styles) = (event.clone(), nav_type.to_string(), dest.to_string(), styles.clone());
+        Rc::new(move || {
+            if bound.get() {
+                return;
+            }
+            let aborted = get(&get(&event, "signal"), "aborted").as_bool() == Some(true);
+            let transition = navigation().map(|nav| get(&nav, "transition")).filter(JsValue::is_object);
+            let (false, Some(transition)) = (aborted, transition) else {
+                if let Some(styles) = &styles {
+                    styles.remove();
+                }
+                return;
+            };
+            bound.set(true);
+            resync_webkit_scroll(&event, &nav_type, &dest, reset_scroll, &transition);
+            if let Some(styles) = styles.clone() {
+                styles.bind(&transition);
+            }
+        })
+    };
+    let on_handler = bind.clone();
+    options.push(("handler", Closure::once_into_js(move || -> JsValue {
+        on_handler();
+        handler()
+    })));
+    if let Some(precommit) = precommit {
+        options.push(("precommitHandler", Closure::once_into_js(move |controller: JsValue| {
+            bind();
+            precommit(controller);
+        })));
     }
-    if let Err(e) = call(&event, "intercept", &[&object(&opts)]) {
+    if let Err(e) = call(event, "intercept", &[&object(&options)]) {
         if let Some(styles) = styles {
             styles.remove();
         }
         warn(&format!("rmx: could not intercept navigation: {}", frames::js_error(&e)));
     }
+}
+
+fn user_agent() -> String {
+    get(&get(&window().into(), "navigator"), "userAgent").as_string().unwrap_or_default()
+}
+
+fn is_chromium(agent: &str) -> bool {
+    agent.contains("Chrome") || agent.contains("Chromium")
+}
+
+/// After a push or replace that resets scroll, WebKit can reset its internal scroll
+/// position without updating the visual viewport (https://bugs.webkit.org/show_bug.cgi?id=309542).
+/// Nudge it to 1 and back to 0, unless something else scrolled meanwhile (Remix
+/// `resyncWebKitScrollAfterNavigation`).
+fn resync_webkit_scroll(event: &JsValue, nav_type: &str, dest: &str, reset_scroll: bool, transition: &JsValue) {
+    let agent = user_agent();
+    if !agent.contains("AppleWebKit") || is_chromium(&agent) {
+        return;
+    }
+    if !reset_scroll || (nav_type != "push" && nav_type != "replace") {
+        return;
+    }
+    if web_sys::Url::new(dest).is_ok_and(|u| !u.hash().is_empty()) {
+        return;
+    }
+    let signal = get(event, "signal");
+    let aborted = move || get(&signal, "aborted").as_bool() == Some(true);
+    let scroll_to = |top: f64| {
+        let options = object(&[("behavior", JsValue::from_str("instant")), ("left", JsValue::from_f64(0.0)), ("top", JsValue::from_f64(top))]);
+        let _ = call(&window().into(), "scrollTo", &[&options]);
+    };
+    let at = |top: f64| {
+        let w: JsValue = window().into();
+        get(&w, "scrollX").as_f64() == Some(0.0) && get(&w, "scrollY").as_f64() == Some(top)
+    };
+    let on_finished = Closure::once_into_js(move |_: JsValue| {
+        if aborted() || !at(0.0) {
+            return;
+        }
+        scroll_to(1.0);
+        let back = Closure::once_into_js(move |_: JsValue| {
+            if !aborted() && at(1.0) {
+                scroll_to(0.0);
+            }
+        });
+        let _ = window().request_animation_frame(back.unchecked_ref());
+    });
+    let ignore = Closure::once_into_js(|_: JsValue| {});
+    let _ = call(&get(transition, "finished"), "then", &[&on_finished, &ignore]);
 }
 
 /// Temporary styles that keep reconciliation from fighting the browser's scroll handling
@@ -344,8 +505,7 @@ impl ScrollStyles {
         if web_sys::Url::new(dest).is_ok_and(|u| !u.hash().is_empty()) {
             return None;
         }
-        let agent = get(&get(&window().into(), "navigator"), "userAgent").as_string().unwrap_or_default();
-        if !(agent.contains("Chrome") || agent.contains("Chromium")) {
+        if !is_chromium(&user_agent()) {
             return None;
         }
         Some(("html, body { overflow-anchor: none !important; }".into(), true))
@@ -388,9 +548,8 @@ impl ScrollStyles {
 
     /// Remove the styles once the navigation's transition settles. Called from the
     /// intercept handler, when `navigation.transition` exists.
-    fn bind(self, nav: &JsValue) {
-        let transition = get(nav, "transition");
-        let finished = get(&transition, "finished");
+    fn bind(self, transition: &JsValue) {
+        let finished = get(transition, "finished");
         if !finished.is_object() {
             self.remove();
             return;
@@ -413,26 +572,36 @@ impl ScrollStyles {
     }
 }
 
-fn intercept(event: &JsValue, handler: JsValue, scroll: bool) {
-    let mut opts = vec![("handler", handler)];
-    if !scroll {
-        opts.push(("scroll", JsValue::from_str("manual")));
+/// Remix `normalizeResetBehavior`: `false`, `"false"` and `"manual"` turn a reset off.
+fn reset_on(v: &JsValue) -> bool {
+    !(v.as_bool() == Some(false) || matches!(v.as_string().as_deref(), Some("false" | "manual")))
+}
+
+/// The runtime state stored for the destination entry. Safari's `destination.getState()`
+/// returns `null` for traversals, so those also look the entry up by key.
+fn destination_state(destination: &JsValue, nav_type: &str) -> Option<JsValue> {
+    let state = call(destination, "getState", &[]).ok().filter(is_runtime_state);
+    if state.is_some() || nav_type != "traverse" {
+        return state;
     }
-    if let Err(e) = call(event, "intercept", &[&object(&opts)]) {
-        warn(&format!("rmx: could not intercept navigation: {}", frames::js_error(&e)));
-    }
+    let nav = navigation()?;
+    let key = get(destination, "key");
+    let entries: js_sys::Array = call(&nav, "entries", &[]).ok()?.dyn_into().ok()?;
+    let entry = entries.iter().find(|e| get(e, "key") == key)?;
+    call(&entry, "getState", &[]).ok().filter(is_runtime_state)
 }
 
 fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> Option<Plan> {
     let from_state = || {
-        let s = call(destination, "getState", &[]).ok()?;
-        is_runtime_state(&s).then(|| Plan {
+        let s = destination_state(destination, nav_type)?;
+        Some(Plan {
             target: get(&s, "target").as_string(),
             src: get(&s, "src").as_string().unwrap_or_else(|| dest.to_string()),
             replace: false,
-            reset_scroll: get(&s, "resetScroll").as_string().as_deref() != Some("manual"),
-            reset_focus: get(&s, "resetFocus").as_string().as_deref() != Some("manual"),
+            reset_scroll: reset_on(&get(&s, "resetScroll")),
+            reset_focus: reset_on(&get(&s, "resetFocus")),
             submission: None,
+            stored: Some(s),
         })
     };
     if nav_type == "traverse" {
@@ -455,6 +624,7 @@ fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> O
             reset_scroll: reset_attr(link.get_attribute("data-rmx-reset-scroll")),
             reset_focus: reset_attr(link.get_attribute("data-rmx-reset-focus")),
             submission: None,
+            stored: None,
         });
     }
 
@@ -479,6 +649,7 @@ fn plan(event: &JsValue, destination: &JsValue, dest: &str, nav_type: &str) -> O
         reset_scroll: reset_attr(attr("data-rmx-reset-scroll")),
         reset_focus: reset_attr(attr("data-rmx-reset-focus")),
         submission,
+        stored: None,
     })
 }
 

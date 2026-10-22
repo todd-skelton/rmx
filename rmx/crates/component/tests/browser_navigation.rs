@@ -66,8 +66,10 @@ async fn start() {
             "",
             "const proto = NavigateEvent.prototype;
              const intercept = proto.intercept;
-             const log = { intercepted: new WeakMap(), events: [] };
+             const scroll = proto.scroll;
+             const log = { intercepted: new WeakMap(), events: [], scrolls: [] };
              proto.intercept = function (options) { log.intercepted.set(this, options || {}); return intercept.call(this, options) };
+             proto.scroll = function () { log.scrolls.push(this.destination.url); return scroll.call(this) };
              navigation.addEventListener('navigate', (event) => {
                const options = log.intercepted.get(event);
                const intercepted = options !== undefined;
@@ -89,9 +91,16 @@ fn events() -> js_sys::Array {
     GUARD.with(|g| get(g.borrow().as_ref().unwrap(), "events")).unchecked_into()
 }
 
+/// The destination URLs of the navigations whose `scroll()` ran since [`clear`].
+fn scrolls() -> Vec<String> {
+    let scrolls: js_sys::Array = GUARD.with(|g| get(g.borrow().as_ref().unwrap(), "scrolls")).unchecked_into();
+    scrolls.iter().map(|s| s.as_string().unwrap()).collect()
+}
+
 /// Forget the navigations recorded so far.
 fn clear() {
     events().set_length(0);
+    GUARD.with(|g| get(g.borrow().as_ref().unwrap(), "scrolls")).unchecked_into::<js_sys::Array>().set_length(0);
     REQUESTS.with(|r| r.borrow_mut().clear());
 }
 
@@ -676,4 +685,298 @@ async fn finishes_loading_the_destination_when_a_hash_navigation_interrupts_its_
     settle().await;
     assert_eq!(decisions(), [true, true, false], "later hash navigations are left to the browser");
     assert_eq!(requests().len(), 2);
+}
+
+/// Run a JavaScript function body and return its value.
+fn js(body: &str) -> JsValue {
+    js_sys::Function::new_no_args(body).call0(&JsValue::NULL).unwrap()
+}
+
+/// Navigate with `navigation.navigate(url, options)`, `options` given as JavaScript.
+fn navigate_raw(url: &str, options: &str) {
+    let options = js(&format!("return {options}"));
+    let navigate: js_sys::Function = get(&navigation(), "navigate").unchecked_into();
+    let _ = navigate.call2(&navigation(), &url.into(), &options);
+}
+
+fn current_state() -> JsValue {
+    let entry = get(&navigation(), "currentEntry");
+    let get_state: js_sys::Function = get(&entry, "getState").unchecked_into();
+    get_state.call0(&entry).unwrap()
+}
+
+async fn back() {
+    let back: js_sys::Function = get(&navigation(), "back").unchecked_into();
+    let result = back.call0(&navigation()).unwrap();
+    let _ = JsFuture::from(get(&result, "finished").unchecked_into::<js_sys::Promise>()).await;
+    settle().await;
+}
+
+#[wasm_bindgen_test]
+async fn passes_runtime_state_via_navigate_history_state() {
+    let _page = Page::new().await;
+    let url = page_url("state");
+    navigate(&url, NavigateOptions { target: Some("details".into()), src: Some("/state-partial".into()), ..Default::default() });
+    settle().await;
+    let state = current_state();
+    assert_eq!(get(&state, "$rmx"), JsValue::TRUE);
+    assert_eq!(get(&state, "target").as_string().as_deref(), Some("details"));
+    assert_eq!(get(&state, "src").as_string().as_deref(), Some("/state-partial"));
+    assert_eq!(get(&state, "resetScroll").as_string().as_deref(), Some(AFTER), "resets after the transition by default");
+    assert_eq!(get(&state, "resetFocus").as_string().as_deref(), Some(AFTER));
+    assert_eq!(resets(), resets_of(&[(AFTER, AFTER)]));
+}
+
+/// Remix's "normalizes resetScroll=false" and "resetFocus=false to manual history state"
+/// and "accepts manual scroll and focus options": `false` converts to `Reset::Manual`.
+#[wasm_bindgen_test]
+async fn normalizes_reset_options_to_manual_history_state() {
+    let _page = Page::new().await;
+    let options = NavigateOptions { target: Some("details".into()), reset_scroll: Some(false.into()), reset_focus: Some(rmx::Reset::Manual), ..Default::default() };
+    navigate(&page_url("manual-state"), options);
+    settle().await;
+    let state = current_state();
+    assert_eq!(get(&state, "resetScroll").as_string().as_deref(), Some("manual"));
+    assert_eq!(get(&state, "resetFocus").as_string().as_deref(), Some("manual"));
+    assert_eq!(resets(), resets_of(&[MANUAL]));
+}
+
+#[wasm_bindgen_test]
+async fn uses_browser_scrolling_after_the_frame_content_commits() {
+    let page = Page::new().await;
+    let url = page_url("commit-scroll");
+    page.click(&format!(r#"<a href="{url}" data-rmx-target="details">Go</a>"#)).await;
+    assert_eq!(resets(), resets_of(&[(AFTER, AFTER)]));
+    assert_eq!(scrolls(), [url], "scrolled once, when the content committed");
+}
+
+#[wasm_bindgen_test]
+async fn does_not_scroll_when_reset_scroll_is_manual() {
+    let page = Page::new().await;
+    page.click(&link("manual-scroll", r#"data-rmx-target="details" data-rmx-reset-scroll="manual""#)).await;
+    assert_eq!(decisions(), [true]);
+    assert!(scrolls().is_empty());
+}
+
+#[wasm_bindgen_test]
+async fn does_not_scroll_for_a_superseded_frame_reload() {
+    let _page = Page::new().await;
+    let mut release = None;
+    let hold = js_sys::Promise::new(&mut |resolve, _| release = Some(resolve));
+    HOLD.with(|h| *h.borrow_mut() = Some(hold));
+    navigate(&page_url("superseded"), NavigateOptions { target: Some("details".into()), ..Default::default() });
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert_eq!(requests().len(), 1, "the navigation's load is pending");
+    Frames.get("details").unwrap().reload();
+    for _ in 0..3 {
+        tick().await;
+    }
+    release.unwrap().call0(&JsValue::NULL).unwrap();
+    settle().await;
+    assert_eq!(decisions(), [true]);
+    assert_eq!(requests().len(), 2);
+    assert!(scrolls().is_empty(), "the navigation's load was superseded before it committed");
+}
+
+/// Pretend to be Safari: a WebKit user agent, a stubbed scroll position, and a
+/// `scrollTo` that records its calls and moves the position to `then` (or to the requested
+/// top when `then` is `null`). Returns the recorded calls; `restore_webkit` undoes it.
+fn stub_webkit(then: &str) -> js_sys::Array {
+    js(&format!(
+        "const saved = {{ x: Object.getOwnPropertyDescriptor(window, 'scrollX'), y: Object.getOwnPropertyDescriptor(window, 'scrollY'), scrollTo: window.scrollTo }};
+         window.__webkit = saved;
+         Object.defineProperty(navigator, 'userAgent', {{ configurable: true, value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15' }});
+         let y = 0;
+         Object.defineProperty(window, 'scrollX', {{ configurable: true, get: () => 0 }});
+         Object.defineProperty(window, 'scrollY', {{ configurable: true, get: () => y }});
+         const calls = [];
+         window.scrollTo = (options) => {{ calls.push(options.behavior + ' ' + options.left + ' ' + options.top); const then = {then}; y = then === null ? options.top : then }};
+         return calls;"
+    ))
+    .unchecked_into()
+}
+
+fn restore_webkit() {
+    js("const saved = window.__webkit;
+        delete navigator.userAgent;
+        Object.defineProperty(window, 'scrollX', saved.x);
+        Object.defineProperty(window, 'scrollY', saved.y);
+        window.scrollTo = saved.scrollTo;
+        delete window.__webkit;");
+}
+
+/// Wait for two animation frames.
+async fn frames() {
+    for _ in 0..2 {
+        let promise = js_sys::Promise::new(&mut |resolve, _| {
+            window().request_animation_frame(&resolve).unwrap();
+        });
+        let _ = JsFuture::from(promise).await;
+    }
+}
+
+fn strings(array: &js_sys::Array) -> Vec<String> {
+    array.iter().map(|v| v.as_string().unwrap()).collect()
+}
+
+#[wasm_bindgen_test]
+async fn resynchronizes_webkit_scroll_state_after_a_navigation_scroll_reset() {
+    let page = Page::new().await;
+    let calls = stub_webkit("null");
+    page.click(&link("webkit", r#"data-rmx-target="details""#)).await;
+    frames().await;
+    restore_webkit();
+    assert_eq!(decisions(), [true]);
+    assert_eq!(strings(&calls), ["instant 0 1", "instant 0 0"]);
+}
+
+#[wasm_bindgen_test]
+async fn preserves_scrolling_that_occurs_after_webkit_scroll_resynchronization() {
+    let page = Page::new().await;
+    let calls = stub_webkit("200");
+    page.click(&link("webkit-scrolled", r#"data-rmx-target="details""#)).await;
+    frames().await;
+    restore_webkit();
+    assert_eq!(strings(&calls), ["instant 0 1"], "a scroll after the nudge is kept");
+}
+
+#[wasm_bindgen_test]
+async fn does_not_resynchronize_webkit_scroll_state_for_fragment_navigations() {
+    let page = Page::new().await;
+    let calls = stub_webkit("null");
+    page.click(&format!(r#"<a href="{}#section" data-rmx-target="details">Go</a>"#, page_url("webkit-fragment"))).await;
+    frames().await;
+    restore_webkit();
+    assert_eq!(decisions(), [true]);
+    assert!(calls.length() == 0);
+}
+
+#[wasm_bindgen_test]
+async fn does_not_resynchronize_scroll_state_outside_webkit() {
+    let page = Page::new().await;
+    let calls = js("const calls = []; window.__scrollTo = window.scrollTo; window.scrollTo = (o) => calls.push(o); return calls;").unchecked_into::<js_sys::Array>();
+    page.click(&link("chromium", r#"data-rmx-target="details""#)).await;
+    frames().await;
+    js("window.scrollTo = window.__scrollTo; delete window.__scrollTo;");
+    assert_eq!(calls.length(), 0);
+}
+
+#[wasm_bindgen_test]
+async fn preserves_manual_scrolling_and_focus_across_frame_redirects() {
+    let _page = Page::new().await;
+    navigate_raw(&page_url("redirected"), "{ history: 'replace', info: { type: 'frame-redirect', resetScroll: 'manual', resetFocus: 'manual' } }");
+    settle().await;
+    assert_eq!(decisions(), [true]);
+    assert_eq!(resets(), resets_of(&[MANUAL]));
+    assert!(requests().is_empty(), "the content is already in the page");
+}
+
+#[wasm_bindgen_test]
+async fn does_not_scroll_again_when_synchronizing_a_frame_redirect_url() {
+    let _page = Page::new().await;
+    navigate_raw(&page_url("redirect-sync"), "{ history: 'replace', info: { type: 'frame-redirect', resetScroll: 'after-transition', resetFocus: 'after-transition' } }");
+    settle().await;
+    assert_eq!(resets(), resets_of(&[("manual", AFTER)]));
+    assert!(scrolls().is_empty());
+    assert!(requests().is_empty());
+}
+
+/// Remix's "ignores legacy boolean scroll and focus settings on traverse navigations" and
+/// "ignores manual scroll and focus settings on traverse navigations": state written with
+/// `resetScroll: false` is manual when pushed, but a traversal back to it resets.
+#[wasm_bindgen_test]
+async fn ignores_legacy_boolean_and_manual_settings_on_traverse_navigations() {
+    let _page = Page::new().await;
+    let state = r#"{ $rmx: true, target: 'details', src: '/legacy', resetScroll: false, resetFocus: false }"#;
+    navigate_raw(&page_url("legacy"), &format!("{{ state: {state} }}"));
+    settle().await;
+    navigate(&page_url("legacy-next"), NavigateOptions { target: Some("details".into()), ..Default::default() });
+    settle().await;
+    back().await;
+    assert_eq!(decisions(), [true, true, true]);
+    assert_eq!(resets(), resets_of(&[MANUAL, (AFTER, AFTER), (AFTER, AFTER)]));
+    let requests = requests();
+    assert!(requests[2].url.ends_with("/legacy"), "{}", requests[2].url);
+}
+
+#[wasm_bindgen_test]
+async fn defaults_missing_reset_settings_when_safari_reads_traversal_state_from_entries() {
+    let page = Page::new().await;
+    page.click(&link("entries-a", r#"data-rmx-target="details" data-rmx-src="/entries-a""#)).await;
+    page.click(&link("entries-b", r#"data-rmx-target="details" data-rmx-src="/entries-b""#)).await;
+    clear();
+    // Safari returns null from destination.getState() for traversals.
+    js("window.__getState = NavigationDestination.prototype.getState; NavigationDestination.prototype.getState = function () { return null };");
+    back().await;
+    js("NavigationDestination.prototype.getState = window.__getState; delete window.__getState;");
+    assert_eq!(decisions(), [true]);
+    assert_eq!(resets(), resets_of(&[(AFTER, AFTER)]));
+    assert!(requests()[0].url.ends_with("/entries-a"), "{}", requests()[0].url);
+    assert_eq!(scrolls().len(), 1);
+}
+
+#[wasm_bindgen_test]
+async fn does_not_reconcile_unsafe_frame_sources_restored_from_navigation_history() {
+    let page = Page::new().await;
+    page.click(&link("unsafe-a", r#"data-rmx-target="details" data-rmx-src="/unsafe-a""#)).await;
+    js("navigation.updateCurrentEntry({ state: { $rmx: true, target: 'details', src: 'https://frames.example/unsafe' } })");
+    page.click(&link("unsafe-b", r#"data-rmx-target="details" data-rmx-src="/unsafe-b""#)).await;
+    clear();
+    let reloads = js_sys::Array::new();
+    let stub = js_sys::Function::new_with_args("log", "return function (options) { log.push(options && options.info); return { committed: Promise.resolve(), finished: Promise.resolve() } }");
+    js_sys::Reflect::set(&navigation(), &"reload".into(), &stub.call1(&JsValue::NULL, &reloads).unwrap()).unwrap();
+    back().await;
+    js_sys::Reflect::delete_property(navigation().unchecked_ref::<js_sys::Object>(), &"reload".into()).unwrap();
+    assert_eq!(reloads.to_vec(), [JsValue::from_str("remix-document-reload")]);
+    assert!(requests().is_empty(), "the unsafe source is not loaded");
+}
+
+#[wasm_bindgen_test]
+async fn opts_out_of_browser_focus_reset_for_get_forms() {
+    let page = Page::new().await;
+    page.submit(&format!(r#"<form action="{}" data-rmx-target="details" data-rmx-reset-focus="false"></form>"#, page_url("get-focus")), None).await;
+    assert_eq!(resets(), resets_of(&[(AFTER, "manual")]));
+}
+
+#[wasm_bindgen_test]
+async fn lets_submitters_restore_browser_focus_reset_for_forms() {
+    let page = Page::new().await;
+    page.submit(
+        &format!(r#"<form action="{}" method="post" data-rmx-target="details" data-rmx-reset-focus="false"><button data-rmx-reset-focus="true">Save</button></form>"#, page_url("focus-restore")),
+        Some("button"),
+    )
+    .await;
+    assert_eq!(resets(), resets_of(&[(AFTER, AFTER)]));
+}
+
+/// Also Remix's "replays a POST submission in the frame selected before cancelling it": the
+/// replay loads the frame chosen for the cancelled push.
+#[wasm_bindgen_test]
+async fn replays_same_location_post_submissions_as_replace_navigations_without_precommit_support() {
+    let page = Page::new().await;
+    js("window.__precommit = window.NavigationPrecommitController; delete window.NavigationPrecommitController;");
+    let entries = entry_count();
+    let url = current_url();
+    let form: web_sys::HtmlFormElement = page
+        .add(&format!(r#"<form action="{url}" method="post" data-rmx-target="details" data-rmx-reset-focus="false"><input name="displayName" value="Ada"></form>"#))
+        .unchecked_into();
+    let input: web_sys::HtmlElement = form.query_selector("input").unwrap().unwrap().unchecked_into();
+    input.focus().unwrap();
+    form.request_submit().unwrap();
+    settle().await;
+    js("window.NavigationPrecommitController = window.__precommit; delete window.__precommit;");
+
+    // The push is cancelled and replayed as a replace navigation (dispatched inside the
+    // first one's listener, so it is recorded first).
+    assert_eq!(decisions(), [true, false]);
+    assert_eq!(entry_count(), entries, "the entry is replaced");
+    assert_eq!(current_url(), url);
+    assert_eq!(document().active_element().as_ref(), Some(input.as_ref()), "focus stays");
+    let requests = requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].method, "POST");
+    assert_eq!(requests[0].target.as_deref(), Some("details"));
+    assert_eq!(requests[0].form, Some(vec![("displayName".to_string(), "Ada".to_string())]));
 }
