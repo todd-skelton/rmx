@@ -502,7 +502,11 @@ Covered since phase 0b:
    and `.ts` is `video/mp2t`, as in Remix.
    `remix/route-pattern` is ported with its tests (split, parse, serialize, route-pattern,
    join, specificity, href, match and match/limits; 355 cases in
-   `crates/route-pattern/src/tests` and `crates/route-pattern/tests`). The type-level
+   `crates/route-pattern/src/tests` and `crates/route-pattern/tests`). The umbrella
+   package's `manifest.test.ts` maps to `crates/rmx/tests/manifest.rs`: every library crate is
+   an `rmx` dependency, re-exported as `rmx::<name>` (the component model at the root) and
+   listed in the crate docs, which caught `rmx::terminal` missing from the table; the README,
+   guide, side-effect and package.json export checks are npm tooling. The type-level
    `types/stringify.test.ts` (13) and `types/join.test.ts` (31) run as parse, serialize and
    join checks; `types/split`, `types/parse` and `types/params` test TypeScript inference of
    the grammar the runtime split and parse tests already cover, and rmx params are runtime
