@@ -66,12 +66,19 @@ pub(crate) fn focus_node(el: Option<&web_sys::HtmlElement>) {
 /// Resolve after `ms` milliseconds.
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn sleep(ms: i32) {
+    let _ = timer(ms).await;
+}
+
+/// Start a `ms` millisecond timer now, like a synchronous `window.setTimeout` call, and
+/// resolve when it fires. Unlike [`sleep`], the timer does not wait for a first poll.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn timer(ms: i32) -> wasm_bindgen_futures::JsFuture {
     let promise = js_sys::Promise::new(&mut |resolve, _| {
         if let Some(w) = web_sys::window() {
             let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
         }
     });
-    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+    wasm_bindgen_futures::JsFuture::from(promise)
 }
 
 /// Resolve when a CSS transition on `node` ends, or after two frames if none started

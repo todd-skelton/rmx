@@ -1284,8 +1284,10 @@ impl SubmenuTrigger {
         #[cfg(target_arch = "wasm32")]
         {
             let (h, generation) = (h.clone(), self.generation);
+            // Started here, as Remix calls `window.setTimeout` from the handler.
+            let fired = crate::event::timer(SUBMENU_OPEN_DELAY_MS);
             spawn(async move {
-                crate::event::sleep(SUBMENU_OPEN_DELAY_MS).await;
+                let _ = fired.await;
                 h.with(|this, _| {
                     let active = this.child.parent.as_ref().and_then(|p| p.active_id());
                     if this.generation == generation && active.as_deref() == Some(this.id.as_str()) {

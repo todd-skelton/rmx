@@ -452,6 +452,10 @@ pub(crate) struct Listener {
 #[derive(Default)]
 struct HandlerTable {
     items: Vec<Option<EventHandler>>,
+    /// Bumped when a slot is freed. An element unmounted without unbinding keeps its
+    /// listener and expando, so the expando carries the generation it was bound with and a
+    /// late event there (a `toggle` after `hidePopover`) cannot reach the slot's next owner.
+    generations: Vec<u32>,
     free: Vec<u32>,
     /// Signals handed out by `Event::signal`, aborted on the next dispatch or release.
     signals: HashMap<u32, web_sys::AbortController>,
@@ -510,13 +514,21 @@ fn with_event_type<R>(name: &'static str, capture: bool, f: impl FnOnce(&EventTy
     })
 }
 
+/// Expando values are `id + generation * 2^32`; generations wrap below 2^21 so the value
+/// stays an exact integer in an `f64`.
+const GENERATION_UNIT: f64 = 4_294_967_296.0;
+const GENERATION_MASK: u32 = (1 << 21) - 1;
+
 /// Run the handler of the element the event is at (`currentTarget`).
 fn dispatch(raw: &web_sys::Event, key: &JsValue) {
     let Some(current) = raw.current_target() else { return };
-    let Some(id) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) else { return };
-    let id = id as u32;
+    let Some(value) = js_sys::Reflect::get(&current, key).ok().and_then(|v| v.as_f64()) else { return };
+    let (id, generation) = ((value % GENERATION_UNIT) as u32, (value / GENERATION_UNIT) as u32);
     let handler = HANDLERS.with(|h| {
         let mut table = h.borrow_mut();
+        if table.generations.get(id as usize) != Some(&generation) {
+            return None;
+        }
         if !table.signals.is_empty() {
             abort_listener_signal(&mut table, id);
         }
@@ -530,21 +542,24 @@ fn dispatch(raw: &web_sys::Event, key: &JsValue) {
 impl Listener {
     fn attach(el: &web_sys::Element, name: &'static str, handler: EventHandler) -> Listener {
         let capture = handler.1;
-        let id = HANDLERS.with(|h| {
+        let (id, generation) = HANDLERS.with(|h| {
             let mut table = h.borrow_mut();
-            match table.free.pop() {
+            let id = match table.free.pop() {
                 Some(id) => {
                     table.items[id as usize] = Some(handler);
                     id
                 }
                 None => {
                     table.items.push(Some(handler));
+                    table.generations.push(0);
                     (table.items.len() - 1) as u32
                 }
-            }
+            };
+            (id, table.generations[id as usize])
         });
+        let value = f64::from(id) + f64::from(generation) * GENERATION_UNIT;
         with_event_type(name, capture, |t| {
-            let _ = t.bind.call1(el, &JsValue::from(id));
+            let _ = t.bind.call1(el, &JsValue::from(value));
         });
         Listener { name, capture, id }
     }
@@ -558,6 +573,8 @@ impl Listener {
         HANDLERS.with(|h| {
             let mut table = h.borrow_mut();
             table.items[self.id as usize] = None;
+            let generation = &mut table.generations[self.id as usize];
+            *generation = (*generation + 1) & GENERATION_MASK;
             table.free.push(self.id);
             if !table.signals.is_empty() {
                 abort_listener_signal(&mut table, self.id);

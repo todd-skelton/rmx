@@ -383,9 +383,16 @@ Covered since phase 0b:
    and re-entry while settling. Porting it found that an explicit `None` prop
    (`AttrValue::Absent`) blocked mixin defaults (`tabindex={None}` left the list without
    `tabindex="-1"`); `Element::attr` and `attrs(..)` now treat `Absent` as unset, like
-   Remix's `undefined`. The menu and combobox suites (48 cases) are covered by the ui
-   gallery's e2e checks rather than case by case, and are being ported to
-   `crates/ui/tests/browser_*.rs`.
+   Remix's `undefined`. `menu.test.tsx` (23) is `browser_menu.rs`; Remix's
+   `setTimeout` spies wrap `window.setTimeout` and the 60 ms flash is a real wait. It found
+   two bugs: the submenu open delay started its timer on the spawned future's first poll
+   rather than in the focus or pointer handler (now `event::timer`, started synchronously
+   like Remix's `window.setTimeout`), and an element unmounted with its subtree kept its
+   listener and handler id, so a late event there (the `toggle` that `hidePopover` queues)
+   ran whichever handler had since reused the freed slot (a menu item's `click`). Listener
+   expandos now carry a slot generation that `release` bumps; `browser_on_mixin.rs` covers
+   it. The combobox suite (25 cases) is covered by the ui gallery's e2e checks rather than
+   case by case, and is being ported next.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,

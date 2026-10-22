@@ -1,7 +1,7 @@
 # Run a crate's browser tests (tests/browser_*.rs, wasm-bindgen-test) in headless Chromium.
-# Usage: pwsh ./test-browser.ps1 [-Crate rmx-component] [-Test browser_errors]
+# Usage: pwsh ./test-browser.ps1 [-Crate rmx-component] [-Test browser_errors] [-Filter test_name]
 # Env: CHROMEDRIVER (chromedriver.exe), CHROMIUM_PATH (chrome.exe matching the driver).
-param([string]$Crate = "rmx-component", [string]$Test)
+param([string]$Crate = "rmx-component", [string]$Test, [string]$Filter)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -21,7 +21,8 @@ $env:CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER = $runner.FullName
 $names = if ($Test) { @($Test) } else { Get-ChildItem (Join-Path $crateDir "tests") -Filter "browser_*.rs" | ForEach-Object BaseName }
 $testArgs = $names | ForEach-Object { "--test"; $_ }
 try {
-    cargo test -p $Crate --target wasm32-unknown-unknown @testArgs
+    $filterArgs = if ($Filter) { @("--", $Filter) } else { @() }
+    cargo test -p $Crate --target wasm32-unknown-unknown @testArgs @filterArgs
     $code = $LASTEXITCODE
 } finally {
     Remove-Item (Join-Path $crateDir "webdriver.json") -ErrorAction SilentlyContinue

@@ -283,3 +283,23 @@ fn aborts_the_previous_handler_signal_on_reentry() {
     assert!(signals[0].aborted());
     assert!(!signals[1].aborted());
 }
+
+// rmx: an element unmounted with its subtree keeps its DOM listener, so an event that
+// still reaches it (a `toggle` queued by `hidePopover`) must not run the handler that
+// took over its freed slot.
+#[wasm_bindgen_test]
+fn events_on_unmounted_elements_do_not_reach_handlers_that_reuse_their_slots() {
+    let calls = log();
+    let c = Connected::new();
+    c.root.render(rsx! { <div><p mix={on("late", push(&calls, "old"))}>"old"</p></div> });
+    c.root.flush();
+    let old = find(&c.el, "p");
+    c.root.render(rsx! { <section></section> });
+    c.root.flush();
+    c.root.render(rsx! { <div><span mix={on("other", push(&calls, "new"))}>"new"</span></div> });
+    c.root.flush();
+    fire(&old, "late", false);
+    assert!(calls.borrow().is_empty(), "{:?}", calls.borrow());
+    fire(&find(&c.el, "span"), "other", false);
+    assert_eq!(*calls.borrow(), ["new"]);
+}
