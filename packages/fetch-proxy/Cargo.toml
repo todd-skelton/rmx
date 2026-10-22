@@ -13,7 +13,7 @@ rmx-headers.workspace = true
 rmx-url.workspace = true
 
 [dev-dependencies]
-rmx-middleware.workspace = true
+rmx-compression-middleware.workspace = true
 rmx-router.workspace = true
 rmx-serve.workspace = true
 tokio.workspace = true

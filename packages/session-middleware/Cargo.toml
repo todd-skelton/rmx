@@ -1,0 +1,19 @@
+[package]
+name = "rmx-session-middleware"
+description = "Middleware for managing sessions with cookie-based storage (remix session-middleware)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-cookie.workspace = true
+rmx-router.workspace = true
+rmx-session.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+rmx-crypto.workspace = true
+rmx-fetch.workspace = true
+rmx-headers.workspace = true
+tokio.workspace = true

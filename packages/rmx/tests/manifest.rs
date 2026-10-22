@@ -31,9 +31,23 @@ fn library_crates() -> BTreeSet<String> {
         .collect()
 }
 
-/// `rmx-file-storage` is `rmx::file_storage`.
+/// The crate's path under `rmx`, like Remix's subpath exports: `rmx-file-storage` is
+/// `rmx::file_storage` and `rmx-static-middleware` is `rmx::middleware::static_files`
+/// (`remix/middleware/static`; `static` is a keyword).
 fn module_name(package: &str) -> String {
-    package.strip_prefix("rmx-").expect("rmx- prefix").replace('-', "_")
+    let name = package.strip_prefix("rmx-").expect("rmx- prefix");
+    match name {
+        "static-middleware" => "middleware::static_files".into(),
+        _ => match name.strip_suffix("-middleware") {
+            Some(middleware) => format!("middleware::{}", middleware.replace('-', "_")),
+            None => name.replace('-', "_"),
+        },
+    }
+}
+
+/// The last segment of [`module_name`]: the name a crate is re-exported as.
+fn export_name(package: &str) -> String {
+    module_name(package).rsplit("::").next().expect("a module name").to_string()
 }
 
 /// Crates that `rmx` exposes another way.
@@ -67,8 +81,7 @@ fn every_library_crate_is_re_exported_under_its_own_name() {
         .into_iter()
         .filter(|name| !NOT_MODULES.iter().any(|(n, _)| n == name))
         .filter(|name| {
-            let module = module_name(name);
-            !lib.contains(&format!("{} as {module}", name.replace('-', "_")))
+            !lib.contains(&format!("{} as {}", name.replace('-', "_"), export_name(name)))
         })
         .collect();
     assert!(missing.is_empty(), "not re-exported as rmx::<name>: {missing:?}");

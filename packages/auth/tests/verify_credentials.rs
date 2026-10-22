@@ -1,13 +1,13 @@
 //! Port of Remix's `verify-credentials.test.ts`. Credentials login lives in
-//! `rmx_middleware::auth`. Remix's last case calls `verifyCredentials` with an empty context;
+//! `rmx_auth_middleware::auth`. Remix's last case calls `verifyCredentials` with an empty context;
 //! here it runs in a route, and the thrown error is a `verify` that returns `Err`.
 
 mod common;
 
 use common::*;
 use rmx_fetch::Body;
-use rmx_middleware::auth::{credentials_provider, verify_credentials};
-use rmx_middleware::form_data::FormDataExt;
+use rmx_auth_middleware::{credentials_provider, verify_credentials};
+use rmx_form_data_middleware::FormDataExt;
 use rmx_router::{middleware, Context, Router};
 use serde_json::json;
 
@@ -15,7 +15,7 @@ use serde_json::json;
 fn login_route(handler: impl Fn(Context) -> rmx_fetch::Response + Send + Sync + 'static) -> Router {
     let handler = std::sync::Arc::new(handler);
     let mut router = Router::new();
-    router.group(vec![middleware(rmx_middleware::form_data())], |r| {
+    router.group(vec![middleware(rmx_form_data_middleware::form_data())], |r| {
         r.post("/login", move |ctx: Context| {
             let handler = handler.clone();
             async move { handler(ctx) }

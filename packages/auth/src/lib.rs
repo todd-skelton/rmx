@@ -18,7 +18,7 @@
 //!
 //! Providers make HTTP requests through the [Fetch] they are given, so the app picks the
 //! HTTPS client and tests answer in memory. Credentials login and `completeAuth` live in
-//! `rmx_middleware::auth` (`credentials_provider`, `verify_credentials`, `complete_auth`).
+//! `rmx_auth_middleware::auth` (`credentials_provider`, `verify_credentials`, `complete_auth`).
 //!
 //! ```
 //! use rmx_auth::{github_provider, start_external_auth, ClientOptions, StartExternalAuthOptions};

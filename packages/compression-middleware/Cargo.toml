@@ -1,0 +1,16 @@
+[package]
+name = "rmx-compression-middleware"
+description = "Middleware for compressing HTTP responses (remix compression-middleware)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-fetch = { workspace = true, features = ["compress"] }
+rmx-mime.workspace = true
+rmx-router.workspace = true
+
+[dev-dependencies]
+brotli = { version = "9", default-features = false, features = ["std"] }
+flate2 = "1"

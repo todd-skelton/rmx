@@ -1154,18 +1154,26 @@ dependencies = [
  "http",
  "rmx-assets",
  "rmx-auth",
+ "rmx-auth-middleware",
  "rmx-component",
+ "rmx-compression-middleware",
  "rmx-cookie",
+ "rmx-cop-middleware",
+ "rmx-cors-middleware",
  "rmx-crypto",
+ "rmx-csrf-middleware",
  "rmx-data-schema",
  "rmx-fetch",
  "rmx-fetch-proxy",
  "rmx-file-storage",
+ "rmx-form-data-middleware",
  "rmx-fs",
  "rmx-headers",
  "rmx-html-template",
  "rmx-lazy-file",
- "rmx-middleware",
+ "rmx-live-reload-middleware",
+ "rmx-logger-middleware",
+ "rmx-method-override-middleware",
  "rmx-mime",
  "rmx-multipart-parser",
  "rmx-render",
@@ -1173,7 +1181,9 @@ dependencies = [
  "rmx-router",
  "rmx-serve",
  "rmx-session",
+ "rmx-session-middleware",
  "rmx-spa",
+ "rmx-static-middleware",
  "rmx-tar-parser",
  "rmx-terminal",
  "rmx-ui",
@@ -1200,18 +1210,33 @@ name = "rmx-auth"
 version = "0.1.0"
 dependencies = [
  "http",
+ "rmx-auth-middleware",
  "rmx-cookie",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-form-data-middleware",
  "rmx-headers",
- "rmx-middleware",
  "rmx-router",
  "rmx-serve",
  "rmx-session",
+ "rmx-session-middleware",
  "rmx-url",
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "rmx-auth-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-cookie",
+ "rmx-fetch",
+ "rmx-form-data-middleware",
+ "rmx-router",
+ "rmx-session",
+ "rmx-session-middleware",
 ]
 
 [[package]]
@@ -1229,6 +1254,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-compression-middleware"
+version = "0.1.0"
+dependencies = [
+ "brotli",
+ "flate2",
+ "http",
+ "rmx-fetch",
+ "rmx-mime",
+ "rmx-router",
+]
+
+[[package]]
 name = "rmx-cookie"
 version = "0.1.0"
 dependencies = [
@@ -1237,8 +1274,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-cop-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-form-data-middleware",
+ "rmx-method-override-middleware",
+ "rmx-router",
+ "rmx-url",
+]
+
+[[package]]
+name = "rmx-cors-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-headers",
+ "rmx-router",
+]
+
+[[package]]
 name = "rmx-crypto"
 version = "0.1.0"
+
+[[package]]
+name = "rmx-csrf-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-cookie",
+ "rmx-crypto",
+ "rmx-fetch",
+ "rmx-form-data-middleware",
+ "rmx-method-override-middleware",
+ "rmx-router",
+ "rmx-session",
+ "rmx-session-middleware",
+ "rmx-url",
+]
 
 [[package]]
 name = "rmx-data-schema"
@@ -1277,9 +1352,9 @@ version = "0.1.0"
 dependencies = [
  "http",
  "http-body",
+ "rmx-compression-middleware",
  "rmx-fetch",
  "rmx-headers",
- "rmx-middleware",
  "rmx-router",
  "rmx-serve",
  "rmx-url",
@@ -1295,6 +1370,15 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "rmx-form-data-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-router",
 ]
 
 [[package]]
@@ -1330,6 +1414,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-live-reload-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-router",
+]
+
+[[package]]
+name = "rmx-logger-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-headers",
+ "rmx-router",
+ "rmx-terminal",
+ "rmx-url",
+]
+
+[[package]]
 name = "rmx-macros"
 version = "0.1.0"
 dependencies = [
@@ -1340,26 +1445,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmx-middleware"
+name = "rmx-method-override-middleware"
 version = "0.1.0"
 dependencies = [
- "brotli",
- "flate2",
  "http",
- "rmx-cookie",
- "rmx-crypto",
  "rmx-fetch",
- "rmx-fs",
- "rmx-headers",
- "rmx-html-template",
- "rmx-lazy-file",
- "rmx-mime",
+ "rmx-form-data-middleware",
  "rmx-router",
- "rmx-session",
- "rmx-terminal",
- "rmx-url",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -1435,6 +1527,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmx-session-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-cookie",
+ "rmx-crypto",
+ "rmx-fetch",
+ "rmx-headers",
+ "rmx-router",
+ "rmx-session",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "rmx-spa"
 version = "0.1.0"
 dependencies = [
@@ -1446,6 +1553,22 @@ dependencies = [
  "tokio",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "rmx-static-middleware"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rmx-fetch",
+ "rmx-form-data-middleware",
+ "rmx-fs",
+ "rmx-html-template",
+ "rmx-lazy-file",
+ "rmx-method-override-middleware",
+ "rmx-mime",
+ "rmx-router",
+ "rmx-url",
 ]
 
 [[package]]

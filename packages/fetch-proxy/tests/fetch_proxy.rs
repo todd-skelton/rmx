@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 use http::{HeaderMap, Method, StatusCode};
 use rmx_fetch::{block_on, Body, BoxError, Request, Response};
 use rmx_fetch_proxy::{FetchProxy, FetchProxyOptions, Redirect};
-use rmx_middleware::compression::{compress_response, CompressOptions, Encoding};
+use rmx_compression_middleware::{compress_response, CompressOptions, Encoding};
 use rmx_router::{Context, Router};
 use tokio::net::TcpListener;
 

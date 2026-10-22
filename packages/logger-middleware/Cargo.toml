@@ -1,0 +1,14 @@
+[package]
+name = "rmx-logger-middleware"
+description = "Middleware for logging HTTP requests and responses (remix logger-middleware)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-fetch.workspace = true
+rmx-headers.workspace = true
+rmx-router.workspace = true
+rmx-terminal.workspace = true
+rmx-url.workspace = true

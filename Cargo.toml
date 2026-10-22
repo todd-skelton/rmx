@@ -9,7 +9,17 @@ members = [
     "packages/fetch-router",
     "packages/node-fetch-server",
     "packages/mime",
-    "packages/middleware",
+    "packages/auth-middleware",
+    "packages/compression-middleware",
+    "packages/cop-middleware",
+    "packages/cors-middleware",
+    "packages/csrf-middleware",
+    "packages/form-data-middleware",
+    "packages/live-reload-middleware",
+    "packages/logger-middleware",
+    "packages/method-override-middleware",
+    "packages/session-middleware",
+    "packages/static-middleware",
     "packages/render-middleware",
     "packages/cookie",
     "packages/spa",
@@ -65,7 +75,17 @@ rmx-fetch = { path = "packages/fetch" }
 rmx-router = { path = "packages/fetch-router" }
 rmx-serve = { path = "packages/node-fetch-server" }
 rmx-mime = { path = "packages/mime" }
-rmx-middleware = { path = "packages/middleware" }
+rmx-auth-middleware = { path = "packages/auth-middleware" }
+rmx-compression-middleware = { path = "packages/compression-middleware" }
+rmx-cop-middleware = { path = "packages/cop-middleware" }
+rmx-cors-middleware = { path = "packages/cors-middleware" }
+rmx-csrf-middleware = { path = "packages/csrf-middleware" }
+rmx-form-data-middleware = { path = "packages/form-data-middleware" }
+rmx-live-reload-middleware = { path = "packages/live-reload-middleware" }
+rmx-logger-middleware = { path = "packages/logger-middleware" }
+rmx-method-override-middleware = { path = "packages/method-override-middleware" }
+rmx-session-middleware = { path = "packages/session-middleware" }
+rmx-static-middleware = { path = "packages/static-middleware" }
 rmx-render = { path = "packages/render-middleware" }
 rmx-spa = { path = "packages/spa" }
 rmx-assets = { path = "packages/assets" }
@@ -106,7 +126,10 @@ opt-level = 3
 [profile.dev.package.rmx-fetch]
 opt-level = 3
 
-[profile.dev.package.rmx-middleware]
+[profile.dev.package.rmx-compression-middleware]
+opt-level = 3
+
+[profile.dev.package.rmx-static-middleware]
 opt-level = 3
 
 [profile.dev.package.brotli]

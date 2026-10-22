@@ -1,0 +1,17 @@
+[package]
+name = "rmx-auth-middleware"
+description = "Pluggable authentication middleware for rmx (remix auth-middleware): resolve who is making the request and require it on routes"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+rmx-fetch.workspace = true
+rmx-router.workspace = true
+rmx-session.workspace = true
+
+[dev-dependencies]
+rmx-cookie.workspace = true
+rmx-form-data-middleware.workspace = true
+rmx-session-middleware.workspace = true

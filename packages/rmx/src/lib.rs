@@ -15,7 +15,17 @@
 //! | `URL`, `URLSearchParams` | [`rmx::url`](url) | browser and server |
 //! | `remix/router` (fetch-router) | [`rmx::router`](router) | browser (route maps, hrefs) and server |
 //! | `remix/response`, `Request`, `Response`, `FormData` | [`rmx::fetch`](fetch) | browser (types) and server |
-//! | `remix/middleware/*` | `rmx::middleware` | server |
+//! | `remix/middleware/auth` | `rmx::middleware::auth` | server |
+//! | `remix/middleware/compression` | `rmx::middleware::compression` | server |
+//! | `remix/middleware/cop` | `rmx::middleware::cop` | server |
+//! | `remix/middleware/cors` | `rmx::middleware::cors` | server |
+//! | `remix/middleware/csrf` | `rmx::middleware::csrf` | server |
+//! | `remix/middleware/form-data` | `rmx::middleware::form_data` | server |
+//! | `remix/middleware/logger` | `rmx::middleware::logger` | server |
+//! | `remix/middleware/method-override` | `rmx::middleware::method_override` | server |
+//! | `remix/middleware/session` | `rmx::middleware::session` | server |
+//! | `remix/middleware/static` | `rmx::middleware::static_files` | server |
+//! | the browser side of `npm run hmr` | `rmx::middleware::live_reload` (page reloads under `rmx dev`) | server |
 //! | `remix/middleware/render`, `remix/component/server` | `rmx::render` | server |
 //! | `remix/node-fetch-server` | `rmx::serve` | server |
 //! | `remix/auth` | `rmx::auth` | server |
@@ -73,6 +83,50 @@ pub mod cli;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
     rmx_assets as assets, rmx_auth as auth, rmx_cookie as cookie, rmx_crypto as crypto, rmx_fetch_proxy as fetch_proxy,
-    rmx_file_storage as file_storage, rmx_fs as fs, rmx_html_template as html_template, rmx_middleware as middleware, rmx_multipart_parser as multipart_parser,
+    rmx_file_storage as file_storage, rmx_fs as fs, rmx_html_template as html_template, rmx_multipart_parser as multipart_parser,
     rmx_render as render, rmx_serve as serve, rmx_session as session, rmx_tar_parser as tar_parser, rmx_terminal as terminal,
 };
+
+/// Remix's `remix/middleware/*` subpaths. Each is its own crate, `rmx-<name>-middleware`
+/// under `packages/`, like Remix's `<name>-middleware` packages. Every module is
+/// re-exported under its name, with its middleware function beside it, so
+/// `rmx::middleware::session(..)` and `rmx::middleware::session::SessionExt` both work.
+///
+/// | Module | Remix package |
+/// | --- | --- |
+/// | [`auth`](rmx_auth_middleware) | `remix/middleware/auth` (and `completeAuth` from `remix/auth`) |
+/// | [`compression`](rmx_compression_middleware) | `remix/middleware/compression` |
+/// | [`cop`](rmx_cop_middleware) | `remix/middleware/cop` |
+/// | [`cors`](rmx_cors_middleware) | `remix/middleware/cors` |
+/// | [`csrf`](rmx_csrf_middleware) | `remix/middleware/csrf` |
+/// | [`form_data`](rmx_form_data_middleware) | `remix/middleware/form-data` |
+/// | [`live_reload`](rmx_live_reload_middleware) | the browser side of `npm run hmr` (page reloads under `rmx dev`) |
+/// | [`logger`](rmx_logger_middleware) | `remix/middleware/logger` |
+/// | [`method_override`](rmx_method_override_middleware) | `remix/middleware/method-override` |
+/// | [`session`](rmx_session_middleware) | `remix/middleware/session` |
+/// | [`static_files`](rmx_static_middleware) | `remix/middleware/static` (`static` is a Rust keyword) |
+#[cfg(not(target_arch = "wasm32"))]
+pub mod middleware {
+    pub use rmx_auth_middleware as auth;
+    pub use rmx_auth_middleware::{auth, require_auth, Auth, AuthExt};
+    pub use rmx_compression_middleware as compression;
+    pub use rmx_compression_middleware::compression;
+    pub use rmx_cop_middleware as cop;
+    pub use rmx_cop_middleware::{cop, Cop};
+    pub use rmx_cors_middleware as cors;
+    pub use rmx_cors_middleware::{cors, Cors};
+    pub use rmx_csrf_middleware as csrf;
+    pub use rmx_csrf_middleware::{csrf, csrf_token, Csrf};
+    pub use rmx_form_data_middleware as form_data;
+    pub use rmx_form_data_middleware::{form_data, FormDataExt};
+    pub use rmx_live_reload_middleware as live_reload;
+    pub use rmx_live_reload_middleware::live_reload;
+    pub use rmx_logger_middleware as logger;
+    pub use rmx_logger_middleware::logger;
+    pub use rmx_method_override_middleware as method_override;
+    pub use rmx_method_override_middleware::method_override;
+    pub use rmx_session_middleware as session;
+    pub use rmx_session_middleware::{session, SessionExt};
+    pub use rmx_static_middleware as static_files;
+    pub use rmx_static_middleware::{static_files, AcceptRanges, AcceptRangesFn, Digest, DigestFn, ETag, StaticOptions};
+}

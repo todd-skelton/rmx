@@ -1,9 +1,9 @@
 //! Port of Remix's `providers/credentials.test.ts`. `createCredentialsAuthProvider` is
-//! `rmx_middleware::auth::credentials_provider`.
+//! `rmx_auth_middleware::credentials_provider`.
 
 use std::future::{ready, Ready};
 
-use rmx_middleware::auth::credentials_provider;
+use rmx_auth_middleware::credentials_provider;
 use rmx_router::Context;
 
 fn parse(ctx: &Context) -> String {

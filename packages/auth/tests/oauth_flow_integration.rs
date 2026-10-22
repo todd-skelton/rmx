@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use common::*;
 use rmx_auth::{code_challenge, finish_external_auth, oidc_provider, start_external_auth, ClientOptions, FinishExternalAuthOptions, OidcOptions, StartExternalAuthOptions};
 use rmx_fetch::Body;
-use rmx_middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
+use rmx_auth_middleware::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
 use rmx_router::{middleware, Context, Router};
 use rmx_url::{SearchParams, Url};
 use serde::{Deserialize, Serialize};

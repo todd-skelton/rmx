@@ -87,7 +87,7 @@ pub fn client(name: &str) -> ClientOptions {
 
 /// `createRouter({ middleware: [sessionMiddleware(createCookie('__session', { secrets: ['secret1'] }), createMemorySessionStorage())] })`.
 pub fn session_router() -> Router {
-    Router::new().with(rmx_middleware::session(Cookie::new("__session").secrets(vec!["secret1".into()]), MemoryStorage::new()))
+    Router::new().with(rmx_session_middleware::session(Cookie::new("__session").secrets(vec!["secret1".into()]), MemoryStorage::new()))
 }
 
 pub fn error_json(message: &str) -> Response {

@@ -3,7 +3,7 @@
 //! A [`Session`] holds values and flash messages. A [`SessionStorage`] turns the value of
 //! the session cookie into a session and back: [`CookieStorage`] keeps everything in the
 //! cookie, [`MemoryStorage`] and [`FsStorage`] keep data on the server and only the id in
-//! the cookie. The `session` middleware in `rmx-middleware` reads and writes the cookie.
+//! the cookie. The `session` middleware in `rmx-session-middleware` reads and writes the cookie.
 //!
 //! ```
 //! use rmx_session::Session;

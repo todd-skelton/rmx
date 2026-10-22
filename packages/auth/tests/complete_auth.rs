@@ -1,10 +1,10 @@
-//! Port of Remix's `complete-auth.test.ts`. `complete_auth` lives in `rmx_middleware::auth`.
+//! Port of Remix's `complete-auth.test.ts`. `complete_auth` lives in `rmx_auth_middleware::auth`.
 
 mod common;
 
 use common::*;
 use rmx_fetch::Body;
-use rmx_middleware::auth::complete_auth;
+use rmx_auth_middleware::complete_auth;
 use rmx_router::Context;
 use rmx_session::Session;
 use serde_json::{json, Value};

@@ -18,6 +18,8 @@ serde_json.workspace = true
 
 [dev-dependencies]
 rmx-cookie.workspace = true
-rmx-middleware.workspace = true
+rmx-auth-middleware.workspace = true
+rmx-form-data-middleware.workspace = true
+rmx-session-middleware.workspace = true
 rmx-serve.workspace = true
 tokio.workspace = true
