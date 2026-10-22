@@ -938,6 +938,282 @@ async fn does_not_resynchronize_scroll_state_outside_webkit() {
     assert_eq!(calls.length(), 0);
 }
 
+/// Pretend to be iOS Safari (Remix `setupWebKitScrollReset`): an iPhone user agent, a
+/// stubbed scroll position that `scrollTo` moves and, when `reset` is set, that
+/// `NavigateEvent.scroll()` resets to the top, plus a spacer whose height sets the page's.
+fn stub_ios(reset: bool) {
+    js(&format!(
+        "const saved = {{ x: Object.getOwnPropertyDescriptor(window, 'scrollX'), y: Object.getOwnPropertyDescriptor(window, 'scrollY'), scrollTo: window.scrollTo, scroll: NavigateEvent.prototype.scroll }};
+         window.__ios = saved;
+         Object.defineProperty(navigator, 'userAgent', {{ configurable: true, value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Mobile/15E148 Safari/604.1' }});
+         let y = 0;
+         saved.setY = (top) => {{ y = top }};
+         Object.defineProperty(window, 'scrollX', {{ configurable: true, get: () => 0 }});
+         Object.defineProperty(window, 'scrollY', {{ configurable: true, get: () => y }});
+         window.scrollTo = (options) => {{ y = options.top }};
+         if ({reset}) NavigateEvent.prototype.scroll = function () {{
+             y = 0;
+             const after = saved.afterScroll;
+             if (after) {{ saved.afterScroll = null; queueMicrotask(after) }}
+             return saved.scroll.call(this)
+         }};
+         saved.spacer = document.createElement('div');
+         document.body.append(saved.spacer);"
+    ));
+}
+
+fn restore_ios() {
+    // Stop any workaround still listening, then put the real window back.
+    window().dispatch_event(&web_sys::Event::new("pointerdown").unwrap()).unwrap();
+    js("const saved = window.__ios;
+        delete navigator.userAgent;
+        Object.defineProperty(window, 'scrollX', saved.x);
+        Object.defineProperty(window, 'scrollY', saved.y);
+        window.scrollTo = saved.scrollTo;
+        NavigateEvent.prototype.scroll = saved.scroll;
+        saved.spacer.remove();
+        delete window.__ios;");
+}
+
+fn set_scroll(y: f64) {
+    js(&format!("window.__ios.setY({y})"));
+}
+
+/// Move the page as Safari's restoration or app code would, including the scroll event.
+fn scroll_page(y: f64) {
+    set_scroll(y);
+    window().dispatch_event(&web_sys::Event::new("scroll").unwrap()).unwrap();
+}
+
+fn scroll_y() -> f64 {
+    window().scroll_y().unwrap()
+}
+
+fn set_page_height(px: u32) {
+    js(&format!("window.__ios.spacer.style.height = '{px}px'"));
+}
+
+fn max_scroll_y() -> f64 {
+    js("return document.documentElement.scrollHeight - window.innerHeight").as_f64().unwrap()
+}
+
+async fn sleep(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        window().set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms).unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+// navigation.test.ts: undoes an iOS restoration of the previous position after the scroll reset
+#[wasm_bindgen_test]
+async fn undoes_an_ios_restoration_of_the_previous_position_after_the_scroll_reset() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    page.click(&link("ios-previous", r#"data-rmx-target="details""#)).await;
+    scroll_page(2400.0);
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(decisions(), [true]);
+    assert_eq!(y, 0.0);
+}
+
+// navigation.test.ts: undoes an iOS restoration at the bottom the page had before it grew
+#[wasm_bindgen_test]
+async fn undoes_an_ios_restoration_at_the_bottom_the_page_had_before_it_grew() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_page_height(3000);
+    // Add the link first: here it is part of the page whose bottom is measured.
+    let anchor: web_sys::HtmlElement = page.add(&link("ios-bottom", r#"data-rmx-target="details""#)).unchecked_into();
+    let bottom = max_scroll_y();
+    set_scroll(bottom + 1000.0);
+    // Right after the scroll reset, before the navigation finishes, the page grows and
+    // Safari restores the old bottom.
+    js(&format!(
+        "window.__ios.afterScroll = () => {{
+             window.__ios.spacer.style.height = '3100px';
+             window.__ios.setY({bottom});
+             window.dispatchEvent(new Event('scroll'));
+             window.__ios.seen = window.scrollY;
+         }}"
+    ));
+    anchor.click();
+    settle().await;
+    let y = js("return window.__ios.seen").as_f64().expect("the restoration ran");
+    restore_ios();
+    assert!(bottom > 0.0, "{bottom}");
+    assert_eq!(decisions(), [true]);
+    assert_eq!(y, 0.0, "bottom {bottom}");
+}
+
+// navigation.test.ts: undoes an iOS restoration that is still in place when a frame redirect finishes
+#[wasm_bindgen_test]
+async fn undoes_an_ios_restoration_still_in_place_when_a_frame_redirect_finishes() {
+    let _page = Page::new().await;
+    stub_ios(false);
+    set_scroll(2400.0);
+    navigate_raw(&page_url("ios-redirected"), "{ history: 'replace', info: { type: 'frame-redirect', resetScroll: 'after-transition', resetFocus: 'after-transition' } }");
+    settle().await;
+    frames().await;
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(decisions(), [true]);
+    assert_eq!(y, 0.0);
+}
+
+// navigation.test.ts: leaves the previous page in place until the new page resets scroll
+#[wasm_bindgen_test]
+async fn leaves_the_previous_page_in_place_until_the_new_page_resets_scroll() {
+    let _page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    let mut release = None;
+    let hold = js_sys::Promise::new(&mut |resolve, _| release = Some(resolve));
+    HOLD.with(|h| *h.borrow_mut() = Some(hold));
+    navigate(&page_url("ios-pending"), NavigateOptions { target: Some("details".into()), ..Default::default() });
+    for _ in 0..3 {
+        tick().await;
+    }
+    scroll_page(2400.0);
+    let y = scroll_y();
+    release.unwrap().call0(&JsValue::NULL).unwrap();
+    settle().await;
+    restore_ios();
+    assert_eq!(y, 2400.0);
+}
+
+// navigation.test.ts: leaves positions other code scrolls to after the scroll reset
+#[wasm_bindgen_test]
+async fn leaves_positions_other_code_scrolls_to_after_the_scroll_reset() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    page.click(&link("ios-other", r#"data-rmx-target="details""#)).await;
+    scroll_page(500.0);
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(y, 500.0);
+}
+
+// navigation.test.ts: stops undoing iOS restorations once the user interacts with the page
+#[wasm_bindgen_test]
+async fn stops_undoing_ios_restorations_once_the_user_interacts_with_the_page() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    page.click(&link("ios-interact", r#"data-rmx-target="details""#)).await;
+    window().dispatch_event(&web_sys::Event::new("pointerdown").unwrap()).unwrap();
+    scroll_page(2400.0);
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(y, 2400.0);
+}
+
+// navigation.test.ts: stops undoing iOS restorations when the next navigation starts (the next
+// navigation keeps its scroll, so it starts no workaround of its own)
+#[wasm_bindgen_test]
+async fn stops_undoing_ios_restorations_when_the_next_navigation_starts() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    page.click(&link("ios-first", r#"data-rmx-target="details""#)).await;
+    page.click(&link("ios-next", r#"data-rmx-target="details" data-rmx-reset-scroll="manual""#)).await;
+    scroll_page(2400.0);
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(decisions(), [true, true]);
+    assert_eq!(y, 2400.0);
+}
+
+// navigation.test.ts: stops undoing iOS restorations shortly after the navigation finishes
+#[wasm_bindgen_test]
+async fn stops_undoing_ios_restorations_shortly_after_the_navigation_finishes() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    page.click(&link("ios-later", r#"data-rmx-target="details""#)).await;
+    sleep(550).await;
+    scroll_page(2400.0);
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(y, 2400.0);
+}
+
+// navigation.test.ts: stops undoing iOS restorations when the navigation fails
+#[wasm_bindgen_test]
+async fn stops_undoing_ios_restorations_when_the_navigation_fails() {
+    let page = Page::new().await;
+    stub_ios(true);
+    set_scroll(2400.0);
+    RESOLVE_NEXT.with(|n| *n.borrow_mut() = Some(Box::new(|_| Box::pin(async { Err("offline".into()) }))));
+    page.click(&link("ios-failed", r#"data-rmx-target="details""#)).await;
+    scroll_page(2400.0);
+    let y = scroll_y();
+    restore_ios();
+    assert_eq!(y, 2400.0);
+}
+
+async fn next_frame() {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        window().request_animation_frame(&resolve).unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+fn adopted_sheets() -> u32 {
+    js("return document.adoptedStyleSheets.length").as_f64().unwrap() as u32
+}
+
+fn computed(element: &str, property: &str) -> String {
+    js(&format!("return getComputedStyle(document.{element}).getPropertyValue('{property}')")).as_string().unwrap()
+}
+
+// navigation.test.ts: leaves traversal restoration to the browser after frame reconciliation
+// (the scroll styles: the starting scroll range and no anchoring while the traversal runs,
+// only the anchoring suppression once it finishes, nothing from the second frame on)
+#[wasm_bindgen_test]
+async fn keeps_scroll_anchoring_off_until_after_a_traversal_paints() {
+    let page = Page::new().await;
+    page.click(&link("anchoring-a", r#"data-rmx-target="details" data-rmx-src="/a""#)).await;
+    page.click(&link("anchoring-b", r#"data-rmx-target="details" data-rmx-src="/b""#)).await;
+    clear();
+    // Let the push navigations' own anchoring styles go first.
+    next_frame().await;
+    next_frame().await;
+    let count = adopted_sheets();
+    let starting_min_height = computed("documentElement", "min-height");
+    let expected_min_height = js("let r = document.documentElement; return r.scrollHeight + r.clientHeight + 'px'").as_string().unwrap();
+
+    let mut release = None;
+    let hold = js_sys::Promise::new(&mut |resolve, _| release = Some(resolve));
+    HOLD.with(|h| *h.borrow_mut() = Some(hold));
+    let back: js_sys::Function = get(&navigation(), "back").unchecked_into();
+    let result = back.call0(&navigation()).unwrap();
+    for _ in 0..50 {
+        if !requests().is_empty() {
+            break;
+        }
+        tick().await;
+    }
+    let during = (adopted_sheets(), computed("documentElement", "min-height"), computed("body", "overflow-anchor"));
+    release.unwrap().call0(&JsValue::NULL).unwrap();
+    let _ = JsFuture::from(get(&result, "finished").unchecked_into::<js_sys::Promise>()).await;
+    JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await.unwrap();
+    let finished = (adopted_sheets(), computed("documentElement", "min-height"), computed("documentElement", "overflow-anchor"), computed("body", "overflow-anchor"));
+    next_frame().await;
+    let first_frame = adopted_sheets();
+    next_frame().await;
+    let second_frame = adopted_sheets();
+    drop(page);
+
+    assert_eq!(decisions(), [true]);
+    assert_eq!(during, (count + 1, expected_min_height, "none".to_string()));
+    assert_eq!(finished, (count + 1, starting_min_height, "none".to_string(), "none".to_string()));
+    assert_eq!(first_frame, count + 1);
+    assert_eq!(second_frame, count);
+}
+
 #[wasm_bindgen_test]
 async fn preserves_manual_scrolling_and_focus_across_frame_redirects() {
     let _page = Page::new().await;

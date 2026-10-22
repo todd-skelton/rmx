@@ -14,7 +14,7 @@
 //! - `data-rmx-history="replace" | "push"` chooses how the history entry is added.
 //! - `data-rmx-document` opts out: the browser does a full document navigation.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use js_sys::Reflect;
@@ -319,6 +319,7 @@ fn on_navigate(event: JsValue) {
             let on_commit = move |load: &web_sys::AbortSignal| {
                 if reset_scroll && !nav_signal.aborted() && !load.aborted() {
                     let _ = call(&scroll_event, "scroll", &[]);
+                    webkit_scroll_reset_applied(&scroll_event);
                 }
             };
             let result = frame.load_for_navigation(submission.unwrap_or_default(), Some(event_signal.clone()), on_commit).await;
@@ -429,10 +430,33 @@ fn is_chromium(agent: &str) -> bool {
     agent.contains("Chrome") || agent.contains("Chromium")
 }
 
-/// After a push or replace that resets scroll, WebKit can reset its internal scroll
-/// position without updating the visual viewport (https://bugs.webkit.org/show_bug.cgi?id=309542).
-/// Nudge it to 1 and back to 0, unless something else scrolled meanwhile (Remix
-/// `resyncWebKitScrollAfterNavigation`).
+thread_local! {
+    /// NavigateEvent -> function the handler calls once it has reset scroll (Remix
+    /// `webKitScrollResets`).
+    static WEBKIT_SCROLL_RESETS: js_sys::WeakMap = js_sys::WeakMap::new();
+}
+
+/// How long after a navigation finishes iOS restorations are still undone.
+const WEBKIT_SCROLL_RESET_MS: i32 = 500;
+
+/// Tell the WebKit workaround for `event` that the navigation has reset scroll.
+fn webkit_scroll_reset_applied(event: &JsValue) {
+    let notify = WEBKIT_SCROLL_RESETS.with(|m| m.get(event.unchecked_ref()));
+    if let Some(notify) = notify.dyn_ref::<js_sys::Function>() {
+        let _ = notify.call0(&JsValue::NULL);
+    }
+}
+
+/// WebKit scroll workarounds for a push or replace that resets scroll (Remix
+/// `resyncWebKitScrollAfterNavigation`):
+///
+/// - iOS Safari can restore the previous position, or the new page's bottom, for several
+///   frames after the reset. Those restorations are undone until shortly after the
+///   navigation finishes, the user interacts with the page, or another navigation starts.
+///   App code that scrolls to one of those positions in that time is undone too.
+/// - WebKit can reset its internal scroll position without updating the visual viewport
+///   (https://bugs.webkit.org/show_bug.cgi?id=309542): once the navigation finishes at the
+///   top, nudge it to 1 and back to 0, unless something else scrolled meanwhile.
 fn resync_webkit_scroll(event: &JsValue, nav_type: &str, dest: &str, reset_scroll: bool, transition: &JsValue) {
     let agent = user_agent();
     if !agent.contains("AppleWebKit") || is_chromium(&agent) {
@@ -444,17 +468,86 @@ fn resync_webkit_scroll(event: &JsValue, nav_type: &str, dest: &str, reset_scrol
     if web_sys::Url::new(dest).is_ok_and(|u| !u.hash().is_empty()) {
         return;
     }
-    let signal = get(event, "signal");
-    let aborted = move || get(&signal, "aborted").as_bool() == Some(true);
+    let w: JsValue = window().into();
+    let scroll_y = {
+        let w = w.clone();
+        move || get(&w, "scrollY").as_f64().unwrap_or(0.0)
+    };
     let scroll_to = |top: f64| {
         let options = object(&[("behavior", JsValue::from_str("instant")), ("left", JsValue::from_f64(0.0)), ("top", JsValue::from_f64(top))]);
         let _ = call(&window().into(), "scrollTo", &[&options]);
     };
-    let at = |top: f64| {
-        let w: JsValue = window().into();
-        get(&w, "scrollX").as_f64() == Some(0.0) && get(&w, "scrollY").as_f64() == Some(top)
+
+    let start_y = scroll_y();
+    let Ok(controller) = web_sys::AbortController::new() else { return };
+    let signal: JsValue = controller.signal().into();
+    let stop: JsValue = Closure::<dyn Fn()>::new(move || controller.abort()).into_js_value();
+    let listen = |target: &JsValue, kind: &str, listener: &JsValue, options: JsValue| {
+        let _ = call(target, "addEventListener", &[&JsValue::from_str(kind), listener, &options]);
     };
+    for kind in ["pointerdown", "wheel", "keydown"] {
+        let options = object(&[("capture", JsValue::TRUE), ("passive", JsValue::TRUE), ("signal", signal.clone())]);
+        listen(&w, kind, &stop, options);
+    }
+    if let Some(nav) = navigation() {
+        listen(&nav, "navigate", &stop, object(&[("signal", signal.clone())]));
+    }
+
+    // Safari clamps the previous position to the page's height when it restores it, and
+    // the page can grow before the scroll event runs, so remember every bottom the new page
+    // has had.
+    let restored = Rc::new(RefCell::new(vec![start_y]));
+    let remember_bottom = {
+        let restored = restored.clone();
+        move || {
+            let Some(root) = window().document().and_then(|d| d.document_element()) else { return };
+            let inner = window().inner_height().ok().and_then(|h| h.as_f64()).unwrap_or(0.0);
+            let max_y = f64::from(root.scroll_height()) - inner;
+            if start_y > max_y && !restored.borrow().contains(&max_y) {
+                restored.borrow_mut().push(max_y);
+            }
+        }
+    };
+    let undo_restoration = {
+        let remember_bottom = remember_bottom.clone();
+        let scroll_y = scroll_y.clone();
+        Rc::new(move || {
+            remember_bottom();
+            let y = scroll_y();
+            if y != 0.0 && restored.borrow().iter().any(|p| (y - p).abs() < 1.0) {
+                scroll_to(0.0);
+            }
+        })
+    };
+
+    let reset_applied = Rc::new(Cell::new(false));
+    let applied = reset_applied.clone();
+    let notify = Closure::<dyn Fn()>::new(move || {
+        applied.set(true);
+        remember_bottom();
+    });
+    WEBKIT_SCROLL_RESETS.with(|m| m.set(event.unchecked_ref(), &notify.into_js_value()));
+    // Scroll events run before the frame paints, so an undone restoration may never be drawn.
+    let on_scroll = {
+        let undo = undo_restoration.clone();
+        Closure::<dyn Fn()>::new(move || {
+            if reset_applied.get() {
+                undo();
+            }
+        })
+        .into_js_value()
+    };
+    listen(&w, "scroll", &on_scroll, object(&[("passive", JsValue::TRUE), ("signal", signal.clone())]));
+
+    let nav_signal = get(event, "signal");
+    let aborted = move || get(&nav_signal, "aborted").as_bool() == Some(true);
+    let stop_later = stop.clone();
     let on_finished = Closure::once_into_js(move |_: JsValue| {
+        if get(&signal, "aborted").as_bool() != Some(true) {
+            undo_restoration();
+            let _ = window().set_timeout_with_callback_and_timeout_and_arguments_0(stop_later.unchecked_ref(), WEBKIT_SCROLL_RESET_MS);
+        }
+        let at = move |top: f64| get(&window().into(), "scrollX").as_f64() == Some(0.0) && scroll_y() == top;
         if aborted() || !at(0.0) {
             return;
         }
@@ -466,8 +559,7 @@ fn resync_webkit_scroll(event: &JsValue, nav_type: &str, dest: &str, reset_scrol
         });
         let _ = window().request_animation_frame(back.unchecked_ref());
     });
-    let ignore = Closure::once_into_js(|_: JsValue| {});
-    let _ = call(&get(transition, "finished"), "then", &[&on_finished, &ignore]);
+    let _ = call(&get(transition, "finished"), "then", &[&on_finished, &stop]);
 }
 
 /// Temporary styles that keep reconciliation from fighting the browser's scroll handling
@@ -476,18 +568,23 @@ fn resync_webkit_scroll(event: &JsValue, nav_type: &str, dest: &str, reset_scrol
 /// - Traversals: reconciling a shorter page, or scroll anchoring, can move the scroll
 ///   position before the Navigation API restores it, and Chromium then treats that as a
 ///   user scroll and skips restoration. Keep the starting scroll range and turn anchoring
-///   off until the navigation finishes.
+///   off until the navigation finishes. Re-enabling anchoring while the page shrinks back
+///   to its own height lets Chromium move the restored position, so anchoring stays off
+///   until after the next paint.
 /// - Chromium push/replace without a hash: anchoring can keep an offset after the reset to
 ///   the top, so turn it off through the first paint after the navigation.
 #[derive(Clone)]
 struct ScrollStyles {
     sheet: JsValue,
     removed: Rc<Cell<bool>>,
-    after_paint: bool,
+    /// Whether the sheet holds more than the anchoring suppression.
+    extra: bool,
 }
 
+const DISABLE_SCROLL_ANCHORING: &str = "html, body { overflow-anchor: none !important; }";
+
 impl ScrollStyles {
-    fn css(nav_type: &str, dest: &str, reset_scroll: bool) -> Option<(String, bool)> {
+    fn css(nav_type: &str, dest: &str, reset_scroll: bool) -> Option<String> {
         if !reset_scroll {
             return None;
         }
@@ -497,7 +594,7 @@ impl ScrollStyles {
             let css = format!(
                 "html {{ min-height: {min_height}px !important; overflow-anchor: none !important; }} body {{ overflow-anchor: none !important; }}"
             );
-            return Some((css, false));
+            return Some(css);
         }
         if nav_type != "push" && nav_type != "replace" {
             return None;
@@ -508,11 +605,11 @@ impl ScrollStyles {
         if !is_chromium(&user_agent()) {
             return None;
         }
-        Some(("html, body { overflow-anchor: none !important; }".into(), true))
+        Some(DISABLE_SCROLL_ANCHORING.into())
     }
 
     fn install(event: &JsValue, nav_type: &str, dest: &str, reset_scroll: bool) -> Option<Self> {
-        let (css, after_paint) = Self::css(nav_type, dest, reset_scroll)?;
+        let css = Self::css(nav_type, dest, reset_scroll)?;
         let constructor = get(&window().into(), "CSSStyleSheet").dyn_into::<js_sys::Function>().ok()?;
         let sheet = Reflect::construct(&constructor, &js_sys::Array::new()).ok()?;
         call(&sheet, "replaceSync", &[&JsValue::from_str(&css)]).ok()?;
@@ -522,7 +619,7 @@ impl ScrollStyles {
         next.push(&sheet);
         Reflect::set(&document, &JsValue::from_str("adoptedStyleSheets"), &next).ok()?;
 
-        let styles = ScrollStyles { sheet, removed: Rc::new(Cell::new(false)), after_paint };
+        let styles = ScrollStyles { sheet, removed: Rc::new(Cell::new(false)), extra: css != DISABLE_SCROLL_ANCHORING };
         let signal = get(event, "signal");
         if get(&signal, "aborted").as_bool() == Some(true) {
             styles.remove();
@@ -546,7 +643,15 @@ impl ScrollStyles {
         let _ = Reflect::set(&document, &JsValue::from_str("adoptedStyleSheets"), &kept);
     }
 
-    /// Remove the styles once the navigation's transition settles. Called from the
+    /// Drop everything but the anchoring suppression once the navigation has finished.
+    fn settle(&self) {
+        if !self.removed.get() && self.extra {
+            let _ = call(&self.sheet, "replaceSync", &[&JsValue::from_str(DISABLE_SCROLL_ANCHORING)]);
+        }
+    }
+
+    /// Once the navigation's transition finishes, settle the styles and remove them before
+    /// the second frame after it; remove them at once if it fails. Called from the
     /// intercept handler, when `navigation.transition` exists.
     fn bind(self, transition: &JsValue) {
         let finished = get(transition, "finished");
@@ -556,9 +661,7 @@ impl ScrollStyles {
         }
         let failed = self.clone();
         let on_finished = Closure::once_into_js(move |_: JsValue| {
-            if !self.after_paint {
-                return self.remove();
-            }
+            self.settle();
             // The first callback runs before the first paint after the navigation; the
             // second removes the styles before the following frame.
             let outer = Closure::once_into_js(move |_: JsValue| {

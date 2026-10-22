@@ -158,6 +158,9 @@ const near = ({ expected, tolerance }) => Math.abs(window.scrollY - expected) < 
 const settled = () => window.navigation.transition === null
 const hydration = (page, sel, n) => page.locator(sel).getByRole('button', { name: `Hydration check: ${n}`, exact: true })
 
+/** window.scrollY two animation frames from now. */
+const afterTwoFrames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.scrollY))))
+
 // Scroll restoration: traversal restores scroll after reconciliation shrinks the document
 // (scroll-restoration.test.e2e.ts, first case).
 {
@@ -175,8 +178,10 @@ const hydration = (page, sel, n) => page.locator(sel).getByRole('button', { name
   check('scroll-restoration: detail page scrolls', detailY > 100, detailY)
   await page.goBack()
   await page.getByText('List row 48', { exact: true }).waitFor()
-  const restored = await until(page, near, { expected: listY, tolerance: 50 })
-  check('scroll-restoration: Back restores list scroll', restored, { listY, now: await page.evaluate(() => window.scrollY) })
+  const restored = await until(page, (a) => window.navigation.transition === null && Math.abs(window.scrollY - a.expected) < a.tolerance, { expected: listY, tolerance: 50 })
+  // The restored position must survive the frames in which the page shrinks to its own height.
+  const afterPaint = await page.evaluate(afterTwoFrames)
+  check('scroll-restoration: Back restores list scroll', restored && Math.abs(afterPaint - listY) < 50, { listY, afterPaint })
   check('scroll-restoration: hydration count still 1 after Back', await hydration(page, repro, 1).isVisible())
   check('scroll-restoration: no console errors', page.errors.length === 0, page.errors)
   await page.close()
@@ -207,7 +212,8 @@ const hydration = (page, sel, n) => page.locator(sel).getByRole('button', { name
   await page.goForward()
   await page.getByRole('heading', { name: 'Short detail view' }).waitFor()
   const fwd = await until(page, (a) => window.navigation.transition === null && Math.abs(window.scrollY - a.expected) < a.tolerance, { expected: detailY, tolerance: 50 })
-  check('scroll-restoration fwd: Forward restores detail scroll', fwd, { detailY, now: await page.evaluate(() => window.scrollY) })
+  const fwdAfterPaint = await page.evaluate(afterTwoFrames)
+  check('scroll-restoration fwd: Forward restores detail scroll', fwd && Math.abs(fwdAfterPaint - detailY) < 50, { detailY, fwdAfterPaint })
   check('scroll-restoration fwd: hydration count still 1', await hydration(page, repro, 1).isVisible())
   await page.close()
 }

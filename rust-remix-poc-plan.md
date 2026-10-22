@@ -306,7 +306,12 @@ Covered since phase 0b:
    after a reset, Safari traversals read their state from `navigation.entries()`, frame
    redirects keep `resetFocus` and the stored history state, legacy boolean resets in
    history state are honored, and without `NavigationPrecommitController` a same-location
-   POST is replayed as a replace navigation into the frame chosen first. About 60 of the 77
+   POST is replayed as a replace navigation into the frame chosen first. Upstream's
+   2026-10-20 scroll fixes are ported: on iOS Safari, restorations of the previous position
+   (or of a bottom the new page has had) are undone after the reset until 500 ms after the
+   navigation finishes, the user interacts, or another navigation starts (9 cases in
+   `browser_navigation.rs`), and a traversal keeps scroll anchoring off until the second
+   frame after it finishes, dropping only its `min-height` when it finishes. About 60 of the 77
    `navigation.test.ts` cases are covered by the 57 tests in `browser_navigation.rs`
    (some tests combine cases); the rest stub a missing Navigation API or `sourceElement`,
    check internal call arguments, or redirect the top frame, which would replace the test
