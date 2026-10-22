@@ -31,6 +31,7 @@
 //! | `remix/html-template` | `rmx::html_template` | server |
 //! | `remix/tar-parser` | `rmx::tar_parser` | server |
 //! | Web Crypto helpers | `rmx::crypto` | server |
+//! | `remix/terminal` | `rmx::terminal` | server |
 //! | `remix/cli` (`remix new`, `routes`, `assets`, `test`, `version`) | `rmx::cli`, the `rmx` binary | native |
 //!
 //! Server modules exist when compiling for a native target; a browser (wasm32) build of the
