@@ -335,11 +335,17 @@ Covered since phase 0b:
    aborts when the client leaves before the response finished, and an aborted request skips
    the rest of the chain and answers 499 with `AbortError` where Remix rejects. The `remix new` starter (`reference/remix/template`)
    is ported as `examples/template` with its controller test and a browser e2e.
-   The route helper tests (`form`, `resource`, `resources`, method helpers) are ported in
-   `crates/router/tests/route_helpers.rs`; `form_with(pattern, Method)` is Remix's
-   `formMethod` option. Route helper options that change a map's shape (`only`, `exclude`,
-   `names`) become a struct you declare with `#[derive(RouteMap)]` (the bookstore's
-   `ReadOnly` and `Users`).
+   `request-context.test.ts` (16 of 25; the rest are JavaScript object and type cases),
+   `middleware.test.ts` and `route-map.test.ts` are ported one per case: `Context::headers_mut`
+   gives the context its own copy of the request headers, like Remix's `context.headers`.
+   The route helper tests (`method`, `form`, `resource`, `resources`: 29 of 31 cases plus
+   the type assertions on composed routes) are ported one per case in
+   `crates/router/tests/route_helpers.rs`, with `options` and `Prefix::head`/`options`
+   added; `form_with(pattern, Method)` is Remix's `formMethod` option. Route helper options
+   that change a map's shape (`only`, `exclude`, `names`) become a struct you declare with
+   `#[derive(RouteMap)]` and fill from the helper, and the tests check the declared map's
+   names, methods, paths and order; the two "both only and exclude" error cases have no
+   struct equivalent and are not ported.
    `remix/response`'s `redirect.test.ts` and the init and stream cases of `html.test.ts` are
    ported in `crates/fetch/src/response.rs`: one `ResponseInit` (status, headers) is shared by
    `redirect_with`, `html_with`, `ctx.render_with` and the SPA `render_with`, and a `Location`

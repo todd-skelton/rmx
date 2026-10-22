@@ -195,7 +195,9 @@ crates:
    takes any `MultiMatcher`, as Remix's `matcher` option does; a panicking handler or middleware
    propagates out of `router.fetch`, and middleware catches it with `catch_panic(next.run(ctx))`;
    `router.test.ts` ported one per case, 64 tests plus 6 compile-fail doctests for the
-   controller shapes Remix checks at runtime), `rmx-route-pattern` (Remix's
+   controller shapes Remix checks at runtime, and the request-context, middleware, route-map
+   and route helper tests likewise; `options` and `Prefix::head`/`options` build HEAD and
+   OPTIONS routes), `rmx-route-pattern` (Remix's
    `route-pattern`: parser with its `ParseError` types, matcher with specificity ranking and
    resource limits, joins, and hrefs with `base_url`-relative output; Remix's tests ported),
    `rmx-fetch` (Request, Response, FormData with Remix's `parseFormData`: URL-encoded and

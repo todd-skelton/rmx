@@ -153,6 +153,10 @@ pub fn head(pattern: &str) -> Route {
     Route::new(Some(Method::HEAD), pattern)
 }
 
+pub fn options(pattern: &str) -> Route {
+    Route::new(Some(Method::OPTIONS), pattern)
+}
+
 /// A base pattern that nested routes are joined onto, like `route('frames', {...})`.
 #[derive(Clone, Debug)]
 pub struct Prefix(RoutePattern);
@@ -182,6 +186,12 @@ impl Prefix {
     }
     pub fn delete(&self, pattern: &str) -> Route {
         self.route(Some(Method::DELETE), pattern)
+    }
+    pub fn head(&self, pattern: &str) -> Route {
+        self.route(Some(Method::HEAD), pattern)
+    }
+    pub fn options(&self, pattern: &str) -> Route {
+        self.route(Some(Method::OPTIONS), pattern)
     }
     pub fn prefix(&self, pattern: &str) -> Prefix {
         Prefix(self.0.join(&RoutePattern::parse(pattern).unwrap_or_else(|e| panic!("{e}"))))
