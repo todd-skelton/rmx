@@ -574,11 +574,20 @@ Remaining gaps:
    other failures go to `on_error` with Remix's error codes and become a 500; CSS
    `@import`s are checked for cycles, and `url()` transform requests keep their other query
    parameters and fragments; content hashes are Remix's (six characters of base64url
-   SHA-256); `preloads()` takes several roots of mixed kinds, shallowest first. 103 cases of
+   SHA-256); `preloads()` takes several roots of mixed kinds, shallowest first. 111 cases of
    `asset-server.test.ts` are ported (`crates/assets/tests/asset_server.rs`); the rest cover
    TypeScript and JSX compilation, source maps, import maps, package and bare imports, barrel
    files, module loaders, watch mode and HMR. One divergence: fingerprinted scripts import
    fingerprinted URLs directly instead of through an import map.
+   `FsFileCache` is Remix's `createFsFileCache`: an LRU of checksummed records in
+   `FsFileStorage` with entry, per-file and total byte limits, a `pending` marker that
+   discards records after an interrupted write, and an index rebuilt from write times on
+   restart; `MemoryFileStorage` and `FsFileStorage` also work as caches. All 24
+   `cache.test.ts` cases are ported (`tests/fs_file_cache.rs`, the default directory case in
+   its own binary and the overlapping read case as a unit test). `FileCache` methods return
+   `io::Result` and a failure reaches `on_error` as `EMIT_FAILED`; the default directory is
+   `target/.cache/rmx/assets` rather than `node_modules/.cache/remix/assets`. The assets demo
+   caches transformed SVGs this way, like Remix's.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
    a document still being parsed (`document.write` splitting a template). Cases that load

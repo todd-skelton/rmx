@@ -82,7 +82,8 @@ fn home_links_assets_through_the_asset_server() {
 
 #[test]
 fn modules_css_and_svgs_are_rewritten_and_transformed() {
-    let router = router(asset_server(&fixture(), false).unwrap());
+    let dir = fixture();
+    let router = router(asset_server(&dir, false).unwrap());
     let (parts, js) = get(&router, "/assets/app/actions/public/entry.js", &[]);
     assert_eq!(parts.headers[header::CONTENT_TYPE], "text/javascript; charset=utf-8");
     assert!(js.contains("from '/assets/app/actions/public/content.js'"), "{js}");
@@ -102,6 +103,13 @@ fn modules_css_and_svgs_are_rewritten_and_transformed() {
     assert!(svg.contains("fill=\"currentColor\""));
     let (_, purple) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor%3A%238B5CF6", &[]);
     assert!(purple.contains("fill=\"#8B5CF6\"") && !purple.contains("currentColor"), "{purple}");
+    // The recolored SVG is kept in the disk cache under the root.
+    let files = dir.join(rmx::assets::DEFAULT_CACHE_DIRECTORY).join("files");
+    let cached = std::fs::read_dir(&files).unwrap().flat_map(|d| std::fs::read_dir(d.unwrap().path()).unwrap()).any(|f| {
+        let path = f.unwrap().path();
+        path.extension().is_some_and(|e| e == "dat") && String::from_utf8_lossy(&std::fs::read(&path).unwrap()).ends_with(&purple)
+    });
+    assert!(cached, "a cache record holds the recolored SVG");
     // A transform that fails is a server error, reported through `on_error` (Remix's
     // `onError`); a malformed transform request is a 400.
     let (parts, _) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor%3Ablue", &[]);

@@ -1,9 +1,9 @@
 use std::path::Path;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use http::StatusCode;
 use rmx::{rsx, Component, Handle, Node};
-use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, FilesOptions, GlobalTransform, Param, TransformContext, Transformed};
+use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, FilesOptions, FsFileCache, FsFileCacheOptions, GlobalTransform, Param, TransformContext, Transformed, DEFAULT_CACHE_DIRECTORY};
 use rmx::fetch::{response, Response};
 use rmx::middleware::logger::logger;
 use rmx::render::Render;
@@ -40,8 +40,10 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| Routes { home: get("/"), 
 
 /// The demo's asset server. `fingerprint` is on in production: URLs carry content hashes
 /// and are cached forever; in development every request revalidates, so edits show up on
-/// the next refresh.
+/// the next refresh. Transformed SVGs are kept in a disk cache under the root
+/// (Remix's demo uses `createFsFileCache()` under its working directory).
 pub fn asset_server(root: &Path, fingerprint: bool) -> Result<AssetServer, AssetError> {
+    let cache = FsFileCache::new(FsFileCacheOptions { directory: root.join(DEFAULT_CACHE_DIRECTORY), ..Default::default() })?;
     AssetServer::new(AssetOptions {
         root_dir: root.to_path_buf(),
         base_path: ASSETS_BASE.into(),
@@ -57,6 +59,7 @@ pub fn asset_server(root: &Path, fingerprint: bool) -> Result<AssetServer, Asset
             })
             .extensions(&[".svg"])],
             transforms: vec![("recolor".into(), FileTransform::new(recolor).param(Param::Required).extensions(&[".svg"]))],
+            cache: Some(Arc::new(cache)),
             ..Default::default()
         }),
         ..Default::default()

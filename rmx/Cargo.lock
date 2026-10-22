@@ -1187,10 +1187,12 @@ dependencies = [
  "http",
  "rmx-crypto",
  "rmx-fetch",
+ "rmx-file-storage",
  "rmx-headers",
  "rmx-mime",
  "rmx-router",
  "rmx-url",
+ "serde_json",
 ]
 
 [[package]]

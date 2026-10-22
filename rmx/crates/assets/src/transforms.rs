@@ -124,10 +124,13 @@ impl GlobalTransform {
 }
 
 /// A cache for transformed file output (Remix's `FileCache`). Implementations own
-/// admission, eviction and persistence, and may drop entries at any time.
+/// admission, eviction and persistence, and may drop entries at any time. An error fails
+/// the request through [`AssetOptions::on_error`](crate::AssetOptions::on_error).
 pub trait FileCache: Send + Sync {
-    fn get(&self, key: &str) -> Option<File>;
-    fn put(&self, key: &str, file: File);
+    /// The cached file, keeping its bytes, name, type and `last_modified`; `None` on a miss.
+    fn get(&self, key: &str) -> std::io::Result<Option<File>>;
+    /// Store or replace a file. The cache may decline to store it.
+    fn put(&self, key: &str, file: File) -> std::io::Result<()>;
 }
 
 /// Options for file assets: files that are served as they are or through transforms,

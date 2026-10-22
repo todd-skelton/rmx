@@ -34,6 +34,7 @@
 //! }});
 //! ```
 
+mod cache;
 mod glob;
 mod inspect;
 pub mod paths;
@@ -52,6 +53,7 @@ use rmx_fetch::{Body, File, Response};
 use rmx_headers::IfNoneMatch;
 use rmx_router::Context;
 
+pub use cache::{FsFileCache, FsFileCacheOptions, DEFAULT_CACHE_DIRECTORY};
 pub use glob::glob_match;
 pub use inspect::{assets_command, assets_command_output, AssetAccess, AssetDetails, AssetKind, AssetStatus};
 pub use transforms::{FileCache, FileTransform, FilesOptions, GlobalTransform, Param, TransformContext, Transformed};
@@ -394,6 +396,12 @@ fn plain(status: StatusCode, message: &str) -> Response {
 }
 
 /// A file path for messages: absolute, `/`-separated.
+/// A [`FileCache`] failure. Remix passes the cache's own error to `onError`; here it is an
+/// `EmitFailed` error carrying that message.
+fn cache_error(e: std::io::Error) -> AssetError {
+    AssetError::new(AssetErrorCode::EmitFailed, format!("File cache failed: {e}"))
+}
+
 fn display(path: &Path) -> String {
     paths::normalize_windows_path(&paths::strip_verbatim(&path.to_string_lossy()))
 }
@@ -595,7 +603,7 @@ impl Inner {
             Built { snapshot, deps: Vec::new(), imports: Vec::new(), body: Arc::new(body), extension, hash }
         };
         if let (Some(cache), Some(key)) = (&self.files.cache, &key) {
-            if let Some(cached) = cache.get(key) {
+            if let Some(cached) = cache.get(key).map_err(cache_error)? {
                 return Ok(built(cached.bytes.to_vec(), extension_of(Path::new(&cached.name))));
             }
         }
@@ -606,7 +614,7 @@ impl Inner {
         if let (Some(cache), Some(key)) = (&self.files.cache, &key) {
             let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             let content_type = rmx_mime::detect_content_type(&extension).unwrap_or_else(|| "application/octet-stream".into());
-            cache.put(key, File::new(format!("{stem}{extension}"), content_type, body.clone()));
+            cache.put(key, File::new(format!("{stem}{extension}"), content_type, body.clone())).map_err(cache_error)?;
         }
         Ok(built(body, extension))
     }

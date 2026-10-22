@@ -147,12 +147,13 @@ const COLOR_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" color=\"#0EA5
 struct MemoryCache(Mutex<HashMap<String, File>>);
 
 impl FileCache for MemoryCache {
-    fn get(&self, key: &str) -> Option<File> {
-        self.0.lock().unwrap().get(key).cloned()
+    fn get(&self, key: &str) -> std::io::Result<Option<File>> {
+        Ok(self.0.lock().unwrap().get(key).cloned())
     }
 
-    fn put(&self, key: &str, file: File) {
+    fn put(&self, key: &str, file: File) -> std::io::Result<()> {
         self.0.lock().unwrap().insert(key.to_string(), file);
+        Ok(())
     }
 }
 
@@ -715,6 +716,238 @@ fn invalidates_transformed_file_cache_entries_when_source_files_change() {
     dir.write("app/content/value.txt", "world!\n");
     assert_eq!(get_ok(&s, &href).body, "WORLD!\n");
     assert_eq!(calls.load(Ordering::Relaxed), 2);
+}
+
+/// A server for `app/content/value.txt` with one request transform.
+fn txt_server(dir: &Dir, cache: Arc<dyn FileCache>, cache_key: Option<&str>, name: &str, transform: FileTransform) -> AssetServer {
+    server(with_files(dir, FilesOptions {
+        cache: Some(cache),
+        cache_key: cache_key.map(str::to_string),
+        transforms: vec![(name.into(), transform)],
+        ..files(&[".txt"])
+    }))
+}
+
+fn fs_cache(directory: PathBuf, max_entries: usize) -> Arc<dyn FileCache> {
+    Arc::new(FsFileCache::new(FsFileCacheOptions { directory, max_entries, ..Default::default() }).unwrap())
+}
+
+#[test]
+fn reuses_a_filesystem_cache_in_a_custom_directory_across_server_restarts() {
+    let dir = Dir::new();
+    let root = dir.0.join("custom-cached-assets");
+    std::fs::create_dir_all(root.join("app/content")).unwrap();
+    std::fs::write(root.join("app/content/value.txt"), "hello").unwrap();
+    let cache_dir = dir.0.join("custom-asset-cache");
+    let calls = Arc::new(AtomicUsize::new(0));
+    for _ in 0..2 {
+        let s = server(AssetOptions {
+            root_dir: root.clone(),
+            allow_files: vec!["app/**".into()],
+            files: Some(FilesOptions {
+                cache: Some(fs_cache(cache_dir.clone(), 1024)),
+                cache_key: Some("custom-build".into()),
+                transforms: vec![("upper".into(), counting(&calls))],
+                ..files(&[".txt"])
+            }),
+            ..Default::default()
+        });
+        assert_eq!(get_ok(&s, "/assets/app/content/value.txt?transform=upper").body, "HELLO");
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    assert!(cache_dir.exists());
+    assert!(!root.join("target").exists());
+}
+
+#[test]
+fn accepts_file_storage_backends_as_file_cache_implementations() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let caches: Vec<Arc<dyn FileCache>> = vec![
+        Arc::new(rmx_file_storage::MemoryFileStorage::new()),
+        Arc::new(rmx_file_storage::FsFileStorage::new(dir.0.join("custom-file-storage-cache")).unwrap()),
+    ];
+    for cache in caches {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let s = txt_server(&dir, cache, None, "upper", counting(&calls));
+        for _ in 0..2 {
+            assert_eq!(get_ok(&s, "/assets/app/content/value.txt?transform=upper").body, "HELLO");
+        }
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+}
+
+#[test]
+fn lets_custom_caches_retain_files_larger_than_the_filesystem_cache_limit() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let cache = Arc::new(MemoryCache::default());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let expand = FileTransform::new(move |_, _| {
+        seen.fetch_add(1, Ordering::Relaxed);
+        Ok(Transformed::with_extension(vec![b'A'; 4 * 1024 * 1024 + 1], ".svg"))
+    });
+    let s = txt_server(&dir, cache.clone(), None, "expand", expand);
+    for _ in 0..2 {
+        let res = get_ok(&s, "/assets/app/content/value.txt?transform=expand");
+        assert!(header(&res, header::CONTENT_TYPE).contains("image/svg+xml"));
+        assert_eq!(res.body.len(), 4 * 1024 * 1024 + 1);
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    let files = cache.0.lock().unwrap();
+    assert_eq!(files.len(), 1);
+    let file = files.values().next().unwrap();
+    assert_eq!(file.name, "value.svg");
+    assert!(file.content_type.contains("image/svg+xml"));
+    assert_eq!(file.size(), 4 * 1024 * 1024 + 1);
+}
+
+#[test]
+fn consults_custom_cache_eviction_before_answering_conditional_requests() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let cache = Arc::new(MemoryCache::default());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let append = FileTransform::new(move |_, _| Ok(format!("output-{}", seen.fetch_add(1, Ordering::Relaxed) + 1).into()));
+    let s = txt_server(&dir, cache.clone(), None, "append", append);
+    let href = "/assets/app/content/value.txt?transform=append";
+    let first = get_ok(&s, href);
+    let etag = header(&first, header::ETAG).to_string();
+    assert!(!etag.is_empty());
+    cache.0.lock().unwrap().clear();
+    let second = request(&s, Method::GET, href, &[("if-none-match", &etag)]).unwrap();
+    assert_eq!(second.status, 200);
+    assert_eq!(second.body, "output-2");
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+}
+
+/// `append` adds its param to the file text and counts its calls.
+fn appending(calls: &Arc<AtomicUsize>) -> FileTransform {
+    let calls = calls.clone();
+    FileTransform::new(move |bytes, c| {
+        calls.fetch_add(1, Ordering::Relaxed);
+        Ok(format!("{}{}", String::from_utf8_lossy(&bytes), c.param.unwrap()).into())
+    })
+    .param(Param::Required)
+}
+
+#[test]
+fn recomputes_evicted_filesystem_cache_entries_for_conditional_requests() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let s = txt_server(&dir, fs_cache(dir.0.join("conditional-cache"), 3), None, "append", appending(&calls));
+    let mut etags = Vec::new();
+    for index in 0..4 {
+        let res = get_ok(&s, &format!("/assets/app/content/value.txt?transform=append:{index}"));
+        assert_eq!(res.body, format!("hello{index}"));
+        etags.push(header(&res, header::ETAG).to_string());
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 4);
+    for (index, etag) in etags.iter().enumerate() {
+        let res = request(&s, Method::GET, &format!("/assets/app/content/value.txt?transform=append:{index}"), &[("if-none-match", etag)]).unwrap();
+        assert_eq!(res.status, 304);
+        assert_eq!(header(&res, header::ETAG), etag);
+    }
+    assert!(calls.load(Ordering::Relaxed) > 4);
+}
+
+#[test]
+fn bounds_the_filesystem_cache_with_configured_limits_across_server_restarts_and_namespaces() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let calls = Arc::new(AtomicUsize::new(0));
+    for round in 0..2 {
+        let s = txt_server(&dir, fs_cache(dir.0.join("cache"), 5), None, "append", appending(&calls));
+        for index in 0..6 {
+            let param = format!("{round}:{index}");
+            assert_eq!(get_ok(&s, &format!("/assets/app/content/value.txt?transform=append:{param}")).body, format!("hello{param}"));
+        }
+        let bodies = walk(&dir.0.join("cache")).into_iter().filter(|p| p.to_string_lossy().ends_with(".dat")).count();
+        assert_eq!(bodies, 5);
+    }
+}
+
+fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            out.extend(walk(&path));
+        }
+        out.push(path);
+    }
+    out
+}
+
+#[test]
+fn serves_oversized_outputs_without_admitting_them_to_the_filesystem_cache() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let expand = FileTransform::new(move |_, _| {
+        seen.fetch_add(1, Ordering::Relaxed);
+        Ok(vec![b'A'; 4 * 1024 * 1024 + 1].into())
+    });
+    let s = txt_server(&dir, fs_cache(dir.0.join("cache"), 1024), None, "expand", expand);
+    for _ in 0..2 {
+        let res = get_ok(&s, "/assets/app/content/value.txt?transform=expand");
+        assert_eq!(res.status, 200);
+        assert_eq!(res.body.len(), 4 * 1024 * 1024 + 1);
+        assert!(res.body.bytes().all(|b| b == b'A'));
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn reuses_the_filesystem_cache_with_a_stable_namespace_and_isolates_new_namespaces() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let calls = Arc::new(AtomicUsize::new(0));
+    for key in ["default-build-a", "default-build-a", "default-build-b"] {
+        let seen = calls.clone();
+        let append = FileTransform::new(move |bytes, _| {
+            seen.fetch_add(1, Ordering::Relaxed);
+            Ok(bytes.into())
+        });
+        let s = txt_server(&dir, fs_cache(dir.0.join("cache"), 1024), Some(key), "append", append);
+        assert_eq!(get_ok(&s, "/assets/app/content/value.txt?transform=append").body, "hello");
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+}
+
+/// A cache whose reads and writes fail.
+struct BrokenCache;
+
+impl FileCache for BrokenCache {
+    fn get(&self, _: &str) -> std::io::Result<Option<File>> {
+        Err(std::io::Error::other("disk on fire"))
+    }
+
+    fn put(&self, _: &str, _: File) -> std::io::Result<()> {
+        Err(std::io::Error::other("disk on fire"))
+    }
+}
+
+#[test]
+fn reports_file_cache_failures_through_on_error() {
+    let dir = Dir::new();
+    dir.write("app/content/value.txt", "hello");
+    let errors = Errors::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let s = server(AssetOptions { on_error: errors.handler(), ..txt_options(&dir, Arc::new(BrokenCache), counting(&calls)) });
+    let res = get_ok(&s, "/assets/app/content/value.txt?transform=upper");
+    assert_eq!(res.status, 500);
+    assert_eq!(errors.count(), 1);
+    assert_eq!(errors.last().code, AssetErrorCode::EmitFailed);
+    assert!(errors.last().message.contains("disk on fire"), "{}", errors.last().message);
+}
+
+fn txt_options(dir: &Dir, cache: Arc<dyn FileCache>, transform: FileTransform) -> AssetOptions {
+    with_files(dir, FilesOptions { cache: Some(cache), transforms: vec![("upper".into(), transform)], ..files(&[".txt"]) })
 }
 
 // CSS
