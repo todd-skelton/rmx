@@ -319,6 +319,14 @@ impl IntoNode for () {
     }
 }
 
+/// Booleans render nothing, like `true` and `false` children in Remix (so `{cond && node}`
+/// style values can be children).
+impl IntoNode for bool {
+    fn into_node(self) -> Node {
+        Node::Empty
+    }
+}
+
 impl<T: IntoNode> IntoNode for Option<T> {
     fn into_node(self) -> Node {
         self.map_or(Node::Empty, IntoNode::into_node)

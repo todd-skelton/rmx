@@ -1,4 +1,5 @@
-//! Ports of Remix's `on-mixin.test.tsx`: listeners live on their host element. Run with
+//! Ports of Remix's `on-mixin.test.tsx` and `vdom.events.test.tsx` (attach, update across
+//! renders, clean up on removal): listeners live on their host element. Run with
 //! `pwsh ./test-browser.ps1 -Test browser_on_mixin`.
 #![cfg(target_arch = "wasm32")]
 

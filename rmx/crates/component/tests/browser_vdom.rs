@@ -1,5 +1,5 @@
-//! Ports of Remix's `vdom.tasks`, `vdom.scheduler`, `vdom.signals` and `vdom.connect`
-//! tests. Run with `pwsh ./test-browser.ps1 -Test browser_vdom`.
+//! Ports of Remix's `vdom.tasks`, `vdom.scheduler`, `vdom.signals`, `vdom.connect` and
+//! `vdom.context` tests. Run with `pwsh ./test-browser.ps1 -Test browser_vdom`.
 #![cfg(target_arch = "wasm32")]
 
 extern crate rmx_component as rmx;
