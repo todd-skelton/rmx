@@ -307,10 +307,14 @@ Covered since phase 0b:
    redirects keep `resetFocus` and the stored history state, legacy boolean resets in
    history state are honored, and without `NavigationPrecommitController` a same-location
    POST is replayed as a replace navigation into the frame chosen first. About 60 of the 77
-   `navigation.test.ts` cases are covered by the 55 tests in `browser_navigation.rs`
+   `navigation.test.ts` cases are covered by the 57 tests in `browser_navigation.rs`
    (some tests combine cases); the rest stub a missing Navigation API or `sourceElement`,
    check internal call arguments, or redirect the top frame, which would replace the test
-   page (the demo e2e scripts cover top frame redirects).
+   page (the demo e2e scripts cover top frame redirects). The two `frame.test.ts` reload
+   abort cases run there as navigations stopped with `window.stop()`: the resolver's signal
+   aborts and an answer it gives after the abort is not applied, and a streamed response
+   is cancelled. The top frame attribute preservation case runs in the frames demo e2e
+   (its document uses `data-rmx-preserve-attrs="class data-theme"` like Remix's docs).
    `diff-dom.test.tsx`: 41 tests in `browser_diff_dom.rs`, plus the live-range focus case
    in `browser_frame_reloads.rs`, cover the 43 cases that apply (the pending marker case is
    the resolved child frame case in `browser_frame_reloads.rs`). Live client

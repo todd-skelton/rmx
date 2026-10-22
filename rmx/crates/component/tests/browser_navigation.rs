@@ -22,16 +22,23 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
+type Resolver = Box<dyn FnOnce(FrameRequest) -> rmx::ResolveFuture>;
+
 thread_local! {
     static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
     static GUARD: RefCell<Option<JsValue>> = const { RefCell::new(None) };
     static REQUESTS: RefCell<Vec<FrameRequest>> = const { RefCell::new(Vec::new()) };
     /// When set, the next resolve waits for this promise.
     static HOLD: RefCell<Option<js_sys::Promise>> = const { RefCell::new(None) };
+    /// When set, the next request is resolved by this function instead.
+    static RESOLVE_NEXT: RefCell<Option<Resolver>> = const { RefCell::new(None) };
 }
 
 fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
-    REQUESTS.with(|r| r.borrow_mut().push(request));
+    REQUESTS.with(|r| r.borrow_mut().push(request.clone()));
+    if let Some(next) = RESOLVE_NEXT.with(|n| n.borrow_mut().take()) {
+        return next(request);
+    }
     let hold = HOLD.with(|h| h.borrow_mut().take());
     Box::pin(async move {
         if let Some(hold) = hold {
@@ -685,6 +692,74 @@ async fn finishes_loading_the_destination_when_a_hash_navigation_interrupts_its_
     settle().await;
     assert_eq!(decisions(), [true, true, false], "later hash navigations are left to the browser");
     assert_eq!(requests().len(), 2);
+}
+
+/// Start a navigation that loads the `details` frame, wait until its request reached the
+/// resolver, then abort the navigation with `window.stop()`.
+async fn navigate_then_stop(case: &str) -> FrameRequest {
+    navigate(&page_url(case), NavigateOptions { target: Some("details".into()), ..Default::default() });
+    for _ in 0..20 {
+        if !requests().is_empty() {
+            break;
+        }
+        tick().await;
+    }
+    assert_eq!(requests().len(), 1, "the frame load started");
+    window().stop().unwrap();
+    settle().await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    requests().remove(0)
+}
+
+#[wasm_bindgen_test]
+async fn aborts_the_active_resolver_when_the_navigation_is_aborted() {
+    let page = Page::new().await;
+    // Like Remix's case, the resolver answers only once its signal aborts; an aborted load
+    // must not apply that answer.
+    RESOLVE_NEXT.with(|n| {
+        *n.borrow_mut() = Some(Box::new(|request: FrameRequest| {
+            let signal = request.signal.clone();
+            let aborted = js_sys::Promise::new(&mut |resolve, _| signal.on_abort(move || drop(resolve.call0(&JsValue::NULL))));
+            Box::pin(async move {
+                let _ = JsFuture::from(aborted).await;
+                Ok(FrameResponse { content: FrameContent::Html(r#"<p id="aborted">Aborted</p>"#.into()), url: None })
+            })
+        }))
+    });
+    let request = navigate_then_stop("abort-resolver").await;
+    assert!(request.signal.aborted(), "the resolver's signal aborts with the navigation");
+    assert!(page.el.query_selector("#aborted").unwrap().is_none(), "{}", page.el.inner_html());
+    assert!(page.el.query_selector("#loaded").unwrap().is_some(), "{}", page.el.inner_html());
+}
+
+#[wasm_bindgen_test]
+async fn stops_reading_the_active_response_stream_when_the_navigation_is_aborted() {
+    let page = Page::new().await;
+    let source = js("const log = { pulls: 0, cancelled: false };
+        log.stream = new ReadableStream({ pull() { log.pulls++; return new Promise(() => {}) }, cancel() { log.cancelled = true } });
+        return log;");
+    let stream: web_sys::ReadableStream = get(&source, "stream").unchecked_into();
+    RESOLVE_NEXT.with(|n| {
+        *n.borrow_mut() = Some(Box::new(move |_| Box::pin(async move { Ok(FrameResponse { content: FrameContent::Stream(stream), url: None }) })))
+    });
+    navigate(&page_url("abort-stream"), NavigateOptions { target: Some("details".into()), ..Default::default() });
+    for _ in 0..20 {
+        if get(&source, "pulls").as_f64().unwrap_or(0.0) > 0.0 {
+            break;
+        }
+        tick().await;
+    }
+    assert!(get(&source, "pulls").as_f64().unwrap_or(0.0) > 0.0, "the stream is being read");
+    window().stop().unwrap();
+    settle().await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    assert!(requests()[0].signal.aborted(), "the load's signal aborts with the navigation");
+    assert_eq!(get(&source, "cancelled"), JsValue::TRUE, "the stream is cancelled");
+    assert!(page.el.query_selector("#loaded").unwrap().is_some(), "{}", page.el.inner_html());
 }
 
 /// Run a JavaScript function body and return its value.

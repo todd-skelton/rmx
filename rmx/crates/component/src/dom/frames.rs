@@ -666,7 +666,8 @@ fn cancel_quietly(reader: &JsValue, pending_read: Option<&js_sys::Promise>) {
 }
 
 /// Run `fut` until it finishes or `signal` aborts. On abort the future is dropped, which
-/// cancels whatever it was waiting on.
+/// cancels whatever it was waiting on. A result that arrives once the signal has aborted
+/// (a resolver answering its own abort, say) is dropped too.
 async fn until_aborted<T>(fut: impl std::future::Future<Output = T>, signal: &web_sys::AbortSignal) -> Option<T> {
     use std::future::Future;
     use std::task::Poll;
@@ -681,6 +682,9 @@ async fn until_aborted<T>(fut: impl std::future::Future<Output = T>, signal: &we
     let mut aborted = JsFuture::from(aborted);
     let mut fut = std::pin::pin!(fut);
     std::future::poll_fn(|cx| {
+        if signal.aborted() {
+            return Poll::Ready(None);
+        }
         if let Poll::Ready(v) = fut.as_mut().poll(cx) {
             return Poll::Ready(Some(v));
         }
