@@ -63,6 +63,13 @@ impl Route {
         self.pattern.href(params)
     }
 
+    /// Build a link with options (Remix's `route.href(params, { baseURL, searchParams })`):
+    /// search params first, and a path-relative href when the target shares `base_url`'s
+    /// origin.
+    pub fn href_with(&self, params: impl HrefParams, options: &rmx_route_pattern::HrefOptions) -> String {
+        self.pattern.href_with(params, options).unwrap_or_else(|e| panic!("href for {}: {e}", self.pattern))
+    }
+
     /// Build a link with extra search params.
     pub fn href_with_search(&self, params: impl HrefParams, search: &SearchParams) -> String {
         self.pattern

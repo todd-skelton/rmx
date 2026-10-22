@@ -85,7 +85,7 @@ fn sealed_values_can_be_read_but_not_replaced() {
     struct Other;
 
     let sealing = |ctx: &mut Context| ctx.set_sealed(Owner("mw"), "Owner is sealed");
-    let mut ctx = Context::new(req("GET", "https://x/"), Router::new());
+    let mut ctx = Context::new(req("GET", "https://x/"));
     sealing(&mut ctx);
     assert_eq!(ctx.get::<Owner>(), Some(&Owner("mw")));
     ctx.set(Other);

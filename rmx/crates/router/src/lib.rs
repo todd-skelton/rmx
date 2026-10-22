@@ -76,6 +76,9 @@ impl<T> MaybeSync for T {}
 /// Everything a handler or middleware gets for one request.
 pub struct Context {
     request: Request,
+    /// The context's own copy of the request headers, made on the first
+    /// [`Context::headers_mut`] or set with [`Context::set_headers`].
+    headers: Option<http::HeaderMap>,
     original_method: Method,
     url: Url,
     params: Params,
@@ -86,13 +89,19 @@ pub struct Context {
 }
 
 impl Context {
-    fn new(request: Request, router: Router) -> Context {
+    /// A context for `request` outside a router (Remix's `new RequestContext(request)`), for
+    /// calling middleware and handlers directly. [`Context::router`] is then an empty router.
+    pub fn new(request: Request) -> Context {
+        Context::with_router(request, Router::new())
+    }
+
+    fn with_router(request: Request, router: Router) -> Context {
         let (parts, body) = request.into_parts();
         let url = request_url(&parts);
         let original_method = parts.method.clone();
         let request = Request::from_parts(parts, body);
         let signal = request.signal();
-        Context { request, original_method, url, params: Params::default(), router, signal, scope: None }
+        Context { request, headers: None, original_method, url, params: Params::default(), router, signal, scope: None }
     }
 
     /// The request's abort signal (`request.signal`). It aborts when the client goes away
@@ -133,12 +142,28 @@ impl Context {
         &self.original_method
     }
 
+    /// The request headers as this context sees them: the request's, until middleware
+    /// changes them with [`Context::headers_mut`] or [`Context::set_headers`].
     pub fn headers(&self) -> &http::HeaderMap {
-        self.request.headers()
+        self.headers.as_ref().unwrap_or_else(|| self.request.headers())
+    }
+
+    /// The headers for later middleware and handlers to read, changeable without touching the
+    /// request (Remix's `context.headers`, a copy of `request.headers` made when first used).
+    pub fn headers_mut(&mut self) -> HeadersMut<'_> {
+        let Context { request, headers, scope, .. } = self;
+        let headers = headers.get_or_insert_with(|| request.headers().clone());
+        HeadersMut { headers, scope }
+    }
+
+    /// Replace the headers this context sees (`context.headers = headers`).
+    pub fn set_headers(&mut self, headers: http::HeaderMap) {
+        async_context::update(&self.scope, |s| s.headers = headers.clone());
+        self.headers = Some(headers);
     }
 
     pub fn header(&self, name: &str) -> Option<&str> {
-        self.request.headers().get(name).and_then(|v| v.to_str().ok())
+        self.headers().get(name).and_then(|v| v.to_str().ok())
     }
 
     /// The absolute request URL.
@@ -160,9 +185,16 @@ impl Context {
         self.params.get(name)
     }
 
-    /// Read a request-scoped value set by middleware.
+    /// Read a request-scoped value set by middleware. A value's type is its key; use a
+    /// newtype for distinct values of one type, and `.cloned().unwrap_or_default()` (or
+    /// `unwrap_or`) where Remix gives a context key a default value.
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
         self.request.extensions().get::<T>()
+    }
+
+    /// Whether a value of type `T` was set (Remix's `context.has(key)`).
+    pub fn has<T: Send + Sync + 'static>(&self) -> bool {
+        self.get::<T>().is_some()
     }
 
     /// # Panics
@@ -204,6 +236,34 @@ impl Context {
     /// The router handling this request, for subrequests (`ctx.router().fetch(req)`).
     pub fn router(&self) -> &Router {
         &self.router
+    }
+}
+
+/// The headers returned by [`Context::headers_mut`]. Changes reach [`async_context`] when
+/// it is dropped.
+pub struct HeadersMut<'a> {
+    headers: &'a mut http::HeaderMap,
+    scope: &'a Option<async_context::Scope>,
+}
+
+impl std::ops::Deref for HeadersMut<'_> {
+    type Target = http::HeaderMap;
+
+    fn deref(&self) -> &http::HeaderMap {
+        self.headers
+    }
+}
+
+impl std::ops::DerefMut for HeadersMut<'_> {
+    fn deref_mut(&mut self) -> &mut http::HeaderMap {
+        self.headers
+    }
+}
+
+impl Drop for HeadersMut<'_> {
+    fn drop(&mut self) {
+        let headers = &*self.headers;
+        async_context::update(self.scope, |s| s.headers = headers.clone());
     }
 }
 
@@ -386,6 +446,13 @@ enum Endpoint {
 ///     let _ = next.run(ctx).await;
 ///     next.run(todo!()).await
 /// }
+/// ```
+///
+/// ```compile_fail,E0277
+/// use rmx_router::{action, Context, Next};
+/// // error: the middleware's future yields `()`, not a `Response` (Remix rejects with
+/// // "Middleware must return a Response or call next()").
+/// let _ = action(|_: Context| async { "OK" }).with(|_: Context, _: Next| async {});
 /// ```
 pub struct Next {
     chain: MiddlewareList,
@@ -720,7 +787,7 @@ impl Router {
 
     /// Handle a request.
     pub fn fetch(&self, request: Request) -> BoxFuture<Response> {
-        let ctx = Context::new(request, self.clone());
+        let ctx = Context::with_router(request, self.clone());
         Next { chain: self.inner.chain.clone(), index: 0, endpoint: Arc::new(Endpoint::Dispatch) }.run(ctx)
     }
 
