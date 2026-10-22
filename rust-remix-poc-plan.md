@@ -378,9 +378,14 @@ Covered since phase 0b:
    `src/tabs.rs`, `accordion.test.tsx` (10) is `browser_accordion.rs`, and `popover.test.tsx` (10) is
    `browser_popover.rs` with Remix's harness, layout mock and popover method spies.
    `select.test.tsx` (11; its two `it.todo` cases have no body) is `browser_select.rs`, waiting
-   in real time where Remix advances fake timers. The other component suites (listbox, menu,
-   combobox; 67 cases) are covered by the ui gallery's e2e checks rather than case by case,
-   and are being ported to `crates/ui/tests/browser_*.rs`.
+   in real time where Remix advances fake timers. `listbox.test.tsx` (19) is
+   `browser_listbox.rs`, plus an rmx case for the ref's `select` skipping disabled options
+   and re-entry while settling. Porting it found that an explicit `None` prop
+   (`AttrValue::Absent`) blocked mixin defaults (`tabindex={None}` left the list without
+   `tabindex="-1"`); `Element::attr` and `attrs(..)` now treat `Absent` as unset, like
+   Remix's `undefined`. The menu and combobox suites (48 cases) are covered by the ui
+   gallery's e2e checks rather than case by case, and are being ported to
+   `crates/ui/tests/browser_*.rs`.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,

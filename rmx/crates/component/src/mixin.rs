@@ -163,9 +163,13 @@ impl Mixin {
             }
             MixinKind::Event(name, handler) => el.events.push((name, handler)),
             MixinKind::Attrs(defaults) => {
+                // Like Remix's `props[key] !== undefined`: an explicit `None` (`Absent`)
+                // still takes the default.
                 for (name, value) in defaults {
-                    if !el.attrs.iter().any(|(n, _)| *n == name) {
-                        el.attrs.push((name, value));
+                    match el.attrs.iter_mut().find(|(n, _)| *n == name) {
+                        Some((_, v)) if matches!(v, AttrValue::Absent) => *v = value,
+                        Some(_) => {}
+                        None => el.attrs.push((name, value)),
                     }
                 }
             }
@@ -186,8 +190,10 @@ impl Element {
         }
     }
 
+    /// The attribute's value, or `None` when it is unset or explicitly omitted
+    /// (`AttrValue::Absent`, Remix's `undefined`).
     pub fn attr(&self, name: &str) -> Option<&AttrValue> {
-        self.attrs.iter().find(|(n, _)| *n == name).map(|(_, v)| v)
+        self.attrs.iter().find(|(n, _)| *n == name).map(|(_, v)| v).filter(|v| !matches!(v, AttrValue::Absent))
     }
 
     /// Add an event handler. For use in custom mixins.
@@ -514,6 +520,32 @@ mod tests {
         assert_eq!(el.attr("class"), Some(&AttrValue::Str(format!("lead {}", ra.class).into())));
         assert_eq!(el.attr("title"), Some(&AttrValue::Str("t".into())));
         assert_eq!(rule_css(&ra), format!("@layer rmx.{0} {{ .{0} {{ color: red; padding: 4px }} }}", ra.class));
+    }
+
+    // attrs-mixin: a prop left `undefined` (`None`) still takes the default; an explicit
+    // value keeps its own.
+    #[test]
+    fn attrs_defaults_replace_absent_values() {
+        let node = Node::element_with_mixins(
+            "div",
+            None,
+            vec![("tabindex", AttrValue::Absent), ("role", AttrValue::Str("grid".into()))],
+            vec![],
+            vec![],
+            vec![attrs(vec![("tabindex", AttrValue::Str("-1".into())), ("role", AttrValue::Str("listbox".into()))])],
+        );
+        let Node::Element(el) = node else { panic!() };
+        assert_eq!(el.attr("tabindex"), Some(&AttrValue::Str("-1".into())));
+        assert_eq!(el.attr("role"), Some(&AttrValue::Str("grid".into())));
+        assert_eq!(el.attrs.iter().filter(|(n, _)| *n == "tabindex").count(), 1);
+    }
+
+    #[test]
+    fn attr_treats_absent_as_unset() {
+        let Node::Element(el) = Node::element_with_mixins("div", None, vec![("title", AttrValue::Absent)], vec![], vec![], vec![]) else {
+            panic!()
+        };
+        assert_eq!(el.attr("title"), None);
     }
 
     fn style_rule(mixin: &Mixin) -> Rc<StyleRule> {
