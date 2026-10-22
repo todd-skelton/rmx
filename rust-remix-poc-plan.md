@@ -770,6 +770,22 @@ Remaining gaps:
    one `spa-response.test.ts` case (`spaResponse.create` throws outside a browser) does
    not apply: `rmx_spa::spa_response` only stores the node beside a response, and the
    native tests build routes with it.
+   Test file audit (2026-10-22): of 289 upstream test files, 86 are not cited by name in rmx.
+   Those that apply are ported under other names: the nine `hydration.*` files in
+   `browser_hydration.rs`, the vdom tasks, scheduler, signals, connect and context files in
+   `browser_vdom.rs`, the elements, fragments and components cases in `browser_elements.rs`,
+   terminal `ansi`, `env` and `styles` in `terminal/src/tests.rs`, `raw-headers` and
+   `header-names` in `headers/tests/raw_headers.rs`, `param-values` (10 of 10) in
+   `param_values.rs`, the five mime files assertion for assertion, `href.test.ts` (94 of
+   94), `spa.test.tsx` (the bodyless response with status, headers and node in
+   `status_and_headers_carry_through`, the redirect target in
+   `routes_render_nodes_and_follow_redirects`, and the rejection case), the CLI `routes`
+   command in `router/tests/route_listing.rs` and `assets` in `assets/src/tests.rs`.
+   `super_headers.rs` ports 12 of 36: the rest test JavaScript object behavior. The rest
+   are out of scope: data-table and the memcache, redis and S3 storage backends (data
+   access), `node-hmr`, `component-hmr`, `multiple-import-maps-polyfill`, `test`,
+   `assert`, the asset transform pipeline, the CLI `db` and `test` commands, and the
+   route-pattern `types/params` type tests.
 5. `frame.test.tsx`'s streamed template parsing cases (a template parsed in two parts, with
    the observer watching or hydration starting mid-template, a sibling appended between the
    parts, and a template without its end marker waiting for parsing to finish) run in

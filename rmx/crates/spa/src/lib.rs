@@ -406,6 +406,7 @@ mod tests {
         );
         assert_eq!(res.status(), 404);
         assert_eq!(res.headers()[header::CACHE_CONTROL], "no-store");
+        assert!(res.body().is_empty_hint(), "an SPA response has no body");
         assert_eq!(take_node(&res).map(|n| rmx::render_to_string(&n)).as_deref(), Some("<p>Missing</p>"));
         assert!(take_node(&res).is_none(), "a node is taken once");
     }
