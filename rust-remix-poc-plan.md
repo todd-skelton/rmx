@@ -472,7 +472,9 @@ Covered since phase 0b:
    props that do not serialize fail the build (the `compile_fail` examples on
    `client_entry!`, checked against compiling controls); `isEntry` on non-functions has no
    counterpart, since only `Component` types carry the constant. `nested-client-entry.test.tsx`
-   is `browser_nested_entries.rs` (6 of 6). Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and
+   is `browser_nested_entries.rs` (6 of 6). `create-element.test.ts`'s mix normalization
+   (flattening, dropping falsy values) is `into_mixins_flattens_nesting_and_drops_none` in
+   `src/mixin.rs`. Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and the rest of
    `create-element.test.ts` (TypeScript types and JavaScript value validation that Rust's
    types enforce), `module-preloader` and `client-entry-boundary` (module ids; rmx ships one
    wasm bundle), `remix/assert` (Rust's `assert!`) and the `assets` module transform tests

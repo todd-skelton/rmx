@@ -548,6 +548,29 @@ mod tests {
         assert_eq!(el.attr("title"), None);
     }
 
+    // create-element.test.ts: normalizes mix to an array or undefined, and drops falsy mix
+    // values (here `None`) during normalization.
+    #[test]
+    fn into_mixins_flattens_nesting_and_drops_none() {
+        let d = || attrs(vec![("title", AttrValue::Str("t".into()))]);
+        assert_eq!(d().into_mixins().len(), 1);
+        assert_eq!([d()].into_mixins().len(), 1);
+        // Nesting of different depths goes through `Mixin::from(Vec<Mixin>)`.
+        let applied = |mixins: Vec<Mixin>| {
+            let Node::Element(el) = Node::element_with_mixins("div", None, vec![], vec![], vec![], mixins) else { panic!() };
+            el.attrs.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+        };
+        let a = || attrs(vec![("a", AttrValue::Bool(true))]);
+        let b = || attrs(vec![("b", AttrValue::Bool(true))]);
+        let nested: Vec<Vec<Mixin>> = vec![vec![a()], vec![Mixin::from(vec![Mixin::from(vec![b()])])]];
+        assert_eq!(applied(nested.into_mixins()), ["a", "b"]);
+        assert!(applied(Vec::<Mixin>::new().into_mixins()).is_empty());
+        assert!(Vec::<Mixin>::new().into_mixins().is_empty());
+        assert!(None::<Mixin>.into_mixins().is_empty());
+        assert_eq!(vec![Some(d()), None, Some(d())].into_mixins().len(), 2);
+        assert_eq!([Some(vec![None, Some(d())]), None].into_mixins().len(), 1);
+    }
+
     fn style_rule(mixin: &Mixin) -> Rc<StyleRule> {
         let MixinKind::Style(rule) = &mixin.0 else { panic!("not a style mixin") };
         rule.clone()
