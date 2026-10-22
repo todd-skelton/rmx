@@ -428,7 +428,12 @@ Covered since phase 0b:
    request aborted is not reported to `on_error` (`isRequestAbortError`); a response body
    that fails after headers were sent is reported as `ServeError::ResponseBody`. `rmx-url`
    now serializes IPv6 hosts as WHATWG URL does (`[2001:db8::1]`), so equivalent `Host` and
-   `:authority` values match.
+   `:authority` values match. `node-fetch-server/test`'s `createTestServer` is
+   `rmx::serve::test::create_test_server(router)`: a server on a free `127.0.0.1` port with
+   `base_url` and `close()` (dropping it closes it too). Remix's `remix/test` runner itself
+   (describe/it, mocks, fake timers, coverage, watch mode) is not ported: `cargo test` is the
+   runner, browser tests use the wasm-bindgen harness and Playwright scripts, and mocks and
+   fake timers are well served by existing crates.
    `remix/headers` tests are ported for accept, accept-encoding, accept-language, range,
    content-range, vary, if-match, if-none-match, if-range, cache-control and content-type
    (`crates/headers/tests/`). Porting changed behavior: `AcceptEncoding::accepts` always

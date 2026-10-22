@@ -680,5 +680,70 @@ pub async fn listen_with(addr: &str, router: Router, options: ServeOptions) -> s
     serve_with(listener, router, options).await
 }
 
+/// Servers for tests (Remix's `node-fetch-server/test`).
+pub mod test {
+    use super::*;
+
+    /// A server on a free loopback port (Remix's `TestServer`).
+    pub struct TestServer {
+        /// `http://127.0.0.1:<port>`.
+        pub base_url: String,
+        stop: Option<tokio::sync::oneshot::Sender<()>>,
+        accepting: Option<tokio::task::JoinHandle<()>>,
+    }
+
+    impl TestServer {
+        /// Stop accepting connections. Requests already being answered finish on their own.
+        pub async fn close(mut self) {
+            self.shutdown();
+            if let Some(accepting) = self.accepting.take() {
+                let _ = accepting.await;
+            }
+        }
+
+        fn shutdown(&mut self) {
+            if let Some(stop) = self.stop.take() {
+                let _ = stop.send(());
+            }
+        }
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            self.shutdown();
+        }
+    }
+
+    /// Serve `router` on `127.0.0.1` at a free port (Remix's `createTestServer(handler)`).
+    /// Dropping the server closes it too.
+    ///
+    /// ```no_run
+    /// # async fn run(router: rmx_router::Router) -> std::io::Result<()> {
+    /// let server = rmx_serve::test::create_test_server(router).await?;
+    /// let url = format!("{}/books", server.base_url);
+    /// // ... drive the app at `url` ...
+    /// server.close().await;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn create_test_server(router: Router) -> std::io::Result<TestServer> {
+        create_test_server_with(router, ServeOptions::default()).await
+    }
+
+    /// [`create_test_server`] with options.
+    pub async fn create_test_server_with(router: Router, options: ServeOptions) -> std::io::Result<TestServer> {
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let base_url = format!("http://{}", listener.local_addr()?);
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        let accepting = tokio::spawn(async move {
+            tokio::select! {
+                _ = serve_with(listener, router, options) => {}
+                _ = stopped => {}
+            }
+        });
+        Ok(TestServer { base_url, stop: Some(stop), accepting: Some(accepting) })
+    }
+}
+
 #[cfg(test)]
 mod tests;
