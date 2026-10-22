@@ -801,3 +801,48 @@ Remaining gaps:
    frames, and the preserved client entry, shared src, nested and blocking frame reload
    cases. The `stream.test.tsx` cases that apply are ported; import map, module preload
    and `resolveClientEntry` cases do not apply.
+
+## 12. Parity audit (2026-10-22)
+
+Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22).
+
+1. Packages: upstream has 50. The 37 in scope each have an rmx crate or module, distributed
+   through the `rmx` crate (`crates/rmx/tests/manifest.rs`): the middleware packages are
+   `rmx-middleware` (async context is `router/src/async_context.rs`), `fetch-router` is
+   `rmx-router`, `response` is `fetch/src/response.rs`, `node-fetch-server` is `rmx-serve`,
+   `render-middleware` is `rmx-render` and `remix` is `rmx`. The other 13 are out of scope:
+   data access (`data-table` and its three adapters, the memcache and redis session
+   stores, `file-storage-s3`), which existing libraries cover, and JavaScript tooling with
+   no Rust counterpart (`node-tsx`, `node-hmr`, `component-hmr`,
+   `multiple-import-maps-polyfill`, `assert`, `test`).
+2. Demos: all 12 are in `rmx/examples/`. The 10 with a browser client, the
+   `social-auth` server and the starter template pass their Playwright e2e suites
+   (rebuild105, measured); `unpkg` is checked by its 13 native tests in the workspace run
+   (test113, measured).
+3. Test files: 289 upstream. Each one that applies is ported case by case, by name or under
+   the names in section 11; the rest are listed there as out of scope or not applicable
+   with the reason. Partial ports name the missing cases and why (`anchor.test.ts` 15 of
+   16, `navigation.test.ts` 83 of 87, `render-ui.test.ts` 12 of 15, `super-headers` 12
+   of 36).
+4. Core values:
+   1. Model first: components are a setup scope plus a render function, updated with
+      `handle.update()`; no hooks, signals or change detection (README, "The Component
+      Model").
+   2. Web APIs: Fetch-style `Request`/`Response`, `Headers`, `FormData`, `URL`, the
+      Navigation API, `AbortSignal` and DOM events, with Remix's names where Rust allows.
+   3. Religiously runtime: a deliberate divergence. rsx and route maps compile with
+      `rustc`; what Remix decides at runtime (routing, frame resolution, node trees from
+      JSON, mixins) is still decided at runtime.
+   4. Avoid dependencies: the core crates use the hyper, tokio and wasm-bindgen stack;
+      the exceptions are listed in the README (ICU4X, `ureq`, `nodejs-semver`).
+   5. Composition: small crates, middleware as composable functions, and mixins on host
+      elements as in Remix.
+   6. Distribute cohesively: one `rmx` dependency re-exports every crate, checked by the
+      manifest test.
+5. Documented divergences, not gaps: one wasm bundle per app (no import maps), no thrown
+   errors (explicit `report_error`), string `style`, plain `Event`s in `rmx-ui`, no HMR
+   (`rmx dev` rebuilds and reloads), and slower creation of large lists than Remix's JS
+   runtime (`bench/README.md`).
+6. Gate at this audit (measured): workspace tests 2,586 passed, 0 failed (test113);
+   browser tests `rmx-component` 596 and `rmx-ui` 140 passed, 0 failed (browser-all11);
+   all demo e2e suites passed (rebuild105).

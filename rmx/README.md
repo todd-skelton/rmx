@@ -305,8 +305,8 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
 ## Differences From Remix 3
 
 1. No import maps or module preloading: each demo ships one wasm bundle that registers its
-   client entries by name (`rmx::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 250 KiB to
-   820 KiB uncompressed (measured, `wasm-release` plus `wasm-opt`); the largest is the ui
+   client entries by name (`rmx::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 300 KiB to
+   900 KiB uncompressed (measured 2026-10-22, `wasm-release` plus `wasm-opt`); the largest is the ui
    gallery, which bundles all 17 of its demos.
 2. Rust does not throw, and a panic cannot be caught in wasm32 (it aborts the module), so
    a failing `setup`, `render` or task is not turned into an error event the way a
