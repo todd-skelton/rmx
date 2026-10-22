@@ -391,8 +391,11 @@ Covered since phase 0b:
    listener and handler id, so a late event there (the `toggle` that `hidePopover` queues)
    ran whichever handler had since reused the freed slot (a menu item's `click`). Listener
    expandos now carry a slot generation that `release` bumps; `browser_on_mixin.rs` covers
-   it. The combobox suite (25 cases) is covered by the ui gallery's e2e checks rather than
-   case by case, and is being ported next.
+   it. `combobox.test.tsx` (25) is `browser_combobox.rs`: where Remix stops fake timers
+   between the flash, the close transition and the 50 ms input commit, the tests poll until
+   the surface closes (the two-frame transition wait leaves time to observe the closing
+   state) and wait past the commit delay in real time. All 18 `@remix-run/ui` test files
+   now have case-by-case ports (`anchor.test.ts` at 15 of 16, as above).
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,
