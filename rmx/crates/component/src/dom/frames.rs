@@ -945,6 +945,20 @@ fn mark_resolved(ids: &[String]) {
     });
 }
 
+/// Register hydration data for tests: client entries as `(id, name, props JSON)` and
+/// frames as `(id, src, name, pending)`.
+pub(crate) fn set_test_data(entries: &[(&str, &str, &str)], frames: &[(&str, &str, Option<&str>, bool)]) {
+    DATA.with(|d| {
+        let mut d = d.borrow_mut();
+        for (id, name, props) in entries {
+            d.entries.insert(id.to_string(), (name.to_string(), props.to_string()));
+        }
+        for (id, src, name, pending) in frames {
+            d.frames.insert(id.to_string(), (src.to_string(), name.map(str::to_string), *pending));
+        }
+    });
+}
+
 /// `(name, props JSON)` for a client entry marker id.
 pub(crate) fn entry_data(id: &str) -> Option<(String, String)> {
     DATA.with(|d| d.borrow().entries.get(id).cloned())

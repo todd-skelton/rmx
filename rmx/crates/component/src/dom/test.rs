@@ -123,6 +123,29 @@ impl Drop for RenderResult {
     }
 }
 
+/// Treat the `<!--rmx:h:ID-->` comment `start` as the start of a live client entry of
+/// component `name`, calling `on_dispose` when the runtime disposes it. For tests of
+/// the DOM diff (Remix's `setClientEntryBoundaryOwner`).
+#[doc(hidden)]
+pub fn attach_entry_owner(start: &web_sys::Node, name: &str, on_dispose: impl FnOnce() + 'static) {
+    super::entries::attach_test_owner(start, name, Box::new(on_dispose));
+}
+
+/// Register hydration data as a page's `rmx-data` script would: client entries as
+/// `(id, component name, props JSON)` and frames as `(id, src, name, pending)`.
+#[doc(hidden)]
+pub fn set_hydration_data(entries: &[(&str, &str, &str)], frames: &[(&str, &str, Option<&str>, bool)]) {
+    super::frames::set_test_data(entries, frames);
+}
+
+/// Reconcile `current` into the shape of `next` (two nodes not in the same parent) the
+/// way Remix's `diffNodes([current], [next])` does.
+#[doc(hidden)]
+pub fn diff_node_lists(current: &web_sys::Node, next: &web_sys::Node) {
+    let parent = current.parent_node().expect("current has a parent");
+    super::diff::diff_nodes(&parent, vec![current.clone()], vec![next.clone()], None);
+}
+
 /// Reconcile `container`'s children to `next_html` the way a navigation or frame reload
 /// does (Remix's `diffNodes`). For tests of the DOM diff itself.
 #[doc(hidden)]

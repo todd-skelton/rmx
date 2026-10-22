@@ -67,7 +67,9 @@ where
 struct LiveEntry {
     name: String,
     props: String,
-    inst: Rc<dyn AnyInstance>,
+    /// `None` for a test owner ([`attach_test_owner`]).
+    inst: Option<Rc<dyn AnyInstance>>,
+    on_dispose: Option<Box<dyn FnOnce()>>,
 }
 
 thread_local! {
@@ -106,7 +108,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
                 return None;
             }
             entry.props = props.clone();
-            Some(entry.inst.clone())
+            entry.inst.clone()
         });
         if let Some(inst) = update {
             let def_update = DEFS.with(|d| d.borrow().iter().find(|e| e.name == name).map(|e| e.update));
@@ -141,17 +143,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
             }
             let slot = LIVE.with(|l| {
                 let mut live = l.borrow_mut();
-                let entry = Some(LiveEntry { name, props, inst });
-                match live.iter().position(Option::is_none) {
-                    Some(i) => {
-                        live[i] = entry;
-                        i
-                    }
-                    None => {
-                        live.push(entry);
-                        live.len() - 1
-                    }
-                }
+                insert_live(&mut live, LiveEntry { name, props, inst: Some(inst), on_dispose: None })
             });
             KEY.with(|k| js_sys::Reflect::set(start_node, k, &JsValue::from(slot as u32)).ok());
         }
@@ -160,13 +152,39 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
     Some(end)
 }
 
+fn insert_live(live: &mut Vec<Option<LiveEntry>>, entry: LiveEntry) -> usize {
+    match live.iter().position(Option::is_none) {
+        Some(i) => {
+            live[i] = Some(entry);
+            i
+        }
+        None => {
+            live.push(Some(entry));
+            live.len() - 1
+        }
+    }
+}
+
+/// Make `start` the start of a live entry of component `name` with no instance, calling
+/// `on_dispose` when it is disposed (Remix's tests attach owners this way).
+pub(crate) fn attach_test_owner(start: &web_sys::Node, name: &str, on_dispose: Box<dyn FnOnce()>) {
+    let entry = LiveEntry { name: name.to_string(), props: String::new(), inst: None, on_dispose: Some(on_dispose) };
+    let slot = LIVE.with(|l| insert_live(&mut l.borrow_mut(), entry));
+    KEY.with(|k| js_sys::Reflect::set(start, k, &JsValue::from(slot as u32)).ok());
+}
+
 /// Unmount the live entry starting at `start`, if any. The DOM is left to the caller.
 pub(crate) fn dispose(start: &web_sys::Node) {
     let Some(slot) = slot_of(start) else { return };
     KEY.with(|k| js_sys::Reflect::delete_property(start.unchecked_ref::<js_sys::Object>(), k).ok());
     let entry = LIVE.with(|l| l.borrow_mut().get_mut(slot).and_then(Option::take));
     if let Some(entry) = entry {
-        unmount_root(&*entry.inst);
+        if let Some(inst) = &entry.inst {
+            unmount_root(&**inst);
+        }
+        if let Some(on_dispose) = entry.on_dispose {
+            on_dispose();
+        }
     }
 }
 

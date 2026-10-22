@@ -311,6 +311,14 @@ Covered since phase 0b:
    (some tests combine cases); the rest stub a missing Navigation API or `sourceElement`,
    check internal call arguments, or redirect the top frame, which would replace the test
    page (the demo e2e scripts cover top frame redirects).
+   `diff-dom.test.tsx`: 41 tests in `browser_diff_dom.rs`, plus the live-range focus case
+   in `browser_frame_reloads.rs`, cover the 43 cases that apply (the pending marker case is
+   the resolved child frame case in `browser_frame_reloads.rs`). Live client
+   entry owners are attached with `rmx::test::attach_entry_owner` like Remix's
+   `setClientEntryBoundaryOwner`, so the hydration range cases (moving live ranges with
+   their siblings, pairing repeated ranges by identity in order, balanced boundary lists,
+   nested and frame markers owned by a range) run against the real diff. The six HMR URL
+   cases do not apply (rmx has no HMR); an entry's identity is its component name.
 3. `rmx-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
    matches Remix's `spring.ts` byte for byte), combobox, listbox, menu (submenus, hover aim,
    context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,

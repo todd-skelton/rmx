@@ -1,6 +1,7 @@
-//! Ports of Remix's `diff-dom.test.tsx` cases that do not need a client entry or frame
-//! owner (basic diffing, comments, keys and live browser state). The HMR cases do not
-//! apply: rmx has no HMR. Run with `pwsh ./test-browser.ps1 -Test browser_diff_dom`.
+//! Ports of Remix's `diff-dom.test.tsx`: basic diffing, comments and hydration ranges,
+//! keys and live browser state. Live client entry owners are attached with
+//! `rmx::test::attach_entry_owner`, as Remix's tests use `setClientEntryBoundaryOwner`; an
+//! entry's identity is its component name. The HMR cases do not apply: rmx has no HMR. Run with `pwsh ./test-browser.ps1 -Test browser_diff_dom`.
 #![cfg(target_arch = "wasm32")]
 
 extern crate rmx_component as rmx;
@@ -429,4 +430,259 @@ fn preserves_current_popover_visibility_when_incoming_html_removes_popover() {
     diff(&c.0, "<div>Hello</div>");
     assert!(popover.matches(":popover-open").unwrap());
     assert_eq!(popover.get_attribute("popover").as_deref(), Some("auto"));
+}
+
+// hydration ranges
+
+fn comment(el: &web_sys::Node, index: u32) -> web_sys::Comment {
+    el.child_nodes().item(index).unwrap().dyn_into().unwrap_or_else(|_| panic!("child {index} is a comment"))
+}
+
+fn comment_data(c: &web_sys::Comment) -> String {
+    c.data().trim().to_string()
+}
+
+/// Attach an owner named `name` to `start` and count its disposals.
+fn owner(start: &web_sys::Node, name: &str) -> Rc<Cell<u32>> {
+    let disposed = Rc::new(Cell::new(0));
+    let count = disposed.clone();
+    rmx::test::attach_entry_owner(start, name, move || count.set(count.get() + 1));
+    disposed
+}
+
+#[wasm_bindgen_test]
+fn updates_hydration_marker_ids_while_fast_forwarding_boundaries() {
+    let el = container("<!-- rmx:h:ff-old --><button>Old</button><!-- /rmx:h -->");
+    let start = comment(&el, 0);
+    owner(&start, "Entry");
+    rmx::test::set_hydration_data(&[("ff-old", "Entry", "{}"), ("ff-new", "Entry", "{}")], &[]);
+    diff(&el, "<!-- rmx:h:ff-new --><button>Old</button><!-- /rmx:h -->");
+    assert_eq!(comment_data(&start), "rmx:h:ff-new");
+    assert!(same(el.first_child(), &start));
+}
+
+#[wasm_bindgen_test]
+fn replaces_hydration_ranges_with_different_client_entry_identities() {
+    let el = container("<!-- rmx:h:id-old --><button>Old</button><!-- /rmx:h -->");
+    let old_start = el.first_child().unwrap();
+    owner(&old_start, "Old");
+    rmx::test::set_hydration_data(&[("id-old", "Old", "{}"), ("id-new", "New", "{}")], &[]);
+    diff(&el, "<!-- rmx:h:id-new --><button>New</button><!-- /rmx:h -->");
+    assert!(!same(el.first_child(), &old_start));
+    assert_eq!(q(&el, "button").text_content().as_deref(), Some("New"));
+}
+
+#[wasm_bindgen_test]
+fn moves_complete_live_hydration_ranges_when_ordinary_siblings_shift() {
+    let el = container("<!-- rmx:h:mv-old --><button>Stateful</button><!-- /rmx:h --><span>After</span>");
+    let start = comment(&el, 0);
+    owner(&start, "Entry");
+    rmx::test::set_hydration_data(&[("mv-new", "Entry", "{}")], &[]);
+    diff(&el, "<p>Before</p><!-- rmx:h:mv-new --><button>Server</button><!-- /rmx:h --><span>After</span>");
+    assert!(same(el.child_nodes().item(1), &start));
+    assert_eq!(comment_data(&start), "rmx:h:mv-new");
+    assert_eq!(q(&el, "button").text_content().as_deref(), Some("Stateful"));
+}
+
+#[wasm_bindgen_test]
+fn keeps_ordinary_sibling_state_with_its_node_when_a_hydration_range_moves() {
+    let el = container(r#"<input id="first" value="First"><input id="second" value="Second"><!-- rmx:h:ks-old --><button>Stateful</button><!-- /rmx:h -->"#);
+    let first: web_sys::HtmlInputElement = q(&el, "#first").unchecked_into();
+    let second: web_sys::HtmlInputElement = q(&el, "#second").unchecked_into();
+    let start = comment(&el, 2);
+    first.set_value("Edited first");
+    second.set_value("Edited second");
+    owner(&start, "Entry");
+    rmx::test::set_hydration_data(&[("ks-new", "Entry", "{}")], &[]);
+    diff(&el, r#"<!-- rmx:h:ks-new --><button>Server</button><!-- /rmx:h --><input id="first" value="First"><input id="second" value="Second">"#);
+    assert!(q(&el, "#first").is_same_node(Some(&first)));
+    assert!(q(&el, "#second").is_same_node(Some(&second)));
+    assert_eq!(first.value(), "Edited first");
+    assert_eq!(second.value(), "Edited second");
+}
+
+#[wasm_bindgen_test]
+fn pairs_repeated_live_hydration_ranges_by_identity_in_source_order() {
+    let el = container("<!-- rmx:h:rp-first --><button>First</button><!-- /rmx:h --><!-- rmx:h:rp-second --><button>Second</button><!-- /rmx:h -->");
+    let first_start = comment(&el, 0);
+    let second_start = comment(&el, 3);
+    let first_disposed = owner(&first_start, "Entry");
+    let second_disposed = owner(&second_start, "Entry");
+    rmx::test::set_hydration_data(&[("rp-next", "Entry", "{}")], &[]);
+    diff(&el, "<!-- rmx:h:rp-next --><button>Server</button><!-- /rmx:h -->");
+    assert!(same(el.first_child(), &first_start));
+    assert!(second_start.parent_node().is_none());
+    assert_eq!(q(&el, "button").text_content().as_deref(), Some("First"));
+    assert_eq!(first_disposed.get(), 0);
+    assert_eq!(second_disposed.get(), 1);
+}
+
+#[wasm_bindgen_test]
+fn does_not_let_an_unmatched_boundary_consume_a_later_semantic_match() {
+    let el = container("<!-- rmx:h:um-current --><button>Stateful</button><!-- /rmx:h -->");
+    let current_start = comment(&el, 0);
+    let disposed = owner(&current_start, "Entry");
+    rmx::test::set_hydration_data(&[("um-inserted", "Other", "{}"), ("um-preserved", "Entry", "{}")], &[]);
+    diff(&el, "<!-- rmx:h:um-inserted --><button>Inserted</button><!-- /rmx:h --><!-- rmx:h:um-preserved --><button>Server</button><!-- /rmx:h -->");
+    assert!(same(el.child_nodes().item(3), &current_start));
+    assert_eq!(comment_data(&current_start), "rmx:h:um-preserved");
+    assert_eq!(el.query_selector_all("button").unwrap().item(1).unwrap().text_content().as_deref(), Some("Stateful"));
+    assert_eq!(disposed.get(), 0);
+}
+
+#[wasm_bindgen_test]
+fn keeps_generated_boundary_lists_balanced_with_exact_ordinary_destination_dom() {
+    let identities = ["A", "B", "BOther"];
+    for seed in 0..24usize {
+        let host = document().create_element("div").unwrap();
+        let current = document().create_element("div").unwrap();
+        let next = document().create_element("div").unwrap();
+        host.append_child(&current).unwrap();
+        let current_count = seed % 4 + 1;
+        let next_count = (seed * 3) % 5 + 1;
+        let mut counts = Vec::new();
+        for i in 0..current_count {
+            if (seed + i) % 2 == 0 {
+                let ordinary = document().create_element("span").unwrap();
+                ordinary.set_attribute("data-source", &format!("{seed}-{i}")).unwrap();
+                current.append_child(&ordinary).unwrap();
+            }
+            let start = document().create_comment(&format!("rmx:h:bl-current-{seed}-{i}"));
+            let content = document().create_element("button").unwrap();
+            content.set_text_content(Some(&format!("Current {seed}-{i}")));
+            let end = document().create_comment("/rmx:h");
+            current.append_child(&start).unwrap();
+            current.append_child(&content).unwrap();
+            current.append_child(&end).unwrap();
+            counts.push(owner(&start, identities[(seed + i) % identities.len()]));
+        }
+        let mut expected = Vec::new();
+        let mut data = Vec::new();
+        for i in 0..next_count {
+            if (seed + i) % 3 != 0 {
+                let id = format!("{seed}-{i}");
+                let ordinary = document().create_element("span").unwrap();
+                ordinary.set_attribute("data-destination", &id).unwrap();
+                next.append_child(&ordinary).unwrap();
+                expected.push(id);
+            }
+            let id = format!("bl-next-{seed}-{i}");
+            let start = document().create_comment(&format!("rmx:h:{id}"));
+            let content = document().create_element("button").unwrap();
+            content.set_text_content(Some(&format!("Next {seed}-{i}")));
+            let end = document().create_comment("/rmx:h");
+            next.append_child(&start).unwrap();
+            next.append_child(&content).unwrap();
+            next.append_child(&end).unwrap();
+            data.push((id, identities[(seed * 2 + i) % identities.len()]));
+        }
+        let entries: Vec<(&str, &str, &str)> = data.iter().map(|(id, name)| (id.as_str(), *name, "{}")).collect();
+        rmx::test::set_hydration_data(&entries, &[]);
+
+        rmx::test::diff_node_lists(&current, &next);
+
+        let comments: Vec<String> = (0..current.child_nodes().length())
+            .filter_map(|i| current.child_nodes().item(i)?.dyn_into::<web_sys::Comment>().ok())
+            .map(|c| comment_data(&c))
+            .collect();
+        assert_eq!(comments.iter().filter(|c| c.starts_with("rmx:h:")).count(), next_count, "seed {seed}");
+        assert_eq!(comments.iter().filter(|c| *c == "/rmx:h").count(), next_count, "seed {seed}");
+        let list = current.query_selector_all("[data-destination]").unwrap();
+        let ids: Vec<String> = (0..list.length()).map(|i| list.item(i).unwrap().unchecked_into::<web_sys::Element>().get_attribute("data-destination").unwrap()).collect();
+        assert_eq!(ids, expected, "seed {seed}");
+        assert!(counts.iter().all(|c| c.get() <= 1), "seed {seed}");
+    }
+}
+
+#[wasm_bindgen_test]
+fn does_not_match_keyed_elements_owned_by_nested_hydration_ranges() {
+    let host = document().create_element("div").unwrap();
+    let current = document().create_element("div").unwrap();
+    host.append_child(&current).unwrap();
+    let outer_start = document().create_comment("rmx:h:nk-outer");
+    let inner_start = document().create_comment("rmx:h:nk-inner");
+    let inner_content = document().create_element("span").unwrap();
+    let inner_end = document().create_comment("/rmx:h");
+    let owned = document().create_element("section").unwrap();
+    let outer_end = document().create_comment("/rmx:h");
+    owned.set_attribute("data-rmx-key", "entry").unwrap();
+    for n in [outer_start.unchecked_ref::<web_sys::Node>(), &inner_start, &inner_content, &inner_end, &owned, &outer_end] {
+        current.append_child(n).unwrap();
+    }
+    let disposed = Rc::new(Cell::new(0));
+    let (count, owned_el) = (disposed.clone(), owned.clone());
+    rmx::test::attach_entry_owner(&outer_start, "Entry", move || {
+        count.set(count.get() + 1);
+        owned_el.remove();
+    });
+
+    let next = document().create_element("div").unwrap();
+    let replacement = document().create_element("section").unwrap();
+    replacement.set_id("replacement");
+    replacement.set_attribute("data-rmx-key", "entry").unwrap();
+    next.append_child(&replacement).unwrap();
+
+    rmx::test::diff_node_lists(&current, &next);
+
+    assert_eq!(current.child_nodes().length(), 1);
+    assert!(same(current.first_child(), &replacement));
+    assert_eq!(disposed.get(), 1);
+}
+
+#[wasm_bindgen_test]
+fn does_not_match_frame_end_markers_owned_by_hydration_ranges() {
+    let host = document().create_element("div").unwrap();
+    let current = document().create_element("div").unwrap();
+    host.append_child(&current).unwrap();
+    let hydration_start = document().create_comment("rmx:h:fe-entry");
+    let frame_start = document().create_comment("rmx:f:fe-current");
+    let frame_content = document().create_element("p").unwrap();
+    let frame_end = document().create_comment("/rmx:f");
+    let hydration_end = document().create_comment("/rmx:h");
+    for n in [hydration_start.unchecked_ref::<web_sys::Node>(), &frame_start, &frame_content, &frame_end, &hydration_end] {
+        current.append_child(n).unwrap();
+    }
+    let disposed = Rc::new(Cell::new(0));
+    let count = disposed.clone();
+    let (fs, fe) = (frame_start.clone(), frame_end.clone());
+    rmx::test::attach_entry_owner(&hydration_start, "Entry", move || {
+        count.set(count.get() + 1);
+        // Remove the frame range, as Remix's owner does with a Range.
+        let mut node = Some(fs.clone().unchecked_into::<web_sys::Node>());
+        while let Some(n) = node {
+            node = if n.is_same_node(Some(&fe)) { None } else { n.next_sibling() };
+            if let Some(p) = n.parent_node() {
+                p.remove_child(&n).unwrap();
+            }
+        }
+    });
+
+    let next = document().create_element("div").unwrap();
+    let next_start = document().create_comment("rmx:f:fe-next");
+    let next_content = document().create_element("section").unwrap();
+    let next_end = document().create_comment("/rmx:f");
+    for n in [next_start.unchecked_ref::<web_sys::Node>(), &next_content, &next_end] {
+        next.append_child(n).unwrap();
+    }
+
+    rmx::test::diff_node_lists(&current, &next);
+
+    assert_eq!(current.child_nodes().length(), 3);
+    assert!(same(current.child_nodes().item(0), &next_start));
+    assert!(same(current.child_nodes().item(1), &next_content));
+    assert!(same(current.child_nodes().item(2), &next_end));
+    assert_eq!(disposed.get(), 1);
+}
+
+#[wasm_bindgen_test]
+fn does_not_match_a_shifted_frame_start_with_the_current_frame_end() {
+    let el = container("<div><i></i><!-- rmx:f:f00000000 --><b></b><!-- /rmx:f --></div>");
+    let root = el.first_element_child().unwrap();
+    let current_end = comment(&root, 3);
+    let next = "<div><i></i><u></u><b></b><!-- rmx:f:f11111111 --><b></b><!-- /rmx:f --></div>";
+    // The inserted siblings shift the incoming frame start to the current frame end's index.
+    diff(&el, next);
+    assert!(!same(root.child_nodes().item(3), &current_end));
+    assert!(current_end.parent_node().is_none());
+    assert_eq!(root.outer_html(), next);
 }
