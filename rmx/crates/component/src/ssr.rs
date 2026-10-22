@@ -465,8 +465,11 @@ impl Ssr {
             // Raw text elements: children are written unescaped.
             for child in &el.children {
                 if let Node::Text(t) | Node::Raw(t) = child {
-                    let t = if el.tag == "script" { t.replace("</script", "<\\/script") } else { t.replace("</style", "\\3C/style") };
-                    self.out.push_str(&t);
+                    if el.tag == "script" {
+                        escape_script_text(&mut self.out, t);
+                    } else {
+                        self.out.push_str(&t.replace("</style", "\\3C/style"));
+                    }
                 }
             }
         } else {
@@ -510,6 +513,7 @@ pub(crate) fn escape_into(out: &mut String, s: &str, attr: bool) {
             b'<' => "&lt;",
             b'>' => "&gt;",
             b'"' if attr => "&quot;",
+            b'\'' if attr => "&#39;",
             _ => continue,
         };
         out.push_str(&s[last..i]);
@@ -517,6 +521,29 @@ pub(crate) fn escape_into(out: &mut String, s: &str, attr: bool) {
         last = i + 1;
     }
     out.push_str(&s[last..]);
+}
+
+/// Write script text so no `<script` or `</script` (any case) can open or close an element:
+/// the `s` becomes `\u0073` (or `\u0053` for `S`), which JavaScript and JSON read the same
+/// (Remix's `escapeScriptTextContent`).
+fn escape_script_text(out: &mut String, text: &str) {
+    let bytes = text.as_bytes();
+    let mut last = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'<' {
+            let at = if bytes.get(i + 1) == Some(&b'/') { i + 2 } else { i + 1 };
+            if bytes.len() >= at + 6 && bytes[at..at + 6].eq_ignore_ascii_case(b"script") {
+                out.push_str(&text[last..at]);
+                out.push_str(if bytes[at] == b's' { "\\u0073" } else { "\\u0053" });
+                last = at + 1;
+                i = at + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out.push_str(&text[last..]);
 }
 
 /// Escape text for HTML.
@@ -552,7 +579,7 @@ mod tests {
         let html = render_to_string(&rsx! { <a href={href} onclick="alert(1)" draggable={false}>"x"</a> });
         assert_eq!(
             html,
-            format!(r#"<a href="{}" draggable="false">x</a>"#, crate::attrs::BLOCKED_JAVASCRIPT_URL)
+            format!(r#"<a href="{}" draggable="false">x</a>"#, escape_html(crate::attrs::BLOCKED_JAVASCRIPT_URL))
         );
     }
 

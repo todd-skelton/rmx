@@ -30,6 +30,78 @@ fn encodes_large_multi_byte_output() {
     assert_eq!(html(rsx! { <p>{content.clone()}</p> }), format!("<p>{content}</p>"));
 }
 
+#[test]
+fn escapes_text_node_content() {
+    let text = r#"<img src=x onerror="alert(1)">&</img>"#;
+    assert_eq!(html(rsx! { <>{text}</> }), r#"&lt;img src=x onerror="alert(1)"&gt;&amp;&lt;/img&gt;"#);
+}
+
+#[test]
+fn escapes_text_children_in_elements() {
+    assert_eq!(html(rsx! { <div>{"<script>alert(1)</script>"}</div> }), "<div>&lt;script&gt;alert(1)&lt;/script&gt;</div>");
+}
+
+#[test]
+fn preserves_unicode_and_entity_text_while_escaping_text_and_attribute_delimiters() {
+    let value = "caf\u{e9} \u{1f600} \"'<&> &amp; \"'<&>";
+    assert_eq!(
+        html(rsx! { <p title={value}>{value}</p> }),
+        "<p title=\"caf\u{e9} \u{1f600} &quot;&#39;&lt;&amp;&gt; &amp;amp; &quot;&#39;&lt;&amp;&gt;\">caf\u{e9} \u{1f600} \"'&lt;&amp;&gt; &amp;amp; \"'&lt;&amp;&gt;</p>"
+    );
+}
+
+#[test]
+fn renders_script_string_children_as_raw_text() {
+    let script = r#"if (value < 10 && value > 0) console.log("in range")"#;
+    assert_eq!(html(rsx! { <script>{script}</script> }), format!("<script>{script}</script>"));
+}
+
+#[test]
+fn renders_empty_script_elements() {
+    assert_eq!(html(rsx! { <script></script> }), "<script></script>");
+}
+
+#[test]
+fn prevents_script_string_children_from_terminating_the_element() {
+    let json = r#"{"imports":{"example":"/example.js?before=a&after=</ScRiPt><script>alert(1)</script>"}}"#;
+    assert_eq!(
+        html(rsx! { <script type="importmap">{json}</script> }),
+        r#"<script type="importmap">{"imports":{"example":"/example.js?before=a&after=</\u0053cRiPt><\u0073cript>alert(1)</\u0073cript>"}}</script>"#
+    );
+}
+
+#[test]
+fn escapes_script_prefixes_conservatively_while_preserving_non_matching_text() {
+    let script = "prescription pre<scription pre<Scription pre</scRipTion pre</ScripTion </ script> </script><script><!-- <script> -->";
+    assert_eq!(
+        html(rsx! { <script>{script}</script> }),
+        concat!(
+            "<script>",
+            r"prescription pre<\u0073cription pre<\u0053cription pre</\u0073cRipTion pre</\u0053cripTion ",
+            r"</ script> </\u0073cript><\u0073cript><!-- <\u0073cript> -->",
+            "</script>"
+        )
+    );
+}
+
+#[test]
+fn renders_svg_script_string_children_as_raw_text() {
+    let script = r#"if (value < 10 && value > 0) console.log("in range")"#;
+    assert_eq!(html(rsx! { <svg><script>{script}</script></svg> }), format!("<svg><script>{script}</script></svg>"));
+}
+
+#[test]
+fn renders_textarea_value_as_escaped_text_content() {
+    assert_eq!(html(rsx! { <textarea value="Hello <Ryan> & friends"></textarea> }), "<textarea>Hello &lt;Ryan&gt; &amp; friends</textarea>");
+    assert_eq!(html(rsx! { <textarea defaultValue="Hello <Ryan> & friends"></textarea> }), "<textarea>Hello &lt;Ryan&gt; &amp; friends</textarea>");
+}
+
+#[test]
+fn renders_fragments_and_lists() {
+    let items = vec![rsx! { <li>"a"</li> }, rsx! { <li>"b"</li> }];
+    assert_eq!(html(rsx! { <ul><>{"x"}{items}</></ul> }), "<ul>x<li>a</li><li>b</li></ul>");
+}
+
 struct Seo;
 
 impl Component for Seo {
