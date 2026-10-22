@@ -83,10 +83,37 @@ const text = (page) => page.evaluate(() => document.body.innerText)
   const s1 = await state()
   check('reload-scope: frame reload only updates the frame', s1.page === s0.page && s1.root === '3', { s0, s1 })
   await page.waitForTimeout(1100)
+  const bodyClass = await page.evaluate(() => {
+    const html = document.documentElement
+    html.setAttribute('class', 'dark')
+    html.setAttribute('data-theme', 'dark')
+    html.setAttribute('lang', 'fr')
+    html.setAttribute('data-page', 'initial')
+    document.body.setAttribute('data-client', 'yes')
+    return document.body.className
+  })
   await page.click('#reload-top')
   await page.waitForFunction((t) => document.querySelector('#page-time').innerText !== t, s0.page, { timeout: 8000 })
   const s2 = await state()
   check('reload-scope: top reload keeps client entry state', s2.root === '3', s2)
+  const attrs = await page.evaluate(() => {
+    const html = document.documentElement
+    return { cls: html.getAttribute('class'), theme: html.getAttribute('data-theme'), lang: html.lang, page: html.hasAttribute('data-page'), client: document.body.hasAttribute('data-client'), body: document.body.className }
+  })
+  check(
+    'reload-scope: top reload keeps preserved html attributes and reconciles the rest',
+    attrs.cls === 'dark' && attrs.theme === 'dark' && attrs.lang === 'en' && !attrs.page && !attrs.client && attrs.body === bodyClass,
+    attrs,
+  )
+  await page.waitForTimeout(1100)
+  const before = await page.evaluate(() => {
+    document.documentElement.removeAttribute('class')
+    return document.querySelector('#page-time').innerText
+  })
+  await page.click('#reload-top')
+  await page.waitForFunction((t) => document.querySelector('#page-time').innerText !== t, before, { timeout: 8000 })
+  const absent = await page.evaluate(() => ({ cls: document.documentElement.hasAttribute('class'), theme: document.documentElement.getAttribute('data-theme') }))
+  check('reload-scope: a removed preserved attribute stays absent across a top reload', !absent.cls && absent.theme === 'dark', absent)
   await page.close()
 }
 

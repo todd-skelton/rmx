@@ -88,7 +88,8 @@ impl Component for Document {
     fn render(&self, props: &DocumentProps, _: &Handle<Self>) -> Node {
         let max_width = format!("max-width: {}", props.max_width.as_deref().unwrap_or("760px"));
         rsx! {
-            <html>
+            // A theme class set in the browser survives top frame reloads.
+            <html lang="en" data-rmx-preserve-attrs="class data-theme">
                 <head>
                     <meta charset="utf-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
