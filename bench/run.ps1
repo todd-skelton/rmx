@@ -1,6 +1,6 @@
 # Runs the full rmx vs Remix 3 comparison and writes results/*.json.
 #   pwsh ./run.ps1 [-Duration 15] [-Connections 50] [-SkipBrowser] [-SkipServer]
-# Prereqs: rmx built (../rmx/build.ps1) and `npm install` in remix-app.
+# Prereqs: rmx built (../scripts/build-bench.ps1) and `npm install` in remix-app.
 param(
     [int]$Duration = 15,
     [int]$Connections = 50,
@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 New-Item -ItemType Directory -Force results | Out-Null
 $oha = Join-Path $PSScriptRoot "tools/oha.exe"
-$rmxDir = Resolve-Path "../rmx"
+$rmxDir = Resolve-Path ".."
 $remixDir = Resolve-Path "remix-app"
 
 function Stop-Port([int]$port) {

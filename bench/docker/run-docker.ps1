@@ -25,7 +25,7 @@ $net = "rmxbench"
 if ($Build) {
     docker build -t rmxbench-oha -f oha.Dockerfile . ; if ($LASTEXITCODE) { throw "oha build failed" }
     docker build -t rmxbench-remix -f remix.Dockerfile ../remix-app ; if ($LASTEXITCODE) { throw "remix build failed" }
-    docker build -t rmxbench-rmx -f rmx.Dockerfile ../../rmx ; if ($LASTEXITCODE) { throw "rmx build failed" }
+    docker build -t rmxbench-rmx -f rmx.Dockerfile ../.. ; if ($LASTEXITCODE) { throw "rmx build failed" }
 }
 
 docker network inspect $net *> $null

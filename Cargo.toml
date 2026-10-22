@@ -1,0 +1,130 @@
+[workspace]
+resolver = "2"
+# The phase 0 Leptos spike is its own project with its own lockfile.
+exclude = ["bench/leptos-spike"]
+members = [
+    "packages/url",
+    "packages/route-pattern",
+    "packages/fetch",
+    "packages/fetch-router",
+    "packages/node-fetch-server",
+    "packages/mime",
+    "packages/middleware",
+    "packages/render-middleware",
+    "packages/cookie",
+    "packages/spa",
+    "packages/assets",
+    "packages/crypto",
+    "packages/session",
+    "packages/file-storage",
+    "packages/tar-parser",
+    "packages/multipart-parser",
+    "packages/html-template",
+    "packages/headers",
+    "packages/fetch-proxy",
+    "packages/auth",
+    "packages/component",
+    "packages/rmx",
+    "packages/component/macros",
+    "packages/ui",
+    "packages/data-schema",
+    "packages/terminal",
+    "packages/lazy-file",
+    "packages/fs",
+    "bench/rmx-app/app",
+    "bench/rmx-app/server",
+    "bench/rmx-app/client",
+    "demos/frames",
+    "demos/frame-navigation",
+    "demos/lazy-frames",
+    "demos/sse",
+    "demos/spa",
+    "demos/assets",
+    "demos/ui",
+    "demos/social-auth",
+    "demos/i18n",
+    "demos/bookstore",
+    "demos/unpkg",
+    "demos/timeboxer",
+    "template",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+rmx = { path = "packages/rmx" }
+rmx-component = { path = "packages/component" }
+rmx-macros = { path = "packages/component/macros" }
+rmx-url = { path = "packages/url" }
+rmx-terminal = { path = "packages/terminal" }
+rmx-route-pattern = { path = "packages/route-pattern" }
+rmx-fetch = { path = "packages/fetch" }
+rmx-router = { path = "packages/fetch-router" }
+rmx-serve = { path = "packages/node-fetch-server" }
+rmx-mime = { path = "packages/mime" }
+rmx-middleware = { path = "packages/middleware" }
+rmx-render = { path = "packages/render-middleware" }
+rmx-spa = { path = "packages/spa" }
+rmx-assets = { path = "packages/assets" }
+rmx-crypto = { path = "packages/crypto" }
+rmx-session = { path = "packages/session" }
+rmx-file-storage = { path = "packages/file-storage" }
+rmx-tar-parser = { path = "packages/tar-parser" }
+rmx-multipart-parser = { path = "packages/multipart-parser" }
+rmx-html-template = { path = "packages/html-template" }
+rmx-headers = { path = "packages/headers" }
+rmx-fetch-proxy = { path = "packages/fetch-proxy" }
+rmx-auth = { path = "packages/auth" }
+rmx-cookie = { path = "packages/cookie" }
+rmx-ui = { path = "packages/ui" }
+rmx-data-schema = { path = "packages/data-schema" }
+rmx-lazy-file = { path = "packages/lazy-file" }
+rmx-fs = { path = "packages/fs" }
+bytes = "1"
+http = "1"
+http-body = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "sync", "fs", "io-util"] }
+bench-app = { path = "bench/rmx-app/app" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pinned to match the wasm-bindgen CLI used by scripts/build-client.ps1.
+wasm-bindgen = { version = "=0.2.129", features = ["enable-interning"] }
+js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+
+# PBKDF2 runs 100k HMAC rounds per password check; keep it fast in debug builds and tests.
+[profile.dev.package.rmx-crypto]
+opt-level = 3
+
+# Compression runs per request; unoptimized brotli is several times slower (quality 11 on a
+# 450 KB wasm file: about 10 s against 1.6 s). Its generic encoder is instantiated in
+# rmx-fetch (`response::compress`), so that crate is optimized too.
+[profile.dev.package.rmx-fetch]
+opt-level = 3
+
+[profile.dev.package.rmx-middleware]
+opt-level = 3
+
+[profile.dev.package.brotli]
+opt-level = 3
+
+[profile.dev.package.alloc-no-stdlib]
+opt-level = 3
+
+[profile.dev.package.alloc-stdlib]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+# Size-optimized browser build; the server uses the normal release profile.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

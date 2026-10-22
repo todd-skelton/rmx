@@ -18,7 +18,7 @@ All numbers below were measured on 2026-10-19 on one laptop: i9-10885H (8 cores,
 ## How to Run
 
 ```powershell
-pwsh ../rmx/build.ps1                     # rmx release server + wasm client
+pwsh ../scripts/build-bench.ps1                  # rmx release server + wasm client
 cd remix-app; npm install; cd ..
 pwsh ./run.ps1                            # Windows: browser bench + server load tests
 pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests only

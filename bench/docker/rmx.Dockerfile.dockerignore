@@ -1,2 +1,13 @@
 target
 **/target
+**/node_modules
+.git
+.tools
+reference
+bench/remix-app
+bench/results
+bench/tools
+bench/leptos-spike
+**/public/pkg
+!bench/rmx-app/public/pkg
+demos/*/tmp
