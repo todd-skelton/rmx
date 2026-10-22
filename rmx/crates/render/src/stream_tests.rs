@@ -370,6 +370,31 @@ fn renders_descendant_frames_in_blocking_and_non_blocking_mixes() {
     assert_eq!(next(&mut res), None);
 }
 
+/// Remix repeats a rule in every frame template that uses it, because its client adopts
+/// rules per frame. rmx pins adopted server rules for the page, so the inlined outer frame's
+/// rule moves into the page head and the streamed inner template carries its own copy.
+#[test]
+fn repeats_selector_addressed_styles_in_each_frame_template_that_uses_them() {
+    let mut router = Router::new();
+    router.get("/", |ctx: Context| async move { ctx.render(rsx! { <Frame src="/outer"/> }) });
+    router.get("/outer", |ctx: Context| async move {
+        ctx.render(rsx! {
+            <section mix={css("color: red")}>
+                <Frame src="/inner" fallback={rsx! { <span>"Loading inner..."</span> }}/>
+            </section>
+        })
+    });
+    router.get("/inner", |ctx: Context| async move { ctx.render(rsx! { <span mix={css("color: red")}>"Inner"</span> }) });
+    let html = drain(&router, "http://localhost/");
+    let template = html.find("<template").expect("template");
+    let tags: Vec<&str> = html.match_indices("data-rmx-style=\"").map(|(i, _)| html[i..].split('>').next().unwrap()).collect();
+    assert_eq!(tags.len(), 2, "{html}");
+    assert_eq!(tags[0], tags[1], "{html}");
+    assert!(html.starts_with("<head><style data-rmx-style="), "{html}");
+    assert!(html[template..].contains("<style data-rmx-style="), "{html}");
+    assert!(!html[..template].contains("<head><head>"), "{html}");
+}
+
 #[test]
 fn delays_a_non_blocking_parent_until_its_blocking_child_resolves() {
     let (tx, child) = gate();

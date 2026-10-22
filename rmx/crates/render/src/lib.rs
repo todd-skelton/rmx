@@ -291,20 +291,35 @@ async fn stream_with_frames(
     }
 }
 
-/// Take the leading `<style data-rmx-style>` tags and the `rmx-data` script out of a
-/// rendered frame fragment.
+/// Take the leading `<style data-rmx-style>` tags (in the `<head>` a rendered fragment
+/// starts with) and the `rmx-data` script out of a rendered frame fragment.
 fn split_frame_html(html: String) -> (String, Vec<(String, String)>, Option<ssr::HydrationData>) {
     const STYLE_OPEN: &str = "<style data-rmx-style=\"";
     const DATA_OPEN: &str = "<script type=\"application/json\" id=\"rmx-data\">";
-    let mut rest = html.as_str();
+    let take_styles = |mut rest: &str, styles: &mut Vec<(String, String)>| -> usize {
+        let start = rest.len();
+        while let Some(after) = rest.strip_prefix(STYLE_OPEN) {
+            let Some(q) = after.find("\">") else { break };
+            let Some(end) = after.find("</style>") else { break };
+            styles.push((after[..q].to_string(), after[q + 2..end].to_string()));
+            rest = &after[end + 8..];
+        }
+        start - rest.len()
+    };
     let mut styles = Vec::new();
-    while let Some(after) = rest.strip_prefix(STYLE_OPEN) {
-        let Some(q) = after.find("\">") else { break };
-        let Some(end) = after.find("</style>") else { break };
-        styles.push((after[..q].to_string(), after[q + 2..end].to_string()));
-        rest = &after[end + 8..];
-    }
-    let mut body = rest.to_string();
+    let mut body = match html.strip_prefix("<head>").and_then(|h| h.find("</head>").map(|end| (&h[..end], &h[end + 7..]))) {
+        Some((head, after)) => {
+            let used = take_styles(head, &mut styles);
+            match &head[used..] {
+                "" => after.to_string(),
+                kept => format!("<head>{kept}</head>{after}"),
+            }
+        }
+        None => {
+            let used = take_styles(&html, &mut styles);
+            html[used..].to_string()
+        }
+    };
     let mut data = None;
     if let Some(start) = body.find(DATA_OPEN) {
         if let Some(len) = body[start..].find("</script>") {

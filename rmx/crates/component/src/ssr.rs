@@ -201,8 +201,8 @@ pub fn render(node: &Node) -> Rendered {
 }
 
 /// Render a tree to one HTML string. Frames show their fallback (or nothing); use the render
-/// middleware to resolve frame content. Styles go at the end of `<head>` (or the start),
-/// hydration data before `</body>` (or the end).
+/// middleware to resolve frame content. Styles and hydration data are placed as
+/// [`finalize_html`] describes.
 pub fn render_to_string(node: &Node) -> String {
     let rendered = render(node);
     let mut html = String::new();
@@ -273,31 +273,50 @@ pub fn escape_template_content(html: &str) -> std::borrow::Cow<'_, str> {
     out.into()
 }
 
-/// Insert style tags and the hydration data script into assembled HTML.
+/// Insert style tags and the hydration data script into assembled HTML, as Remix's
+/// `finalizeHtml` does.
+///
+/// A document (HTML with an `<html>` element) gets its styles at the end of the first
+/// `<head>`, or in a new `<head>` right after the `<html>` start tag, and its data before
+/// the last `</body>` (else `</html>`, else the end). A fragment gets its styles in a
+/// `<head>` in front (a browser moves them into the document head, and a `<template>`
+/// drops the `<head>` tags and keeps the styles) and its data at the end.
 pub fn finalize_html(mut html: String, styles: &[(String, String)], data: &HydrationData) -> String {
-    if !styles.is_empty() {
-        let tags = style_tags(styles);
-        match find_ci(&html, "</head>") {
-            Some(pos) => html.insert_str(pos, &tags),
-            None => {
-                // Keep a doctype first.
-                let at = if html.trim_start().to_ascii_lowercase().starts_with("<!doctype") { html.find('>').map_or(0, |i| i + 1) } else { 0 };
-                html.insert_str(at, &tags);
-            }
+    let tags = style_tags(styles);
+    let script = data.to_script();
+    let lower = html.to_ascii_lowercase();
+    let Some(html_open_end) = html_start_tag_end(&lower) else {
+        if !tags.is_empty() {
+            html.insert_str(0, &format!("<head>{tags}</head>"));
+        }
+        html.push_str(&script);
+        return html;
+    };
+    // Both insertion points are found before either insertion.
+    let head = (!tags.is_empty()).then(|| match lower.find("</head>") {
+        Some(pos) => (pos, tags),
+        None => (html_open_end, format!("<head>{tags}</head>")),
+    });
+    let data_at = (!script.is_empty()).then(|| lower.rfind("</body>").or_else(|| lower.rfind("</html>")).unwrap_or(html.len()));
+    let mut inserts = [head, data_at.map(|at| (at, script))];
+    // The later position first, so the earlier one stays valid.
+    if let [Some((a, _)), Some((b, _))] = &inserts {
+        if a < b {
+            inserts.swap(0, 1);
         }
     }
-    let script = data.to_script();
-    if !script.is_empty() {
-        match find_ci(&html, "</body>") {
-            Some(pos) => html.insert_str(pos, &script),
-            None => html.push_str(&script),
-        }
+    for (at, text) in inserts.into_iter().flatten() {
+        html.insert_str(at, &text);
     }
     html
 }
 
-fn find_ci(hay: &str, needle: &str) -> Option<usize> {
-    hay.to_ascii_lowercase().rfind(needle)
+/// The index just past the first `<html>` start tag in lowercased HTML.
+fn html_start_tag_end(lower: &str) -> Option<usize> {
+    lower.match_indices("<html").find_map(|(i, _)| {
+        let rest = &lower[i + 5..];
+        matches!(rest.bytes().next(), Some(b'>' | b'/') | Some(b' ' | b'\t' | b'\n' | b'\r' | b'\x0c')).then(|| rest.find('>').map(|j| i + 5 + j + 1))?
+    })
 }
 
 #[derive(Default)]
@@ -556,6 +575,28 @@ pub fn escape_html(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn finalize(html: &str) -> String {
+        let styles = [("rmxc-a".to_string(), "@layer rmx.rmxc-a { .rmxc-a { color: red } }".to_string())];
+        let data = HydrationData { entries: vec![("h1".into(), "Counter".into(), "{}".into())], frames: Vec::new() };
+        let script = data.to_script();
+        finalize_html(html.to_string(), &styles, &data).replace(&script, "<DATA>").replace(&style_tags(&styles), "<STYLES>")
+    }
+
+    #[test]
+    fn places_styles_and_data_like_remix_finalize_html() {
+        assert_eq!(finalize("<html><head><title>t</title></head><body><p>x</p></body></html>"), "<html><head><title>t</title><STYLES></head><body><p>x</p><DATA></body></html>");
+        assert_eq!(finalize("<HTML lang=\"en\"><BODY>x</BODY></HTML>"), "<HTML lang=\"en\"><head><STYLES></head><BODY>x<DATA></BODY></HTML>");
+        assert_eq!(finalize("<html><body>x</html>"), "<html><head><STYLES></head><body>x<DATA></html>");
+        assert_eq!(finalize("<html>x"), "<html><head><STYLES></head>x<DATA>");
+        assert_eq!(finalize("<!DOCTYPE html><html><body></body></html>"), "<!DOCTYPE html><html><head><STYLES></head><body><DATA></body></html>");
+        // The page's head, not one inside inlined frame content; the data goes before the last body end.
+        assert_eq!(finalize("<html><head></head><body><head></head><body></body></body></html>"), "<html><head><STYLES></head><body><head></head><body></body><DATA></body></html>");
+        // Not a document: `<htmlx>` and text.
+        assert_eq!(finalize("<htmlx></htmlx>"), "<head><STYLES></head><htmlx></htmlx><DATA>");
+        assert_eq!(finalize("<p>x</p>"), "<head><STYLES></head><p>x</p><DATA>");
+        assert_eq!(finalize_html("<p>x</p>".into(), &[], &HydrationData::default()), "<p>x</p>");
+    }
 
     #[test]
     fn escapes_text_and_attributes() {

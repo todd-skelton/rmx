@@ -319,6 +319,16 @@ Covered since phase 0b:
    their siblings, pairing repeated ranges by identity in order, balanced boundary lists,
    nested and frame markers owned by a range) run against the real diff. The six HMR URL
    cases do not apply (rmx has no HMR); an entry's identity is its component name.
+   `stream.test.tsx` escaping and styles: script text escapes `<script` and `</script` in
+   any case as `\u0073` or `\u0053` (JSON and JS read it unchanged) and attribute values
+   escape `'`, like Remix. Styles follow Remix's `finalizeHtml`: a document gets them at
+   the end of its first `<head>` or in a new `<head>` after the `<html>` start tag, a
+   fragment gets them in a `<head>` in front, and the hydration data goes before the last
+   `</body>` (else `</html>`, else the end). Empty `css("")` adds no class or rule. The
+   styles group runs in `ssr_stream.rs` with CSS text in place of style objects (rsx has
+   no style objects; string `style` passes through). Divergence: an inlined blocking
+   frame's rules move to the page head, because rmx pins adopted server rules for the page
+   instead of adopting them per frame; streamed frame templates still carry their own.
 3. `rmx-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
    matches Remix's `spring.ts` byte for byte), combobox, listbox, menu (submenus, hover aim,
    context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,

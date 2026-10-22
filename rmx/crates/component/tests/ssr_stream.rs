@@ -239,6 +239,139 @@ fn prevents_css_mixin_styles_from_breaking_out_of_style_tags() {
     assert!(!out.contains("</style><script>"), "{out}");
 }
 
+/// The generated class names in `out` that `tag` elements carry, in order.
+fn classes_of(out: &str, tag: &str) -> Vec<String> {
+    let open = format!("<{tag} class=\"");
+    out.match_indices(&open).map(|(i, _)| out[i + open.len()..].split('"').next().unwrap().to_string()).collect()
+}
+
+#[test]
+fn handles_css_mixin_styles() {
+    let out = html(rsx! { <div mix={css("color: red; font-size: 16px")}>"Styled text"</div> });
+    assert!(out.contains("<style data-rmx-style="), "{out}");
+    assert!(out.contains(".rmxc-"), "{out}");
+    assert!(out.contains("color: red; font-size: 16px"), "{out}");
+    let class = &classes_of(&out, "div")[0];
+    assert!(class.starts_with("rmxc-") && class[5..].bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()), "{out}");
+}
+
+#[test]
+fn passes_string_style_attributes_through() {
+    assert_eq!(
+        html(rsx! { <div style="color: blue; font-weight: bold;">"String styled"</div> }),
+        r#"<div style="color: blue; font-weight: bold;">String styled</div>"#
+    );
+}
+
+#[test]
+fn combines_css_mixin_with_an_existing_class() {
+    let out = html(rsx! { <div class="existing-class" mix={css("background: yellow")}>"Combined classes"</div> });
+    assert!(out.contains(r#"<div class="existing-class rmxc-"#), "{out}");
+    assert!(out.contains("background: yellow"), "{out}");
+}
+
+#[test]
+fn deduplicates_styles_across_multiple_elements() {
+    let out = html(rsx! {
+        <div>
+            <span mix={css("color: red; font-size: 14px")}>"First"</span>
+            <span mix={css("color: red; font-size: 14px")}>"Second"</span>
+            <span mix={css("color: blue")}>"Third"</span>
+        </div>
+    });
+    assert_eq!(out.matches("color: red").count(), 1, "{out}");
+    assert!(out.contains("color: blue"), "{out}");
+    let spans = classes_of(&out, "span");
+    assert_eq!(spans.len(), 3, "{out}");
+    assert_eq!(spans[0], spans[1]);
+    assert_ne!(spans[0], spans[2]);
+}
+
+#[test]
+fn places_styles_in_head_when_an_html_root_exists() {
+    let out = html(rsx! { <html><body><div mix={css("color: purple")}>"Content"</div></body></html> });
+    assert!(out.contains("<html><head><style data-rmx-style="), "{out}");
+    assert!(out.contains("color: purple"), "{out}");
+    assert!(out.contains("</style></head><body>"), "{out}");
+}
+
+#[test]
+fn places_styles_in_a_head_when_there_is_no_html_root() {
+    let out = html(rsx! { <div mix={css("color: orange")}>"No HTML root"</div> });
+    assert!(out.starts_with("<head><style data-rmx-style="), "{out}");
+    assert!(out.contains("color: orange"), "{out}");
+    let class = &classes_of(&out, "div")[0];
+    assert!(out.ends_with(&format!(r#"</style></head><div class="{class}">No HTML root</div>"#)), "{out}");
+}
+
+#[test]
+fn handles_css_mixin_in_components() {
+    struct StyledButton;
+    impl Component for StyledButton {
+        type Props = &'static str;
+        fn setup(_: &&'static str, _: &Handle<Self>) -> Self {
+            StyledButton
+        }
+        fn render(&self, label: &&'static str, _: &Handle<Self>) -> Node {
+            rsx! { <button mix={css("background: blue; color: white; padding: 10px")}>{*label}</button> }
+        }
+    }
+    let out = html(rsx! { <div>{Node::component::<StyledButton>(None, "Click me")}{Node::component::<StyledButton>(None, "And me")}</div> });
+    assert_eq!(out.matches("background: blue").count(), 1, "{out}");
+    let buttons = classes_of(&out, "button");
+    assert_eq!(buttons.len(), 2, "{out}");
+    assert_eq!(buttons[0], buttons[1]);
+}
+
+#[test]
+fn adds_no_class_or_style_for_an_empty_css_mixin() {
+    assert_eq!(html(rsx! { <div mix={css("")}>"Empty css mixin"</div> }), "<div>Empty css mixin</div>");
+    assert_eq!(html(rsx! { <div mix={css(" \n\t ")}>"Blank css mixin"</div> }), "<div>Blank css mixin</div>");
+}
+
+#[test]
+fn handles_pseudo_selectors_in_css_mixin() {
+    let out = html(rsx! { <button mix={css("color: black; &:hover { color: red } &:focus { outline: 2px solid blue }")}>"Hover me"</button> });
+    assert!(out.contains(":hover"), "{out}");
+    assert!(out.contains("color: red"), "{out}");
+    assert!(out.contains(":focus"), "{out}");
+    assert!(out.contains("outline: 2px solid blue"), "{out}");
+}
+
+#[test]
+fn handles_media_queries_in_css_mixin() {
+    let out = html(rsx! { <div mix={css("font-size: 14px; @media (min-width: 768px) { font-size: 16px }")}>"Responsive text"</div> });
+    assert!(out.contains("@media (min-width: 768px)"), "{out}");
+    assert!(out.contains("font-size: 16px"), "{out}");
+}
+
+#[test]
+fn preserves_range_media_query_operators_in_css_mixin() {
+    let out = html(rsx! { <div mix={css("@media (width < 900px) { display: none }")}></div> });
+    assert!(out.contains("@media (width < 900px)"), "{out}");
+}
+
+#[test]
+fn merges_styles_with_existing_head_content() {
+    let out = html(rsx! {
+        <html>
+            <head><title>"Page Title"</title><meta charset="utf-8"/></head>
+            <body><div mix={css("font-weight: bold")}>"Bold text"</div></body>
+        </html>
+    });
+    let head = &out[out.find("<head>").expect("head") + 6..out.find("</head>").expect("head end")];
+    assert!(head.starts_with(r#"<title>Page Title</title><meta charset="utf-8"><style data-rmx-style="#), "{out}");
+    assert!(head.contains("font-weight: bold"), "{out}");
+    assert_eq!(out.matches("<head>").count(), 1, "{out}");
+}
+
+#[test]
+fn places_styles_after_the_html_start_tag_when_a_document_has_no_head() {
+    let out = html(rsx! { <html lang="en"><body><main mix={css("color: teal")}>"Main"</main></body></html> });
+    assert!(out.starts_with(r#"<html lang="en"><head><style data-rmx-style="#), "{out}");
+    assert!(out.contains("</style></head><body><main class=\"rmxc-"), "{out}");
+}
+
 // svg
 
 #[test]

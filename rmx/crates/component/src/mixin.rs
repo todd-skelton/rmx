@@ -309,12 +309,16 @@ impl From<Vec<Mixin>> for Mixin {
 }
 
 /// Scoped styles from CSS declarations. The same text always yields the same class, and
-/// rules are cached per thread, so calling `css` in `render` is cheap.
+/// rules are cached per thread, so calling `css` in `render` is cheap. Empty (or blank)
+/// text adds no class and no rule.
 ///
 /// ```ignore
 /// css("padding: 12px 24px; border-radius: 4px; &:hover { background: navy } @media (width < 600px) { padding: 8px }")
 /// ```
 pub fn css(text: &str) -> Mixin {
+    if text.trim().is_empty() {
+        return Mixin(MixinKind::Many(Vec::new()));
+    }
     thread_local! {
         static CACHE: std::cell::RefCell<HashMap<String, Rc<StyleRule>>> = std::cell::RefCell::new(HashMap::new());
     }
