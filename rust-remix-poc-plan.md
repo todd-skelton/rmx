@@ -556,7 +556,7 @@ Remaining gaps:
    (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files);
    and `remix assets` exists as `rmx::assets::assets_command` over the asset server's
    `assets()` / `asset_details()` inspection (list, `inspect <url-or-file>`, with statuses
-   reachable, denied, not-allowed, missing and unmapped), run by the assets and template
+   reachable, denied, not-allowed, missing, unmapped and unsupported), run by the assets and template
    demos for `-- assets`. The asset server's mounts compile through `rmx::assets::routes`
    (Remix's `compileRoutes`, with `paths` for Windows, UNC and POSIX file paths): mount keys
    canonicalize as URL pathnames, absolute directories, query strings, fragments, encoded dot
@@ -565,6 +565,20 @@ Remaining gaps:
    the fingerprint format and parse cases of `fingerprint.test.ts` are ported one per case;
    the module graph, script transforms and CommonJS checks are the TypeScript side of
    Remix's asset server, which rmx apps (Rust compiled to wasm) do not have.
+   The server itself follows Remix's `createAssetServer`: it serves scripts (`.js`, `.mjs`),
+   stylesheets and file assets (`files.extensions`, plus `.wasm`); other files, missing or
+   denied files and stale or missing fingerprints return `None` so the router continues;
+   request transforms take `name` or `name:param` with Remix's validation and messages,
+   run before the global transforms (which may skip by returning `None`), and can be cached
+   through a `FileCache` keyed by `cache_key`; malformed transform requests are 400s and
+   other failures go to `on_error` with Remix's error codes and become a 500; CSS
+   `@import`s are checked for cycles, and `url()` transform requests keep their other query
+   parameters and fragments; content hashes are Remix's (six characters of base64url
+   SHA-256); `preloads()` takes several roots of mixed kinds, shallowest first. 103 cases of
+   `asset-server.test.ts` are ported (`crates/assets/tests/asset_server.rs`); the rest cover
+   TypeScript and JSX compilation, source maps, import maps, package and bare imports, barrel
+   files, module loaders, watch mode and HMR. One divergence: fingerprinted scripts import
+   fingerprinted URLs directly instead of through an import map.
 4. Data access (`data-table`) is intentionally left to existing Rust libraries.
 5. Not yet ported: a few `frame.test.tsx` streamed template parsing edge cases that need
    a document still being parsed (`document.write` splitting a template). Cases that load

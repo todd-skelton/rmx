@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 
 use http::StatusCode;
 use rmx::{rsx, Component, Handle, Node};
-use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, GlobalTransform, Param, Transformed};
+use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, FilesOptions, GlobalTransform, Param, TransformContext, Transformed};
 use rmx::fetch::{response, Response};
 use rmx::middleware::logger::logger;
 use rmx::render::Render;
@@ -49,19 +49,24 @@ pub fn asset_server(root: &Path, fingerprint: bool) -> Result<AssetServer, Asset
         allow_files: vec!["app/**/public/**".into()],
         deny_files: vec!["app/**/*.test.*".into()],
         fingerprint,
-        global_transforms: vec![GlobalTransform::new(&[".svg"], |bytes| {
-            let svg = String::from_utf8(bytes).map_err(|_| "SVG files must be UTF-8".to_string())?;
-            Ok(minify_svg(&svg).into())
-        })],
-        transforms: vec![("recolor".into(), FileTransform::new(&[".svg"], Param::Required, recolor))],
+        files: Some(FilesOptions {
+            extensions: vec![".svg".into()],
+            global_transforms: vec![GlobalTransform::new(|bytes, _| {
+                let svg = String::from_utf8(bytes).map_err(|_| "SVG files must be UTF-8".to_string())?;
+                Ok(Some(minify_svg(&svg).into()))
+            })
+            .extensions(&[".svg"])],
+            transforms: vec![("recolor".into(), FileTransform::new(recolor).param(Param::Required).extensions(&[".svg"]))],
+            ..Default::default()
+        }),
         ..Default::default()
     })
 }
 
 /// The `recolor` request transform: `image.svg?transform=recolor:8B5CF6` replaces
 /// `currentColor` with the color.
-fn recolor(bytes: Vec<u8>, param: Option<&str>) -> Result<Transformed, String> {
-    let param = param.unwrap_or_default();
+fn recolor(bytes: Vec<u8>, context: &TransformContext<'_>) -> Result<Transformed, String> {
+    let param = context.param.unwrap_or_default();
     let hex = param.strip_prefix('#').unwrap_or(param);
     if !matches!(hex.len(), 3 | 4 | 6 | 8) || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("Expected a hex color, with or without a leading #".into());

@@ -2,17 +2,23 @@
 //!
 //! An [`AssetServer`] maps public URLs under a base path onto mounted directories, serves
 //! only files the allow and deny globs permit, and rewrites references between assets so
-//! every URL it hands out is current:
+//! every URL it hands out is current. It serves three kinds of files:
 //!
-//! - CSS `url(...)` and `@import` references, and relative module specifiers in JavaScript
-//!   (`import`, `import()`, `new URL('...', import.meta.url)`, as wasm-bindgen emits), become
-//!   asset URLs.
-//! - With `fingerprint: true`, URLs carry a content hash (`app.@k3j2h1x9.css`) and are served
-//!   as immutable; otherwise they are revalidated with an `ETag`.
-//! - Named request transforms run on demand (`image.svg?transform=recolor:8B5CF6`), after
-//!   the global transforms that run for every file of their extensions.
+//! - Scripts (`.js`, `.mjs`): relative module specifiers (`import`, `import()`) and
+//!   `new URL('...', import.meta.url)` files, as wasm-bindgen emits, become asset URLs.
+//! - Stylesheets (`.css`): `@import` and `url(...)` references become asset URLs.
+//! - File assets: the extensions in [`FilesOptions::extensions`], plus `.wasm`. Named request
+//!   transforms run on demand (`image.svg?transform=recolor:8B5CF6`), then the global
+//!   transforms.
 //!
-//! Files are read when requested, so edits show up on the next request without restarting.
+//! With `fingerprint: true`, URLs carry a content hash (`app.@k3j2h1.css`), are served as
+//! immutable, and only fingerprinted URLs are served; otherwise responses are revalidated
+//! with an `ETag`. Files are read when requested, so edits show up on the next request
+//! without restarting.
+//!
+//! Requests the server does not handle (missing, not allowed, unsupported types, stale
+//! fingerprints) return `None` so the router can continue; failures go to
+//! [`AssetOptions::on_error`] and become a `500`.
 //!
 //! ```ignore
 //! let assets = AssetServer::new(AssetOptions {
@@ -33,6 +39,7 @@ mod inspect;
 pub mod paths;
 mod rewrite;
 pub mod routes;
+mod transforms;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -41,79 +48,24 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use http::{header, HeaderValue, Method, StatusCode};
-use rmx_fetch::{Body, Response};
+use rmx_fetch::{Body, File, Response};
+use rmx_headers::IfNoneMatch;
 use rmx_router::Context;
 
 pub use glob::glob_match;
 pub use inspect::{assets_command, assets_command_output, AssetAccess, AssetDetails, AssetKind, AssetStatus};
+pub use transforms::{FileCache, FileTransform, FilesOptions, GlobalTransform, Param, TransformContext, Transformed};
 
-/// A request transform's parameter: none, required (`name:param`) or optional.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Param {
-    #[default]
-    None,
-    Required,
-    Optional,
-}
-
-/// The output of a transform: new bytes, and optionally a new extension (`.webp`).
-pub struct Transformed {
-    pub content: Vec<u8>,
-    pub extension: Option<String>,
-}
-
-impl From<Vec<u8>> for Transformed {
-    fn from(content: Vec<u8>) -> Self {
-        Transformed { content, extension: None }
-    }
-}
-
-impl From<String> for Transformed {
-    fn from(content: String) -> Self {
-        Transformed { content: content.into_bytes(), extension: None }
-    }
-}
-
-type TransformFn = dyn Fn(Vec<u8>, Option<&str>) -> Result<Transformed, String> + Send + Sync;
-
-/// A named transform requested from asset URLs (`defineFileTransform`).
-#[derive(Clone)]
-pub struct FileTransform {
-    /// Extensions (`.svg`) this transform accepts; empty accepts any.
-    pub extensions: Vec<String>,
-    pub param: Param,
-    pub transform: Arc<TransformFn>,
-}
-
-impl FileTransform {
-    pub fn new(
-        extensions: &[&str],
-        param: Param,
-        transform: impl Fn(Vec<u8>, Option<&str>) -> Result<Transformed, String> + Send + Sync + 'static,
-    ) -> FileTransform {
-        FileTransform { extensions: extensions.iter().map(|e| e.to_string()).collect(), param, transform: Arc::new(transform) }
-    }
-}
-
-/// A transform that runs for every served file with one of its extensions.
-#[derive(Clone)]
-pub struct GlobalTransform {
-    pub extensions: Vec<String>,
-    pub transform: Arc<dyn Fn(Vec<u8>) -> Result<Transformed, String> + Send + Sync>,
-}
-
-impl GlobalTransform {
-    pub fn new(extensions: &[&str], transform: impl Fn(Vec<u8>) -> Result<Transformed, String> + Send + Sync + 'static) -> Self {
-        GlobalTransform { extensions: extensions.iter().map(|e| e.to_string()).collect(), transform: Arc::new(transform) }
-    }
-}
+/// Called with errors that fail a request (Remix's `onError`). Return a response to send
+/// instead of the default `500 Internal Server Error`.
+pub type ErrorHandler = Arc<dyn Fn(&AssetError) -> Option<Response> + Send + Sync>;
 
 /// Options for [`AssetServer::new`].
 #[derive(Clone)]
 pub struct AssetOptions {
     /// Relative paths in the other options resolve from here.
     pub root_dir: PathBuf,
-    /// URL prefix, like `/assets`.
+    /// URL prefix, like `/assets`. Empty serves from the root.
     pub base_path: String,
     /// `(url segment, directory)` pairs: `("app", "app")` serves `app/x.css` at
     /// `/assets/app/x.css`.
@@ -122,12 +74,13 @@ pub struct AssetOptions {
     pub allow_files: Vec<String>,
     /// Globs that are never served, even when allowed.
     pub deny_files: Vec<String>,
-    /// Put content hashes in URLs and serve them as immutable.
+    /// Put content hashes in URLs and serve them as immutable. Only fingerprinted URLs
+    /// are served.
     pub fingerprint: bool,
-    pub transforms: Vec<(String, FileTransform)>,
-    pub global_transforms: Vec<GlobalTransform>,
-    /// Most transforms one URL may request.
-    pub max_request_transforms: usize,
+    /// File assets: extensions served as they are or through transforms.
+    pub files: Option<FilesOptions>,
+    /// Called for requests that fail; the default logs the error to stderr.
+    pub on_error: Option<ErrorHandler>,
 }
 
 impl Default for AssetOptions {
@@ -139,36 +92,81 @@ impl Default for AssetOptions {
             allow_files: Vec::new(),
             deny_files: Vec::new(),
             fingerprint: false,
-            transforms: Vec::new(),
-            global_transforms: Vec::new(),
-            max_request_transforms: 5,
+            files: None,
+            on_error: None,
+        }
+    }
+}
+
+/// What went wrong (Remix's `AssetServerCompilationError` codes, plus `Config` for invalid
+/// options and arguments).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AssetErrorCode {
+    Config,
+    FileNotFound,
+    FileNotAllowed,
+    FileNotSupported,
+    FileOutsideMounts,
+    FileTransformQueryInvalid,
+    FileTransformNotSupported,
+    FileTransformResultInvalid,
+    FileTransformFailed,
+    EmitFailed,
+    ImportResolutionFailed,
+    ImportNotSupported,
+    ImportNotAllowed,
+    ImportOutsideMounts,
+    UrlResolutionFailed,
+    UrlNotSupported,
+    UrlNotAllowed,
+    UrlOutsideMounts,
+}
+
+impl AssetErrorCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AssetErrorCode::Config => "CONFIG",
+            AssetErrorCode::FileNotFound => "FILE_NOT_FOUND",
+            AssetErrorCode::FileNotAllowed => "FILE_NOT_ALLOWED",
+            AssetErrorCode::FileNotSupported => "FILE_NOT_SUPPORTED",
+            AssetErrorCode::FileOutsideMounts => "FILE_OUTSIDE_MOUNTS",
+            AssetErrorCode::FileTransformQueryInvalid => "FILE_TRANSFORM_QUERY_INVALID",
+            AssetErrorCode::FileTransformNotSupported => "FILE_TRANSFORM_NOT_SUPPORTED",
+            AssetErrorCode::FileTransformResultInvalid => "FILE_TRANSFORM_RESULT_INVALID",
+            AssetErrorCode::FileTransformFailed => "FILE_TRANSFORM_FAILED",
+            AssetErrorCode::EmitFailed => "EMIT_FAILED",
+            AssetErrorCode::ImportResolutionFailed => "IMPORT_RESOLUTION_FAILED",
+            AssetErrorCode::ImportNotSupported => "IMPORT_NOT_SUPPORTED",
+            AssetErrorCode::ImportNotAllowed => "IMPORT_NOT_ALLOWED",
+            AssetErrorCode::ImportOutsideMounts => "IMPORT_OUTSIDE_MOUNTS",
+            AssetErrorCode::UrlResolutionFailed => "URL_RESOLUTION_FAILED",
+            AssetErrorCode::UrlNotSupported => "URL_NOT_SUPPORTED",
+            AssetErrorCode::UrlNotAllowed => "URL_NOT_ALLOWED",
+            AssetErrorCode::UrlOutsideMounts => "URL_OUTSIDE_MOUNTS",
         }
     }
 }
 
 /// Why an asset could not be served or linked.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AssetError {
-    /// Bad options, found by [`AssetServer::new`].
-    Config(String),
-    /// No mount contains the file, or the access rules refuse it.
-    NotServable(String),
-    NotFound(String),
-    /// An unknown or invalid transform request.
-    BadTransform(String),
-    /// A transform failed.
-    TransformFailed(String),
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssetError {
+    pub code: AssetErrorCode,
+    pub message: String,
+}
+
+impl AssetError {
+    pub fn new(code: AssetErrorCode, message: impl Into<String>) -> AssetError {
+        AssetError { code, message: message.into() }
+    }
+
+    fn config(message: impl Into<String>) -> AssetError {
+        AssetError::new(AssetErrorCode::Config, message)
+    }
 }
 
 impl fmt::Display for AssetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AssetError::Config(m) => write!(f, "invalid asset options: {m}"),
-            AssetError::NotServable(m) => write!(f, "not a servable asset: {m}"),
-            AssetError::NotFound(m) => write!(f, "asset not found: {m}"),
-            AssetError::BadTransform(m) => write!(f, "invalid transform: {m}"),
-            AssetError::TransformFailed(m) => write!(f, "transform failed: {m}"),
-        }
+        f.write_str(&self.message)
     }
 }
 
@@ -195,27 +193,30 @@ struct Mount {
 
 struct Inner {
     root: PathBuf,
-    base: String,
     /// Longest URL root first.
     mounts: Vec<Mount>,
     allow: Vec<String>,
     deny: Vec<String>,
     fingerprint: bool,
-    transforms: HashMap<String, FileTransform>,
-    global: Vec<GlobalTransform>,
-    max_transforms: usize,
-    cache: Mutex<HashMap<(PathBuf, Vec<String>), Built>>,
+    files: transforms::Files,
+    on_error: Option<ErrorHandler>,
+    /// Emitted scripts, styles and untransformed files.
+    cache: Mutex<HashMap<PathBuf, Built>>,
+    /// Each file's last seen `(modified, len)` and a version that changes with it, for
+    /// transformed-output cache keys.
+    versions: Mutex<HashMap<PathBuf, (Snapshot, u64)>>,
 }
+
+type Snapshot = (Option<SystemTime>, u64);
 
 /// A file after transforms and reference rewriting.
 #[derive(Clone)]
 struct Built {
-    modified: Option<SystemTime>,
-    len: u64,
+    snapshot: Snapshot,
     /// `(file, transforms, hash)` of every asset this one links to.
     deps: Vec<(PathBuf, Vec<String>, String)>,
-    /// Module specifiers this file imports (for preloads).
-    imports: Vec<(PathBuf, Vec<String>)>,
+    /// Scripts a script imports, or stylesheets a stylesheet `@import`s (for preloads).
+    imports: Vec<PathBuf>,
     body: Arc<Vec<u8>>,
     extension: String,
     hash: String,
@@ -224,13 +225,16 @@ struct Built {
 impl AssetServer {
     pub fn new(options: AssetOptions) -> Result<AssetServer, AssetError> {
         if options.allow_files.is_empty() {
-            return Err(AssetError::Config("allow_files must list the files that may be served".into()));
+            return Err(AssetError::config("allow_files must list the files that may be served"));
         }
-        let root = options.root_dir.canonicalize().map_err(|e| AssetError::Config(format!("root_dir: {e}")))?;
-        let base = format!("/{}", options.base_path.trim_matches('/'));
+        if options.mounts.is_empty() {
+            return Err(AssetError::config("mounts must include at least one entry"));
+        }
+        let files = transforms::Files::resolve(options.files).map_err(AssetError::config)?;
+        let root = options.root_dir.canonicalize().map_err(|e| AssetError::config(format!("root_dir: {e}")))?;
         let root_dir = paths::strip_verbatim(&root.to_string_lossy());
         let config = routes::MountConfig { mounts: options.mounts.clone(), root_dir };
-        let compiled = routes::compile_routes(&base, &[config]).map_err(AssetError::Config)?;
+        let compiled = routes::compile_routes(&options.base_path, &[config]).map_err(AssetError::config)?;
         let mut mounts = Vec::new();
         for mount in compiled.mounts {
             let dir_path = root.join(&mount.file_root_value);
@@ -238,120 +242,234 @@ impl AssetServer {
             mounts.push(Mount { url_root: mount.url_root, dir: dir_path, file_root: mount.file_root_value });
         }
         mounts.sort_by_key(|m| std::cmp::Reverse(m.url_root.len()));
-        let mut transforms = HashMap::new();
-        for (name, t) in options.transforms {
-            if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
-                return Err(AssetError::Config(format!("transform names use letters, digits and '-': {name}")));
-            }
-            transforms.insert(name, t);
-        }
         Ok(AssetServer(Arc::new(Inner {
             root,
-            base,
             mounts,
             allow: options.allow_files,
             deny: options.deny_files,
             fingerprint: options.fingerprint,
-            transforms,
-            global: options.global_transforms,
-            max_transforms: options.max_request_transforms,
+            files,
+            on_error: options.on_error,
             cache: Mutex::new(HashMap::new()),
+            versions: Mutex::new(HashMap::new()),
         })))
     }
 
-    /// The URL for a file (absolute, or relative to `root_dir`).
+    /// The URL for a file: a path relative to `root_dir`, an absolute path or a `file://`
+    /// URL (`getHref`).
     pub fn href(&self, file: impl AsRef<Path>) -> Result<String, AssetError> {
         self.href_with(file, &[])
     }
 
-    /// The URL for a file with request transforms applied (`"recolor:8B5CF6"`).
+    /// The URL for a file asset with request transforms applied, each `"name"` or
+    /// `"name:param"` (`getHref` with `transform`). Only configured file assets take
+    /// transforms.
     pub fn href_with(&self, file: impl AsRef<Path>, transforms: &[&str]) -> Result<String, AssetError> {
-        let path = self.resolve(file.as_ref());
-        let transforms: Vec<String> = transforms.iter().map(|t| t.to_string()).collect();
-        self.0.href(&path, &transforms, &mut HashSet::new())
+        let file = self.0.served_file(&self.0.file_input(file.as_ref())?)?;
+        let kind = self.0.kind(&file);
+        if !transforms.is_empty() && kind != AssetKind::File {
+            return Err(AssetError::config("AssetServer::href_with only supports transforms for configured file assets"));
+        }
+        let query: Vec<String> = transforms.iter().map(|t| t.to_string()).collect();
+        let transforms = self.0.files.parse(&query).map_err(|e| AssetError::config(e.message))?;
+        if kind == AssetKind::Style {
+            // Resolve the import graph, so missing or circular imports fail here.
+            self.0.build(&file, &[], &mut Vec::new())?;
+        }
+        self.0.href(&file, &transforms, &mut Vec::new())
     }
 
     /// The URL of a module entry and the modules it imports (`getScriptEntry`).
     pub fn script_entry(&self, file: impl AsRef<Path>) -> Result<ScriptEntry, AssetError> {
-        let path = self.resolve(file.as_ref());
-        let href = self.0.href(&path, &[], &mut HashSet::new())?;
-        let mut preloads = Vec::new();
-        let mut seen = HashSet::new();
-        let mut queue = std::collections::VecDeque::from([(path, Vec::<String>::new())]);
-        while let Some((file, transforms)) = queue.pop_front() {
-            if !seen.insert(file.clone()) {
-                continue;
-            }
-            let built = self.0.build(&file, &transforms, &mut HashSet::new())?;
-            if is_script(&built.extension) {
-                preloads.push(self.0.href(&file, &transforms, &mut HashSet::new())?);
-                queue.extend(built.imports.iter().cloned());
-            }
-        }
+        let href = self.href(file.as_ref())?;
+        let preloads = self.preloads(&[file.as_ref()])?;
         Ok(ScriptEntry { href, preloads })
     }
 
-    /// Serve an asset request. `None` when the URL is outside the base path (let the router
-    /// continue); otherwise a response, `404` for files that are missing or not allowed.
+    /// The URLs to preload for scripts, stylesheets and file assets (`getPreloads`): the
+    /// roots, then what they import, shallowest first, each URL once. Scripts follow their
+    /// imports and stylesheets their `@import`s; file assets are listed as they are.
+    pub fn preloads<P: AsRef<Path>>(&self, files: &[P]) -> Result<Vec<String>, AssetError> {
+        let mut order: Vec<AssetKind> = Vec::new();
+        let mut groups: HashMap<AssetKind, Vec<PathBuf>> = HashMap::new();
+        for file in files {
+            let file = self.0.served_file(&self.0.file_input(file.as_ref())?)?;
+            let kind = self.0.kind(&file);
+            if !order.contains(&kind) {
+                order.push(kind);
+            }
+            groups.entry(kind).or_default().push(file);
+        }
+        let mut layered = Vec::new();
+        for kind in &order {
+            let roots = &groups[kind];
+            layered.push(match kind {
+                AssetKind::File => vec![roots.iter().map(|f| self.0.href(f, &[], &mut Vec::new())).collect::<Result<Vec<_>, _>>()?],
+                _ => self.0.layers(roots)?,
+            });
+        }
+        let mut urls = Vec::new();
+        let mut seen = HashSet::new();
+        let depth = layered.iter().map(Vec::len).max().unwrap_or(0);
+        for d in 0..depth {
+            for layers in &layered {
+                for url in layers.get(d).into_iter().flatten() {
+                    if seen.insert(url.clone()) {
+                        urls.push(url.clone());
+                    }
+                }
+            }
+        }
+        Ok(urls)
+    }
+
+    /// Serve an asset request (`fetch`). `None` when this server does not handle it: not
+    /// GET or HEAD, outside every mount, missing, not allowed, an unsupported file type,
+    /// or (when fingerprinting) a URL without the current fingerprint. Malformed transform
+    /// requests are `400`; other failures go to [`AssetOptions::on_error`].
     pub fn fetch(&self, ctx: &Context) -> Option<Response> {
         let head = *ctx.method() == Method::HEAD;
         if !head && *ctx.method() != Method::GET {
             return None;
         }
         let url = ctx.url();
-        let pathname = url.pathname();
-        if !pathname.starts_with(&format!("{}/", self.0.base)) {
+        let (pathname, fingerprint) = parse_fingerprint(url.pathname());
+        let (mount, mapped) = self.0.mapped_url(&pathname)?;
+        if self.0.fingerprint && fingerprint.is_none() {
             return None;
         }
-        let (pathname, fingerprint) = parse_fingerprint(pathname);
-        let Some(file) = self.0.file_for_url(&pathname) else { return Some(status(StatusCode::NOT_FOUND, "Not found")) };
-        let transforms: Vec<String> = url.search_params().get_all("transform").into_iter().map(str::to_string).collect();
-        let built = match self.0.build(&file, &transforms, &mut HashSet::new()) {
-            Ok(b) => b,
-            Err(AssetError::BadTransform(m)) | Err(AssetError::TransformFailed(m)) => return Some(status(StatusCode::BAD_REQUEST, &m)),
-            Err(_) => return Some(status(StatusCode::NOT_FOUND, "Not found")),
+        let query: Vec<String> = url.search_params().get_all("transform").into_iter().map(str::to_string).collect();
+        match self.0.kind(&mapped) {
+            AssetKind::Unsupported => return None,
+            AssetKind::Script | AssetKind::Style if !query.is_empty() => {
+                return Some(plain(StatusCode::BAD_REQUEST, "Asset request transforms are only supported for configured file assets"));
+            }
+            _ => {}
+        }
+        let file = mapped.canonicalize().ok()?;
+        if !file.starts_with(&mount.dir) || !file.is_file() || !self.0.allowed(&file) {
+            return None;
+        }
+        let built = self.0.files.parse(&query).and_then(|transforms| self.0.build(&file, &transforms, &mut Vec::new()));
+        let built = match built {
+            Ok(built) => built,
+            Err(e) => {
+                return match e.code {
+                    AssetErrorCode::FileNotFound | AssetErrorCode::FileNotAllowed => None,
+                    AssetErrorCode::FileTransformQueryInvalid => Some(plain(StatusCode::BAD_REQUEST, &e.message)),
+                    _ => Some(self.0.error_response(&e)),
+                };
+            }
         };
         if fingerprint.as_deref().is_some_and(|f| f != built.hash) {
-            // A stale fingerprinted URL: never serve other content as immutable.
-            return Some(status(StatusCode::NOT_FOUND, "Not found"));
+            return None;
         }
         let etag = format!("W/\"{}\"", built.hash);
-        let cache_control = if fingerprint.is_some() { "public, max-age=31536000, immutable" } else { "no-cache" };
-        let mut res = if ctx.header("if-none-match").is_some_and(|v| v.split(',').any(|t| t.trim() == etag)) {
+        let etag_value = HeaderValue::from_str(&etag).expect("hash is header-safe");
+        if IfNoneMatch::parse(ctx.header("if-none-match")).matches(&etag) {
             let mut res = Response::new(Body::empty());
             *res.status_mut() = StatusCode::NOT_MODIFIED;
-            res
-        } else {
-            let mut res = Response::new(if head { Body::empty() } else { Body::from((*built.body).clone()) });
-            let ct = rmx_mime::detect_content_type(&built.extension).unwrap_or_else(|| "application/octet-stream".into());
-            if let Ok(v) = HeaderValue::from_str(&ct) {
-                res.headers_mut().insert(header::CONTENT_TYPE, v);
-            }
-            res.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(built.body.len()));
-            res
-        };
-        if let Ok(v) = HeaderValue::from_str(&etag) {
-            res.headers_mut().insert(header::ETAG, v);
+            res.headers_mut().insert(header::ETAG, etag_value);
+            return Some(res);
         }
+        let mut res = Response::new(if head { Body::empty() } else { Body::from((*built.body).clone()) });
+        let ct = rmx_mime::detect_content_type(&built.extension).unwrap_or_else(|| "application/octet-stream".into());
+        if let Ok(v) = HeaderValue::from_str(&ct) {
+            res.headers_mut().insert(header::CONTENT_TYPE, v);
+        }
+        res.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(built.body.len()));
+        res.headers_mut().insert(header::ETAG, etag_value);
+        let cache_control = if fingerprint.is_some() { "public, max-age=31536000, immutable" } else { "no-cache" };
         res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static(cache_control));
         Some(res)
     }
+}
 
-    fn resolve(&self, file: &Path) -> PathBuf {
-        let path = if file.is_absolute() { file.to_path_buf() } else { self.0.root.join(file) };
-        path.canonicalize().unwrap_or(path)
-    }
+/// A `text/plain; charset=utf-8` response.
+fn plain(status: StatusCode, message: &str) -> Response {
+    let mut res = Response::new(Body::from(message.to_string()));
+    *res.status_mut() = status;
+    res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/plain; charset=utf-8"));
+    res
+}
+
+/// A file path for messages: absolute, `/`-separated.
+fn display(path: &Path) -> String {
+    paths::normalize_windows_path(&paths::strip_verbatim(&path.to_string_lossy()))
+}
+
+fn extension_of(path: &Path) -> String {
+    path.extension().map(|e| format!(".{}", e.to_string_lossy().to_ascii_lowercase())).unwrap_or_default()
 }
 
 impl Inner {
-    fn href(&self, file: &Path, transforms: &[String], visiting: &mut HashSet<PathBuf>) -> Result<String, AssetError> {
-        let mut url = self.url_for_file(file).ok_or_else(|| AssetError::NotServable(file.display().to_string()))?;
-        if !self.allowed(file) {
-            return Err(AssetError::NotServable(file.display().to_string()));
+    /// How a file is served, by extension.
+    fn kind(&self, file: &Path) -> AssetKind {
+        let extension = extension_of(file);
+        if is_script(&extension) {
+            AssetKind::Script
+        } else if extension == ".css" {
+            AssetKind::Style
+        } else if self.files.extensions.contains(&extension) {
+            AssetKind::File
+        } else {
+            AssetKind::Unsupported
         }
-        if self.fingerprint && !visiting.contains(file) {
-            let built = self.build(file, transforms, visiting)?;
-            url = format_fingerprint(&url, &built.hash);
+    }
+
+    /// A `file://` URL, an absolute path, or a path relative to the root.
+    fn file_input(&self, input: &Path) -> Result<PathBuf, AssetError> {
+        let text = input.to_string_lossy();
+        if let Some(rest) = text.strip_prefix("file://") {
+            let path = rmx_url::decode(rest.split(['?', '#']).next().unwrap_or_default());
+            // `file:///C:/x` on Windows.
+            let path = if path.len() > 2 && path.as_bytes()[2] == b':' { &path[1..] } else { &path[..] };
+            return Ok(PathBuf::from(path));
+        }
+        if text.contains("://") {
+            return Err(AssetError::config(format!("Expected a file path or file:// URL, received \"{text}\"")));
+        }
+        Ok(if input.is_absolute() { input.to_path_buf() } else { self.root.join(input) })
+    }
+
+    /// The real path of a file the server can serve, or why not (`resolveServedFileOrThrow`).
+    fn served_file(&self, file: &Path) -> Result<PathBuf, AssetError> {
+        let real = file.canonicalize().ok().filter(|f| f.is_file());
+        let Some(file) = real else {
+            return Err(AssetError::new(AssetErrorCode::FileNotFound, format!("File not found: {}", display(file))));
+        };
+        if self.kind(&file) == AssetKind::Unsupported {
+            return Err(AssetError::new(AssetErrorCode::FileNotSupported, format!("File type is not supported: {}", display(&file))));
+        }
+        if !self.allowed(&file) {
+            return Err(AssetError::new(
+                AssetErrorCode::FileNotAllowed,
+                format!(
+                    "File \"{}\" is not allowed by the asset server access configuration. Add a matching allow_files rule, or remove a conflicting deny_files rule.",
+                    display(&file)
+                ),
+            ));
+        }
+        if self.url_for_file(&file).is_none() {
+            return Err(AssetError::new(AssetErrorCode::FileOutsideMounts, format!("File {} is outside all configured mounts.", display(&file))));
+        }
+        Ok(file)
+    }
+
+    /// The URL of a servable file, fingerprinted when fingerprinting is on.
+    fn href(&self, file: &Path, transforms: &[String], stack: &mut Vec<PathBuf>) -> Result<String, AssetError> {
+        let hash = if self.fingerprint { Some(self.build(file, transforms, stack)?.hash) } else { None };
+        self.url_with(file, transforms, hash.as_deref())
+    }
+
+    /// The URL of a file with its transforms, fingerprinted with `hash` when fingerprinting
+    /// is on.
+    fn url_with(&self, file: &Path, transforms: &[String], hash: Option<&str>) -> Result<String, AssetError> {
+        let mut url = self.url_for_file(file).ok_or_else(|| {
+            AssetError::new(AssetErrorCode::FileOutsideMounts, format!("File {} is outside all configured mounts.", display(file)))
+        })?;
+        if let (true, Some(hash)) = (self.fingerprint, hash) {
+            url = format_fingerprint(&url, hash);
         }
         if !transforms.is_empty() {
             let mut params = rmx_url::SearchParams::new();
@@ -361,6 +479,36 @@ impl Inner {
             url = format!("{url}?{params}");
         }
         Ok(url)
+    }
+
+    /// Preload layers for scripts or stylesheets: the roots, then each level of imports.
+    fn layers(&self, roots: &[PathBuf]) -> Result<Vec<Vec<String>>, AssetError> {
+        let mut visited: HashSet<PathBuf> = HashSet::new();
+        let mut frontier: Vec<PathBuf> = roots.iter().filter(|r| visited.insert((*r).clone())).cloned().collect();
+        let mut layers = Vec::new();
+        while !frontier.is_empty() {
+            let mut layer = Vec::new();
+            let mut next = Vec::new();
+            for file in frontier {
+                let built = self.build(&file, &[], &mut Vec::new())?;
+                layer.push(self.url_with(&file, &[], Some(&built.hash))?);
+                next.extend(built.imports.iter().filter(|i| visited.insert((*i).clone())).cloned());
+            }
+            layers.push(layer);
+            frontier = next;
+        }
+        Ok(layers)
+    }
+
+    fn error_response(&self, error: &AssetError) -> Response {
+        let custom = match &self.on_error {
+            Some(handler) => handler(error),
+            None => {
+                eprintln!("{}: {error}", error.code.as_str());
+                None
+            }
+        };
+        custom.unwrap_or_else(|| plain(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"))
     }
 
     fn relative(&self, file: &Path) -> Option<String> {
@@ -378,21 +526,16 @@ impl Inner {
         self.mounts.iter().find_map(|Mount { url_root, dir, .. }| {
             let rel = file.strip_prefix(dir).ok()?;
             let segments: Vec<String> = rel.components().map(|c| rmx_url::encode_component(&c.as_os_str().to_string_lossy())).collect();
-            Some(format!("{url_root}/{}", segments.join("/")))
+            Some(format!("{}/{}", url_root.trim_end_matches('/'), segments.join("/")))
         })
-    }
-
-    fn file_for_url(&self, pathname: &str) -> Option<PathBuf> {
-        let (mount, path) = self.mapped_url(pathname)?;
-        let path = path.canonicalize().ok()?;
-        (path.starts_with(&mount.dir) && path.is_file() && self.allowed(&path)).then_some(path)
     }
 
     /// The mount and file a URL pathname maps to, whether or not the file exists.
     fn mapped_url(&self, pathname: &str) -> Option<(&Mount, PathBuf)> {
-        let mount = self.mounts.iter().find(|m| pathname.starts_with(&format!("{}/", m.url_root)))?;
+        let mount = self.mounts.iter().find(|m| m.url_root == "/" || pathname.starts_with(&format!("{}/", m.url_root)))?;
         let mut path = mount.dir.clone();
-        for segment in pathname[mount.url_root.len() + 1..].split('/') {
+        let rest = if mount.url_root == "/" { &pathname[1..] } else { &pathname[mount.url_root.len() + 1..] };
+        for segment in rest.split('/') {
             let segment = rmx_url::decode(segment);
             if segment.is_empty() || segment == "." || segment == ".." || segment.contains(['\\', '/', ':']) {
                 return None;
@@ -402,122 +545,268 @@ impl Inner {
         matches!(path.strip_prefix(&mount.dir).ok()?.components().next(), Some(Component::Normal(_))).then_some((mount, path))
     }
 
-    /// Read, transform and rewrite a file, reusing the cached result while the file and
-    /// everything it links to are unchanged.
-    fn build(&self, file: &Path, transforms: &[String], visiting: &mut HashSet<PathBuf>) -> Result<Built, AssetError> {
-        let meta = std::fs::metadata(file).map_err(|_| AssetError::NotFound(file.display().to_string()))?;
-        let key = (file.to_path_buf(), transforms.to_vec());
-        let cached = self.cache.lock().expect("asset cache").get(&key).cloned();
+    /// The version of a file's content this server has seen, bumped when its size or
+    /// modification time changes.
+    fn version(&self, file: &Path, snapshot: Snapshot) -> u64 {
+        let mut versions = self.versions.lock().expect("asset versions");
+        let entry = versions.entry(file.to_path_buf()).or_insert((snapshot, 0));
+        if entry.0 != snapshot {
+            *entry = (snapshot, entry.1 + 1);
+        }
+        entry.1
+    }
+
+    /// Read, transform and rewrite a file. Scripts, styles and untransformed files are kept
+    /// while the file and everything it links to are unchanged; transformed files are
+    /// recomputed unless a [`FileCache`] has them.
+    fn build(&self, file: &Path, transforms: &[String], stack: &mut Vec<PathBuf>) -> Result<Built, AssetError> {
+        let meta = std::fs::metadata(file).map_err(|_| AssetError::new(AssetErrorCode::FileNotFound, format!("File not found: {}", display(file))))?;
+        let snapshot = (meta.modified().ok(), meta.len());
+        let kind = self.kind(file);
+        if kind == AssetKind::File && self.files.has_pipeline(transforms, &extension_of(file)) {
+            return self.build_transformed(file, transforms, snapshot);
+        }
+        let cached = self.cache.lock().expect("asset cache").get(file).cloned();
         if let Some(c) = cached {
-            let fresh = c.modified == meta.modified().ok()
-                && c.len == meta.len()
-                && c.deps.iter().all(|(dep, t, hash)| {
-                    visiting.contains(dep) || self.build(dep, t, visiting).is_ok_and(|b| &b.hash == hash)
-                });
+            let fresh = c.snapshot == snapshot
+                && c.deps.iter().all(|(dep, t, hash)| stack.contains(dep) || self.build(dep, t, stack).is_ok_and(|b| &b.hash == hash));
             if fresh {
                 return Ok(c);
             }
         }
-        visiting.insert(file.to_path_buf());
-        let built = self.build_fresh(file, transforms, &meta, visiting);
-        visiting.remove(file);
+        stack.push(file.to_path_buf());
+        let built = self.build_fresh(file, kind, snapshot, stack);
+        stack.pop();
         let built = built?;
-        self.cache.lock().expect("asset cache").insert(key, built.clone());
+        self.cache.lock().expect("asset cache").insert(file.to_path_buf(), built.clone());
         Ok(built)
     }
 
-    fn build_fresh(
-        &self,
-        file: &Path,
-        transforms: &[String],
-        meta: &std::fs::Metadata,
-        visiting: &mut HashSet<PathBuf>,
-    ) -> Result<Built, AssetError> {
-        let mut body = std::fs::read(file).map_err(|_| AssetError::NotFound(file.display().to_string()))?;
-        let mut extension = file.extension().map(|e| format!(".{}", e.to_string_lossy().to_ascii_lowercase())).unwrap_or_default();
-        for global in &self.global {
-            if accepts(&global.extensions, &extension) {
-                let out = (global.transform)(body).map_err(AssetError::TransformFailed)?;
-                body = out.content;
-                extension = out.extension.unwrap_or(extension);
+    fn build_transformed(&self, file: &Path, transforms: &[String], snapshot: Snapshot) -> Result<Built, AssetError> {
+        let file_path = display(file);
+        let version = self.version(file, snapshot);
+        let key = self.files.cache.as_ref().map(|_| {
+            let identity = format!("{file_path:?},{version},{transforms:?}");
+            let digest = rmx_crypto::sha256(format!("[\"transformed-file-v3\",{:?},[{identity}]]", self.files.cache_key).as_bytes());
+            rmx_crypto::hex(&digest)
+        });
+        let built = |body: Vec<u8>, extension: String| {
+            let hash = hash_content(&body);
+            Built { snapshot, deps: Vec::new(), imports: Vec::new(), body: Arc::new(body), extension, hash }
+        };
+        if let (Some(cache), Some(key)) = (&self.files.cache, &key) {
+            if let Some(cached) = cache.get(key) {
+                return Ok(built(cached.bytes.to_vec(), extension_of(Path::new(&cached.name))));
             }
         }
-        if transforms.len() > self.max_transforms {
-            return Err(AssetError::BadTransform(format!("at most {} transforms per URL", self.max_transforms)));
+        let source = std::fs::read(file).map_err(|_| AssetError::new(AssetErrorCode::FileNotFound, format!("File not found: {file_path}")))?;
+        let Some((body, extension)) = self.files.apply(&file_path, source.clone(), extension_of(file), transforms)? else {
+            return Ok(built(source, extension_of(file)));
+        };
+        if let (Some(cache), Some(key)) = (&self.files.cache, &key) {
+            let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let content_type = rmx_mime::detect_content_type(&extension).unwrap_or_else(|| "application/octet-stream".into());
+            cache.put(key, File::new(format!("{stem}{extension}"), content_type, body.clone()));
         }
-        for invocation in transforms {
-            let (name, param) = match invocation.split_once(':') {
-                Some((n, p)) => (n, Some(p)),
-                None => (invocation.as_str(), None),
-            };
-            let t = self.transforms.get(name).ok_or_else(|| AssetError::BadTransform(format!("unknown transform {name}")))?;
-            match (t.param, param) {
-                (Param::None, Some(_)) => return Err(AssetError::BadTransform(format!("{name} takes no parameter"))),
-                (Param::Required, None) => return Err(AssetError::BadTransform(format!("{name} needs a parameter"))),
-                _ => {}
-            }
-            if !accepts(&t.extensions, &extension) {
-                return Err(AssetError::BadTransform(format!("{name} does not accept {extension} files")));
-            }
-            let out = (t.transform)(body, param).map_err(AssetError::TransformFailed)?;
-            body = out.content;
-            extension = out.extension.unwrap_or(extension);
-        }
+        Ok(built(body, extension))
+    }
+
+    fn build_fresh(&self, file: &Path, kind: AssetKind, snapshot: Snapshot, stack: &mut Vec<PathBuf>) -> Result<Built, AssetError> {
+        let file_path = display(file);
+        let mut body = std::fs::read(file).map_err(|_| AssetError::new(AssetErrorCode::FileNotFound, format!("File not found: {file_path}")))?;
         let mut deps = Vec::new();
         let mut imports = Vec::new();
-        if extension == ".css" || is_script(&extension) {
+        if matches!(kind, AssetKind::Style | AssetKind::Script) {
             let text = String::from_utf8_lossy(&body).into_owned();
             let dir = file.parent().unwrap_or(&self.root).to_path_buf();
+            let mut failure = None;
             let mut link = |spec: &str, is_import: bool| -> Option<String> {
-                let (path_part, query) = spec.split_once('?').map_or((spec, None), |(p, q)| (p, Some(q)));
-                let target = dir.join(path_part.replace('/', std::path::MAIN_SEPARATOR_STR));
-                let target = target.canonicalize().ok()?;
-                let target_transforms: Vec<String> = query
-                    .map(|q| rmx_url::SearchParams::parse(q).get_all("transform").into_iter().map(str::to_string).collect())
-                    .unwrap_or_default();
-                let href = self.href(&target, &target_transforms, visiting).ok()?;
-                if !visiting.contains(&target) {
-                    if let Ok(b) = self.build(&target, &target_transforms, visiting) {
-                        deps.push((target.clone(), target_transforms.clone(), b.hash));
+                if failure.is_some() {
+                    return None;
+                }
+                let linked = if kind == AssetKind::Style {
+                    self.link_style(spec, is_import, &dir, &file_path, stack)
+                } else {
+                    self.link_script(spec, is_import, &dir, &file_path, stack)
+                };
+                match linked {
+                    Ok(Some(link)) => {
+                        if let Some(hash) = link.hash {
+                            deps.push((link.target.clone(), link.transforms, hash));
+                        }
+                        if link.import {
+                            imports.push(link.target);
+                        }
+                        Some(link.href)
+                    }
+                    Ok(None) => None,
+                    Err(e) => {
+                        failure = Some(e);
+                        None
                     }
                 }
-                if is_import {
-                    imports.push((target, target_transforms));
-                }
-                Some(href)
             };
-            let rewritten = if extension == ".css" { rewrite::css(&text, &mut link) } else { rewrite::script(&text, &mut link) };
+            let rewritten = if kind == AssetKind::Style { rewrite::css(&text, &mut link) } else { rewrite::script(&text, &mut link) };
+            if let Some(e) = failure {
+                return Err(e);
+            }
             body = rewritten.into_bytes();
         }
         let hash = hash_content(&body);
-        Ok(Built { modified: meta.modified().ok(), len: meta.len(), deps, imports, body: Arc::new(body), extension, hash })
+        Ok(Built { snapshot, deps, imports, body: Arc::new(body), extension: extension_of(file), hash })
     }
+
+    /// A stylesheet reference: `@import` (another stylesheet) or `url()` (a file asset),
+    /// relative to the stylesheet. Query strings and fragments are kept; `transform`
+    /// parameters on file URLs are requests for transformed output.
+    fn link_style(&self, spec: &str, is_import: bool, dir: &Path, importer: &str, stack: &mut Vec<PathBuf>) -> Result<Option<Link>, AssetError> {
+        let (path_part, query, fragment) = split_url(spec);
+        if path_part.is_empty() {
+            return Ok(None);
+        }
+        let target = dir.join(rmx_url::decode(path_part).replace('/', std::path::MAIN_SEPARATOR_STR)).canonicalize().ok().filter(|t| t.is_file());
+        if is_import {
+            let Some(target) = target.filter(|t| extension_of(t) == ".css") else {
+                return Err(AssetError::new(AssetErrorCode::ImportResolutionFailed, format!("Failed to resolve import \"{spec}\" in {importer}.")));
+            };
+            self.check_reference(&target, spec, importer, "Import", AssetErrorCode::ImportNotAllowed, AssetErrorCode::ImportOutsideMounts)?;
+            if let Some(start) = stack.iter().position(|f| *f == target) {
+                let cycle: Vec<String> = stack[start..].iter().chain([&target]).map(|f| display(f)).collect();
+                return Err(AssetError::new(AssetErrorCode::EmitFailed, format!("Circular CSS imports are not supported: {}", cycle.join(" -> "))));
+            }
+            let built = self.build(&target, &[], stack)?;
+            let href = self.url_with(&target, &[], Some(&built.hash))?;
+            return Ok(Some(Link { href: format!("{href}{query}{fragment}"), hash: Some(built.hash), transforms: Vec::new(), import: true, target }));
+        }
+        let Some(target) = target else {
+            return Err(AssetError::new(AssetErrorCode::UrlResolutionFailed, format!("Failed to resolve url(\"{spec}\") in {importer}.")));
+        };
+        if self.kind(&target) != AssetKind::File {
+            return Err(AssetError::new(
+                AssetErrorCode::UrlNotSupported,
+                format!(
+                    "URL \"{spec}\" in {importer}, resolved to \"{}\", is not a supported file asset. Add the file extension to files.extensions to serve this asset.",
+                    display(&target)
+                ),
+            ));
+        }
+        self.check_reference(&target, spec, importer, "URL", AssetErrorCode::UrlNotAllowed, AssetErrorCode::UrlOutsideMounts)?;
+        let mut params = rmx_url::SearchParams::parse(query);
+        let requested: Vec<String> = params.get_all("transform").into_iter().map(str::to_string).collect();
+        params.delete("transform");
+        let rest = if params.is_empty() { String::new() } else { format!("?{params}") };
+        let suffix = format!("{rest}{fragment}");
+        let (href, built, transforms) = match self.files.parse(&requested) {
+            Ok(transforms) => {
+                let built = self.build(&target, &transforms, stack)?;
+                (self.url_with(&target, &transforms, Some(&built.hash))?, built, transforms)
+            }
+            Err(e) => {
+                // Leave the request as written, so the browser gets the 400 for it.
+                eprintln!("Invalid file transform request \"{}\" in CSS asset {importer} for {}: {}", requested.join(","), display(&target), e.message);
+                let mut query = rmx_url::SearchParams::new();
+                for t in &requested {
+                    query.append("transform", t);
+                }
+                let built = self.build(&target, &[], stack)?;
+                (format!("{}?{query}", self.url_with(&target, &[], Some(&built.hash))?), built, Vec::new())
+            }
+        };
+        let href = match suffix.strip_prefix('?') {
+            Some(more) if href.contains('?') => format!("{href}&{more}"),
+            _ => format!("{href}{suffix}"),
+        };
+        Ok(Some(Link { href, hash: Some(built.hash), transforms, import: false, target }))
+    }
+
+    /// A script reference: a relative module specifier (`import`, `export ... from`,
+    /// `import()`) or a `new URL('...', import.meta.url)` file, as wasm-bindgen emits.
+    /// Unresolvable `new URL` references are left as written.
+    fn link_script(&self, spec: &str, is_import: bool, dir: &Path, importer: &str, stack: &mut Vec<PathBuf>) -> Result<Option<Link>, AssetError> {
+        let (path_part, query, fragment) = split_url(spec);
+        let target = dir.join(rmx_url::decode(path_part).replace('/', std::path::MAIN_SEPARATOR_STR)).canonicalize().ok().filter(|t| t.is_file());
+        if !is_import {
+            let Some(target) = target.filter(|t| self.kind(t) == AssetKind::File && self.allowed(t)) else { return Ok(None) };
+            let Ok(built) = self.build(&target, &[], stack) else { return Ok(None) };
+            let Ok(href) = self.url_with(&target, &[], Some(&built.hash)) else { return Ok(None) };
+            return Ok(Some(Link { href: format!("{href}{query}{fragment}"), hash: Some(built.hash), transforms: Vec::new(), import: false, target }));
+        }
+        let Some(target) = target else {
+            return Err(AssetError::new(
+                AssetErrorCode::ImportResolutionFailed,
+                format!("Failed to resolve import \"{spec}\" in {importer}. Ensure it resolves to a file within a configured asset server mount, or mark it as external."),
+            ));
+        };
+        if self.kind(&target) != AssetKind::Script {
+            return Err(AssetError::new(
+                AssetErrorCode::ImportNotSupported,
+                format!("Import \"{spec}\" in {importer}, resolved to \"{}\", is not a supported script file. Supported extensions are .js, .mjs.", display(&target)),
+            ));
+        }
+        self.check_reference(&target, spec, importer, "Import", AssetErrorCode::ImportNotAllowed, AssetErrorCode::ImportOutsideMounts)?;
+        let on_stack = stack.iter().position(|f| *f == target);
+        if let (true, Some(start)) = (self.fingerprint, on_stack) {
+            // A fingerprint covers the URLs a module imports, so a cycle has none.
+            let cycle: Vec<String> = stack[start..].iter().chain([&target]).map(|f| display(f)).collect();
+            return Err(AssetError::new(
+                AssetErrorCode::EmitFailed,
+                format!("Circular module imports are not supported with fingerprinting: {}", cycle.join(" -> ")),
+            ));
+        }
+        let hash = if on_stack.is_some() { None } else { Some(self.build(&target, &[], stack)?.hash) };
+        let href = self.url_with(&target, &[], hash.as_deref())?;
+        Ok(Some(Link { href: format!("{href}{query}{fragment}"), hash, transforms: Vec::new(), import: true, target }))
+    }
+
+    /// The access and mount checks for a file another asset references.
+    fn check_reference(&self, target: &Path, spec: &str, importer: &str, what: &str, not_allowed: AssetErrorCode, outside: AssetErrorCode) -> Result<(), AssetError> {
+        let resolved = display(target);
+        if !self.allowed(target) {
+            return Err(AssetError::new(
+                not_allowed,
+                format!(
+                    "{what} \"{spec}\" in {importer}, resolved to \"{resolved}\", is not allowed by the asset server access configuration. Add a matching allow_files rule, or remove a conflicting deny_files rule."
+                ),
+            ));
+        }
+        if self.url_for_file(target).is_none() {
+            return Err(AssetError::new(
+                outside,
+                format!("{what} \"{spec}\" in {importer}, resolved to \"{resolved}\", is outside all configured mounts. Add a matching mount for this file path."),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// A reference another asset makes.
+struct Link {
+    href: String,
+    target: PathBuf,
+    transforms: Vec<String>,
+    /// The target's hash, so the referencing asset is rebuilt when it changes.
+    hash: Option<String>,
+    /// Followed for preloads.
+    import: bool,
+}
+
+/// `path?query#fragment` -> (`path`, `?query`, `#fragment`).
+fn split_url(spec: &str) -> (&str, &str, &str) {
+    let (rest, fragment) = spec.find('#').map_or((spec, ""), |i| (&spec[..i], &spec[i..]));
+    let (path, query) = rest.find('?').map_or((rest, ""), |i| (&rest[..i], &rest[i..]));
+    (path, query, fragment)
 }
 
 fn is_script(extension: &str) -> bool {
     matches!(extension, ".js" | ".mjs")
 }
 
-fn accepts(extensions: &[String], extension: &str) -> bool {
-    extensions.is_empty() || extensions.iter().any(|e| e.eq_ignore_ascii_case(extension))
-}
-
-fn status(status: StatusCode, message: &str) -> Response {
-    let mut res = rmx_fetch::response::text(message.to_string());
-    *res.status_mut() = status;
-    res
-}
-
-/// A short content hash for URLs: 64-bit FNV-1a in base64url. It only needs to change
-/// when content changes; it is not a security measure.
+/// A content hash for URLs and ETags (Remix's `hashContent`): the first six characters of
+/// the base64url SHA-256 digest.
 fn hash_content(bytes: &[u8]) -> String {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in bytes {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(0x0100_0000_01b3);
-    }
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    (0..8).map(|i| ALPHABET[((h >> (i * 6)) & 63) as usize] as char).collect()
+    let mut hash = rmx_crypto::base64url_encode(&rmx_crypto::sha256(bytes));
+    hash.truncate(6);
+    hash
 }
 
 /// `dir/name.@hash.ext` -> (`dir/name.ext`, `Some(hash)`).

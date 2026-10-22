@@ -38,21 +38,28 @@ impl Fixture {
             allow_files: vec!["app/**/public/**".into()],
             deny_files: vec!["app/**/*.test.*".into()],
             fingerprint,
-            global_transforms: vec![GlobalTransform::new(&[".svg"], |bytes| {
-                let svg = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-                Ok(svg.lines().map(str::trim).collect::<String>().into())
-            })],
-            transforms: vec![(
-                "recolor".into(),
-                FileTransform::new(&[".svg"], Param::Required, |bytes, color| {
-                    let color = color.unwrap_or_default();
-                    if !(3..=8).contains(&color.len()) || !color.bytes().all(|b| b.is_ascii_hexdigit()) {
-                        return Err("Expected a hex color".into());
-                    }
-                    Ok(String::from_utf8_lossy(&bytes).replace("currentColor", &format!("#{color}")).into())
-                }),
-            )],
-            ..Default::default()
+            files: Some(FilesOptions {
+                extensions: vec![".svg".into()],
+                global_transforms: vec![GlobalTransform::new(|bytes, _| {
+                    let svg = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+                    Ok(Some(svg.lines().map(str::trim).collect::<String>().into()))
+                })
+                .extensions(&[".svg"])],
+                transforms: vec![(
+                    "recolor".into(),
+                    FileTransform::new(|bytes, context| {
+                        let color = context.param.unwrap_or_default();
+                        if !(3..=8).contains(&color.len()) || !color.bytes().all(|b| b.is_ascii_hexdigit()) {
+                            return Err("Expected a hex color".into());
+                        }
+                        Ok(String::from_utf8_lossy(&bytes).replace("currentColor", &format!("#{color}")).into())
+                    })
+                    .param(Param::Required)
+                    .extensions(&[".svg"]),
+                )],
+                ..Default::default()
+            }),
+            on_error: Some(Arc::new(|_| None)),
         })
         .unwrap()
     }
@@ -124,7 +131,7 @@ fn fingerprints_are_immutable_and_follow_content() {
     let (status, _, _) = get(&router, &css_href, &[]);
     assert_eq!(status, 404, "a stale fingerprint is not served as immutable");
     let (status, _, _) = get(&router, "/assets/app/public/styles/app.css", &[]);
-    assert_eq!(status, 200, "the plain URL still works");
+    assert_eq!(status, 404, "only fingerprinted URLs are served when fingerprinting");
 }
 
 #[test]
@@ -139,10 +146,12 @@ fn transforms_run_on_request() {
     let (status, _, svg) = get(&router, &href, &[]);
     assert_eq!(status, 200);
     assert!(svg.contains("#8B5CF6"), "{svg}");
-    for bad in ["recolor:nothex", "recolor", "unknown"] {
+    for bad in ["recolor", "unknown"] {
         let (status, _, _) = get(&router, &format!("/assets/app/public/images/image.svg?transform={bad}"), &[]);
         assert_eq!(status, 400, "{bad}");
     }
+    let (status, _, _) = get(&router, "/assets/app/public/images/image.svg?transform=recolor:nothex", &[]);
+    assert_eq!(status, 500, "a failing transform is a server error");
 }
 
 #[test]
@@ -161,7 +170,8 @@ fn access_rules_and_paths() {
         let (status, _, _) = get(&router, url, &[]);
         assert_eq!(status, 404, "{url}");
     }
-    assert!(matches!(assets.href("app/server.rs"), Err(AssetError::NotServable(_))));
+    assert_eq!(assets.href("app/server.rs").unwrap_err().code, AssetErrorCode::FileNotSupported);
+    assert_eq!(assets.href("app/public/secret.test.js").unwrap_err().code, AssetErrorCode::FileNotAllowed);
     assert!(AssetServer::new(AssetOptions { root_dir: fx.root.clone(), ..Default::default() }).is_err(), "allow_files is required");
 }
 
@@ -193,6 +203,7 @@ fn inspection_fixture(name: &str) -> (Fixture, AssetServer) {
         mounts: vec![("app".into(), "app".into())],
         allow_files: vec!["app/public/**".into()],
         deny_files: vec!["app/**/*.test.*".into()],
+        files: Some(FilesOptions { extensions: vec![".svg".into()], ..Default::default() }),
         ..Default::default()
     })
     .unwrap();

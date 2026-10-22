@@ -102,9 +102,13 @@ fn modules_css_and_svgs_are_rewritten_and_transformed() {
     assert!(svg.contains("fill=\"currentColor\""));
     let (_, purple) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor%3A%238B5CF6", &[]);
     assert!(purple.contains("fill=\"#8B5CF6\"") && !purple.contains("currentColor"), "{purple}");
-    let (parts, body) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor%3Ablue", &[]);
+    // A transform that fails is a server error, reported through `on_error` (Remix's
+    // `onError`); a malformed transform request is a 400.
+    let (parts, _) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor%3Ablue", &[]);
+    assert_eq!(parts.status, 500);
+    let (parts, body) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor", &[]);
     assert_eq!(parts.status, 400);
-    assert!(body.contains("Expected a hex color"), "{body}");
+    assert!(body.contains("File transform \"recolor\" requires a param"), "{body}");
 }
 
 #[test]

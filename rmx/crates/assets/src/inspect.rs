@@ -1,25 +1,26 @@
 //! Asset inspection (Remix's `assetServer.getAssets()` / `getAssetDetails()`) and the
 //! `assets` command built on it (`remix assets`, `remix assets inspect <url-or-file>`).
 //!
-//! rmx serves every file its access rules allow, so there is no `unsupported` status:
-//! Remix only serves scripts, styles and the file extensions it is configured with. Access
-//! rules are file globs only (Remix also allows packages), so [`AssetAccess::allowed_by`]
-//! is the glob that matched.
+//! Access rules are file globs only (Remix also allows packages), so
+//! [`AssetAccess::allowed_by`] is the glob that matched.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use super::{glob_match, is_script, parse_fingerprint, AssetServer, Inner, Mount};
+use super::{glob_match, parse_fingerprint, AssetServer, Inner, Mount};
 
 /// How the asset server handles a file (`AssetKind`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AssetKind {
-    /// Served as is, after any transforms.
+    /// A file asset (an extension in `files.extensions`, or `.wasm`): served as is, after
+    /// any transforms.
     File,
     /// A JavaScript module: its relative imports are rewritten to asset URLs.
     Script,
     /// A stylesheet: its `url(...)` and `@import` references are rewritten.
     Style,
+    /// Not served: not a script, stylesheet or configured file asset.
+    Unsupported,
 }
 
 impl AssetKind {
@@ -28,6 +29,7 @@ impl AssetKind {
             AssetKind::File => "file",
             AssetKind::Script => "script",
             AssetKind::Style => "style",
+            AssetKind::Unsupported => "unsupported",
         }
     }
 }
@@ -45,6 +47,8 @@ pub enum AssetStatus {
     Missing,
     /// No mount covers the URL or file.
     Unmapped,
+    /// Present and allowed, but not a type the server serves.
+    Unsupported,
 }
 
 impl AssetStatus {
@@ -55,6 +59,7 @@ impl AssetStatus {
             AssetStatus::NotAllowed => "not-allowed",
             AssetStatus::Missing => "missing",
             AssetStatus::Unmapped => "unmapped",
+            AssetStatus::Unsupported => "unsupported",
         }
     }
 }
@@ -164,20 +169,15 @@ impl Inner {
         let allowed_by = self.allow.iter().find(|g| glob_match(g, &rel)).cloned();
         let denied_by = allowed_by.as_ref().and_then(|_| self.deny.iter().find(|g| glob_match(g, &rel)).cloned());
         let access = AssetAccess { allowed: allowed_by.is_some() && denied_by.is_none(), allowed_by, denied_by };
-        let extension = file.extension().map(|e| format!(".{}", e.to_string_lossy().to_ascii_lowercase())).unwrap_or_default();
-        let kind = if is_script(&extension) {
-            AssetKind::Script
-        } else if extension == ".css" {
-            AssetKind::Style
-        } else {
-            AssetKind::File
-        };
+        let kind = self.kind(&file);
         let status = if !exists {
             AssetStatus::Missing
         } else if access.denied_by.is_some() {
             AssetStatus::Denied
         } else if !access.allowed {
             AssetStatus::NotAllowed
+        } else if kind == AssetKind::Unsupported {
+            AssetStatus::Unsupported
         } else {
             AssetStatus::Reachable
         };

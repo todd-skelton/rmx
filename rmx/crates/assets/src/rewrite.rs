@@ -28,8 +28,22 @@ pub(crate) fn css(text: &str, link: &mut Link<'_>) -> String {
             let rest = &text[i + 7..];
             let trimmed = rest.trim_start();
             let skipped = rest.len() - trimmed.len();
-            if let Some((value, len)) = string_literal(trimmed) {
-                if let Some(href) = is_relative(&value).then(|| link(&value, false)).flatten() {
+            if trimmed.to_ascii_lowercase().starts_with("url(") {
+                // `@import url(...)`: an import, not a file reference.
+                let start = i + 7 + skipped + 4;
+                if let Some((value, quote, end)) = css_url_value(text, start) {
+                    if let Some(href) = is_relative(&value).then(|| link(&value, true)).flatten() {
+                        out.push_str(&text[i..start]);
+                        out.push_str(quote);
+                        out.push_str(&href);
+                        out.push_str(quote);
+                        out.push(')');
+                        i = end;
+                        continue;
+                    }
+                }
+            } else if let Some((value, len)) = string_literal(trimmed) {
+                if let Some(href) = is_relative(&value).then(|| link(&value, true)).flatten() {
                     let q = &trimmed[..1];
                     out.push_str("@import");
                     out.push_str(&rest[..skipped]);

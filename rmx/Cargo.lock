@@ -1185,7 +1185,9 @@ name = "rmx-assets"
 version = "0.1.0"
 dependencies = [
  "http",
+ "rmx-crypto",
  "rmx-fetch",
+ "rmx-headers",
  "rmx-mime",
  "rmx-router",
  "rmx-url",
