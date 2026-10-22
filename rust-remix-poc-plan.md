@@ -375,8 +375,9 @@ Covered since phase 0b:
    frame and bounding-rect mocks, plus a case that tells the on-screen box of a running
    animation from its natural box, which Remix's sequence mocks cannot. `toggle.test.tsx` (3)
    is `browser_toggle.rs` and `tabs.test.tsx` (9) is `browser_tabs.rs` plus the server case in
-   `src/tabs.rs`, and `accordion.test.tsx` (10) is `browser_accordion.rs`. The other component
-   suites (popover, listbox, select, menu, combobox; 88 cases) are covered by the ui gallery's e2e checks rather than case by case,
+   `src/tabs.rs`, `accordion.test.tsx` (10) is `browser_accordion.rs`, and `popover.test.tsx` (10) is
+   `browser_popover.rs` with Remix's harness, layout mock and popover method spies. The other
+   component suites (listbox, select, menu, combobox; 78 cases) are covered by the ui gallery's e2e checks rather than case by case,
    and are being ported to `crates/ui/tests/browser_*.rs`.
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
