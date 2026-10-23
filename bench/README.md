@@ -39,7 +39,64 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
 
 Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
 
-## Latest Run (2026-10-23): Faster Lists, Slightly Smaller Client
+## Latest Run (2026-10-23, Afternoon): Frames and Navigation Compiled Out
+
+The bench client now depends on rmx with `default-features = false`, which leaves the
+browser half of frames, soft navigation and the server HTML differ out of the wasm
+(decision record section 14). The bench page only hydrates two client entries, so it
+behaves the same; the server keeps the defaults. Raw results:
+`results/browser-2026-10-23-lean.json`, `results/browser-2026-10-23-lean-nightly.json` and
+the matching `run-*.log` files.
+
+### Client Size
+
+| Build | `.wasm` raw | Total gzip | Total brotli | Gzip vs Remix |
+| --- | --- | --- | --- | --- |
+| Remix 3 (41 JS files) | | **42.5 KB** | **37.7 KB** | 1x |
+| rmx stable, all features (morning run) | 317.3 KiB | 150.4 KB | 127.1 KB | 3.5x |
+| rmx nightly, all features (morning run) | 273.7 KiB | 133.6 KB | 113.5 KB | 3.1x |
+| rmx stable, no frames or navigation | 205.3 KiB | 99.7 KB | 85 KB | 2.3x |
+| rmx nightly, no frames or navigation | 174.6 KiB | 87.2 KB | 75.3 KB | 2.1x |
+
+Compiling the features out saves 50.7 KB gzip on stable and 46.4 KB on nightly. The
+nightly client is still 44.7 KB above Remix. What is left, measured with twiggy on the
+nightly build before `wasm-opt` (shallow bytes):
+
+1. The runtime the page does use: the vdom (44 KB), component instances and handles
+   (11 KB), startup, mixin hosting and the rest (about 28 KB).
+2. What wasm brings that JavaScript gets from the browser: `core` (29 KB), `js-sys`
+   (19 KB), serde_json for client entry props (17 KB), `alloc` (10 KB), `hashbrown`
+   (9 KB), the allocator (5 KB) and string data (17 KB).
+3. The JS glue: 38 KB raw, 6.6 KB gzip.
+
+serde_json is the largest single item left; the rest are a few KB each. Remix cannot make
+the same cut: its `run()` starts frames and the navigation listener on every page.
+
+### Lists and Load
+
+Median commit ms (click to DOM updated), operations interleaved between the apps. The two
+runs had different background load, so compare within a pair of columns only.
+
+| Operation | Remix 3 | rmx stable | Remix 3 | rmx nightly |
+| --- | --- | --- | --- | --- |
+| create 1k | 13.6 | **12** | 25.1 | **20.9** |
+| replace 1k | 20.8 | **19.1** | 32.5 | **31.3** |
+| update every 10th | 8.4 | **3.7** | 11.5 | **7.8** |
+| select row | 5.4 | **2.9** | 9.5 | **5.4** |
+| swap rows | 5.6 | **3.7** | 9.6 | **6.6** |
+| remove row | 6.5 | **3.2** | 8.1 | **5.8** |
+| create 10k | **501** | 502.9 | 843 | **791.8** |
+| append 1k | 17.9 | **14.3** | 20.8 | **16.6** |
+| clear 1k | 5.3 | 5.3 | 5.9 | 5.9 |
+| Page hydrated (ms after navigation) | 146.4 | **67.85** | 162.2 | **83.25** |
+
+Leaving the features out did not change list speed. An interleaved A/B of the all-features
+and no-features clients (stable, one browser, 15 to 25 iterations, three rounds) kept every
+operation within noise; create 10k ranged from 0.93x to 1.10x across the rounds. `clear
+1k` still reaches the next painted frame later on rmx (13.6 vs 11.8 ms and 11.8 vs
+7.3 ms).
+
+## Earlier Run (2026-10-23, Morning): Faster Lists, Slightly Smaller Client
 
 Browser only; the servers did not change, so the 2026-10-22 server numbers below still
 stand. Results: `results/browser-2026-10-23.json` (stable Rust, the default build) and
@@ -114,7 +171,8 @@ gain), more `wasm-opt` passes (`--converge`, `--gufa`, `-O3`: within 0.3 KB gzip
 `-Zlocation-detail=none -Zfmt-debug=none` on top of immediate-abort (0.8 KB), and
 minifying the JS glue (2 KB gzip, but it would add a Node tool to the Rust build). Closing
 the rest would mean shipping less runtime per page (for example compiling frames and
-navigation out of apps that do not use them, which Remix does not do either) or rendering
+navigation out of apps that do not use them, which Remix does not do either; done in the
+afternoon run above) or rendering
 from a JavaScript runtime, which would no longer be full stack Rust.
 
 The nightly build's trade-off: with `panic=immediate-abort`, a panic traps without a

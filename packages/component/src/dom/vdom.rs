@@ -11,7 +11,9 @@ use wasm_bindgen::JsCast;
 
 use super::document_state::DocumentState;
 use super::ops::{self, FastMap};
-use super::{document, frames, styles, Scope};
+#[cfg(feature = "frames")]
+use super::frames;
+use super::{document, styles, Scope};
 use crate::component::{Component, Handle, HandleShared, Instance, Phase};
 use crate::host_mixin::has_mixins;
 use super::mixin_host::MixinHost;
@@ -390,6 +392,7 @@ pub(crate) enum Mounted {
     Head(Box<MElement>, web_sys::Text),
     Text(MText),
     Component(MComponent),
+    #[cfg(feature = "frames")]
     Frame(Box<MFrame>),
 }
 
@@ -433,6 +436,7 @@ pub(crate) struct MComponent {
 }
 
 /// A `<Frame>` rendered by a component: a comment-bounded range the frame owns.
+#[cfg(feature = "frames")]
 pub(crate) struct MFrame {
     src: String,
     name: Option<String>,
@@ -602,7 +606,9 @@ impl Mounted {
         match self {
             Mounted::Element(e) | Mounted::Head(e, _) => e.key.as_ref(),
             Mounted::Component(c) => c.key.as_ref(),
-            Mounted::Text(_) | Mounted::Frame(_) => None,
+            Mounted::Text(_) => None,
+            #[cfg(feature = "frames")]
+            Mounted::Frame(_) => None,
         }
     }
 
@@ -612,6 +618,7 @@ impl Mounted {
             Mounted::Head(_, marker) => marker.clone().into(),
             Mounted::Text(t) => t.node.clone().into(),
             Mounted::Component(c) => c.inst.live().root.borrow()[0].first_dom(),
+            #[cfg(feature = "frames")]
             Mounted::Frame(f) => f.state.start().into(),
         }
     }
@@ -622,6 +629,7 @@ impl Mounted {
             Mounted::Head(_, marker) => marker.clone().into(),
             Mounted::Text(t) => t.node.clone().into(),
             Mounted::Component(c) => c.inst.live().root.borrow().last().expect("component has DOM").last_dom(),
+            #[cfg(feature = "frames")]
             Mounted::Frame(f) => f.state.end().into(),
         }
     }
@@ -632,6 +640,7 @@ impl Mounted {
             Mounted::Head(_, marker) => f(marker.unchecked_ref()),
             Mounted::Text(t) => f(t.node.unchecked_ref()),
             Mounted::Component(c) => c.inst.live().root.borrow().iter().for_each(|m| m.for_each_dom(f)),
+            #[cfg(feature = "frames")]
             Mounted::Frame(m) => {
                 let start: web_sys::Node = m.state.start().into();
                 // A frame created detached keeps its range in a fragment until inserted.
@@ -649,6 +658,7 @@ impl Mounted {
             (Mounted::Head(..), Node::Element(n)) => n.tag == "head",
             (Mounted::Text(_), Node::Text(_)) => true,
             (Mounted::Component(m), Node::Component(n)) => m.inst.component_type() == n.inner.component_type(),
+            #[cfg(feature = "frames")]
             (Mounted::Frame(_), Node::Frame(_)) => true,
             _ => false,
         }
@@ -709,6 +719,7 @@ fn unmount(m: &Mounted) {
         }
         Mounted::Text(_) => {}
         Mounted::Component(c) => unmount_root(&*c.inst),
+        #[cfg(feature = "frames")]
         Mounted::Frame(f) => {
             for node in frames::range_nodes(&f.state.start(), &f.state.end(), true) {
                 super::diff::dispose_subtree(&node);
@@ -1156,6 +1167,7 @@ fn create(node: Node, scope: &Scope, parent: Option<&web_sys::Node>) -> Mounted 
             inst.shared().committed.set(true);
             Mounted::Component(MComponent { key: c.key, inst })
         }
+        #[cfg(feature = "frames")]
         Node::Frame(f) => {
             let m = create_frame(&f, scope);
             if let Some(parent) = parent {
@@ -1163,6 +1175,8 @@ fn create(node: Node, scope: &Scope, parent: Option<&web_sys::Node>) -> Mounted 
             }
             m
         }
+        #[cfg(not(feature = "frames"))]
+        Node::Frame(f) => create(frame_stand_in(&f), scope, parent),
         other => {
             let mut flat = Vec::new();
             flatten(other, &mut flat);
@@ -1199,11 +1213,23 @@ fn is_svg(tag: &str) -> bool {
     )
 }
 
+#[cfg(feature = "frames")]
 fn create_frame(f: &FrameNode, scope: &Scope) -> Mounted {
     let fallback = f.fallback.as_ref().map(crate::ssr::render_to_string).unwrap_or_default();
     let state = frames::create_client_frame(&f.src, f.name.clone(), scope.frame.clone(), &fallback);
     state.set_owner(scope.parent.clone());
     Mounted::Frame(Box::new(MFrame { src: f.src.clone(), name: f.name.clone(), state }))
+}
+
+/// Without the `frames` feature a client-rendered `<Frame>` is its fallback (or nothing):
+/// there is no runtime to load it.
+#[cfg(not(feature = "frames"))]
+fn frame_stand_in(f: &FrameNode) -> Node {
+    thread_local!(static WARNED: Cell<bool> = const { Cell::new(false) });
+    if !WARNED.with(|w| w.replace(true)) {
+        super::warn("rmx: <Frame> renders its fallback in the browser without the `frames` feature");
+    }
+    f.fallback.clone().unwrap_or_else(empty_text)
 }
 
 fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
@@ -1220,6 +1246,7 @@ fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
             m.key = c.key;
             c.inner.update_instance(&*m.inst);
         }
+        #[cfg(feature = "frames")]
         (Mounted::Frame(m), Node::Frame(f)) => {
             if m.name != f.name {
                 m.state.set_name(f.name.clone());
@@ -1713,6 +1740,7 @@ fn hydrate_node(node: Node, parent: &web_sys::Node, cursor: &mut Option<web_sys:
             hydrate_instance(&*inst, parent, cursor, end);
             Mounted::Component(MComponent { key: c.key, inst })
         }
+        #[cfg(feature = "frames")]
         Node::Frame(f) => {
             let start = claimable(cursor.clone(), end)
                 .and_then(|n| n.dyn_into::<web_sys::Comment>().ok())

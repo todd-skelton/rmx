@@ -6,5 +6,6 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
-rmx.workspace = true
+# Shared with the client, so no default features here; the server turns them back on.
+rmx = { path = "../../../packages/rmx", default-features = false }
 serde.workspace = true

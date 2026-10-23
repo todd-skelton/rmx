@@ -5,7 +5,7 @@
 //! content of a client-created `<Frame>` from a custom resolver, which hydrates the same
 //! way and leaves the test runner's page alone. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_nested_entries`.
-#![cfg(target_arch = "wasm32")]
+#![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
 extern crate rmx_component as rmx;
 

@@ -135,6 +135,7 @@ impl Root {
     }
 
     /// Stop managing the content (its components are released, the DOM is left in place).
+    #[cfg(feature = "frames")]
     pub(crate) fn release(&self) {
         if let Some(inst) = self.0.inst.borrow_mut().take() {
             super::vdom::unmount_root(&*inst);

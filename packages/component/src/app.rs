@@ -66,7 +66,7 @@ pub(crate) fn remove_listener(id: ListenerId) {
     ERRORS.with(|t| t.remove_listener(id));
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+#[cfg_attr(not(all(target_arch = "wasm32", feature = "navigation")), allow(dead_code))]
 pub(crate) fn has_listeners() -> bool {
     ERRORS.with(|t| t.listener_count() > 0)
 }

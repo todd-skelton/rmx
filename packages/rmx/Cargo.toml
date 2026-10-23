@@ -6,9 +6,17 @@ version.workspace = true
 license.workspace = true
 
 [features]
-default = ["ui"]
+default = ["ui", "frames", "navigation", "spa"]
 # The rmx-ui component library (accordion, menu, popover, ...).
 ui = ["dep:rmx-ui"]
+# Browser runtime parts a client build can leave out (wasm32 only; the server always renders
+# <Frame>). `frames`: <Frame> loading, reloads and streamed content in the browser.
+# `navigation`: links and forms as soft navigations. A client that only hydrates client
+# entries can use `default-features = false`; see rmx-component's Cargo.toml for what changes.
+frames = ["rmx-component/frames"]
+navigation = ["rmx-component/navigation", "frames"]
+# Client-side routing (`rmx::spa`): runs the router in the browser through frames.
+spa = ["dep:rmx-spa", "navigation"]
 
 [dependencies]
 rmx-component.workspace = true
@@ -20,7 +28,7 @@ rmx-lazy-file.workspace = true
 rmx-mime.workspace = true
 rmx-route-pattern.workspace = true
 rmx-fetch-router.workspace = true
-rmx-spa.workspace = true
+rmx-spa = { workspace = true, optional = true }
 rmx-ui = { workspace = true, optional = true }
 rmx-url.workspace = true
 

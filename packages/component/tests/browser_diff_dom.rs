@@ -2,7 +2,7 @@
 //! keys and live browser state. Live client entry owners are attached with
 //! `rmx::test::attach_entry_owner`, as Remix's tests use `setClientEntryBoundaryOwner`; an
 //! entry's identity is its component name. The HMR cases do not apply: rmx has no HMR. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_diff_dom`.
-#![cfg(target_arch = "wasm32")]
+#![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
 extern crate rmx_component as rmx;
 

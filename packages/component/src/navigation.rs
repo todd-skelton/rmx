@@ -70,10 +70,13 @@ impl From<bool> for Reset {
 
 /// Navigate through the runtime, like clicking a link: the target frame (the top frame by
 /// default) loads the new content and the URL and history update. Without the Navigation
-/// API the browser loads the document. No-op on the server.
+/// API (or without the `navigation` feature) the browser loads the document. No-op on the
+/// server.
 pub fn navigate(href: &str, options: NavigateOptions) {
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "navigation"))]
     crate::dom::navigation::navigate(href, options);
+    #[cfg(all(target_arch = "wasm32", not(feature = "navigation")))]
+    load_document(href, &options);
     #[cfg(not(target_arch = "wasm32"))]
     let _ = (href, options);
 }
@@ -81,10 +84,19 @@ pub fn navigate(href: &str, options: NavigateOptions) {
 /// [`navigate`], resolving once the new content is in the page (Remix's
 /// `await navigate(href)`). Resolves at once on the server.
 pub async fn navigate_async(href: &str, options: NavigateOptions) {
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "navigation"))]
     crate::dom::navigation::navigate_async(href, options).await;
+    #[cfg(all(target_arch = "wasm32", not(feature = "navigation")))]
+    load_document(href, &options);
     #[cfg(not(target_arch = "wasm32"))]
     let _ = (href, options);
+}
+
+/// Without the navigation runtime a navigation is a document load.
+#[cfg(all(target_arch = "wasm32", not(feature = "navigation")))]
+fn load_document(href: &str, options: &NavigateOptions) {
+    let Some(location) = web_sys::window().map(|w| w.location()) else { return };
+    let _ = if options.history == Some(History::Replace) { location.replace(href) } else { location.assign(href) };
 }
 
 /// Make any element a link (Remix's `link(href)` mixin).

@@ -8,11 +8,22 @@
 //! - [`navigation`] routes link clicks and form submissions through frame reloads using the
 //!   Navigation API.
 //! - [`styles`] inserts `css()` rules once per document.
+//!
+//! The `frames` and `navigation` features (on by default) can be turned off for apps
+//! that only hydrate client entries; [`frames`] is then a small stand-in that reads the
+//! hydration data and treats the document as the only frame.
 
+#[cfg(feature = "frames")]
 pub(crate) mod diff;
 pub(crate) mod entries;
+#[cfg(feature = "navigation")]
 pub(crate) mod form_navigation;
+#[cfg(feature = "frames")]
 pub(crate) mod frames;
+#[cfg(not(feature = "frames"))]
+#[path = "frames_lite.rs"]
+pub(crate) mod frames;
+#[cfg(feature = "navigation")]
 pub(crate) mod navigation;
 mod mixin_host;
 mod ops;
@@ -63,7 +74,8 @@ pub struct RunOptions {
     /// Client entries the page may contain, created with [`entry`].
     pub entries: Vec<Entry>,
     /// Resolve frame content in the browser instead of fetching it from the server (Remix's
-    /// `resolveFrame`). `rmx-spa` uses it to run a router in the page.
+    /// `resolveFrame`). `rmx-spa` uses it to run a router in the page. Needs the `frames`
+    /// feature; without it the runtime warns and ignores it.
     pub resolve_frame: Option<crate::frame::ResolveFrame>,
 }
 
@@ -81,12 +93,18 @@ pub struct RunOptions {
 pub fn run(options: RunOptions) -> App {
     install_panic_hook();
     entries::register(options.entries);
+    #[cfg(feature = "frames")]
     frames::set_resolver(options.resolve_frame);
+    #[cfg(not(feature = "frames"))]
+    if options.resolve_frame.is_some() {
+        warn("rmx: RunOptions::resolve_frame needs the `frames` feature; it is ignored");
+    }
     let mut resolve_ready = None;
     let ready = js_sys::Promise::new(&mut |resolve, _| resolve_ready = Some(resolve));
     when_content_parsed(Box::new(move || {
         styles::adopt_server_styles(&document().into());
         frames::start();
+        #[cfg(feature = "navigation")]
         navigation::start();
         flush();
         if let Some(resolve) = resolve_ready {
@@ -142,9 +160,13 @@ impl App {
     /// Stop intercepting navigations and tear down every client entry and frame in the
     /// document, leaving its DOM in place for the app to replace.
     pub fn dispose(&self) {
+        #[cfg(feature = "navigation")]
         navigation::stop();
         if let Some(body) = document().body() {
+            #[cfg(feature = "frames")]
             diff::dispose_subtree(&body.into());
+            #[cfg(not(feature = "frames"))]
+            frames::dispose_subtree(&body.into());
         }
         frames::top().abort_reload();
     }
@@ -248,6 +270,7 @@ pub(crate) fn window() -> web_sys::Window {
 }
 
 /// Small `Reflect` helpers for browser APIs that web-sys gates or types awkwardly.
+#[cfg(feature = "frames")]
 pub(crate) mod js {
     use js_sys::{Object, Reflect};
     use wasm_bindgen::{JsCast, JsValue};

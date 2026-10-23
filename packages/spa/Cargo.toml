@@ -8,7 +8,8 @@ license.workspace = true
 [dependencies]
 http.workspace = true
 # Imported as `rmx` so `rsx!` output (`::rmx::...`) resolves without the umbrella crate.
-rmx = { package = "rmx-component", path = "../component" }
+# The browser router loads frames through `resolve_frame` and needs soft navigation.
+rmx = { package = "rmx-component", path = "../component", default-features = false, features = ["navigation"] }
 rmx-fetch.workspace = true
 rmx-response.workspace = true
 rmx-fetch-router.workspace = true

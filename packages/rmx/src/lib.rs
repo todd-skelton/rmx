@@ -34,7 +34,7 @@
 //! | `remix/cookie` | `rmx::cookie` | server |
 //! | `remix/session` | `rmx::session` | server |
 //! | `remix/assets` | `rmx::assets` | server |
-//! | `spaResponse`, client-side routing | [`rmx::spa`](spa) | browser and server |
+//! | `spaResponse`, client-side routing | [`rmx::spa`](spa) | browser and server, feature `spa` (default) |
 //! | `remix/fetch-proxy` | `rmx::fetch_proxy` | server |
 //! | `remix/file-storage` | `rmx::file_storage` | server |
 //! | `remix/lazy-file` | [`rmx::lazy_file`](lazy_file) | browser and server |
@@ -48,6 +48,12 @@
 //!
 //! Server modules exist when compiling for a native target; a browser (wasm32) build of the
 //! same crate sees only the browser column, so one dependency serves both halves of an app.
+//!
+//! A client crate that only hydrates client entries can leave out the browser runtime's
+//! frame loading and soft navigation with `default-features = false` (features `frames`,
+//! `navigation`, `spa` and `ui` are on by default). Its `<Frame>`s then render their
+//! fallback in the browser, frame reloads load the document, and links and forms are plain
+//! browser navigations. The server crate keeps the defaults.
 //!
 //! ```
 //! use rmx::router::{Context, Router};
@@ -75,6 +81,7 @@ pub use rmx_lazy_file as lazy_file;
 pub use rmx_mime as mime;
 pub use rmx_route_pattern as route_pattern;
 pub use rmx_fetch_router as router;
+#[cfg(feature = "spa")]
 pub use rmx_spa as spa;
 #[cfg(feature = "ui")]
 pub use rmx_ui as ui;

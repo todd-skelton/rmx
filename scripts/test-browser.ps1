@@ -1,7 +1,8 @@
 # Run a crate's browser tests (tests/browser_*.rs, wasm-bindgen-test) in headless Chromium.
-# Usage: pwsh ./scripts/test-browser.ps1 [-Crate rmx-component] [-Test browser_errors] [-Filter test_name]
+# Usage: pwsh ./scripts/test-browser.ps1 [-Crate rmx-component] [-Test browser_errors] [-Filter test_name] [-NoDefaultFeatures]
+# -NoDefaultFeatures builds without the frames and navigation runtime (pair it with -Test browser_no_frames).
 # Env: CHROMEDRIVER (chromedriver.exe), CHROMIUM_PATH (chrome.exe matching the driver).
-param([string]$Crate = "rmx-component", [string]$Test, [string]$Filter)
+param([string]$Crate = "rmx-component", [string]$Test, [string]$Filter, [switch]$NoDefaultFeatures)
 $ErrorActionPreference = "Stop"
 # Paths are relative to the repository root.
 Set-Location (Split-Path $PSScriptRoot -Parent)
@@ -23,7 +24,8 @@ $names = if ($Test) { @($Test) } else { Get-ChildItem (Join-Path $crateDir "test
 $testArgs = $names | ForEach-Object { "--test"; $_ }
 try {
     $filterArgs = if ($Filter) { @("--", $Filter) } else { @() }
-    cargo test -p $Crate --target wasm32-unknown-unknown @testArgs @filterArgs
+    $featureArgs = @(if ($NoDefaultFeatures) { "--no-default-features" })
+    cargo test -p $Crate --target wasm32-unknown-unknown @featureArgs @testArgs @filterArgs
     $code = $LASTEXITCODE
 } finally {
     Remove-Item (Join-Path $crateDir "webdriver.json") -ErrorAction SilentlyContinue

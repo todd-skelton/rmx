@@ -2,7 +2,7 @@
 //! `frame.test.tsx`: what a resolver receives for reloads and submissions, redirected
 //! responses, and node content. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_frame_resolver`.
-#![cfg(target_arch = "wasm32")]
+#![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
 extern crate rmx_component as rmx;
 

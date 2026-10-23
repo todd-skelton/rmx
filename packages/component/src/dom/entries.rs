@@ -87,6 +87,7 @@ fn slot_of(start: &web_sys::Node) -> Option<usize> {
 }
 
 /// The component name of the live entry starting at `start`.
+#[cfg(feature = "frames")]
 pub(crate) fn live_name(start: &web_sys::Node) -> Option<String> {
     let slot = slot_of(start)?;
     LIVE.with(|l| l.borrow().get(slot)?.as_ref().map(|e| e.name.clone()))

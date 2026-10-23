@@ -297,9 +297,36 @@ cargo test --workspace
 ```
 
 `test-browser.ps1` runs each `tests/browser_*.rs` file of a crate with `wasm-bindgen-test`
-(default crate `rmx-component`; `-Test browser_errors` picks one file). It needs a
+(default crate `rmx-component`; `-Test browser_errors` picks one file; `-Test
+browser_no_frames -NoDefaultFeatures` checks the runtime with frames and navigation off). It needs a
 ChromeDriver matching the Chromium binary: set `CHROMEDRIVER` and `CHROMIUM_PATH`, or use
 the defaults under `%LOCALAPPDATA%`.
+
+### Smaller Clients: Cargo Features
+
+`rmx` turns on `frames`, `navigation`, `spa` and `ui` by default. A client crate whose
+pages only hydrate client entries can leave the browser half of frames and soft navigation
+out:
+
+```toml
+# app/client/Cargo.toml (the server crate keeps the defaults)
+rmx = { path = "...", default-features = false }
+```
+
+The shared app crate should also use `default-features = false`, or Cargo turns the
+defaults back on for the client too. With the features off, `run()` hydrates client
+entries and nothing else:
+
+1. Links and forms are plain browser navigations, and `navigate()` assigns `location`.
+2. The document is the only frame: `FrameHandle::reload` loads the document, `replace`
+   renders into the body, frame events never fire and `Frames::get` finds nothing.
+3. A `<Frame>` rendered in the browser shows its fallback (with a console warning), and
+   `RunOptions::resolve_frame` is ignored.
+4. The server is unchanged: it still renders and streams `<Frame>`.
+
+`frames` alone keeps frames and drops soft navigation. The bench client uses
+`default-features = false` and dropped from 150.4 KB to 99.7 KB gzip (stable), see
+[bench/README.md](../../bench/README.md).
 
 Server env vars: `HOST` (default `127.0.0.1`), `PORT` (each demo has its own default).
 The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark server is in

@@ -142,21 +142,23 @@ Did rewriting it in Rust make it fast? Of course it did; that is the only reason
 | Remix 3, 8 Node workers (8 CPUs) | 999 | 903 | 109 | 2,208 MB |
 | rmx, 8 threads (8 CPUs) | 42,881 | 15,601 | 2,165 | 9 MB |
 
-That is 12x to 43x the throughput in a few megabytes. In the browser (Chromium, medians, measured 2026-10-23 with the client built on nightly Rust; the stable build is in the bench notes):
+That is 12x to 43x the throughput in a few megabytes. In the browser (Chromium, medians, measured 2026-10-23 with the client built on nightly Rust and frames and navigation compiled out; the stable build is in the bench notes):
 
 | | Remix 3 | rmx |
 | --- | --- | --- |
-| Client download (gzip) | **42.5 KB** in 41 files | 133.6 KB in 3 files |
-| Page hydrated | 138.15 ms | **64.4 ms** |
-| Create 1,000 rows | 17.5 ms | **14.6 ms** |
-| Replace 1,000 rows | 20.6 ms | **20 ms** |
-| Create 10,000 rows | 687.3 ms | **657.3 ms** |
-| Append 1,000 rows | 24.9 ms | **21.7 ms** |
-| Select a row | 11.3 ms | **6.7 ms** |
+| Client download (gzip) | **42.5 KB** in 41 files | 87.2 KB in 3 files |
+| Page hydrated | 162.2 ms | **83.25 ms** |
+| Create 1,000 rows | 25.1 ms | **20.9 ms** |
+| Replace 1,000 rows | 32.5 ms | **31.3 ms** |
+| Create 10,000 rows | 843 ms | **791.8 ms** |
+| Append 1,000 rows | 20.8 ms | **16.6 ms** |
+| Select a row | 9.5 ms | **5.4 ms** |
 
-Rust also lost the list benchmarks at first, which was awkward for a rewrite whose only argument is speed. Every DOM node cost several calls from wasm into JavaScript and a UTF-8 decode, so rmx now batches those calls through one small JavaScript object of its own. Yes, the Rust rewrite got faster by writing more JavaScript. It now wins those rows by 3 to 17%, which is a tie on screen.
+Rust also lost the list benchmarks at first, which was awkward for a rewrite whose only argument is speed. Every DOM node cost several calls from wasm into JavaScript and a UTF-8 decode, so rmx now batches those calls through one small JavaScript object of its own. Yes, the Rust rewrite got faster by writing more JavaScript. It now wins those rows by 4 to 20%, which is a tie on screen.
 
-The fine print, because there is always fine print: the client still ships about 3x more bytes, since WebAssembly brings its own runtime where Remix borrows the browser's. The nightly build trims 17 KB by making panics trap silently, and the stable build is 150.4 KB. Single runs vary by 30% or more, the Windows host was busy, and this compares a proof of concept with a released framework. The method, the raw results, where the bytes go and every earlier run are in [bench/README.md](bench/README.md).
+Then the download. Remix's `run()` starts frames and soft navigation on every page, including the bench page, which has no frames and does not need soft navigation. Rust gets to delete them at compile time: the bench client builds with `default-features = false`, and Cargo features took it from 133.6 KB to 87.2 KB. A Rust rewrite getting smaller by deleting code instead of adding it felt suspicious enough that we measured it twice.
+
+The fine print, because there is always fine print: the client still ships about 2x more bytes, since WebAssembly brings its own runtime where Remix borrows the browser's. The nightly build trims 12.5 KB by making panics trap silently (the stable build is 99.7 KB), and with every feature on the client is 133.6 KB on nightly and 150.4 KB on stable. Single runs vary by 30% or more, the Windows host was busy, and this compares a proof of concept with a released framework. The method, the raw results, where the bytes go and every earlier run are in [bench/README.md](bench/README.md).
 
 ## Getting Started
 

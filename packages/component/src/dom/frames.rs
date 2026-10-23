@@ -318,6 +318,7 @@ impl FrameState {
     /// newer load of the same frame, and calls `on_commit` with the load's signal once the
     /// new content is in the page (before blocking frames inside it finish). Resolves to the
     /// final URL when the server redirected, and the load's signal.
+    #[cfg(feature = "navigation")]
     pub(crate) async fn load_for_navigation(
         self: &Rc<Self>,
         submission: Submission,

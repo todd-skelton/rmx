@@ -2,7 +2,7 @@
 //! stay while any frame still uses them, and reloading a frame with unchanged styles does
 //! not grow the stylesheet. Frames are client-created and load through a custom resolver.
 //! Run with `pwsh ./scripts/test-browser.ps1 -Test browser_frame_css`.
-#![cfg(target_arch = "wasm32")]
+#![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
 extern crate rmx_component as rmx;
 

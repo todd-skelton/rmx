@@ -5,6 +5,19 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+# Browser runtime parts an app can compile out (they only affect wasm32 builds; server
+# rendering of <Frame> is always available). With both off, the client hydrates client
+# entries and renders components, and that is all.
+[features]
+default = ["frames", "navigation"]
+# <Frame> in the browser: reloads, streamed templates, server HTML reconciliation, and
+# FrameHandle::reload/replace. Off: the top frame is the document (reload loads the page),
+# and a client-rendered <Frame> renders its fallback.
+frames = []
+# Soft navigation: links and forms reload frames through the Navigation API. Off: links and
+# forms are plain browser navigations, and navigate() assigns location.
+navigation = ["frames"]
+
 [dependencies]
 rmx-macros.workspace = true
 serde.workspace = true

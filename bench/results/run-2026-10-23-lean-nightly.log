@@ -1,0 +1,19 @@
+== remix
+== rmx
+== operations (interleaved)
+chromium 148.0.7778.96; medians; commit = click to DOM updated, frame = to next painted frame
+counter hydrated+clickable: remix true (Count: 5 -> Count: 6), rmx true (Count: 5 -> Count: 6)
+first label: remix "big blue house", rmx "big blue house"
+client assets: remix 41 files 112.3 KB raw / 42.5 KB gzip / 37.7 KB br; rmx 3 files 211.8 KB raw / 87.2 KB gzip / 75.3 KB br
+hydrated at (ms since navigation): remix 162.2, rmx 83.25; DCL remix 149.3, rmx 61.5
+op                   remix commit rmx commit | remix frame rmx frame
+create 1k                    25.1       20.9 |        106.7     101.2
+replace 1k                   32.5       31.3 |         96.2        98
+update every 10th            11.5        7.8 |         63.4      59.3
+select row                    9.5        5.4 |         21.6      21.2
+swap rows                     9.6        6.6 |         30.6      22.2
+remove row                    8.1        5.8 |         29.9      27.7
+create 10k                    843      791.8 |        849.6       798
+append 1k                    20.8       16.6 |         86.8      87.2
+clear 1k                      5.9        5.9 |          7.3      11.8
+page errors: remix 0, rmx 0; JS heap MB after run: remix 7.4, rmx 3.4 (excludes WASM linear memory)

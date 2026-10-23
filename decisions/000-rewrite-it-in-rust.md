@@ -870,3 +870,32 @@ Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22).
    from the browser (core, alloc, serde_json, the allocator, the JS glue). Closing it would
    mean shipping less runtime per page or moving rendering back to JavaScript; neither is
    done.
+
+## 14. Compiling out frames and navigation (2026-10-23)
+
+1. After section 13 the runtime's own code was the largest part of the client: frames
+   (35 KB), soft navigation (17 KB) and the DOM differ for frame reloads (9 KB), shallow
+   bytes before `wasm-opt`. The bench page uses none of them; it hydrates two client entries.
+2. Decision: Cargo features `frames` and `navigation` (which needs `frames`) on
+   rmx-component, forwarded by `rmx` along with `spa` (which needs both). All are on by
+   default, so existing apps do not change. With them off the browser runtime is the vdom,
+   client entry hydration from `rmx-data`, styles and mixins, and the document is the only
+   frame:
+   1. `FrameHandle::reload` loads the document (GET assigns or reloads, POST submits a
+      form), `replace` renders into the body, frame events never fire and
+      `Frames::get` finds nothing.
+   2. A client-rendered `<Frame>` renders its fallback, with one console warning.
+   3. `navigate()` assigns `location`; links and forms are plain browser navigations.
+   4. `RunOptions::resolve_frame` is ignored, with a warning.
+   5. The server is unaffected and renders `<Frame>` either way.
+3. A client crate opts out with `rmx = { ..., default-features = false }`; the shared app
+   crate does too, and the server crate keeps the defaults. rmx-ui no longer turns the
+   features on, and rmx-spa asks for `navigation`.
+4. Remix has no equivalent switch: its `run()` starts frames and navigation on every page.
+   This is a place where compile-time features fit Rust better than a runtime option.
+5. Result (measured, `bench/README.md`): the bench client went from 150.4 to 99.7 KB gzip
+   on stable and from 133.6 to 87.2 KB on nightly, against 42.5 KB for Remix (2.3x and
+   2.1x, from 3.5x and 3.1x). List speed did not change within noise.
+6. What is left is mostly the vdom and what wasm brings (`core`, `js-sys`, serde_json,
+   `alloc`, `hashbrown`, the allocator). serde_json for entry props (17 KB before
+   `wasm-opt`) is the largest single item. Not done.

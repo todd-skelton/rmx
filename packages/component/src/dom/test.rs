@@ -25,11 +25,13 @@ use super::{create_root, document, Root};
 pub use super::document_state::DocumentState;
 /// Form submissions behind `navigate` events (Remix's `createFormNavigationResolver`),
 /// for tests.
+#[cfg(feature = "navigation")]
 #[doc(hidden)]
 pub use super::form_navigation::{FormNavigation, FormNavigationResolver, FormSubmission, PendingSubmission};
 
 /// Start the runtime's navigation listeners (Remix's `startNavigationListener`), for tests
 /// that check they stay off without the Navigation API. [`crate::run`] starts them.
+#[cfg(feature = "navigation")]
 #[doc(hidden)]
 pub fn start_navigation_listener() {
     super::navigation::start();
@@ -147,6 +149,7 @@ pub fn set_hydration_data(entries: &[(&str, &str, &str)], frames: &[(&str, &str,
 
 /// Reconcile `current` into the shape of `next` (two nodes not in the same parent) the
 /// way Remix's `diffNodes([current], [next])` does.
+#[cfg(feature = "frames")]
 #[doc(hidden)]
 pub fn diff_node_lists(current: &web_sys::Node, next: &web_sys::Node) {
     let parent = current.parent_node().expect("current has a parent");
@@ -155,6 +158,7 @@ pub fn diff_node_lists(current: &web_sys::Node, next: &web_sys::Node) {
 
 /// Reconcile `container`'s children to `next_html` the way a navigation or frame reload
 /// does (Remix's `diffNodes`). For tests of the DOM diff itself.
+#[cfg(feature = "frames")]
 #[doc(hidden)]
 pub fn diff_html(container: &web_sys::Element, next_html: &str) {
     let template: web_sys::HtmlTemplateElement = document().create_element("template").expect("template").unchecked_into();

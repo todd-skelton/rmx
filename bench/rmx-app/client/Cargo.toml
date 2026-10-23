@@ -9,5 +9,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 bench-app.workspace = true
-rmx.workspace = true
+# The bench page only hydrates two client entries: no frames, soft navigation, spa or ui.
+rmx = { path = "../../../packages/rmx", default-features = false }
 wasm-bindgen.workspace = true

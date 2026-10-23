@@ -68,7 +68,8 @@ license = "MIT"
 
 [workspace.dependencies]
 rmx = { path = "packages/rmx" }
-rmx-component = { path = "packages/component" }
+# Only the rmx umbrella crate uses this; its features turn the browser runtime parts on.
+rmx-component = { path = "packages/component", default-features = false }
 rmx-macros = { path = "packages/component/macros" }
 rmx-url = { path = "packages/url" }
 rmx-terminal = { path = "packages/terminal" }

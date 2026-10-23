@@ -7,7 +7,8 @@ license.workspace = true
 
 [dependencies]
 # Imported as `rmx` so `rsx!` output (`::rmx::...`) resolves without the umbrella crate.
-rmx = { package = "rmx-component", path = "../component" }
+# No frames or navigation: an app that uses neither can compile them out (see rmx's features).
+rmx = { package = "rmx-component", path = "../component", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true

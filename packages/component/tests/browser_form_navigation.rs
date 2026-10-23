@@ -2,7 +2,7 @@
 //! submission behind it, with submitter overrides, detached or reused submitters and
 //! canceled duplicate submits. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_form_navigation`.
-#![cfg(target_arch = "wasm32")]
+#![cfg(all(target_arch = "wasm32", feature = "navigation"))]
 
 extern crate rmx_component as rmx;
 

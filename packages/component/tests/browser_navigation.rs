@@ -7,7 +7,7 @@
 //! navigations only target named frames (a top frame load would replace the test page)
 //! and resolve through a custom resolver. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_navigation`.
-#![cfg(target_arch = "wasm32")]
+#![cfg(all(target_arch = "wasm32", feature = "navigation"))]
 
 extern crate rmx_component as rmx;
 
