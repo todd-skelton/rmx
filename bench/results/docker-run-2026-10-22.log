@@ -1,0 +1,238 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from oha.Dockerfile
+#1 transferring dockerfile:
+#1 transferring dockerfile: 254B 0.1s done
+#1 DONE 0.3s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context:
+#3 transferring context: 2B 0.1s done
+#3 DONE 0.3s
+
+#4 [1/2] FROM docker.io/library/debian:bookworm-slim
+#4 DONE 0.0s
+
+#5 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#5 DONE 6.4s
+
+#6 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#6 CACHED
+
+#7 exporting to image
+#7 exporting layers done
+#7 writing image sha256:dfa8d200d48ccc66da3c5fbb4c83c9fb2aabeacd18ba170ee3b0689033ecdce2 done
+#7 naming to docker.io/library/rmxbench-oha done
+#7 DONE 0.1s
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from remix.Dockerfile
+#1 transferring dockerfile:
+#1 transferring dockerfile: 471B 0.1s done
+#1 DONE 0.3s
+
+#2 [internal] load metadata for docker.io/library/node:24-bookworm-slim
+#2 DONE 0.0s
+
+#3 [1/5] FROM docker.io/library/node:24-bookworm-slim
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context:
+#4 transferring context: 124.74kB 0.3s done
+#4 DONE 0.6s
+
+#5 [2/5] WORKDIR /app
+#5 CACHED
+
+#6 [3/5] COPY package.json package-lock.json ./
+#6 DONE 0.4s
+
+#7 [4/5] RUN npm ci --omit=dev
+#7 18.14 
+#7 18.14 added 90 packages, and audited 91 packages in 15s
+#7 18.14 
+#7 18.14 13 packages are looking for funding
+#7 18.14   run `npm fund` for details
+#7 18.17 
+#7 18.17 1 low severity vulnerability
+#7 18.17 
+#7 18.17 To address all issues, run:
+#7 18.17   npm audit fix
+#7 18.17 
+#7 18.17 Run `npm audit` for details.
+#7 18.17 npm warn allow-scripts 1 package has install scripts not yet covered by allowScripts:
+#7 18.17 npm warn allow-scripts   esbuild@0.27.7 (postinstall: node install.js)
+#7 18.17 npm warn allow-scripts
+#7 18.17 npm warn allow-scripts Run `npm approve-scripts --allow-scripts-pending` to review, or `npm approve-scripts <pkg>` to allow.
+#7 18.19 npm notice
+#7 18.19 npm notice New major version of npm available! 11.17.0 -> 12.2.1
+#7 18.19 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+#7 18.19 npm notice To update run: npm install -g npm@12.2.1
+#7 18.19 npm notice
+#7 DONE 18.8s
+
+#8 [5/5] COPY . .
+#8 DONE 0.5s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 2.4s done
+#9 writing image sha256:8b0a33444c1992534e4eaf1b27bc9f36b4d5610aecf938695a48ba97c24661e3 done
+#9 naming to docker.io/library/rmxbench-remix 0.0s done
+#9 DONE 2.4s
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from rmx.Dockerfile
+#1 transferring dockerfile:
+#1 transferring dockerfile: 902B 0.0s done
+#1 DONE 0.3s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/rust:1-bookworm
+#3 DONE 0.0s
+
+#4 [build 1/4] FROM docker.io/library/rust:1-bookworm
+#4 DONE 0.0s
+
+#5 [stage-1 1/3] FROM docker.io/library/debian:bookworm-slim
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 128.79kB 0.1s
+#6 transferring context: 9.18MB 2.3s done
+#6 DONE 2.4s
+
+#7 [build 2/4] WORKDIR /src
+#7 CACHED
+
+#8 [build 3/4] COPY . .
+#8 DONE 0.9s
+
+#9 [build 4/4] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     cargo build --release -p bench-server && cp target/release/bench-server /bench-server
+#9 1.246     Updating crates.io index
+#9 2.620  Downloading crates ...
+#9 3.097   Downloaded fnv v1.0.7
+#9 3.124   Downloaded h2 v0.4.20
+#9 3.375    Compiling serde_core v1.0.229
+#9 3.375    Compiling memchr v2.8.3
+#9 3.381    Compiling rmx-url v0.1.0 (/src/packages/url)
+#9 3.381    Compiling alloc-no-stdlib v3.0.0
+#9 3.382    Compiling crc32fast v1.5.2
+#9 3.389    Compiling rmx-crypto v0.1.0 (/src/packages/crypto)
+#9 3.389    Compiling simd-adler32 v0.3.10
+#9 3.401    Compiling rmx-headers v0.1.0 (/src/packages/headers)
+#9 3.401    Compiling adler2 v2.0.1
+#9 3.405    Compiling cfg-if v1.0.5
+#9 3.405    Compiling rmx-mime v0.1.0 (/src/packages/mime)
+#9 3.411    Compiling rmx-terminal v0.1.0 (/src/packages/terminal)
+#9 3.422    Compiling hashbrown v0.17.1
+#9 3.422    Compiling rmx-macros v0.1.0 (/src/packages/component/macros)
+#9 3.425    Compiling equivalent v1.0.3
+#9 3.430    Compiling tokio-util v0.7.20
+#9 3.541    Compiling tracing v0.1.44
+#9 3.616    Compiling try-lock v0.2.5
+#9 4.027    Compiling fnv v1.0.7
+#9 4.105    Compiling alloc-stdlib v0.3.0
+#9 4.258    Compiling slab v0.4.12
+#9 4.362    Compiling miniz_oxide v0.9.1
+#9 4.625    Compiling brotli-decompressor v6.0.1
+#9 5.041    Compiling rmx-route-pattern v0.1.0 (/src/packages/route-pattern)
+#9 5.231    Compiling want v0.3.2
+#9 6.155    Compiling futures-channel v0.3.34
+#9 6.259    Compiling rmx-cli v0.1.0 (/src/packages/cli)
+#9 6.497    Compiling rmx-tar-parser v0.1.0 (/src/packages/tar-parser)
+#9 7.174    Compiling rmx-multipart-parser v0.1.0 (/src/packages/multipart-parser)
+#9 7.715    Compiling rmx-html-template v0.1.0 (/src/packages/html-template)
+#9 7.795    Compiling flate2 v1.1.10
+#9 7.982    Compiling indexmap v2.14.2
+#9 8.147    Compiling rmx-cookie v0.1.0 (/src/packages/cookie)
+#9 10.53    Compiling brotli v9.0.0
+#9 11.89    Compiling h2 v0.4.20
+#9 17.28    Compiling serde_json v1.0.154
+#9 17.28    Compiling serde v1.0.229
+#9 21.07    Compiling rmx-fetch v0.1.0 (/src/packages/fetch)
+#9 21.07    Compiling rmx-session v0.1.0 (/src/packages/session)
+#9 21.07    Compiling rmx-component v0.1.0 (/src/packages/component)
+#9 22.15    Compiling rmx-response v0.1.0 (/src/packages/response)
+#9 22.24    Compiling rmx-file-storage v0.1.0 (/src/packages/file-storage)
+#9 22.36    Compiling rmx-fetch-proxy v0.1.0 (/src/packages/fetch-proxy)
+#9 22.50    Compiling rmx-data-schema v0.1.0 (/src/packages/data-schema)
+#9 23.37    Compiling hyper v1.12.0
+#9 25.31    Compiling rmx-fetch-router v0.1.0 (/src/packages/fetch-router)
+#9 25.49    Compiling rmx-lazy-file v0.1.0 (/src/packages/lazy-file)
+#9 26.19    Compiling rmx-ui v0.1.0 (/src/packages/ui)
+#9 26.60    Compiling rmx-fs v0.1.0 (/src/packages/fs)
+#9 28.96    Compiling rmx-form-data-middleware v0.1.0 (/src/packages/form-data-middleware)
+#9 29.19    Compiling rmx-auth v0.1.0 (/src/packages/auth)
+#9 29.56    Compiling rmx-session-middleware v0.1.0 (/src/packages/session-middleware)
+#9 29.69    Compiling rmx-live-reload-middleware v0.1.0 (/src/packages/live-reload-middleware)
+#9 30.07    Compiling rmx-csrf-middleware v0.1.0 (/src/packages/csrf-middleware)
+#9 31.01    Compiling rmx-method-override-middleware v0.1.0 (/src/packages/method-override-middleware)
+#9 31.43    Compiling rmx-spa v0.1.0 (/src/packages/spa)
+#9 31.60    Compiling rmx-static-middleware v0.1.0 (/src/packages/static-middleware)
+#9 31.70    Compiling rmx-render-middleware v0.1.0 (/src/packages/render-middleware)
+#9 31.96    Compiling rmx-cors-middleware v0.1.0 (/src/packages/cors-middleware)
+#9 32.87    Compiling rmx-auth-middleware v0.1.0 (/src/packages/auth-middleware)
+#9 33.13    Compiling rmx-cop-middleware v0.1.0 (/src/packages/cop-middleware)
+#9 33.17    Compiling rmx-compression-middleware v0.1.0 (/src/packages/compression-middleware)
+#9 33.77    Compiling rmx-logger-middleware v0.1.0 (/src/packages/logger-middleware)
+#9 35.09    Compiling hyper-util v0.1.21
+#9 35.88    Compiling rmx-assets v0.1.0 (/src/packages/assets)
+#9 37.72    Compiling rmx-node-fetch-server v0.1.0 (/src/packages/node-fetch-server)
+#9 41.70    Compiling rmx v0.1.0 (/src/packages/rmx)
+#9 42.00    Compiling bench-app v0.1.0 (/src/bench/rmx-app/app)
+#9 46.20    Compiling bench-server v0.1.0 (/src/bench/rmx-app/server)
+#9 50.93     Finished `release` profile [optimized] target(s) in 49.89s
+#9 DONE 51.2s
+
+#5 [stage-1 1/3] FROM docker.io/library/debian:bookworm-slim
+#5 CACHED
+
+#10 [stage-1 2/3] COPY --from=build /bench-server /usr/local/bin/bench-server
+#10 DONE 0.2s
+
+#11 [stage-1 3/3] COPY bench/rmx-app/public /app/public
+#11 DONE 0.4s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.2s done
+#12 writing image sha256:dcc6a874a1134a12709787676afd51ace93b62b668d4afda013dcacefed4197d
+#12 writing image sha256:dcc6a874a1134a12709787676afd51ace93b62b668d4afda013dcacefed4197d 0.0s done
+#12 naming to docker.io/library/rmxbench-rmx 0.0s done
+#12 DONE 0.5s
+remix (node, 1 process)            /               233 req/s  p50   213.35 ms  p99   336.42 ms  200=3445
+remix (node, 1 process)            /ssr/100        195 req/s  p50   253.41 ms  p99   431.69 ms  200=2870
+remix (node, 1 process)            /ssr/1000        31 req/s  p50  1232.05 ms  p99 12359.22 ms  200=409
+rmx (1 thread)                     /              3623 req/s  p50     8.07 ms  p99    50.57 ms  200=54314
+rmx (1 thread)                     /ssr/100       2407 req/s  p50    20.04 ms  p99    48.27 ms  200=36076
+rmx (1 thread)                     /ssr/1000       443 req/s  p50   106.05 ms  p99   262.44 ms  200=6601
+remix (node cluster, 8 workers)    /               999 req/s  p50    41.06 ms  p99   159.85 ms  200=14947
+remix (node cluster, 8 workers)    /ssr/100        903 req/s  p50    49.96 ms  p99   149.68 ms  200=13491
+remix (node cluster, 8 workers)    /ssr/1000       109 req/s  p50   451.61 ms  p99   821.11 ms  200=1589
+rmx (8 threads)                    /             42881 req/s  p50     0.83 ms  p99     6.31 ms  200=643336
+rmx (8 threads)                    /ssr/100      15601 req/s  p50     2.82 ms  p99    11.69 ms  200=234021
+rmx (8 threads)                    /ssr/1000      2165 req/s  p50    22.28 ms  p99    51.76 ms  200=32424
+
+Config                          Path           Rps   P50Ms    P99Ms  Bytes StartupMs IdleMB LoadedMB
+------                          ----           ---   -----    -----  ----- --------- ------ --------
+remix (node, 1 process)         /           233.00  213.35   336.42   5863   5274.00  83.90   288.10
+remix (node, 1 process)         /ssr/100    195.00  253.41   431.69  16872   5274.00  83.90   288.50
+remix (node, 1 process)         /ssr/1000    31.00 1232.05 12359.22 131540   5274.00  83.90   340.40
+rmx (1 thread)                  /          3623.00    8.07    50.57    838   1364.00   3.00     4.40
+rmx (1 thread)                  /ssr/100   2407.00   20.04    48.27  12976   1364.00   3.00     4.50
+rmx (1 thread)                  /ssr/1000   443.00  106.05   262.44 127644   1364.00   3.00     5.10
+remix (node cluster, 8 workers) /           999.00   41.06   159.85   5863   3428.00 528.70  1899.50
+remix (node cluster, 8 workers) /ssr/100    903.00   49.96   149.68  16872   3428.00 528.70  2152.40
+remix (node cluster, 8 workers) /ssr/1000   109.00  451.61   821.11 131540   3428.00 528.70  2207.70
+rmx (8 threads)                 /         42881.00    0.83     6.31    838   1668.00   1.10     4.40
+rmx (8 threads)                 /ssr/100  15601.00    2.82    11.69  12976   1668.00   1.10     5.40
+rmx (8 threads)                 /ssr/1000  2165.00   22.28    51.76 127644   1668.00   1.10     9.10
+
+

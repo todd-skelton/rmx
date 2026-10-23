@@ -1,8 +1,9 @@
 # rmx
 
-A proof of concept of the Remix 3 component model in idiomatic Rust: server rendering on
-axum, plus interactive islands compiled to WebAssembly. This is a fun side project, not a
-production framework.
+The `rmx` crate: Remix 3 in idiomatic Rust, in one dependency (the counterpart of Remix's
+`remix` package). Server rendering runs on rmx's own router and hyper server, and interactive
+islands compile to WebAssembly. This is a fun side project, not a production framework. The
+repository overview is in the [root README](../../README.md).
 
 ## The Component Model
 

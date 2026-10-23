@@ -1,26 +1,19 @@
-//! axum server for the rmx benchmark app.
+//! The rmx benchmark server, on rmx's own stack like the Remix app it is compared with
+//! (`bench/remix-app/app/router.tsx`): fetch-router, the static and form-data middleware,
+//! `ctx.render` and node-fetch-server.
 //!
 //! Env: `HOST` (default 127.0.0.1), `PORT` (default 44101), `RMX_THREADS` (tokio worker threads; default = CPU count),
 //! `RMX_PUBLIC` (static dir; default `bench/rmx-app/public`).
 
 use std::sync::{Arc, Mutex};
 
-use axum::extract::{Path, State};
-use axum::response::{Html, Redirect};
-use axum::routing::get;
-use axum::{Form, Router};
 use bench_app::Task;
-use serde::Deserialize;
-use tower_http::services::ServeDir;
-
-struct AppState {
-    tasks: Mutex<Vec<Task>>,
-}
-
-#[derive(Deserialize)]
-struct NewTask {
-    title: String,
-}
+use http::StatusCode;
+use rmx::middleware::form_data::{form_data, FormDataExt};
+use rmx::middleware::render::Render;
+use rmx::middleware::static_files::{static_files, StaticOptions};
+use rmx::response;
+use rmx::router::{Context, Router};
 
 fn main() {
     let threads = std::env::var("RMX_THREADS").ok().and_then(|v| v.parse::<usize>().ok());
@@ -28,47 +21,36 @@ fn main() {
     if let Some(n) = threads {
         builder.worker_threads(n);
     }
-    builder.enable_all().build().expect("tokio runtime").block_on(serve());
-}
-
-async fn serve() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44101".into());
     let public = std::env::var("RMX_PUBLIC").unwrap_or_else(|_| "bench/rmx-app/public".into());
-    let tasks = (1..=5).map(|id| Task { id, title: format!("Seed task {id}") }).collect();
-    let state = Arc::new(AppState { tasks: Mutex::new(tasks) });
-
-    let app = Router::new()
-        .route("/", get(home))
-        .route("/tasks", axum::routing::post(add_task))
-        .route("/ssr/{n}", get(ssr_rows))
-        .route("/client", get(client))
-        .fallback_service(ServeDir::new(public))
-        .with_state(state);
-
-    let listener = tokio::net::TcpListener::bind(format!("{host}:{port}")).await.expect("bind");
-    println!("rmx bench listening on http://{host}:{port}");
-    axum::serve(listener, app).await.expect("serve");
+    let addr = format!("{host}:{port}");
+    println!("rmx bench listening on http://{addr}");
+    builder.enable_all().build().expect("tokio runtime").block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
-// Node trees use Rc, so each handler renders to a String before any await point.
+fn router(public: &str) -> Router {
+    let tasks: Arc<Mutex<Vec<Task>>> = Arc::new(Mutex::new((1..=5).map(|id| Task { id, title: format!("Seed task {id}") }).collect()));
+    let mut router = Router::new();
+    router.use_middleware(static_files(public, StaticOptions { index: vec![], ..Default::default() }));
+    router.use_middleware(form_data());
 
-async fn home(State(state): State<Arc<AppState>>) -> Html<String> {
-    let tasks = state.tasks.lock().expect("tasks lock").clone();
-    Html(rmx::render_to_string(&bench_app::home_page(&tasks)))
-}
-
-async fn add_task(State(state): State<Arc<AppState>>, Form(form): Form<NewTask>) -> Redirect {
-    let mut tasks = state.tasks.lock().expect("tasks lock");
-    let id = tasks.len() as u32 + 1;
-    tasks.push(Task { id, title: form.title });
-    Redirect::to("/")
-}
-
-async fn ssr_rows(Path(n): Path<usize>) -> Html<String> {
-    Html(rmx::render_to_string(&bench_app::ssr_page(n.min(10_000))))
-}
-
-async fn client() -> Html<String> {
-    Html(rmx::render_to_string(&bench_app::client_page()))
+    let home = tasks.clone();
+    router.get("/", move |ctx: Context| {
+        let tasks = home.lock().expect("tasks lock").clone();
+        async move { ctx.render(bench_app::home_page(&tasks)) }
+    });
+    router.post("/tasks", move |ctx: Context| {
+        let title = ctx.form_data().get("title").unwrap_or_default().to_string();
+        let mut tasks = tasks.lock().expect("tasks lock");
+        let id = tasks.len() as u32 + 1;
+        tasks.push(Task { id, title });
+        async move { response::redirect_with("/", StatusCode::SEE_OTHER) }
+    });
+    router.get("/ssr/:n", |ctx: Context| async move {
+        let n = ctx.param("n").and_then(|n| n.parse::<usize>().ok()).unwrap_or(0).min(10_000);
+        ctx.render(bench_app::ssr_page(n))
+    });
+    router.get("/client", |ctx: Context| async move { ctx.render(bench_app::client_page()) });
+    router
 }

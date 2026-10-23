@@ -1,12 +1,14 @@
 # Runs the full rmx vs Remix 3 comparison and writes results/*.json.
-#   pwsh ./run.ps1 [-Duration 15] [-Connections 50] [-SkipBrowser] [-SkipServer]
+#   pwsh ./run.ps1 [-Duration 15] [-Connections 50] [-SkipBrowser] [-SkipServer] [-Suffix -2026-10-22]
 # Prereqs: rmx built (../scripts/build-bench.ps1) and `npm install` in remix-app.
 param(
     [int]$Duration = 15,
     [int]$Connections = 50,
     [int]$OhaThreads = 4,
     [switch]$SkipBrowser,
-    [switch]$SkipServer
+    [switch]$SkipServer,
+    # Appended to the result file names, so a new run does not replace an earlier one.
+    [string]$Suffix = ""
 )
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -81,7 +83,7 @@ if (-not $SkipBrowser) {
     $rmx = Start-Server "rmx" @{}
     # Remix compiles client modules on first request; load once so the timed runs are warm.
     Invoke-WebRequest "http://127.0.0.1:44100/client" | Out-Null
-    node browser-bench.mjs --iterations 15 --loads 10 --out results/browser.json
+    node browser-bench.mjs --iterations 15 --loads 10 --out "results/browser$Suffix.json"
     Stop-Process -Id $remix.Process.Id, $rmx.Process.Id -Force
     Stop-Port 44100; Stop-Port 44101
 }
@@ -118,6 +120,6 @@ if (-not $SkipServer) {
         oha_threads = $OhaThreads; cpu = (Get-CimInstance Win32_Processor).Name; logical_cores = $cores
         node = (node --version); rows = $rows
     }
-    $meta | ConvertTo-Json -Depth 5 | Set-Content results/server.json -Encoding utf8
+    $meta | ConvertTo-Json -Depth 5 | Set-Content "results/server$Suffix.json" -Encoding utf8
     $rows | Format-Table Config, Path, Rps, P50Ms, P99Ms, Bytes, StartupMs, IdleMB, LoadedMB -AutoSize | Out-String -Width 200
 }

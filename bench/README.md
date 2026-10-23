@@ -1,7 +1,8 @@
 # rmx vs Remix 3 benchmarks
 
-Compares `../rmx` (Rust, axum + WASM islands) with Remix 3.0.0 (`remix-app/`, Node). Both apps
-serve the same routes with the same markup, data and islands:
+Compares rmx (`rmx-app/`: Rust, rmx's router, middleware and server, WASM islands) with
+Remix 3.0.0 (`remix-app/`, Node). Both apps serve the same routes with the same markup, data
+and islands:
 
 1. `/`: a document shell, five tasks, a POST form, and a `Counter` island.
 2. `/ssr/{n}`: `n` table rows, each rendered through a nested `RowView` component, with
@@ -12,7 +13,7 @@ Parity check: after stripping hydration markers and self-closing slashes, the `<
 byte-identical for `/`, `/ssr/100` and `/client`. Remix responses are larger because `<head>`
 carries modulepreload and import map tags.
 
-All numbers below were measured on 2026-10-19 on one laptop: i9-10885H (8 cores, 16 threads),
+Unless a section says otherwise, numbers were measured on one laptop: i9-10885H (8 cores, 16 threads),
 64 GB RAM, Windows 11, Node 24.15.0, Rust 1.99.1, Chromium 148.0.7778.96, oha 1.16.0.
 
 ## How to Run
@@ -20,8 +21,8 @@ All numbers below were measured on 2026-10-19 on one laptop: i9-10885H (8 cores,
 ```powershell
 pwsh ../scripts/build-bench.ps1                  # rmx release server + wasm client
 cd remix-app; npm install; cd ..
-pwsh ./run.ps1                            # Windows: browser bench + server load tests
-pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests only
+pwsh ./run.ps1 -Suffix -2026-10-22        # Windows: browser bench + server load tests
+pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests only (-Out names the file)
 ```
 
 1. `run.ps1` starts both servers on the host, runs `browser-bench.mjs` (Playwright driving
@@ -36,7 +37,92 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
 
 Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
 
-## Browser (Chromium, Windows host)
+## Latest Run (2026-10-22): rmx on Its Own Stack
+
+Until this run, the rmx bench server was an axum app that used rmx only to render. It now
+runs on rmx itself, mirroring `remix-app/app/router.tsx` line for line: the static
+middleware first, then form data, then routes that call `ctx.render`, served by
+`rmx::node_fetch_server`. The HTML is the same as the axum server's apart from the
+hydration marker ids (checked for `/`, `/ssr/100`, `/client` and `/app.css`), and the
+form POST still redirects with 303. An A/B on the Windows host put the two servers within
+about 15% of each other (8 s at 50 connections, measured):
+
+| rmx server | 1 thread, `/` | 1 thread, `/ssr/100` | 16 threads, `/` |
+| --- | --- | --- | --- |
+| axum (earlier runs) | 6,367 req/s | 1,257 req/s | 34,394 req/s |
+| rmx stack, no static middleware | 6,047 req/s | 1,457 req/s | 34,879 req/s |
+| rmx stack (this run) | 5,448 req/s | 1,394 req/s | 32,436 req/s |
+
+Remix 3.0.0 on Node v24.22.1, Rust 1.99.1, Chromium 148.0.7778.96, same laptop as below. Results:
+`results/docker-server-2026-10-22.json`, `results/server-2026-10-22.json` and
+`results/browser-2026-10-22.json`.
+
+### Server, Linux Containers (Pinned CPUs)
+
+Requests per second, 15 s at 50 connections after a 3 s warm-up; oha runs in its own
+container on other CPUs.
+
+| Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
+| --- | --- | --- | --- | --- | --- | --- |
+| Remix, 1 Node process | 1 | 233 | 195 | 31 | 83.9 / 340.4 MB | 5.3 s |
+| rmx, 1 thread | 1 | 3,623 | 2,407 | 443 | 3 / 5.1 MB | 1.4 s |
+| Remix, cluster of 8 workers | 8 | 999 | 903 | 109 | 528.7 / 2207.7 MB | 3.4 s |
+| rmx, 8 threads | 8 | 42,881 | 15,601 | 2,165 | 1.1 / 9.1 MB | 1.7 s |
+
+| rmx / Remix | `/` | `/ssr/100` | `/ssr/1000` |
+| --- | --- | --- | --- |
+| 1 CPU | 16x | 12x | 14x |
+| 8 CPUs | 43x | 17x | 20x |
+
+Startup includes starting the container; Remix's also includes `node-tsx` transpiling on
+first load.
+
+### Server, Windows Host
+
+Same settings, servers unpinned. Other applications kept the CPU about 44% busy during this
+run (measured just before it), so treat these as rough: rmx on 1 thread served `/` at
+1,226 req/s here and at 5,448 req/s in the A/B above, minutes later. The Docker rows are
+the ones to compare.
+
+| Config | `/` | `/ssr/100` | `/ssr/1000` | Idle memory |
+| --- | --- | --- | --- | --- |
+| Remix, 1 Node process | 182 | 246 | 38 | 113.2 MB |
+| Remix, cluster of 16 workers | 545 | 746 | 111 | 1710.8 MB |
+| rmx, 1 thread | 1,226 | 646 | 140 | 17.6 MB |
+| rmx, 16 threads | 4,034 | 11,214 | 2,006 | 18 MB |
+
+### Browser (Chromium, Windows Host)
+
+Medians over 10 fresh page loads and 15 iterations per operation; commit is click to DOM
+updated, frame adds the next paint. One run.
+
+| Metric | Remix 3 | rmx |
+| --- | --- | --- |
+| Client assets (gzip) | 42.5 KB in 41 files | 151.4 KB in 3 files (320.8 KiB raw `.wasm`) |
+| Hydrated at | 136.4 ms | 63.45 ms |
+| DOMContentLoaded | 127.9 ms | 43.95 ms |
+| JS heap after run | 4.2 MB | 2.7 MB (excludes WASM memory) |
+
+| Operation | Remix 3 commit / frame ms | rmx commit / frame ms |
+| --- | --- | --- |
+| create 1k | 20.7 / 87.7 | 18.2 / 66.4 |
+| replace 1k | 19.5 / 68 | 26.3 / 71.6 |
+| update every 10th | 8.6 / 45.4 | 3.7 / 39.3 |
+| select row | 6.2 / 19.2 | 3.2 / 17.3 |
+| swap rows | 9.6 / 23.4 | 4.6 / 23.3 |
+| remove row | 8.5 / 29.2 | 3.3 / 27.3 |
+| create 10k | 566 / 574 | 629.8 / 648.7 |
+| append 1k | 24.6 / 106.5 | 30.4 / 96.2 |
+| clear 1k | 7.7 / 19.8 | 5.3 / 20.6 |
+
+Both counters hydrated and incremented (5 to 6), with no page errors on either side.
+
+## Earlier Runs (2026-10-19 and 2026-10-20, axum Server)
+
+The rest of this file is the first two rounds, when the rmx server was axum with rmx
+rendering. Their client numbers still describe rmx's runtime at the time.
+
+### Browser (Chromium, Windows host)
 
 Load metrics are medians over 10 fresh page loads; operations are medians over 15 iterations.
 "Commit" is click to DOM updated; "frame" adds the next paint.
@@ -88,7 +174,7 @@ client bundle about doubled. Single runs vary by 30% or more.
 | append 1k rows | 36.5 / 171.6 | 29.3 / 106.9 |
 | clear 1k rows | 11.0 / 13.5 | 8.4 / 11.0 |
 
-## Server, Linux Containers (Docker Desktop, WSL2)
+### Server, Linux Containers (Docker Desktop, WSL2)
 
 Requests per second, 15 s at 50 connections. Docker run 3 (`results/docker-server.json`).
 
@@ -112,7 +198,7 @@ up better:
 
 Docker run 1 pinned the 1-CPU configs to CPU 0; runs 2 and 3 used CPU 2.
 
-## Server, Windows Host
+### Server, Windows Host
 
 Run 2 (`results/server.json`), same oha settings, servers unpinned.
 

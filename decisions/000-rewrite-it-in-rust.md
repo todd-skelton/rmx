@@ -162,7 +162,7 @@ care about. Keep the Leptos spike as a baseline for WASM size, build times and h
 
 | Phase | Goal | Done when |
 | --- | --- | --- |
-| 0. Spike | axum + Leptos SSR, one island | Done; numbers in `spike/README.md` |
+| 0. Spike | axum + Leptos SSR, one island | Done; numbers in `bench/leptos-spike/README.md` |
 | 0b. Component-model spike | `Component` trait, `Handle::update()`, same `render()` used for SSR and a WASM island | Done; `rmx/` plus the Remix 3 comparison in `bench/` (section 10) |
 | 1. Routes + loaders (SSR only) | `build.rs` route scan, nested layouts, parallel loaders, loader data passed to route components as props | `/projects/1` renders 3 nested layouts with no WASM shipped |
 | 2. Actions + forms | `#[action]`, plain `<form>`, POST/redirect/GET, validation errors | Create/rename works with JS disabled |

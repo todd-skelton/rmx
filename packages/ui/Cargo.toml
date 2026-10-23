@@ -1,6 +1,6 @@
 [package]
 name = "rmx-ui"
-description = "UI helpers for rmx (Remix's @remix-run/ui): entrance, exit and layout animation mixins, springs and tweens"
+description = "Headless, accessible UI primitives and animation utilities for rmx components (remix ui): accordion, anchor, combobox, listbox, menu, popover, select, tabs, toggle, springs and layout animation"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
