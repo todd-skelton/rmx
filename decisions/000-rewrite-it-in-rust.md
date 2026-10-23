@@ -844,7 +844,29 @@ Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22).
 5. Documented divergences, not gaps: one wasm bundle per app (no import maps), no thrown
    errors (explicit `report_error`), string `style`, plain `Event`s in `rmx-ui`, no HMR
    (`rmx dev` rebuilds and reloads), and slower creation of large lists than Remix's JS
-   runtime (`bench/README.md`).
+   runtime (`bench/README.md`; fixed on 2026-10-23, section 13).
 6. Gate at this audit (measured): workspace tests 2,586 passed, 0 failed (test113);
    browser tests `rmx-component` 596 and `rmx-ui` 140 passed, 0 failed (browser-all11);
    all demo e2e suites passed (rebuild105).
+
+## 13. Client speed and size (2026-10-23)
+
+1. The list benchmarks rmx lost (replace 1k, create 10k, append 1k) were bound by calls
+   from wasm into JavaScript, not by diffing: about 25 calls per table row, each through
+   web-sys, plus a `TextDecoder` run for every dynamic string and a SipHash lookup for
+   every interned one.
+2. Decision: keep the vdom in Rust and route its hot DOM calls through one small JS object
+   built at startup (`packages/component/src/dom/ops.rs`), combining create and append,
+   passing template strings as indexes into a JS-side table, and decoding short ASCII
+   strings in JS. No generated JS snippet file, so the page still loads three files.
+   Keyed lists also patch their common prefix and suffix in place.
+3. Result (measured, `bench/README.md`): rmx commits faster than Remix on every list
+   operation in both runs except `clear 1k` in the stable run, by 3 to 17% on the four
+   creation-heavy ones.
+4. Size: narrowed, not closed. 150.4 KB gzip on stable, 133.6 KB with
+   `build-client.ps1 -Nightly` (`build-std` with `panic=immediate-abort`), against
+   42.5 KB for Remix. The runtime's own code (vdom, frames, navigation) is about as large as
+   Remix's JavaScript before compression; the rest is what wasm brings that JavaScript gets
+   from the browser (core, alloc, serde_json, the allocator, the JS glue). Closing it would
+   mean shipping less runtime per page or moving rendering back to JavaScript; neither is
+   done.

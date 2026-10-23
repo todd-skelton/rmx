@@ -5,7 +5,8 @@
 // Everything is measured from outside the frameworks with the same code: click a DOM
 // element, wait one macrotask (each framework flushes updates on a microtask), read the
 // clock ("commit"), then wait for the next animation frame plus a macrotask ("frame",
-// which includes style, layout and paint).
+// which includes style, layout and paint). Operations alternate between the two apps on
+// every iteration, so a change in background load hits both sides alike.
 
 import { createRequire } from 'node:module'
 import { writeFileSync } from 'node:fs'
@@ -148,7 +149,7 @@ async function counterCheck(browser, target) {
   return { before, after, ok: before !== after }
 }
 
-async function opBenchmarks(browser, target) {
+async function openBenchPage(browser, target) {
   const page = await browser.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
@@ -160,37 +161,53 @@ async function opBenchmarks(browser, target) {
   await clickAndMeasure(page, '#clear')
   await clickAndMeasure(page, '#create')
   const firstLabel = (await state(page)).firstLabel
+  return { page, errors, firstLabel, results: {} }
+}
 
-  const results = {}
+async function opBenchmarks(browser, targets) {
+  const runs = []
+  for (const target of targets) runs.push(await openBenchPage(browser, target))
   for (const op of OPS) {
     const n = op.iterations ?? ITERATIONS
-    const commit = []
-    const frame = []
-    const internal = []
+    const samples = runs.map(() => ({ commit: [], frame: [], internal: [] }))
     for (let i = 0; i < WARMUP + n; i++) {
-      for (const p of op.prep) await clickAndMeasure(page, p)
-      const m = await clickAndMeasure(page, op.click)
-      const s = await state(page)
-      check(op, s, m)
-      if (i >= WARMUP) {
-        commit.push(m.commit)
-        frame.push(m.frame)
-        const internalMs = s.lastOp && op.click.startsWith('#') ? Number(s.lastOp.split(':')[1]) : null
-        if (internalMs != null) internal.push(internalMs)
+      for (const [t, run] of runs.entries()) {
+        for (const p of op.prep) await clickAndMeasure(run.page, p)
+        const m = await clickAndMeasure(run.page, op.click)
+        const s = await state(run.page)
+        check(op, s, m)
+        if (i >= WARMUP) {
+          samples[t].commit.push(m.commit)
+          samples[t].frame.push(m.frame)
+          const internalMs = s.lastOp && op.click.startsWith('#') ? Number(s.lastOp.split(':')[1]) : null
+          if (internalMs != null) samples[t].internal.push(internalMs)
+        }
       }
     }
-    results[op.name] = {
-      n,
-      commitMs: round(median(commit)),
-      frameMs: round(median(frame)),
-      internalMs: internal.length ? round(median(internal)) : null,
+    for (const [t, run] of runs.entries()) {
+      const { commit, frame, internal } = samples[t]
+      run.results[op.name] = {
+        n,
+        commitMs: round(median(commit)),
+        frameMs: round(median(frame)),
+        internalMs: internal.length ? round(median(internal)) : null,
+      }
     }
   }
-  const cdp = await page.context().newCDPSession(page)
-  await cdp.send('Performance.enable')
-  const heap = await cdp.send('Performance.getMetrics').catch(() => null)
-  await page.close()
-  return { firstLabel, results, errors, jsHeapMB: heap ? round((heap.metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? NaN) / 2 ** 20, 1) : null }
+  const out = []
+  for (const run of runs) {
+    const cdp = await run.page.context().newCDPSession(run.page)
+    await cdp.send('Performance.enable')
+    const heap = await cdp.send('Performance.getMetrics').catch(() => null)
+    await run.page.close()
+    out.push({
+      firstLabel: run.firstLabel,
+      results: run.results,
+      errors: run.errors,
+      jsHeapMB: heap ? round((heap.metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? NaN) / 2 ** 20, 1) : null,
+    })
+  }
+  return out
 }
 
 // The bundled Playwright expects a newer browser build than is installed; use the installed
@@ -205,9 +222,10 @@ for (const target of TARGETS) {
   console.error(`== ${target.name}`)
   const counter = await counterCheck(browser, target)
   const load = await loadMetrics(browser, target)
-  const ops = await opBenchmarks(browser, target)
-  out.targets[target.name] = { counter, load, ...ops }
+  out.targets[target.name] = { counter, load }
 }
+console.error('== operations (interleaved)')
+for (const [t, ops] of (await opBenchmarks(browser, TARGETS)).entries()) Object.assign(out.targets[TARGETS[t].name], ops)
 await browser.close()
 
 writeFileSync(args.out ?? 'results/browser.json', JSON.stringify(out, null, 2))

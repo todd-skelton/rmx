@@ -142,18 +142,21 @@ Did rewriting it in Rust make it fast? Of course it did; that is the only reason
 | Remix 3, 8 Node workers (8 CPUs) | 999 | 903 | 109 | 2,208 MB |
 | rmx, 8 threads (8 CPUs) | 42,881 | 15,601 | 2,165 | 9 MB |
 
-That is 12x to 43x the throughput in a few megabytes. In the browser (Chromium, medians):
+That is 12x to 43x the throughput in a few megabytes. In the browser (Chromium, medians, measured 2026-10-23 with the client built on nightly Rust; the stable build is in the bench notes):
 
 | | Remix 3 | rmx |
 | --- | --- | --- |
-| Client download (gzip) | **42.5 KB** in 41 files | 151.4 KB in 3 files |
-| Page hydrated | 136.4 ms | **63.45 ms** |
-| Create 1,000 rows | 20.7 ms | 18.2 ms |
-| Replace 1,000 rows | **19.5 ms** | 26.3 ms |
-| Create 10,000 rows | **566 ms** | 629.8 ms |
-| Select a row | 6.2 ms | **3.2 ms** |
+| Client download (gzip) | **42.5 KB** in 41 files | 133.6 KB in 3 files |
+| Page hydrated | 138.15 ms | **64.4 ms** |
+| Create 1,000 rows | 17.5 ms | **14.6 ms** |
+| Replace 1,000 rows | 20.6 ms | **20 ms** |
+| Create 10,000 rows | 687.3 ms | **657.3 ms** |
+| Append 1,000 rows | 24.9 ms | **21.7 ms** |
+| Select a row | 11.3 ms | **6.7 ms** |
 
-The fine print, because there is always fine print: the client ships about 3.5x more bytes, since WebAssembly brings its own runtime where Remix borrows the browser's. Creating large lists is slower, because every DOM node costs several calls from wasm into JavaScript. Single runs vary by 30% or more, the Windows host numbers were taken on a busy machine, and this compares a proof of concept with a released framework. The method, the raw results and every earlier run are in [bench/README.md](bench/README.md).
+Rust also lost the list benchmarks at first, which was awkward for a rewrite whose only argument is speed. Every DOM node cost several calls from wasm into JavaScript and a UTF-8 decode, so rmx now batches those calls through one small JavaScript object of its own. Yes, the Rust rewrite got faster by writing more JavaScript. It now wins those rows by 3 to 17%, which is a tie on screen.
+
+The fine print, because there is always fine print: the client still ships about 3x more bytes, since WebAssembly brings its own runtime where Remix borrows the browser's. The nightly build trims 17 KB by making panics trap silently, and the stable build is 150.4 KB. Single runs vary by 30% or more, the Windows host was busy, and this compares a proof of concept with a released framework. The method, the raw results, where the bytes go and every earlier run are in [bench/README.md](bench/README.md).
 
 ## Getting Started
 

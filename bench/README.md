@@ -20,13 +20,15 @@ Unless a section says otherwise, numbers were measured on one laptop: i9-10885H 
 
 ```powershell
 pwsh ../scripts/build-bench.ps1                  # rmx release server + wasm client
+# or: pwsh ../scripts/build-bench.ps1 -Nightly nightly   # client on nightly, immediate-abort panics
 cd remix-app; npm install; cd ..
 pwsh ./run.ps1 -Suffix -2026-10-22        # Windows: browser bench + server load tests
 pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests only (-Out names the file)
 ```
 
 1. `run.ps1` starts both servers on the host, runs `browser-bench.mjs` (Playwright driving
-   Chromium), then runs oha for 15 s at 50 connections after a 3 s warm-up per path.
+   Chromium; since 2026-10-23 every operation alternates between the two apps on each
+   iteration, so background load hits both alike), then runs oha for 15 s at 50 connections after a 3 s warm-up per path.
    Configs: Remix in 1 Node process, Remix as a Node cluster (one worker per logical core),
    rmx on 1 thread, and rmx on all threads.
 2. `docker/run-docker.ps1` runs each server alone in a container pinned to the same CPUs
@@ -37,7 +39,99 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
 
 Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
 
-## Latest Run (2026-10-22): rmx on Its Own Stack
+## Latest Run (2026-10-23): Faster Lists, Slightly Smaller Client
+
+Browser only; the servers did not change, so the 2026-10-22 server numbers below still
+stand. Results: `results/browser-2026-10-23.json` (stable Rust, the default build) and
+`results/browser-2026-10-23-nightly.json` (`build-bench.ps1 -Nightly`). Same laptop and
+versions as below, nightly rustc 1.101.0 (2026-10-22). Other programs kept the host busy
+(roughly 30 to 90% CPU, sampled between runs), which is why both apps are slower in the
+stable run than in the nightly one; compare columns within a run, not across runs.
+
+What changed in rmx (commit `607bc43`):
+
+1. The hot DOM calls go through one small JS object (`packages/component/src/dom/ops.rs`)
+   instead of one web-sys call each: an element or text node is created and appended in
+   one call, tags, attribute names and static text are indexes into a JS string table,
+   short ASCII strings are decoded in JS straight from wasm memory instead of by
+   `TextDecoder`, and binding a listener is one call.
+2. Keyed lists patch their common start and end in place, so an append only creates the
+   new rows; a list where nothing is reused skips the move pass.
+3. Integers render without `core::fmt`, and wasm-bindgen's `enable-interning` is off (it
+   looked up every string passed to JS in a hash map).
+
+### Lists
+
+Median commit ms (click to DOM updated), 15 iterations (5 for create 10k):
+
+| Operation | Remix 3 | rmx stable | Remix 3 | rmx nightly | rmx on 2026-10-22 vs Remix |
+| --- | --- | --- | --- | --- | --- |
+| create 1k | 25.1 | **22.5** | 17.5 | **14.6** | 18.2 vs 20.7 |
+| replace 1k | 42.3 | **39.3** | 20.6 | **20** | 26.3 vs 19.5 |
+| create 10k | 1019 | **970.3** | 687.3 | **657.3** | 629.8 vs 566 |
+| append 1k | 19.1 | **18** | 24.9 | **21.7** | 30.4 vs 24.6 |
+| update every 10th | 12.1 | **7.5** | 8.7 | **5.7** | 3.7 vs 8.6 |
+| select row | 11.4 | **6.5** | 11.3 | **6.7** | 3.2 vs 6.2 |
+| swap rows | 12.5 | **8** | 11.2 | **6.5** | 4.6 vs 9.6 |
+| remove row | 11.7 | **7.4** | 7.3 | **5.7** | 3.3 vs 8.5 |
+| clear 1k | **6.6** | 6.8 | 8.7 | **7.7** | 5.3 vs 7.7 |
+
+rmx now commits faster than Remix on replace, create 10k and append, the three it lost
+before. The margins on create 1k, replace 1k, create 10k and append 1k are small (3 to 17%),
+and in the nightly run the next painted frame for create 1k and replace 1k was still a few
+ms later for rmx (78.4 vs 74.9 ms and 73.4 vs 70.3 ms), so call those a tie on screen.
+`clear 1k` reaches the next frame later on rmx in both runs (16.9 vs 12 and 21.3 vs 12.1
+ms) with the same commit time; that is not explained yet.
+
+An interleaved A/B of the old and new runtime (stable builds, one browser, 20 iterations, run
+before the commit) put the new one at 0.80x the old on create 10k, 0.64x on append 1k,
+0.71x on replace 1k and 0.64x on create 1k.
+
+### Client Size
+
+| Build | `.wasm` raw | Total gzip | Total brotli |
+| --- | --- | --- | --- |
+| Remix 3 (41 JS files) | | 42.5 KB | 37.7 KB |
+| rmx on 2026-10-22 | 320.8 KiB | 151.4 KB | 127.6 KB |
+| rmx stable, this run | 317.3 KiB | 150.4 KB | 127.1 KB |
+| rmx nightly, immediate-abort panics | 273.7 KiB | 133.6 KB | 113.5 KB |
+
+The size gap is narrowed, not closed: about 3.1x Remix with the nightly build, 3.5x on
+stable. Where the bytes go, measured with twiggy on the nightly build before `wasm-opt`
+(shallow bytes):
+
+1. The component runtime itself, about 145 KB: the vdom (41 KB), frames (35 KB), soft
+   navigation (17 KB), the DOM differ for frame reloads (9 KB) and the rest. Remix ships
+   the same features plus the app as about 112 KB of unminified JavaScript, and JavaScript compresses
+   better than wasm (2.6x against 2.2x gzip here).
+2. What JavaScript gets from the browser and wasm has to bring: `core` and `alloc`
+   (52 KB), serde_json for client entry props (about 20 KB), `hashbrown` (9 KB), the
+   allocator (5 KB) and the wasm-bindgen glue (66 KB of JS, 10 KB gzip).
+3. String data, about 21 KB.
+
+Things tried that did not pay: opt-level `s` instead of `z` (14 KB more gzip, no clear speed
+gain), more `wasm-opt` passes (`--converge`, `--gufa`, `-O3`: within 0.3 KB gzip),
+`-Zlocation-detail=none -Zfmt-debug=none` on top of immediate-abort (0.8 KB), and
+minifying the JS glue (2 KB gzip, but it would add a Node tool to the Rust build). Closing
+the rest would mean shipping less runtime per page (for example compiling frames and
+navigation out of apps that do not use them, which Remix does not do either) or rendering
+from a JavaScript runtime, which would no longer be full stack Rust.
+
+The nightly build's trade-off: with `panic=immediate-abort`, a panic traps without a
+console message and `App::on_error` does not hear about it.
+
+### Load
+
+| Metric | Remix 3 | rmx stable | Remix 3 | rmx nightly |
+| --- | --- | --- | --- | --- |
+| Hydrated at | 241.8 ms | 105.85 ms | 138.15 ms | 64.4 ms |
+| DOMContentLoaded | 228.95 ms | 73.45 ms | 129.55 ms | 45.8 ms |
+| JS heap after run | 7.4 MB | 3.5 MB | 7.4 MB | 3.4 MB |
+
+Both counters hydrated and incremented (5 to 6), with no page errors on either side, in
+both runs.
+
+## Previous Run (2026-10-22): rmx on Its Own Stack
 
 Until this run, the rmx bench server was an axum app that used rmx only to render. It now
 runs on rmx itself, mirroring `remix-app/app/router.tsx` line for line: the static

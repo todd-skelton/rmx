@@ -1,0 +1,342 @@
+{
+  "date": "2026-10-23T14:40:32.843Z",
+  "chromium": "148.0.7778.96",
+  "iterations": 15,
+  "loads": 10,
+  "targets": {
+    "remix": {
+      "counter": {
+        "before": "Count: 5",
+        "after": "Count: 6",
+        "ok": true
+      },
+      "load": {
+        "assets": {
+          "files": 41,
+          "rawKB": 112.3,
+          "gzipKB": 42.5,
+          "brotliKB": 37.7,
+          "list": [
+            {
+              "path": "/assets/app/public/entry.ts",
+              "bytes": 151
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/run.js",
+              "bytes": 2067
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/style/stylesheet.js",
+              "bytes": 2120
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/vdom.js",
+              "bytes": 3531
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/typed-event-target.js",
+              "bytes": 51
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/frame.js",
+              "bytes": 21697
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/navigation.js",
+              "bytes": 6463
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/error-event.js",
+              "bytes": 138
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/jsx.js",
+              "bytes": 130
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/component.js",
+              "bytes": 3508
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/invariant.js",
+              "bytes": 178
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/diff-dom.js",
+              "bytes": 8728
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/stream-protocol.js",
+              "bytes": 330
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/module-preloader.js",
+              "bytes": 1287
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/frame-resolution.js",
+              "bytes": 292
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/client-entry-boundary.js",
+              "bytes": 407
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/import-map-manager.js",
+              "bytes": 4095
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/document-reload.js",
+              "bytes": 373
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/scheduler.js",
+              "bytes": 2335
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/reconcile.js",
+              "bytes": 24160
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/to-vnode.js",
+              "bytes": 1632
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/vnode.js",
+              "bytes": 1129
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/diff-props.js",
+              "bytes": 439
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/refresh.js",
+              "bytes": 277
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/style/layers.js",
+              "bytes": 86
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/core/vnode.js",
+              "bytes": 724
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/form-navigation.js",
+              "bytes": 1737
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/spa-response.js",
+              "bytes": 420
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/document-state.js",
+              "bytes": 1278
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/core/props.js",
+              "bytes": 2188
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/client-entries.js",
+              "bytes": 381
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/mixins/mixin.js",
+              "bytes": 7321
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/mixins/on-mixin.js",
+              "bytes": 677
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/core/children.js",
+              "bytes": 903
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/core/mix.js",
+              "bytes": 1672
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/unsafe-html.js",
+              "bytes": 761
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/core/attributes.js",
+              "bytes": 2640
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/style/style.js",
+              "bytes": 3364
+            },
+            {
+              "path": "/assets/npm/%40remix-run/component/dist/runtime/svg-attributes.js",
+              "bytes": 2524
+            },
+            {
+              "path": "/assets/app/public/rows-bench.tsx",
+              "bytes": 2194
+            },
+            {
+              "path": "/assets/app/public/labels.ts",
+              "bytes": 598
+            }
+          ]
+        },
+        "hydratedMs": 241.8,
+        "domContentLoadedMs": 228.95,
+        "loadMs": 229.15
+      },
+      "firstLabel": "big blue house",
+      "results": {
+        "create 1k": {
+          "n": 15,
+          "commitMs": 25.1,
+          "frameMs": 113.9,
+          "internalMs": 24.9
+        },
+        "replace 1k": {
+          "n": 15,
+          "commitMs": 42.3,
+          "frameMs": 148,
+          "internalMs": 42.1
+        },
+        "update every 10th": {
+          "n": 15,
+          "commitMs": 12.1,
+          "frameMs": 67.8,
+          "internalMs": 11.8
+        },
+        "select row": {
+          "n": 15,
+          "commitMs": 11.4,
+          "frameMs": 15.9,
+          "internalMs": null
+        },
+        "swap rows": {
+          "n": 15,
+          "commitMs": 12.5,
+          "frameMs": 32.2,
+          "internalMs": 12.3
+        },
+        "remove row": {
+          "n": 15,
+          "commitMs": 11.7,
+          "frameMs": 42.8,
+          "internalMs": null
+        },
+        "create 10k": {
+          "n": 5,
+          "commitMs": 1019,
+          "frameMs": 1026.2,
+          "internalMs": 248.4
+        },
+        "append 1k": {
+          "n": 15,
+          "commitMs": 19.1,
+          "frameMs": 90.1,
+          "internalMs": 18.9
+        },
+        "clear 1k": {
+          "n": 15,
+          "commitMs": 6.6,
+          "frameMs": 12,
+          "internalMs": 6.5
+        }
+      },
+      "errors": [],
+      "jsHeapMB": 7.4
+    },
+    "rmx": {
+      "counter": {
+        "before": "Count: 5",
+        "after": "Count: 6",
+        "ok": true
+      },
+      "load": {
+        "assets": {
+          "files": 3,
+          "rawKB": 381.7,
+          "gzipKB": 150.4,
+          "brotliKB": 127.1,
+          "list": [
+            {
+              "path": "/boot.js",
+              "bytes": 56
+            },
+            {
+              "path": "/pkg/bench_client.js",
+              "bytes": 65899
+            },
+            {
+              "path": "/pkg/bench_client_bg.wasm",
+              "bytes": 324878
+            }
+          ]
+        },
+        "hydratedMs": 105.85,
+        "domContentLoadedMs": 73.45,
+        "loadMs": 73.65
+      },
+      "firstLabel": "big blue house",
+      "results": {
+        "create 1k": {
+          "n": 15,
+          "commitMs": 22.5,
+          "frameMs": 109.9,
+          "internalMs": 22.1
+        },
+        "replace 1k": {
+          "n": 15,
+          "commitMs": 39.3,
+          "frameMs": 134,
+          "internalMs": 39
+        },
+        "update every 10th": {
+          "n": 15,
+          "commitMs": 7.5,
+          "frameMs": 63.1,
+          "internalMs": 7.2
+        },
+        "select row": {
+          "n": 15,
+          "commitMs": 6.5,
+          "frameMs": 19,
+          "internalMs": null
+        },
+        "swap rows": {
+          "n": 15,
+          "commitMs": 8,
+          "frameMs": 28.2,
+          "internalMs": 7.6
+        },
+        "remove row": {
+          "n": 15,
+          "commitMs": 7.4,
+          "frameMs": 37.4,
+          "internalMs": null
+        },
+        "create 10k": {
+          "n": 5,
+          "commitMs": 970.3,
+          "frameMs": 977.8,
+          "internalMs": 190.1
+        },
+        "append 1k": {
+          "n": 15,
+          "commitMs": 18,
+          "frameMs": 89.1,
+          "internalMs": 17.7
+        },
+        "clear 1k": {
+          "n": 15,
+          "commitMs": 6.8,
+          "frameMs": 16.9,
+          "internalMs": 6.4
+        }
+      },
+      "errors": [],
+      "jsHeapMB": 3.5
+    }
+  }
+}
