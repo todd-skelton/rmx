@@ -29,7 +29,7 @@ if ($Nightly) {
     # Own target dir: the flags change every crate's fingerprint.
     $env:RUSTFLAGS = "-Zunstable-options -Cpanic=immediate-abort"
     try {
-        cargo "+$Nightly" build -p $Crate --lib --target wasm32-unknown-unknown --profile $profile -Zbuild-std=std,panic_abort --target-dir target/nightly
+        cargo "+$Nightly" build -p $Crate --lib --target wasm32-unknown-unknown --profile $profile "-Zbuild-std=std,panic_abort" --target-dir target/nightly
     } finally {
         Remove-Item env:RUSTFLAGS
     }
