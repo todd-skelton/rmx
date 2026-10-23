@@ -168,6 +168,20 @@ fn handles_removing_items_with_keys() {
     assert!(el.query_selector("[data-id=b]").unwrap().is_none());
 }
 
+// rmx: the common start and end of a keyed list are patched in place and only the middle
+// is matched by key; every kept node must survive, wherever it sits.
+#[wasm_bindgen_test]
+fn keeps_nodes_when_reordering_between_a_kept_prefix_and_suffix() {
+    let (el, first, items) = relist(&["a", "b", "c", "d", "e", "f"], &["a", "b", "e", "c", "x", "f"]);
+    let ids: Vec<String> = items.iter().map(|e| e.get_attribute("data-id").unwrap()).collect();
+    assert_eq!(ids, ["a", "b", "e", "c", "x", "f"]);
+    for (now, before) in [(0, 0), (1, 1), (2, 4), (3, 2), (5, 5)] {
+        assert!(same(&items[now], &first[before]), "{} was recreated", ids[now]);
+    }
+    assert!(!first.iter().any(|e| same(e, &items[4])), "x is new");
+    assert!(el.query_selector("[data-id=d]").unwrap().is_none());
+}
+
 #[wasm_bindgen_test]
 fn handles_inserting_items_with_keys() {
     let (_, first, items) = relist(&["a", "c"], &["a", "b", "c"]);

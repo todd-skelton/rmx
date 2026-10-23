@@ -114,8 +114,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time",
 bench-app = { path = "bench/rmx-app/app" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Pinned to match the wasm-bindgen CLI used by scripts/build-client.ps1.
-wasm-bindgen = { version = "=0.2.129", features = ["enable-interning"] }
+# Pinned to match the wasm-bindgen CLI used by scripts/build-client.ps1. No
+# `enable-interning`: the component runtime keeps its own string table (dom/ops.rs), and the
+# feature would look up every string passed to JS in a hash map.
+wasm-bindgen = "=0.2.129"
 js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"

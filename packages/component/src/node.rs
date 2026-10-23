@@ -276,7 +276,54 @@ macro_rules! display_attr_and_node {
         }
     )*};
 }
-display_attr_and_node!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, char);
+display_attr_and_node!(u128, i128, f32, f64, char);
+
+/// Integers are formatted without `core::fmt`: list rows render ids as text, and the
+/// formatter machinery was a visible share of creating them.
+macro_rules! int_attr_and_node {
+    ($($t:ty),*) => {$(
+        impl IntoAttr for $t {
+            fn into_attr(self) -> AttrValue { AttrValue::Str(Cow::Owned(int_string(self as i64 as u64, self < (0 as $t)))) }
+        }
+        impl IntoNode for $t {
+            fn into_node(self) -> Node { Node::Text(Cow::Owned(int_string(self as i64 as u64, self < (0 as $t)))) }
+        }
+    )*};
+}
+int_attr_and_node!(i8, i16, i32, i64, isize);
+
+macro_rules! uint_attr_and_node {
+    ($($t:ty),*) => {$(
+        impl IntoAttr for $t {
+            fn into_attr(self) -> AttrValue { AttrValue::Str(Cow::Owned(int_string(self as u64, false))) }
+        }
+        impl IntoNode for $t {
+            fn into_node(self) -> Node { Node::Text(Cow::Owned(int_string(self as u64, false))) }
+        }
+    )*};
+}
+uint_attr_and_node!(u8, u16, u32, u64, usize);
+
+/// Decimal text of an integer given as its two's complement bits and sign.
+fn int_string(bits: u64, negative: bool) -> String {
+    let mut n = if negative { bits.wrapping_neg() } else { bits };
+    let mut digits = [0u8; 20];
+    let mut start = digits.len();
+    loop {
+        start -= 1;
+        digits[start] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
+        }
+    }
+    let mut out = String::with_capacity(digits.len() - start + usize::from(negative));
+    if negative {
+        out.push('-');
+    }
+    out.extend(digits[start..].iter().map(|&d| char::from(d)));
+    out
+}
 
 /// Values usable as children in `rsx!` (`{expr}` blocks).
 pub trait IntoNode {

@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::{intern, JsCast};
+use wasm_bindgen::JsCast;
 
 use super::document_state::DocumentState;
+use super::ops::{self, FastMap};
 use super::{document, frames, styles, Scope};
 use crate::component::{Component, Handle, HandleShared, Instance, Phase};
 use crate::host_mixin::has_mixins;
@@ -475,43 +476,26 @@ fn abort_listener_signal(table: &mut HandlerTable, id: u32) {
     }
 }
 
-/// The shared functions for one event type and phase. `bind` and `unbind` run with the
-/// element as `this`: they set or delete the expando and add or remove the listener.
-struct EventType {
-    bind: js_sys::Function,
-    unbind: js_sys::Function,
-}
-
 thread_local! {
     static HANDLERS: RefCell<HandlerTable> = RefCell::new(HandlerTable::default());
-    static EVENT_TYPES: RefCell<HashMap<(&'static str, bool), EventType>> = RefCell::new(HashMap::new());
+    /// The shared listener of each event type and phase, registered with [`ops::event_kind`].
+    static EVENT_KINDS: RefCell<FastMap<(&'static str, bool), u32>> = RefCell::default();
 }
 
-/// Call `f` with the shared functions for `name` in this phase, creating them on first use.
-fn with_event_type<R>(name: &'static str, capture: bool, f: impl FnOnce(&EventType) -> R) -> R {
-    EVENT_TYPES.with(|types| {
-        if let Some(t) = types.borrow().get(&(name, capture)) {
-            return f(t);
-        }
-        let key = JsValue::from_str(&format!("__rmx_{}{name}", if capture { "c_" } else { "" }));
-        let dispatch_key = key.clone();
-        // `Fn`: a handler may dispatch another event of the same type synchronously.
-        let listener: js_sys::Function = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| dispatch(&raw, &dispatch_key))
-            .into_js_value()
-            .unchecked_into();
-        let make = js_sys::Function::new_with_args(
-            "f,k,n,c",
-            "return [function(id){this[k]=id;this.addEventListener(n,f,c)},function(){delete this[k];this.removeEventListener(n,f,c)}]",
-        );
-        let pair: js_sys::Array = make
-            .apply(&JsValue::NULL, &js_sys::Array::of4(&listener, &key, &JsValue::from_str(name), &JsValue::from_bool(capture)))
-            .expect("event binders")
-            .unchecked_into();
-        let t = EventType { bind: pair.get(0).unchecked_into(), unbind: pair.get(1).unchecked_into() };
-        let out = f(&t);
-        types.borrow_mut().insert((name, capture), t);
-        out
-    })
+/// The [`ops`] id of the shared listener for `name` in this phase, created on first use.
+/// Binding it sets the element's `__rmx_<name>` expando to the handler id and adds the
+/// listener.
+fn event_kind(name: &'static str, capture: bool) -> u32 {
+    if let Some(kind) = EVENT_KINDS.with(|k| k.borrow().get(&(name, capture)).copied()) {
+        return kind;
+    }
+    let key = format!("__rmx_{}{name}", if capture { "c_" } else { "" });
+    let dispatch_key = JsValue::from_str(&key);
+    // `Fn`: a handler may dispatch another event of the same type synchronously.
+    let listener = Closure::<dyn Fn(web_sys::Event)>::new(move |raw: web_sys::Event| dispatch(&raw, &dispatch_key)).into_js_value();
+    let kind = ops::event_kind(&listener, &key, name, capture);
+    EVENT_KINDS.with(|k| k.borrow_mut().insert((name, capture), kind));
+    kind
 }
 
 /// Expando values are `id + generation * 2^32`; generations wrap below 2^21 so the value
@@ -558,9 +542,7 @@ impl Listener {
             (id, table.generations[id as usize])
         });
         let value = f64::from(id) + f64::from(generation) * GENERATION_UNIT;
-        with_event_type(name, capture, |t| {
-            let _ = t.bind.call1(el, &JsValue::from(value));
-        });
+        ops::bind(el, event_kind(name, capture), value);
         Listener { name, capture, id }
     }
 
@@ -581,9 +563,7 @@ impl Listener {
             }
         });
         if let Some(el) = el {
-            with_event_type(self.name, self.capture, |t| {
-                let _ = t.unbind.call0(el);
-            });
+            ops::unbind(el, event_kind(self.name, self.capture));
         }
     }
 }
@@ -691,6 +671,9 @@ fn flatten(node: Node, out: &mut Vec<Node>) {
 }
 
 fn flatten_children(children: Vec<Node>) -> Vec<Node> {
+    if !children.iter().any(|c| matches!(c, Node::Fragment(_) | Node::Shared(_) | Node::Empty | Node::Raw(_))) {
+        return children;
+    }
     let mut flat = Vec::with_capacity(children.len());
     children.into_iter().for_each(|c| flatten(c, &mut flat));
     flat
@@ -841,16 +824,7 @@ fn create_in(parent: &web_sys::Node, node: Node, scope: &Scope) -> Mounted {
             }
             Mounted::Element(m)
         }
-        (_, node) => create(node, scope),
-    }
-}
-
-/// Template strings (tags, attribute names, static text) are interned so repeated rows reuse
-/// one JS string instead of re-decoding UTF-8 on every call; dynamic text is not.
-fn interned(s: &Str) -> &str {
-    match s {
-        Cow::Borrowed(b) => intern(b),
-        Cow::Owned(o) => o,
+        (_, node) => create(node, scope, None),
     }
 }
 
@@ -925,35 +899,30 @@ pub(super) fn set_attr(el: &web_sys::Element, tag: &str, name: &'static str, val
     if tag.contains('-') && set_custom_element_property(el, name, value) {
         return;
     }
-    let name = intern(name);
     match value {
-        AttrValue::Html(v) => {
-            let _ = el.set_attribute(name, &crate::attrs::sanitize_url(tag, name, v));
-        }
+        AttrValue::Html(v) => ops::set_attr_string(el, name, &crate::attrs::sanitize_url(tag, name, v)),
         AttrValue::Bool(b) if crate::attrs::is_booleanish_string(name) => {
-            let _ = el.set_attribute(name, if *b { "true" } else { "false" });
+            ops::set_attr(el, name, &Cow::Borrowed(if *b { "true" } else { "false" }));
         }
         AttrValue::Str(v) => {
             match name {
                 "href" | "src" | "action" | "formaction" | "data" => {
-                    let _ = el.set_attribute(name, &crate::attrs::sanitize_url(tag, name, v));
+                    ops::set_attr_string(el, name, &crate::attrs::sanitize_url(tag, name, v));
                 }
-                _ => {
-                    let _ = el.set_attribute(name, interned(v));
-                }
+                _ => ops::set_attr(el, name, v),
             }
             if name == "value" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::from_str(v));
             }
         }
         AttrValue::Bool(true) => {
-            let _ = el.set_attribute(name, "");
+            ops::set_attr(el, name, &Cow::Borrowed(""));
             if name == "checked" || name == "selected" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::TRUE);
             }
         }
         AttrValue::Bool(false) | AttrValue::Absent => {
-            let _ = el.remove_attribute(name);
+            ops::remove_attr(el, name);
             if name == "checked" || name == "selected" {
                 let _ = js_sys::Reflect::set(el, &JsValue::from_str(name), &JsValue::FALSE);
             }
@@ -1129,20 +1098,19 @@ pub(super) fn release_styles(applied: &[Rc<StyleRule>]) {
 // Create and patch
 // ---------------------------------------------------------------------------------------
 
-/// Build detached DOM for a node. The caller inserts it.
-fn create(node: Node, scope: &Scope) -> Mounted {
+/// Build DOM for a node. With `parent` (a detached element being built) the new nodes are
+/// appended to it, in the same call into JS for elements and text; without, the caller
+/// inserts them.
+fn create(node: Node, scope: &Scope, parent: Option<&web_sys::Node>) -> Mounted {
     match node {
         Node::Element(mut el) => {
             let tag = el.tag;
             let head = if tag == "head" { document().head() } else { None };
             let child_scope = element_scope(scope, tag);
             let scope = &*child_scope;
-            let dom = if let Some(head) = &head {
-                head.clone().into()
-            } else if in_svg(scope, tag) {
-                document().create_element_ns(Some("http://www.w3.org/2000/svg"), intern(tag)).expect("createElementNS")
-            } else {
-                document().create_element(intern(tag)).expect("createElement")
+            let dom = match &head {
+                Some(head) => head.clone().into(),
+                None => ops::element(parent, tag, in_svg(scope, tag)),
             };
             let children = std::mem::take(&mut el.children);
             let (key, props, host, inner_html) = if has_mixins(&el) {
@@ -1152,7 +1120,8 @@ fn create(node: Node, scope: &Scope) -> Mounted {
                 (key, Applied::default(), Some(host), inner_html)
             } else {
                 let Element { key, attrs, events, extra, .. } = *el;
-                for (name, value) in &attrs {
+                // A new element has no attributes or properties to clear.
+                for (name, value) in attrs.iter().filter(|(_, v)| *v != AttrValue::Absent) {
                     set_attr(&dom, tag, name, value);
                 }
                 let mut styles = Vec::new();
@@ -1162,42 +1131,42 @@ fn create(node: Node, scope: &Scope) -> Mounted {
                 (key, Applied { attrs, listeners, styles }, None, inner_html)
             };
             let children = if inner_html { Vec::new() } else { children };
-            let mut kids = Vec::with_capacity(children.len());
             let children = flatten_children(children);
             warn_duplicate_keys(&children);
-            for child in children {
-                let m = create(child, scope);
-                m.for_each_dom(&mut |n| {
-                    dom.append_child(n).expect("appendChild");
-                });
-                kids.push(m);
-            }
+            let into: &web_sys::Node = dom.unchecked_ref();
+            let kids = children.into_iter().map(|child| create(child, scope, Some(into))).collect();
             if tag == "select" {
                 sync_select_value(&dom);
             }
             let element = Box::new(MElement { tag, key, props, el: dom, children: kids, host });
             match head {
-                Some(_) => Mounted::Head(element, document().create_text_node("")),
+                Some(_) => Mounted::Head(element, ops::text(parent, &Cow::Borrowed(""))),
                 None => Mounted::Element(element),
             }
         }
         Node::Text(text) => {
-            let node = document().create_text_node(interned(&text));
+            let node = ops::text(parent, &text);
             Mounted::Text(MText { text, node })
         }
         Node::Component(c) => {
             let inst = c.inner.instantiate(scope);
             let child_scope = &inst.live().child_scope;
-            let root = rendered_list(&*inst).into_iter().map(|n| create(n, child_scope)).collect();
+            let root = rendered_list(&*inst).into_iter().map(|n| create(n, child_scope, parent)).collect();
             *inst.live().root.borrow_mut() = root;
             inst.shared().committed.set(true);
             Mounted::Component(MComponent { key: c.key, inst })
         }
-        Node::Frame(f) => create_frame(&f, scope),
+        Node::Frame(f) => {
+            let m = create_frame(&f, scope);
+            if let Some(parent) = parent {
+                insert(parent, &m, None);
+            }
+            m
+        }
         other => {
             let mut flat = Vec::new();
             flatten(other, &mut flat);
-            create(flat.into_iter().next().unwrap_or_else(empty_text), scope)
+            create(flat.into_iter().next().unwrap_or_else(empty_text), scope, parent)
         }
     }
 }
@@ -1243,7 +1212,7 @@ fn patch(parent: &web_sys::Node, old: &mut Mounted, new: Node, scope: &Scope) {
         (Mounted::Head(m, _), Node::Element(n)) if n.tag == "head" => patch_element(m, *n, scope),
         (Mounted::Text(m), Node::Text(t)) => {
             if m.text != t {
-                m.node.set_data(&t);
+                ops::set_data(&m.node, &t);
                 m.text = t;
             }
         }
@@ -1396,14 +1365,24 @@ fn warn_duplicate_keys(nodes: &[Node]) {
     if nodes.len() < 2 || nodes.iter().all(|n| n.key().is_none()) {
         return;
     }
-    // Sort references rather than hash clones: no allocation for string keys.
-    let mut keys: Vec<&Key> = nodes.iter().filter_map(Node::key).collect();
-    keys.sort_unstable();
-    let mut duplicates: Vec<&Key> = keys.windows(2).filter(|w| w[0] == w[1]).map(|w| w[0]).collect();
+    let mut seen: FastMap<&Key, bool> = FastMap::with_capacity_and_hasher(nodes.len(), Default::default());
+    let mut duplicates: Vec<&Key> = Vec::new();
+    for key in nodes.iter().filter_map(Node::key) {
+        // `true` once reported, so a key repeated three times is listed once.
+        match seen.get_mut(key) {
+            Some(reported) if !*reported => {
+                *reported = true;
+                duplicates.push(key);
+            }
+            Some(_) => {}
+            None => {
+                seen.insert(key, false);
+            }
+        }
+    }
     if duplicates.is_empty() {
         return;
     }
-    duplicates.dedup();
     let quoted: Vec<String> = duplicates
         .iter()
         .map(|k| match k {
@@ -1430,7 +1409,50 @@ fn patch_indexed(parent: &web_sys::Node, old: &mut Vec<Mounted>, new: Vec<Node>,
     }
 }
 
+/// Keyed reconciliation. Children that keep their key at the start or end of the list (an
+/// append, a prepend, an edit in the middle) are patched in place first; only the rest
+/// goes through the key map and the longest-increasing-run moves.
 fn patch_keyed(
+    parent: &web_sys::Node,
+    old: &mut Vec<Mounted>,
+    mut new: Vec<Node>,
+    end: Option<&web_sys::Node>,
+    whole: bool,
+    scope: &Scope,
+) {
+    let same = |m: &Mounted, n: &Node| m.key().is_some() && m.key() == n.key() && m.same_kind(n);
+    let mut start = 0;
+    while start < old.len() && start < new.len() && same(&old[start], &new[start]) {
+        start += 1;
+    }
+    let (mut old_end, mut new_end) = (old.len(), new.len());
+    while old_end > start && new_end > start && same(&old[old_end - 1], &new[new_end - 1]) {
+        old_end -= 1;
+        new_end -= 1;
+    }
+    if start == 0 && old_end == old.len() {
+        return patch_keyed_range(parent, old, new, end, whole, scope);
+    }
+
+    let mut suffix = old.split_off(old_end);
+    let mut middle = old.split_off(start);
+    let new_suffix = new.split_off(new_end);
+    let new_middle = new.split_off(start);
+    for (m, n) in old.iter_mut().zip(new) {
+        patch(parent, m, n, scope);
+    }
+    for (m, n) in suffix.iter_mut().zip(new_suffix) {
+        patch(parent, m, n, scope);
+    }
+    let after = suffix.first().map(Mounted::first_dom).or_else(|| end.cloned());
+    patch_keyed_range(parent, &mut middle, new_middle, after.as_ref(), false, scope);
+    old.append(&mut middle);
+    old.append(&mut suffix);
+}
+
+/// Reconcile `old` with `new` by key, inserting before `end`. `whole` means `old` is
+/// every child of `parent`, so it can be cleared in one DOM call.
+fn patch_keyed_range(
     parent: &web_sys::Node,
     old: &mut Vec<Mounted>,
     new: Vec<Node>,
@@ -1438,8 +1460,20 @@ fn patch_keyed(
     whole: bool,
     scope: &Scope,
 ) {
+    if old.is_empty() {
+        for node in new {
+            let m = create_in(parent, node, scope);
+            insert(parent, &m, end);
+            old.push(m);
+        }
+        return;
+    }
+    if new.is_empty() {
+        old.drain(..).for_each(|m| remove(parent, m));
+        return;
+    }
     let mut slots: Vec<Option<Mounted>> = old.drain(..).map(Some).collect();
-    let mut by_key: HashMap<Key, usize> = HashMap::with_capacity(slots.len());
+    let mut by_key: FastMap<Key, usize> = FastMap::with_capacity_and_hasher(slots.len(), Default::default());
     for (i, slot) in slots.iter().enumerate() {
         if let Some(key) = slot.as_ref().and_then(Mounted::key) {
             by_key.insert(key.clone(), i);
@@ -1473,6 +1507,16 @@ fn patch_keyed(
     }
 
     let mut result = Vec::with_capacity(matched.len());
+    if !any_reused {
+        // Every child is new: create them in order, no moves to work out.
+        for (_, node, _) in matched {
+            let m = create_in(parent, node, scope);
+            insert(parent, &m, end);
+            result.push(m);
+        }
+        *old = result;
+        return;
+    }
     let mut sources = Vec::with_capacity(matched.len());
     for (existing, node, source) in matched {
         let m = match existing {
@@ -1713,7 +1757,7 @@ pub(super) fn hydrate_attrs(dom: &web_sys::Element, tag: &str, attrs: &[(&'stati
 }
 
 fn create_at(node: Node, parent: &web_sys::Node, cursor: &Option<web_sys::Node>, scope: &Scope) -> Mounted {
-    let m = create(node, scope);
+    let m = create(node, scope, None);
     insert(parent, &m, cursor.as_ref());
     m
 }

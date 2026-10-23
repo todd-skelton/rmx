@@ -599,6 +599,31 @@ mod tests {
     }
 
     #[test]
+    fn renders_integers_like_display() {
+        use crate::node::{IntoAttr, IntoNode};
+        fn text(n: Node) -> String {
+            render_to_string(&n)
+        }
+        for (got, want) in [
+            (text(0u8.into_node()), "0".to_string()),
+            (text(u8::MAX.into_node()), u8::MAX.to_string()),
+            (text(i8::MIN.into_node()), i8::MIN.to_string()),
+            (text((-42i32).into_node()), "-42".to_string()),
+            (text(1_000_000u32.into_node()), "1000000".to_string()),
+            (text(i64::MIN.into_node()), i64::MIN.to_string()),
+            (text(i64::MAX.into_node()), i64::MAX.to_string()),
+            (text(u64::MAX.into_node()), u64::MAX.to_string()),
+            (text(usize::MAX.into_node()), usize::MAX.to_string()),
+            (text(isize::MIN.into_node()), isize::MIN.to_string()),
+            (text(i128::MIN.into_node()), i128::MIN.to_string()),
+        ] {
+            assert_eq!(got, want);
+        }
+        assert_eq!((-7i16).into_attr(), AttrValue::Str("-7".into()));
+        assert_eq!(65_535u16.into_attr(), AttrValue::Str("65535".into()));
+    }
+
+    #[test]
     fn escapes_text_and_attributes() {
         let node = Node::element(
             "a",

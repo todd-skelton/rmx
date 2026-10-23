@@ -1,9 +1,15 @@
 # Build a browser crate to WebAssembly: cargo (wasm-release profile) + wasm-bindgen + wasm-opt.
-# Usage: pwsh ./scripts/build-client.ps1 -Crate bench-client -Out bench/rmx-app/public/pkg
+# Usage: pwsh ./scripts/build-client.ps1 -Crate bench-client -Out bench/rmx-app/public/pkg [-Nightly nightly]
+#
+# -Nightly <toolchain> rebuilds std for the browser with `panic=immediate-abort` (needs a nightly
+# toolchain with rust-src). Panic messages and the formatting code behind them leave the binary,
+# about 11% less gzip for the bench client. The trade-off: a panic traps without a console
+# message, and `App::on_error` does not hear about it.
 param(
     [Parameter(Mandatory)] [string]$Crate,
     [Parameter(Mandatory)] [string]$Out,
-    [switch]$Dev
+    [switch]$Dev,
+    [string]$Nightly
 )
 $ErrorActionPreference = "Stop"
 # Paths are relative to the repository root.
@@ -18,9 +24,22 @@ $profile = if ($Dev) { "dev" } else { "wasm-release" }
 $dir = if ($Dev) { "debug" } else { "wasm-release" }
 $name = $Crate -replace "-", "_"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-cargo build -p $Crate --lib --target wasm32-unknown-unknown --profile $profile
+if ($Nightly) {
+    if ($Dev) { throw "-Nightly is for release builds" }
+    # Own target dir: the flags change every crate's fingerprint.
+    $env:RUSTFLAGS = "-Zunstable-options -Cpanic=immediate-abort"
+    try {
+        cargo "+$Nightly" build -p $Crate --lib --target wasm32-unknown-unknown --profile $profile -Zbuild-std=std,panic_abort --target-dir target/nightly
+    } finally {
+        Remove-Item env:RUSTFLAGS
+    }
+    $wasm = "target/nightly/wasm32-unknown-unknown/$dir/$name.wasm"
+} else {
+    cargo build -p $Crate --lib --target wasm32-unknown-unknown --profile $profile
+    $wasm = "target/wasm32-unknown-unknown/$dir/$name.wasm"
+}
 if ($LASTEXITCODE) { throw "$Crate build failed" }
-& $wasmBindgen.FullName --target web --no-typescript --out-dir $Out "target/wasm32-unknown-unknown/$dir/$name.wasm"
+& $wasmBindgen.FullName --target web --no-typescript --out-dir $Out $wasm
 if ($LASTEXITCODE) { throw "wasm-bindgen failed" }
 if (-not $Dev) {
     & $wasmOpt.FullName -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types -o "$Out/${name}_bg.wasm" "$Out/${name}_bg.wasm"
