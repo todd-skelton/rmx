@@ -1,0 +1,158 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from oha.Dockerfile
+#1 transferring dockerfile: 34B 0.1s
+#1 transferring dockerfile: 254B 0.2s done
+#1 DONE 0.3s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.1s
+
+#4 [1/2] FROM docker.io/library/debian:bookworm-slim
+#4 DONE 0.0s
+
+#5 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#5 DONE 0.6s
+
+#6 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#6 CACHED
+
+#7 exporting to image
+#7 exporting layers done
+#7 writing image sha256:dfa8d200d48ccc66da3c5fbb4c83c9fb2aabeacd18ba170ee3b0689033ecdce2 done
+#7 naming to docker.io/library/rmxbench-oha done
+#7 DONE 0.0s
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from remix.Dockerfile
+#1 transferring dockerfile: 471B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/node:24-bookworm-slim
+#2 DONE 0.0s
+
+#3 [1/5] FROM docker.io/library/node:24-bookworm-slim
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 575B 0.0s done
+#4 DONE 0.1s
+
+#5 [2/5] WORKDIR /app
+#5 CACHED
+
+#6 [3/5] COPY package.json package-lock.json ./
+#6 CACHED
+
+#7 [4/5] RUN npm ci --omit=dev
+#7 CACHED
+
+#8 [5/5] COPY . .
+#8 CACHED
+
+#9 exporting to image
+#9 exporting layers done
+#9 writing image sha256:a05017ef527dab069d25eec8326a9afb73cbe85ebdb0308da938e24d1543ab6c 0.0s done
+#9 naming to docker.io/library/rmxbench-remix 0.0s done
+#9 DONE 0.0s
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from rmx.Dockerfile
+#1 transferring dockerfile: 902B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/rust:1-bookworm
+#3 DONE 0.0s
+
+#4 [stage-1 1/3] FROM docker.io/library/debian:bookworm-slim
+#4 DONE 0.0s
+
+#5 [build 1/4] FROM docker.io/library/rust:1-bookworm
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 185.89kB 0.1s
+#6 transferring context: 192.66kB 0.1s done
+#6 DONE 0.2s
+
+#7 [build 2/4] WORKDIR /src
+#7 CACHED
+
+#8 [build 3/4] COPY . .
+#8 DONE 1.0s
+
+#9 [build 4/4] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     cargo build --release -p bench-server && cp target/release/bench-server /bench-server
+#9 2.111    Compiling rmx-fetch-router v0.1.0 (/src/packages/fetch-router)
+#9 4.510    Compiling rmx-form-data-middleware v0.1.0 (/src/packages/form-data-middleware)
+#9 4.510    Compiling rmx-cors-middleware v0.1.0 (/src/packages/cors-middleware)
+#9 4.510    Compiling rmx-session-middleware v0.1.0 (/src/packages/session-middleware)
+#9 4.511    Compiling rmx-cop-middleware v0.1.0 (/src/packages/cop-middleware)
+#9 4.513    Compiling rmx-node-fetch-server v0.1.0 (/src/packages/node-fetch-server)
+#9 4.520    Compiling rmx-spa v0.1.0 (/src/packages/spa)
+#9 4.522    Compiling rmx-static-middleware v0.1.0 (/src/packages/static-middleware)
+#9 4.529    Compiling rmx-auth v0.1.0 (/src/packages/auth)
+#9 4.540    Compiling rmx-render-middleware v0.1.0 (/src/packages/render-middleware)
+#9 4.540    Compiling rmx-compression-middleware v0.1.0 (/src/packages/compression-middleware)
+#9 4.541    Compiling rmx-logger-middleware v0.1.0 (/src/packages/logger-middleware)
+#9 4.541    Compiling rmx-auth-middleware v0.1.0 (/src/packages/auth-middleware)
+#9 4.541    Compiling rmx-live-reload-middleware v0.1.0 (/src/packages/live-reload-middleware)
+#9 4.546    Compiling rmx-assets v0.1.0 (/src/packages/assets)
+#9 6.083    Compiling rmx-method-override-middleware v0.1.0 (/src/packages/method-override-middleware)
+#9 6.473    Compiling rmx-csrf-middleware v0.1.0 (/src/packages/csrf-middleware)
+#9 9.796    Compiling rmx v0.1.0 (/src/packages/rmx)
+#9 10.08    Compiling bench-app v0.1.0 (/src/bench/rmx-app/app)
+#9 16.73    Compiling bench-server v0.1.0 (/src/bench/rmx-app/server)
+#9 23.59     Finished `release` profile [optimized] target(s) in 22.19s
+#9 DONE 23.8s
+
+#4 [stage-1 1/3] FROM docker.io/library/debian:bookworm-slim
+#4 CACHED
+
+#10 [stage-1 2/3] COPY --from=build /bench-server /usr/local/bin/bench-server
+#10 DONE 0.2s
+
+#11 [stage-1 3/3] COPY bench/rmx-app/public /app/public
+#11 DONE 0.3s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.3s done
+#12 writing image sha256:9695e0a392716d33e222eaf0518235e1b60155718a2d0991b6539679669a413e 0.0s done
+#12 naming to docker.io/library/rmxbench-rmx 0.0s done
+#12 DONE 0.5s
+remix (node, 1 process)            /               508 req/s  p50    95.51 ms  p99   216.87 ms  200=7564
+remix (node, 1 process)            /ssr/100        232 req/s  p50   201.08 ms  p99   475.07 ms  200=3436
+remix (node, 1 process)            /ssr/1000        32 req/s  p50  1634.23 ms  p99  2898.12 ms  200=426
+rmx (1 thread)                     /              3587 req/s  p50    12.44 ms  p99    45.38 ms  200=53810
+rmx (1 thread)                     /ssr/100       1355 req/s  p50    36.45 ms  p99    68.47 ms  200=20276
+rmx (1 thread)                     /ssr/1000       185 req/s  p50   285.21 ms  p99   373.36 ms  200=2724
+remix (node cluster, 8 workers)    /              1118 req/s  p50    31.63 ms  p99   271.63 ms  200=16864
+remix (node cluster, 8 workers)    /ssr/100        576 req/s  p50    39.51 ms  p99  1061.05 ms  200=8615
+remix (node cluster, 8 workers)    /ssr/1000       136 req/s  p50   352.68 ms  p99   869.51 ms  200=1989
+rmx (8 threads)                    /             20051 req/s  p50     1.17 ms  p99    20.06 ms  200=300806
+rmx (8 threads)                    /ssr/100       6311 req/s  p50     5.11 ms  p99    37.69 ms  200=94653
+rmx (8 threads)                    /ssr/1000      1392 req/s  p50    33.69 ms  p99    86.32 ms  200=20833
+
+Config                          Path           Rps   P50Ms   P99Ms  Bytes StartupMs IdleMB LoadedMB
+------                          ----           ---   -----   -----  ----- --------- ------ --------
+remix (node, 1 process)         /           508.00   95.51  216.87   6059   8308.00  92.30   263.40
+remix (node, 1 process)         /ssr/100    232.00  201.08  475.07  17068   8308.00  92.30   329.50
+remix (node, 1 process)         /ssr/1000    32.00 1634.23 2898.12 131736   8308.00  92.30   350.70
+rmx (1 thread)                  /          3587.00   12.44   45.38    838   5705.00   4.00     5.10
+rmx (1 thread)                  /ssr/100   1355.00   36.45   68.47  12976   5705.00   4.00     5.10
+rmx (1 thread)                  /ssr/1000   185.00  285.21  373.36 127644   5705.00   4.00     5.80
+remix (node cluster, 8 workers) /          1118.00   31.63  271.63   6059  15951.00 550.30  1155.10
+remix (node cluster, 8 workers) /ssr/100    576.00   39.51 1061.05  17068  15951.00 550.30  1994.80
+remix (node cluster, 8 workers) /ssr/1000   136.00  352.68  869.51 131736  15951.00 550.30  2264.10
+rmx (8 threads)                 /         20051.00    1.17   20.06    840   3028.00   3.10     6.30
+rmx (8 threads)                 /ssr/100   6311.00    5.11   37.69  12976   3028.00   3.10     7.70
+rmx (8 threads)                 /ssr/1000  1392.00   33.69   86.32 127644   3028.00   3.10    10.90
+
+

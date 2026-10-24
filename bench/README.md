@@ -39,7 +39,75 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
 
 Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
 
-## Latest Run (2026-10-24): Against Remix 3.1
+## Latest Run (2026-10-24, Afternoon): Router Without Per-Step Boxes
+
+Corten (Todd's Rust web framework on axum) cut about 4% of instructions per request by not boxing the
+rest of the stack again in every middleware call. rmx's router did the same thing:
+`Next::run` boxed its own future on every step, on top of the middleware's future, and
+each chain allocated an `Arc` for its endpoint. Since commit `0063a2c`, `Next::run` returns a
+`NextFuture` (a plain state machine that races the abort signal itself), and the endpoint is
+stored by value. Each step now allocates only the future of the middleware it calls.
+
+### In Process (Exact)
+
+`packages/rmx/examples/router_profile.rs` sends `GET /` through four routers that answer
+with a short text body. Instructions per request come from callgrind in a Linux container
+(`bench/docker/profile.Dockerfile` and `profile-router.sh`: 5,000 requests minus 1,000,
+divided by 4,000, so setup drops out). Allocations per request come from a counting
+allocator on Windows. Neither depends on host load.
+
+| Router | Instructions before | After | Change | Allocations before | After |
+| --- | --- | --- | --- | --- | --- |
+| Handler only | 15,944 | 15,000 | -5.9% | 34 | 31 |
+| 4 middleware, `next.run(ctx)` | 21,479 | 18,779 | -12.6% | 42 | 35 |
+| 4 middleware, `async move { next.run(ctx).await }` | 22,013 | 21,148 | -3.9% | 42 | 35 |
+| The bench server's stack (static files, form data) | 26,393 | 24,169 | -8.4% | 47 | 42 |
+
+A middleware step went from about 1,384 to 945 instructions (the 4-middleware row less the
+handler row, divided by 4). The profile also shows what the change does not touch: in the
+bench stack, `static_files` resolves the request path with `canonicalize` on every request
+(`realpath` and `statx` in the profile), and in the Linux container that router took about
+32 us a request against 3 us for the handler alone. That lookup, not the boxing, is the
+largest router cost on `/`. Not changed yet.
+
+### Server, Linux Containers, Against Remix 3.1
+
+Same settings as the morning run. The Windows host was 70 to 100% busy for the whole run
+(sampled before and during), so every number here is lower than in the morning, rmx's more
+than Remix's. Results: `results/docker-server-2026-10-24-nextfuture.json` and the log.
+
+| Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
+| --- | --- | --- | --- | --- | --- | --- |
+| Remix 3.1, 1 Node process | 1 | 508 | 232 | 32 | 92.3 / 350.7 MB | 8.3 s |
+| rmx, 1 thread | 1 | 3,587 | 1,355 | 185 | 4 / 5.8 MB | 5.7 s |
+| Remix 3.1, cluster of 8 workers | 8 | 1,118 | 576 | 136 | 550.3 / 2264.1 MB | 16 s |
+| rmx, 8 threads | 8 | 20,051 | 6,311 | 1,392 | 3.1 / 10.9 MB | 3 s |
+
+| rmx / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
+| --- | --- | --- | --- |
+| 1 CPU | 7x | 6x | 6x |
+| 8 CPUs | 18x | 11x | 10x |
+
+To check whether the router change shows up over HTTP, the bench server was also built from
+the commit before it (`bbdaed2`) and the two images ran alternately, rmx only
+(`run-docker.ps1 -Only rmx -RmxImage ...`; `results/docker-router-ab-2026-10-24-*.json`).
+Requests per second:
+
+| Config | Path | Before, round 1 | After, round 1 | Before, round 2 | After, round 2 |
+| --- | --- | --- | --- | --- | --- |
+| 1 thread | `/` | 4,300 | 2,869 | 3,069 | 3,422 |
+| 1 thread | `/ssr/100` | 1,397 | 1,291 | 1,183 | 1,099 |
+| 1 thread | `/ssr/1000` | 228 | 148 | 170 | 177 |
+| 8 threads | `/` | 11,742 | 8,538 | 8,408 | 8,876 |
+| 8 threads | `/ssr/100` | 5,523 | 4,301 | 4,428 | 5,086 |
+| 8 threads | `/ssr/1000` | 1,246 | 1,013 | 1,122 | 1,157 |
+
+The first run was the fastest of the four and the other three overlap: on this host the
+router change is inside the run-to-run spread over HTTP, as Corten found for its own. The
+in-process counts above are the result; the morning run remains the better measure of
+rmx against Remix 3.1 on a quieter machine.
+
+## Earlier Run (2026-10-24, Morning): Against Remix 3.1
 
 `remix-app` now pins `remix` 3.1.0 (released 2026-10-23), and rmx carries the 3.1 changes
 that apply to it: the header, range and tar fixes, streaming uploads (`/future`), keyed

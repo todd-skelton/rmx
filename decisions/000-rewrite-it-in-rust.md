@@ -951,3 +951,32 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
    0 failed (browser-all16), plus `browser_prefetch` 9, `browser_prefetch_assets` 4 and
    `browser_entry_props` 2; demo e2e suites 11 of 12 in rebuild110, and the twelfth
    (bookstore, its new viewport-prefetch check) passed after scrolling the links into view.
+
+## 16. Router steps without boxes (2026-10-24)
+
+1. Prompted by Corten, which removed a per-request re-boxing of its middleware stack. In rmx
+   each middleware step allocated twice: `Next::run` boxed its own `async fn`, and the
+   middleware's future was boxed by `Middleware::call`. Each chain also allocated an `Arc`
+   for its endpoint.
+2. Profile first (measured, callgrind in a Linux container,
+   `packages/rmx/examples/router_profile.rs`): a step cost about 1,384 instructions, and the
+   four-middleware router took 21,479 instructions a request against 15,944 for the handler
+   alone, so it showed up.
+3. Decision: `Next::run` returns `NextFuture`, a named future that calls the next step on its
+   first poll (so `catch_panic` still sees a panic there), checks the abort signal before and
+   after calling it, and then polls the step before the signal, as `AbortSignal::race` did.
+   The endpoint is held by value. `Middleware::call` still returns a `BoxFuture`: middleware
+   is a list of trait objects, as in Remix, so one box per step stays.
+4. Breaking: an `impl Middleware` that returned `next.run(ctx)` as its `BoxFuture` now writes
+   `Box::pin(next.run(ctx))` (five crates in the repo). Closures and `async` blocks are
+   unchanged.
+5. Result (measured): a step costs about 945 instructions; requests use 3 to 7 fewer
+   allocations and 4 to 13% fewer instructions depending on the middleware. Over HTTP in
+   Docker the difference was inside the run-to-run spread on a busy host
+   (`bench/README.md`).
+6. Found on the way, not changed: `static_files` calls `canonicalize` on every request path,
+   which costs more than all of the router's boxing on `/`.
+7. Gate (measured): workspace tests 2,641 passed, 0 failed (test124); native clippy, wasm
+   clippy for `rmx-fetch-router` and `rmx-spa` with `-D warnings`; all 12 demo e2e suites
+   passed (rebuild111). `rmx-fetch-router`'s wasm `--all-targets` clippy fails on an
+   `Arc<Mutex<Option<Router>>>` in `tests/router.rs`, at the previous commit as well.

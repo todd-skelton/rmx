@@ -200,6 +200,9 @@ crates:
    Remix's `routes` listing: `cargo run -p bookstore-demo -- routes --table`; `Router::with_matcher`
    takes any `MultiMatcher`, as Remix's `matcher` option does; a panicking handler or middleware
    propagates out of `router.fetch`, and middleware catches it with `catch_panic(next.run(ctx))`;
+   `next.run(ctx)` returns a `NextFuture` rather than a box, so each middleware step allocates
+   only its own future (an `impl Middleware` whose `call` returns a `BoxFuture` writes
+   `Box::pin(next.run(ctx))`);
    `router.test.ts` ported one per case, 64 tests plus 6 compile-fail doctests for the
    controller shapes Remix checks at runtime, and the request-context, middleware, route-map
    and route helper tests likewise; `options` and `Prefix::head`/`options` build HEAD and

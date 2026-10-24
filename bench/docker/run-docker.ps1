@@ -1,5 +1,5 @@
 # Linux/Docker variant of the server benchmark (run.ps1 covers Windows + the browser bench).
-#   pwsh ./run-docker.ps1 [-Duration 15] [-Connections 50] [-Build]
+#   pwsh ./run-docker.ps1 [-Duration 15] [-Connections 50] [-Build] [-Only rmx] [-RmxImage rmxbench-rmx]
 # Each server runs alone in a container pinned to the same CPUs and memory cap; oha runs in
 # its own container on separate CPUs and reaches the server over a Docker network, so no
 # Windows port forwarding or bind mounts are on the measured path.
@@ -14,6 +14,7 @@ param(
     [string]$Only = "",  # regex on config name, e.g. "1 (process|thread)"
     [string]$Out = "docker-server.json",
     [string]$Memory = "8g",
+    [string]$RmxImage = "rmxbench-rmx",  # another rmx build, e.g. one tagged from an older commit
     [switch]$Build
 )
 $ErrorActionPreference = "Stop"
@@ -79,9 +80,9 @@ function Invoke-Load([int]$port, [string]$path, [int]$seconds) {
 $tsx = @("node", "--import", "remix/node-tsx")
 $configs = @(
     @{ Name = "remix (node, 1 process)"; Cores = 1; Cpus = $OneCpu; Image = "rmxbench-remix"; Port = 44100; Env = @{}; Cmd = $tsx + "server.ts" },
-    @{ Name = "rmx (1 thread)"; Cores = 1; Cpus = $OneCpu; Image = "rmxbench-rmx"; Port = 44101; Env = @{ RMX_THREADS = "1" }; Cmd = @() },
+    @{ Name = "rmx (1 thread)"; Cores = 1; Cpus = $OneCpu; Image = $RmxImage; Port = 44101; Env = @{ RMX_THREADS = "1" }; Cmd = @() },
     @{ Name = "remix (node cluster, 8 workers)"; Cores = 8; Cpus = $ManyCpus; Image = "rmxbench-remix"; Port = 44100; Env = @{ REMIX_WORKERS = "8" }; Cmd = $tsx + "cluster.ts" },
-    @{ Name = "rmx (8 threads)"; Cores = 8; Cpus = $ManyCpus; Image = "rmxbench-rmx"; Port = 44101; Env = @{ RMX_THREADS = "8" }; Cmd = @() }
+    @{ Name = "rmx (8 threads)"; Cores = 8; Cpus = $ManyCpus; Image = $RmxImage; Port = 44101; Env = @{ RMX_THREADS = "8" }; Cmd = @() }
 )
 if ($Only) { $configs = @($configs | Where-Object { $_.Name -match $Only }) }
 $paths = @("/", "/ssr/100", "/ssr/1000")
