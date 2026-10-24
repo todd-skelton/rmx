@@ -2,8 +2,11 @@
 name = "rsmix-lazy-file"
 description = "Lazy, streaming files and blobs for rsmix (Remix's lazy-file): LazyFile and LazyBlob read their content only when streamed, with byte-range slicing"
 edition.workspace = true
-version.workspace = true
+version = "5.0.8"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 bytes.workspace = true

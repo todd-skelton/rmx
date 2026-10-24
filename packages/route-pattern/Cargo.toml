@@ -2,8 +2,11 @@
 name = "rsmix-route-pattern"
 description = "URL pattern matching, ranking and href generation (port of remix route-pattern)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 rsmix-url.workspace = true

@@ -2,8 +2,11 @@
 name = "rsmix-data-schema"
 description = "Small, sync data validation for rsmix (Remix's data-schema): schemas, checks, coercion and FormData parsing"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 rsmix-fetch.workspace = true

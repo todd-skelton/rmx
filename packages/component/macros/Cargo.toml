@@ -2,8 +2,11 @@
 name = "rsmix-macros"
 description = "rsx! macro for rsmix"
 edition.workspace = true
-version.workspace = true
+version = "1.1.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
 proc-macro = true

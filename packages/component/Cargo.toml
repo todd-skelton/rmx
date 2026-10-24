@@ -2,8 +2,11 @@
 name = "rsmix-component"
 description = "A Remix 3 style component model for Rust: setup once, render on update(), server HTML, client entries"
 edition.workspace = true
-version.workspace = true
+version = "1.1.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 # Browser runtime parts an app can compile out (they only affect wasm32 builds; server
 # rendering of <Frame> is always available). With both off, the client hydrates client

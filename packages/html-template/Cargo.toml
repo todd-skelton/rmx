@@ -2,8 +2,11 @@
 name = "rsmix-html-template"
 description = "html! templates that escape interpolations into SafeHtml (remix/html-template)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 rsmix-macros.workspace = true

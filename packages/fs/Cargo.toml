@@ -2,8 +2,11 @@
 name = "rsmix-fs"
 description = "Local files as lazy files for rsmix (Remix's fs): open_lazy_file streams a file from disk on demand, write_file streams any file or blob to disk"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 rsmix-fetch.workspace = true

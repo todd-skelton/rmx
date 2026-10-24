@@ -2,8 +2,11 @@
 name = "rsmix-assets"
 description = "Serve browser assets from source directories: access rules, fingerprints, file transforms, CSS url() and module import rewriting (port of remix/assets)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -17,4 +20,4 @@ rsmix-url.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-rsmix-response.workspace = true
+rsmix-response = { path = "../response" }

@@ -2,8 +2,11 @@
 name = "rsmix-cookie"
 description = "Cookie header parsing and Set-Cookie serialization for rsmix (Remix's cookie package)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 rsmix-crypto.workspace = true

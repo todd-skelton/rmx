@@ -2,7 +2,10 @@
 name = "rsmix-mime"
 description = "MIME types by file extension for rsmix (Remix's mime package): the mime-db table, charset and compressibility rules, custom types"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]

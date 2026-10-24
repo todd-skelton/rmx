@@ -2,8 +2,11 @@
 name = "rsmix-node-fetch-server"
 description = "Serve an rsmix Router over HTTP/1 and HTTP/2 with hyper and tokio"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -17,4 +20,4 @@ rsmix-url.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-rsmix-fetch-proxy.workspace = true
+rsmix-fetch-proxy = { path = "../fetch-proxy" }

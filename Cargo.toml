@@ -63,51 +63,56 @@ members = [
 
 [workspace.package]
 edition = "2021"
-version = "0.1.0"
+# The umbrella crate's version, like the `remix` package; each published crate sets its own,
+# matching its @remix-run/* counterpart in remix 3.1.0.
+version = "3.1.0"
 license = "MIT"
+authors = ["Todd Skelton"]
+repository = "https://github.com/todd-skelton/rsmix"
+homepage = "https://github.com/todd-skelton/rsmix"
 
 [workspace.dependencies]
-rsmix = { path = "packages/rsmix" }
+rsmix = { path = "packages/rsmix", version = "3.1.0" }
 # Only the rsmix umbrella crate uses this; its features turn the browser runtime parts on.
-rsmix-component = { path = "packages/component", default-features = false }
-rsmix-macros = { path = "packages/component/macros" }
-rsmix-url = { path = "packages/url" }
-rsmix-terminal = { path = "packages/terminal" }
-rsmix-route-pattern = { path = "packages/route-pattern" }
-rsmix-fetch = { path = "packages/fetch" }
-rsmix-response = { path = "packages/response" }
-rsmix-fetch-router = { path = "packages/fetch-router" }
-rsmix-node-fetch-server = { path = "packages/node-fetch-server" }
-rsmix-mime = { path = "packages/mime" }
-rsmix-auth-middleware = { path = "packages/auth-middleware" }
-rsmix-compression-middleware = { path = "packages/compression-middleware" }
-rsmix-cop-middleware = { path = "packages/cop-middleware" }
-rsmix-cors-middleware = { path = "packages/cors-middleware" }
-rsmix-csrf-middleware = { path = "packages/csrf-middleware" }
-rsmix-form-data-middleware = { path = "packages/form-data-middleware" }
-rsmix-live-reload-middleware = { path = "packages/live-reload-middleware" }
-rsmix-logger-middleware = { path = "packages/logger-middleware" }
-rsmix-method-override-middleware = { path = "packages/method-override-middleware" }
-rsmix-session-middleware = { path = "packages/session-middleware" }
-rsmix-static-middleware = { path = "packages/static-middleware" }
-rsmix-render-middleware = { path = "packages/render-middleware" }
-rsmix-spa = { path = "packages/spa" }
-rsmix-assets = { path = "packages/assets" }
-rsmix-crypto = { path = "packages/crypto" }
-rsmix-session = { path = "packages/session" }
-rsmix-file-storage = { path = "packages/file-storage" }
-rsmix-tar-parser = { path = "packages/tar-parser" }
-rsmix-multipart-parser = { path = "packages/multipart-parser" }
-rsmix-html-template = { path = "packages/html-template" }
-rsmix-headers = { path = "packages/headers" }
-rsmix-fetch-proxy = { path = "packages/fetch-proxy" }
-rsmix-auth = { path = "packages/auth" }
-rsmix-cli = { path = "packages/cli" }
-rsmix-cookie = { path = "packages/cookie" }
-rsmix-ui = { path = "packages/ui" }
-rsmix-data-schema = { path = "packages/data-schema" }
-rsmix-lazy-file = { path = "packages/lazy-file" }
-rsmix-fs = { path = "packages/fs" }
+rsmix-component = { path = "packages/component", version = "1.1.0", default-features = false }
+rsmix-macros = { path = "packages/component/macros", version = "1.1.0" }
+rsmix-url = { path = "packages/url", version = "1.0.0" }
+rsmix-terminal = { path = "packages/terminal", version = "1.0.0" }
+rsmix-route-pattern = { path = "packages/route-pattern", version = "1.0.0" }
+rsmix-fetch = { path = "packages/fetch", version = "1.0.0" }
+rsmix-response = { path = "packages/response", version = "1.0.1" }
+rsmix-fetch-router = { path = "packages/fetch-router", version = "1.0.0" }
+rsmix-node-fetch-server = { path = "packages/node-fetch-server", version = "1.0.0" }
+rsmix-mime = { path = "packages/mime", version = "1.0.0" }
+rsmix-auth-middleware = { path = "packages/auth-middleware", version = "1.0.0" }
+rsmix-compression-middleware = { path = "packages/compression-middleware", version = "1.0.1" }
+rsmix-cop-middleware = { path = "packages/cop-middleware", version = "1.0.0" }
+rsmix-cors-middleware = { path = "packages/cors-middleware", version = "1.0.1" }
+rsmix-csrf-middleware = { path = "packages/csrf-middleware", version = "1.0.0" }
+rsmix-form-data-middleware = { path = "packages/form-data-middleware", version = "1.1.0" }
+rsmix-live-reload-middleware = { path = "packages/live-reload-middleware", version = "1.0.0" }
+rsmix-logger-middleware = { path = "packages/logger-middleware", version = "1.0.0" }
+rsmix-method-override-middleware = { path = "packages/method-override-middleware", version = "1.0.0" }
+rsmix-session-middleware = { path = "packages/session-middleware", version = "1.0.1" }
+rsmix-static-middleware = { path = "packages/static-middleware", version = "1.0.1" }
+rsmix-render-middleware = { path = "packages/render-middleware", version = "1.0.1" }
+rsmix-spa = { path = "packages/spa", version = "1.0.1" }
+rsmix-assets = { path = "packages/assets", version = "1.0.1" }
+rsmix-crypto = { path = "packages/crypto", version = "1.0.0" }
+rsmix-session = { path = "packages/session", version = "1.0.0" }
+rsmix-file-storage = { path = "packages/file-storage", version = "1.0.0" }
+rsmix-tar-parser = { path = "packages/tar-parser", version = "1.0.1" }
+rsmix-multipart-parser = { path = "packages/multipart-parser", version = "1.1.0" }
+rsmix-html-template = { path = "packages/html-template", version = "1.0.0" }
+rsmix-headers = { path = "packages/headers", version = "1.0.1" }
+rsmix-fetch-proxy = { path = "packages/fetch-proxy", version = "1.0.1" }
+rsmix-auth = { path = "packages/auth", version = "1.0.0" }
+rsmix-cli = { path = "packages/cli", version = "1.0.1" }
+rsmix-cookie = { path = "packages/cookie", version = "1.0.1" }
+rsmix-ui = { path = "packages/ui", version = "0.12.1" }
+rsmix-data-schema = { path = "packages/data-schema", version = "1.0.0" }
+rsmix-lazy-file = { path = "packages/lazy-file", version = "5.0.8" }
+rsmix-fs = { path = "packages/fs", version = "1.0.0" }
 bytes = "1"
 http = "1"
 http-body = "1"

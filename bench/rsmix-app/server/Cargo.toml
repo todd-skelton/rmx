@@ -3,6 +3,7 @@ name = "bench-server"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 bench-app.workspace = true

@@ -2,8 +2,11 @@
 name = "rsmix-cors-middleware"
 description = "Middleware for handling CORS (remix cors-middleware)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -11,4 +14,4 @@ rsmix-fetch.workspace = true
 rsmix-fetch-router.workspace = true
 
 [dev-dependencies]
-rsmix-headers.workspace = true
+rsmix-headers = { path = "../headers" }

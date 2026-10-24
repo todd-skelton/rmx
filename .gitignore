@@ -12,4 +12,6 @@ node_modules/
 /demos/*/public/pkg
 /demos/*/app/actions/public/pkg
 /template/app/actions/public/pkg
+# The starter app copy scripts/sync-cli-template.ps1 makes for publishing rsmix-cli
+/packages/cli/template/
 /demos/*/tmp

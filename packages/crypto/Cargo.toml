@@ -2,7 +2,10 @@
 name = "rsmix-crypto"
 description = "SHA-256, HMAC, PBKDF2, base64 and OS randomness for rsmix, with no dependencies (what Remix gets from Web Crypto)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]

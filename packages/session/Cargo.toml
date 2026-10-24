@@ -2,8 +2,11 @@
 name = "rsmix-session"
 description = "Sessions for rsmix: a Session with values and flash data, and cookie, memory and filesystem storages (Remix's session package)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 rsmix-crypto.workspace = true
@@ -16,5 +19,5 @@ default = ["fs"]
 fs = ["dep:tokio"]
 
 [dev-dependencies]
-rsmix-fetch.workspace = true
+rsmix-fetch = { path = "../fetch" }
 tokio.workspace = true

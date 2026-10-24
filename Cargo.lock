@@ -25,7 +25,7 @@ dependencies = [
 
 [[package]]
 name = "assets-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix",
@@ -65,7 +65,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bench-app"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "rsmix",
  "serde",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "bench-client"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "bench-app",
  "rsmix",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "bench-server"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "bench-app",
  "http",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix",
@@ -255,7 +255,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "frame-navigation-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "js-sys",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "frames-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix",
@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "i18n-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "fixed_decimal",
  "http",
@@ -821,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "lazy-frames-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "js-sys",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix-assets",
@@ -1084,7 +1084,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-assets"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "rsmix-crypto",
@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-auth"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-auth-middleware",
@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-auth-middleware"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-cookie",
@@ -1136,14 +1136,17 @@ dependencies = [
 
 [[package]]
 name = "rsmix-cli"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
+ "flate2",
+ "rsmix-crypto",
+ "rsmix-tar-parser",
  "rsmix-terminal",
 ]
 
 [[package]]
 name = "rsmix-component"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "js-sys",
  "memchr",
@@ -1159,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-compression-middleware"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "brotli",
  "flate2",
@@ -1172,7 +1175,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-cookie"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "rsmix-crypto",
  "rsmix-headers",
@@ -1180,7 +1183,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-cop-middleware"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1192,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-cors-middleware"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1202,11 +1205,11 @@ dependencies = [
 
 [[package]]
 name = "rsmix-crypto"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "rsmix-csrf-middleware"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-cookie",
@@ -1222,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-data-schema"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rsmix-fetch",
  "rsmix-url",
@@ -1231,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-fetch"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bytes",
  "http",
@@ -1245,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-fetch-proxy"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "http-body",
@@ -1261,7 +1264,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-fetch-router"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix",
@@ -1275,7 +1278,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-file-storage"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rsmix-crypto",
  "rsmix-fetch",
@@ -1286,7 +1289,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-form-data-middleware"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1296,7 +1299,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-fs"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rsmix-fetch",
  "rsmix-lazy-file",
@@ -1305,21 +1308,21 @@ dependencies = [
 
 [[package]]
 name = "rsmix-headers"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
 ]
 
 [[package]]
 name = "rsmix-html-template"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rsmix-macros",
 ]
 
 [[package]]
 name = "rsmix-lazy-file"
-version = "0.1.0"
+version = "5.0.8"
 dependencies = [
  "bytes",
  "js-sys",
@@ -1329,7 +1332,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-live-reload-middleware"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1339,7 +1342,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-logger-middleware"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1352,7 +1355,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-macros"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1362,7 +1365,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-method-override-middleware"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1372,11 +1375,11 @@ dependencies = [
 
 [[package]]
 name = "rsmix-mime"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "rsmix-multipart-parser"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "bytes",
  "http",
@@ -1388,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-node-fetch-server"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "http",
  "http-body",
@@ -1404,7 +1407,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-render-middleware"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "rsmix-component",
@@ -1416,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-response"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "brotli",
  "bytes",
@@ -1435,14 +1438,14 @@ dependencies = [
 
 [[package]]
 name = "rsmix-route-pattern"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rsmix-url",
 ]
 
 [[package]]
 name = "rsmix-session"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rsmix-crypto",
  "rsmix-fetch",
@@ -1453,7 +1456,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-session-middleware"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "rsmix-cookie",
@@ -1468,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-spa"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "rsmix-component",
@@ -1483,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-static-middleware"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "http",
  "rsmix-fetch",
@@ -1500,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-tar-parser"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "flate2",
  "rsmix-crypto",
@@ -1508,11 +1511,11 @@ dependencies = [
 
 [[package]]
 name = "rsmix-terminal"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "rsmix-ui"
-version = "0.1.0"
+version = "0.12.1"
 dependencies = [
  "js-sys",
  "rsmix-component",
@@ -1524,7 +1527,7 @@ dependencies = [
 
 [[package]]
 name = "rsmix-url"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "rstml"
@@ -1659,7 +1662,7 @@ checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
 
 [[package]]
 name = "social-auth-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix",
@@ -1681,7 +1684,7 @@ dependencies = [
 
 [[package]]
 name = "spa-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "js-sys",
@@ -1694,7 +1697,7 @@ dependencies = [
 
 [[package]]
 name = "sse-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix",
@@ -1741,7 +1744,7 @@ dependencies = [
 
 [[package]]
 name = "template-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "rsmix",
@@ -1774,7 +1777,7 @@ dependencies = [
 
 [[package]]
 name = "timeboxer-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "js-sys",
@@ -1800,9 +1803,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.54.0"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c168a474b95bfecfe908a65d4bdffc523144b649a74c09c286afb35d53e0bc"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",
@@ -1871,7 +1874,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "ui-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "http",
  "js-sys",
@@ -1891,7 +1894,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "unpkg-demo"
-version = "0.1.0"
+version = "3.1.0"
 dependencies = [
  "bytes",
  "flate2",
@@ -2103,7 +2106,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

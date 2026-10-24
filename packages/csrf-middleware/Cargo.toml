@@ -2,8 +2,11 @@
 name = "rsmix-csrf-middleware"
 description = "Session-backed CSRF protection middleware (remix csrf-middleware)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -15,6 +18,6 @@ rsmix-session.workspace = true
 rsmix-url.workspace = true
 
 [dev-dependencies]
-rsmix-cookie.workspace = true
-rsmix-method-override-middleware.workspace = true
-rsmix-session-middleware.workspace = true
+rsmix-cookie = { path = "../cookie" }
+rsmix-method-override-middleware = { path = "../method-override-middleware" }
+rsmix-session-middleware = { path = "../session-middleware" }

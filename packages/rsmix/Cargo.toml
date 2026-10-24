@@ -4,6 +4,12 @@ description = "Remix 3 for Rust in one dependency: components and rsx! at the ro
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["remix", "web", "framework", "ssr", "wasm"]
+categories = ["web-programming", "web-programming::http-server", "wasm"]
 
 [features]
 default = ["ui", "frames", "navigation", "spa"]

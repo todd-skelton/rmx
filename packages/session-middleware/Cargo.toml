@@ -2,8 +2,11 @@
 name = "rsmix-session-middleware"
 description = "Middleware for managing sessions with cookie-based storage (remix session-middleware)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -13,7 +16,7 @@ rsmix-session.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-rsmix-crypto.workspace = true
-rsmix-fetch.workspace = true
-rsmix-headers.workspace = true
+rsmix-crypto = { path = "../crypto" }
+rsmix-fetch = { path = "../fetch" }
+rsmix-headers = { path = "../headers" }
 tokio.workspace = true

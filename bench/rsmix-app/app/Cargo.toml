@@ -4,6 +4,7 @@ description = "Components shared by the bench server (SSR) and client (WASM isla
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 # Shared with the client, so no default features here; the server turns them back on.

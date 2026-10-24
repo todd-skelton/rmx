@@ -2,8 +2,11 @@
 name = "rsmix-live-reload-middleware"
 description = "Reload open pages when `rsmix dev` restarts the app (stands in for remix node-hmr)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -11,4 +14,4 @@ rsmix-fetch.workspace = true
 rsmix-fetch-router.workspace = true
 
 [dev-dependencies]
-rsmix-response.workspace = true
+rsmix-response = { path = "../response" }

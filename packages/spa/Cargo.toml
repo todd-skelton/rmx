@@ -2,14 +2,17 @@
 name = "rsmix-spa"
 description = "Run an rsmix-fetch-router in the browser: client-only apps with the server's Request/Response contract (port of remix/spa)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
 # Imported as `rsmix` so `rsx!` output (`::rsmix::...`) resolves without the umbrella crate.
 # The browser router loads frames through `resolve_frame` and needs soft navigation.
-rsmix = { package = "rsmix-component", path = "../component", default-features = false, features = ["navigation"] }
+rsmix = { package = "rsmix-component", path = "../component", version = "1.1.0", default-features = false, features = ["navigation"] }
 rsmix-fetch.workspace = true
 rsmix-response.workspace = true
 rsmix-fetch-router.workspace = true

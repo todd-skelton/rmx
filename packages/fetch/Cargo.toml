@@ -2,8 +2,11 @@
 name = "rsmix-fetch"
 description = "The Fetch API for rsmix: Request, Response, streaming Body, FormData and AbortSignal on the standard http crate"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 bytes.workspace = true

@@ -2,7 +2,10 @@
 name = "rsmix-terminal"
 description = "ANSI styles, color detection and terminal output for rsmix (Remix's remix/terminal)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]

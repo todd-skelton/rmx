@@ -2,8 +2,11 @@
 name = "rsmix-auth-middleware"
 description = "Pluggable authentication middleware for rsmix (remix auth-middleware): resolve who is making the request and require it on routes"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
@@ -12,7 +15,7 @@ rsmix-fetch-router.workspace = true
 rsmix-session.workspace = true
 
 [dev-dependencies]
-rsmix-response.workspace = true
-rsmix-cookie.workspace = true
-rsmix-form-data-middleware.workspace = true
-rsmix-session-middleware.workspace = true
+rsmix-response = { path = "../response" }
+rsmix-cookie = { path = "../cookie" }
+rsmix-form-data-middleware = { path = "../form-data-middleware" }
+rsmix-session-middleware = { path = "../session-middleware" }

@@ -2,7 +2,10 @@
 name = "rsmix-url"
 description = "Minimal URL, percent-encoding and URLSearchParams utilities for rsmix (no dependencies)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]

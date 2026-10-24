@@ -2,8 +2,11 @@
 name = "rsmix-response"
 description = "Response helpers for rsmix (remix response): html, redirect, file and compress"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 bytes.workspace = true
@@ -29,7 +32,7 @@ compress = ["dep:flate2", "dep:brotli"]
 http-body.workspace = true
 brotli = { version = "9", default-features = false, features = ["std"] }
 flate2 = "1"
-rsmix-lazy-file.workspace = true
+rsmix-lazy-file = { path = "../lazy-file" }
 
 [[test]]
 name = "compress"

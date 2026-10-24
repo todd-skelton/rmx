@@ -2,8 +2,11 @@
 name = "rsmix-fetch-router"
 description = "A composable router on Request/Response with route maps, middleware and typed request context (port of remix fetch-router)"
 edition.workspace = true
-version.workspace = true
+version = "1.0.0"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 http.workspace = true
