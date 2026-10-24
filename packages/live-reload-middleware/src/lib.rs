@@ -63,7 +63,7 @@ impl LiveReload {
 
 impl Middleware for LiveReload {
     fn call(&self, ctx: Context, next: Next) -> BoxFuture<Response> {
-        let Some(build_id) = self.build_id.clone() else { return next.run(ctx) };
+        let Some(build_id) = self.build_id.clone() else { return Box::pin(next.run(ctx)) };
         if ctx.url().pathname() == LIVE_RELOAD_PATH && *ctx.method() == Method::GET {
             return Box::pin(async move { event_stream(&build_id) });
         }

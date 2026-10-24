@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use rmx::fetch::{block_on, Body, Response};
 use rmx::response;
-use rmx::router::{action, catch_panic, Action, BoxFuture, Context, Next, Router};
+use rmx::router::{action, catch_panic, Action, BoxFuture, Context, Next, NextFuture, Router};
 
 /// Run `action`'s middleware and handler for a `GET https://remix.run`.
 fn run_middleware(action: Action) -> Response {
@@ -36,7 +36,7 @@ fn hello_world() -> Action {
 
 type Log = Arc<Mutex<Vec<&'static str>>>;
 
-fn record(log: &Log, name: &'static str) -> impl Fn(Context, Next) -> BoxFuture<Response> + Send + Sync + 'static {
+fn record(log: &Log, name: &'static str) -> impl Fn(Context, Next) -> NextFuture + Send + Sync + 'static {
     let log = log.clone();
     move |ctx: Context, next: Next| {
         log.lock().unwrap().push(name);

@@ -156,7 +156,7 @@ impl Csrf {
 impl Middleware for Csrf {
     fn call(&self, ctx: Context, next: Next) -> BoxFuture<Response> {
         match self.check(&ctx) {
-            Ok(()) => next.run(ctx),
+            Ok(()) => Box::pin(next.run(ctx)),
             Err(failure) => {
                 let res = match &self.on_error {
                     Some(respond) => respond(failure, &ctx),

@@ -31,7 +31,7 @@ use http::{Extensions, HeaderMap, Method};
 use rmx_route_pattern::Params;
 use rmx_url::Url;
 
-use crate::{BoxFuture, Context, Middleware, Next};
+use crate::{Context, Middleware, Next, NextFuture};
 use rmx_fetch::Response;
 
 /// What the scope holds; kept in step with the request's [`Context`].
@@ -123,7 +123,7 @@ pub(crate) fn update(scope: &Option<Scope>, f: impl FnOnce(&mut Shared)) {
 /// threads and awaits (how `tokio::task_local!` works, without depending on tokio).
 struct Scoped {
     scope: Option<Scope>,
-    inner: BoxFuture<Response>,
+    inner: NextFuture,
 }
 
 impl Future for Scoped {
@@ -138,6 +138,6 @@ impl Future for Scoped {
         }
         let this = &mut *self;
         let _restore = Restore(CURRENT.with(|c| c.replace(this.scope.clone())));
-        this.inner.as_mut().poll(cx)
+        Pin::new(&mut this.inner).poll(cx)
     }
 }

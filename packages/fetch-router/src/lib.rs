@@ -29,6 +29,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
+use rmx_fetch::abort::UntilAborted;
 use rmx_fetch::{request_url, AbortError, AbortSignal, Body, Request, RequestExt, Response};
 use rmx_response as response;
 use rmx_route_pattern::{specificity, Matcher, MultiMatcher, Params, RoutePattern};
@@ -428,6 +429,7 @@ where
 
 type MiddlewareList = Arc<[Arc<dyn Middleware>]>;
 
+#[derive(Clone)]
 enum Endpoint {
     /// End of the router-level chain: match a route and dispatch.
     Dispatch,
@@ -458,7 +460,7 @@ enum Endpoint {
 pub struct Next {
     chain: MiddlewareList,
     index: usize,
-    endpoint: Arc<Endpoint>,
+    endpoint: Endpoint,
 }
 
 impl Next {
@@ -472,31 +474,84 @@ impl Next {
     /// The next step is called when the returned future is first polled, so a middleware or
     /// handler that panics before returning its future panics inside this one, where
     /// [`catch_panic`] sees it (Remix's `next()` returns a rejected promise).
-    pub fn run(self, ctx: Context) -> BoxFuture<Response> {
-        Box::pin(self.run_step(ctx))
+    ///
+    /// The returned [`NextFuture`] is a plain value, not a box: the only allocation per step
+    /// is the future of the middleware or handler it calls. A [`Middleware::call`] that
+    /// returns a [`BoxFuture`] boxes it with `Box::pin(next.run(ctx))`.
+    pub fn run(self, ctx: Context) -> NextFuture {
+        NextFuture { state: NextState::Start(Some((self, ctx))) }
     }
 
-    async fn run_step(mut self, ctx: Context) -> Response {
-        if ctx.signal.aborted() {
-            return AbortError.into_response();
-        }
-        let signal = (!ctx.signal.is_never()).then(|| ctx.signal.clone());
-        let fut = if let Some(mw) = self.chain.get(self.index).cloned() {
+    /// Call the next middleware, or the endpoint once the chain is done.
+    fn call(mut self, ctx: Context) -> BoxFuture<Response> {
+        if let Some(mw) = self.chain.get(self.index).cloned() {
             self.index += 1;
-            mw.call(ctx, self)
-        } else {
-            match &*self.endpoint {
-                Endpoint::Handler(h) => h.call(ctx),
-                Endpoint::Dispatch => {
-                    let router = ctx.router.clone();
-                    Box::pin(async move { router.dispatch(ctx).await })
+            return mw.call(ctx, self);
+        }
+        match self.endpoint {
+            Endpoint::Handler(h) => h.call(ctx),
+            Endpoint::Dispatch => {
+                let router = ctx.router.clone();
+                Box::pin(async move { router.dispatch(ctx).await })
+            }
+        }
+    }
+}
+
+/// The future returned by [`Next::run`]: the rest of the chain, raced against the request's
+/// abort signal.
+#[must_use = "futures do nothing unless awaited"]
+pub struct NextFuture {
+    state: NextState,
+}
+
+// `Start` holds the request context inline: boxing it would bring back the allocation per
+// step that `NextFuture` exists to avoid. The future lives inside the calling middleware's
+// own (boxed) future, where the old `async fn` state held the same values.
+#[allow(clippy::large_enum_variant)]
+enum NextState {
+    /// Not polled yet: the next step is called on the first poll.
+    Start(Option<(Next, Context)>),
+    /// The step's future, and the abort signal unless the request has none.
+    Running(BoxFuture<Response>, Option<UntilAborted>),
+    Done,
+}
+
+impl Future for NextFuture {
+    type Output = Response;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Response> {
+        use std::task::Poll;
+        let state = &mut self.state;
+        if let NextState::Start(start) = state {
+            let (next, ctx) = start.take().expect("NextFuture state");
+            if ctx.signal.aborted() {
+                *state = NextState::Done;
+                return Poll::Ready(AbortError.into_response());
+            }
+            let signal = (!ctx.signal.is_never()).then(|| ctx.signal.clone());
+            let fut = next.call(ctx);
+            // As `AbortSignal::race`: an abort while the step was being called wins, and
+            // after that the step is polled before the signal.
+            if signal.as_ref().is_some_and(AbortSignal::aborted) {
+                *state = NextState::Done;
+                return Poll::Ready(AbortError.into_response());
+            }
+            *state = NextState::Running(fut, signal.map(|s| s.until_aborted()));
+        }
+        let NextState::Running(fut, aborted) = state else { panic!("NextFuture polled after completion") };
+        let result = match fut.as_mut().poll(cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => {
+                let Some(aborted) = aborted else { return Poll::Pending };
+                if Pin::new(aborted).poll(cx).is_pending() {
+                    return Poll::Pending;
                 }
+                AbortError.into_response()
             }
         };
-        match signal {
-            None => fut.await,
-            Some(signal) => signal.race(fut).await.unwrap_or_else(AbortError::into_response),
-        }
+        *state = NextState::Done;
+        Poll::Ready(result)
     }
 }
 
@@ -789,7 +844,7 @@ impl Router {
     /// Handle a request.
     pub fn fetch(&self, request: Request) -> BoxFuture<Response> {
         let ctx = Context::with_router(request, self.clone());
-        Next { chain: self.inner.chain.clone(), index: 0, endpoint: Arc::new(Endpoint::Dispatch) }.run(ctx)
+        Box::pin(Next { chain: self.inner.chain.clone(), index: 0, endpoint: Endpoint::Dispatch }.run(ctx))
     }
 
     /// `GET` an absolute URL. Handy in tests.
@@ -857,7 +912,7 @@ impl Router {
         ctx.params = found.params.clone();
         async_context::update(&ctx.scope, |s| s.params = ctx.params.clone());
         drop(matches);
-        let res = Next { chain: entry.middleware.clone(), index: 0, endpoint: Arc::new(Endpoint::Handler(entry.handler.clone())) }
+        let res = Next { chain: entry.middleware.clone(), index: 0, endpoint: Endpoint::Handler(entry.handler.clone()) }
             .run(ctx)
             .await;
         if strip_body {

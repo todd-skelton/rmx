@@ -212,7 +212,7 @@ impl<I: Clone + Send + Sync + 'static> Middleware for RequireAuth<I> {
             .get::<Auth<I>>()
             .expect("Auth state not found. Make sure auth() middleware runs before requireAuth().");
         if state.is_ok() {
-            return next.run(ctx);
+            return Box::pin(next.run(ctx));
         }
         let mut res = match &self.on_failure {
             Some(respond) => respond(&ctx, state),

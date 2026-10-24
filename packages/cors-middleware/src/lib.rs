@@ -219,13 +219,13 @@ impl Middleware for Cors {
                 let res = empty(self.preflight_status);
                 return Box::pin(async move { res });
             }
-            return next.run(ctx);
+            return Box::pin(next.run(ctx));
         };
         let Some(allowed) = self.allowed_origin(&origin, &ctx) else {
             if preflight && !self.preflight_continue {
                 return Box::pin(async { empty(StatusCode::FORBIDDEN) });
             }
-            return next.run(ctx);
+            return Box::pin(next.run(ctx));
         };
 
         let mut cors = HeaderMap::new();

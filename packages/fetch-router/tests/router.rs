@@ -63,7 +63,7 @@ fn record(log: &Log, name: &'static str) -> impl Fn(Context, Next) -> BoxFuture<
     let log = log.clone();
     move |ctx: Context, next: Next| {
         push(&log, name);
-        next.run(ctx)
+        Box::pin(next.run(ctx))
     }
 }
 

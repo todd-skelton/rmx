@@ -111,7 +111,7 @@ impl Cop {
 impl Middleware for Cop {
     fn call(&self, ctx: Context, next: Next) -> BoxFuture<Response> {
         let Some(failure) = self.check(&ctx) else {
-            return next.run(ctx);
+            return Box::pin(next.run(ctx));
         };
         let res = match &self.on_deny {
             Some(respond) => respond(failure, &ctx),
