@@ -6,6 +6,8 @@
 //! - text is a string, a fragment is an array, nothing is `null`;
 //! - an element is `{"$rmx":true,"type":tag,"key":k,"props":{attrs..,"children":[..]},"css":[[class,css]..]}`;
 //! - a `<Frame>` is `{"$rmxFrame":true,"props":{"src":..,"name":..,"fallback":..}}`;
+//! - a `<Fragment>` is `{"$rmxFragment":true,"key":k,"props":{"children":[..]}}`, so a keyed
+//!   group keeps its key (Remix 3.1);
 //! - a component renders on the server and serializes as its output.
 //!
 //! Event handlers and `node_ref` callbacks cannot cross the boundary and are dropped.
@@ -28,6 +30,19 @@ impl Node {
             Node::Element(el) => element_json(el),
             Node::Text(t) => Value::String(t.to_string()),
             Node::Fragment(nodes) => Value::Array(nodes.iter().map(Node::to_json).collect()),
+            Node::Component(c) if c.inner.component_type() == std::any::TypeId::of::<crate::Fragment>() => {
+                let mut out = Map::new();
+                out.insert("$rmxFragment".into(), Value::Bool(true));
+                if let Some(key) = key_json(c.key.as_ref()) {
+                    out.insert("key".into(), key);
+                }
+                let children = match c.inner.render_static().to_json() {
+                    Value::Array(items) => Value::Array(items),
+                    one => Value::Array(vec![one]),
+                };
+                out.insert("props".into(), serde_json::json!({ "children": children }));
+                Value::Object(out)
+            }
             Node::Component(c) => c.inner.render_static().to_json(),
             Node::Shared(n) => n.to_json(),
             Node::Raw(html) => serde_json::json!({ "$rmxRaw": html.as_ref() }),
@@ -64,6 +79,9 @@ impl Node {
                         name: field("name").and_then(Value::as_str).map(str::to_string),
                         fallback: field("fallback").map(Node::from_json),
                     }))
+                } else if obj.get("$rmxFragment").and_then(Value::as_bool) == Some(true) {
+                    let children = obj.get("props").and_then(|p| p.get("children")).map_or(Node::Empty, Node::from_json);
+                    Node::component::<crate::Fragment>(key_from_json(obj.get("key")), crate::FragmentProps { children: children.into() })
                 } else if let Some(html) = obj.get("$rmxRaw").and_then(Value::as_str) {
                     Node::Raw(Cow::Owned(html.to_string()))
                 } else {
@@ -100,14 +118,8 @@ fn element_json(el: &Element) -> Value {
     let mut out = Map::new();
     out.insert("$rmx".into(), Value::Bool(true));
     out.insert("type".into(), Value::String(el.tag.to_string()));
-    match &el.key {
-        Some(Key::Int(i)) => {
-            out.insert("key".into(), Value::from(*i));
-        }
-        Some(Key::Str(s)) => {
-            out.insert("key".into(), Value::String(s.to_string()));
-        }
-        None => {}
+    if let Some(key) = key_json(el.key.as_ref()) {
+        out.insert("key".into(), key);
     }
     out.insert("props".into(), Value::Object(props));
     if let Some(extra) = &el.extra {
@@ -119,13 +131,24 @@ fn element_json(el: &Element) -> Value {
     Value::Object(out)
 }
 
+fn key_json(key: Option<&Key>) -> Option<Value> {
+    match key? {
+        Key::Int(i) => Some(Value::from(*i)),
+        Key::Str(s) => Some(Value::String(s.to_string())),
+    }
+}
+
+fn key_from_json(value: Option<&Value>) -> Option<Key> {
+    match value? {
+        Value::Number(n) => n.as_i64().map(Key::Int),
+        Value::String(s) => Some(Key::Str(Cow::Owned(s.clone()))),
+        _ => None,
+    }
+}
+
 fn element_from_json(obj: &Map<String, Value>) -> Node {
     let tag = intern(obj.get("type").and_then(Value::as_str).unwrap_or("div"));
-    let key = match obj.get("key") {
-        Some(Value::Number(n)) => n.as_i64().map(Key::Int),
-        Some(Value::String(s)) => Some(Key::Str(Cow::Owned(s.clone()))),
-        _ => None,
-    };
+    let key = key_from_json(obj.get("key"));
     let mut attrs = Vec::new();
     let mut children = Vec::new();
     if let Some(props) = obj.get("props").and_then(Value::as_object) {
@@ -267,6 +290,27 @@ mod tests {
     #[should_panic(expected = "Invalid srcdoc prop: expected a value created with unsafe_html()")]
     fn srcdoc_rejects_json_shaped_values() {
         Node::from_json(&serde_json::json!({ "$rmx": true, "type": "iframe", "props": { "srcdoc": { "value": "<p>HTML</p>" } } }));
+    }
+
+    #[test]
+    fn fragments_and_keys_round_trip() {
+        let node = rsx! {
+            <dl>
+                <crate::Fragment key="a"><dt>"A"</dt><dd>"first"</dd></crate::Fragment>
+                <crate::Fragment key={2}><dt>"B"</dt></crate::Fragment>
+                <li key="k">"keyed"</li>
+            </dl>
+        };
+        let json = node.to_json();
+        let text = json.to_string();
+        assert!(text.contains(r#"{"$rmxFragment":true,"key":"a","props":{"children":[{"$rmx":true,"props":{"children":["A"]},"type":"dt"}"#), "{text}");
+        assert!(text.contains(r#""$rmxFragment":true,"key":2"#), "{text}");
+        assert!(text.contains(r#"{"$rmx":true,"key":"k","props":{"children":["keyed"]},"type":"li"}"#), "{text}");
+        let revived = Node::from_json(&json);
+        assert_eq!(revived.to_json(), json, "keys survive the round trip");
+        let Node::Element(dl) = &revived else { panic!("an element") };
+        assert!(matches!(&dl.children[0], Node::Component(c) if c.key == Some(crate::node::Key::Str("a".into()))));
+        assert_eq!(crate::render_to_string(&revived), "<dl><dt>A</dt><dd>first</dd><dt>B</dt><li>keyed</li></dl>");
     }
 
     #[test]
