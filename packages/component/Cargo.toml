@@ -23,6 +23,13 @@ rmx-macros.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["raw_value"] }
 
+# Server rendering only (the browser build keeps core's code, so the client does not grow):
+# memchr for escaping long text, and zmij (already in the tree through serde_json) for float
+# digits.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+memchr.workspace = true
+zmij = "1"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true

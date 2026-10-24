@@ -276,7 +276,95 @@ macro_rules! display_attr_and_node {
         }
     )*};
 }
-display_attr_and_node!(u128, i128, f32, f64, char);
+display_attr_and_node!(u128, i128, f32, char);
+
+impl IntoAttr for f64 {
+    fn into_attr(self) -> AttrValue {
+        AttrValue::Str(Cow::Owned(float_string(self)))
+    }
+}
+
+impl IntoNode for f64 {
+    fn into_node(self) -> Node {
+        Node::Text(Cow::Owned(float_string(self)))
+    }
+}
+
+/// `value`'s `Display` text. On the server the digits come from zmij, several times faster
+/// than `core::fmt`'s float path, laid out as `Display` lays them out (Corten's
+/// `push_float`); a value that may sit halfway between two shortest forms, where the two
+/// round differently, still goes through `Display`.
+fn float_string(value: f64) -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    if !may_tie(value) {
+        return zmij_display(value);
+    }
+    value.to_string()
+}
+
+/// True when `value` might lie exactly halfway between its two nearest shortest forms, where
+/// zmij keeps the even digit and `Display` rounds up, or is too large to check. A tie needs
+/// an exact decimal of at most 18 significant digits ending in 5 at least two places after
+/// the point: a short binary fraction (`x.25`, `n / 2048`). Prices and other decimals are
+/// never exact in binary, so they stay on the fast path.
+#[cfg(not(target_arch = "wasm32"))]
+fn may_tie(value: f64) -> bool {
+    if !value.is_finite() || value == 0.0 {
+        return false;
+    }
+    if value.abs() >= 9_007_199_254_740_992.0 {
+        return true;
+    }
+    let bits = value.to_bits();
+    let biased = ((bits >> 52) & 0x7ff) as i32;
+    let fraction = bits & ((1 << 52) - 1);
+    let (mantissa, exponent) = if biased == 0 { (fraction, -1074) } else { (fraction | (1 << 52), biased - 1075) };
+    let zeros = mantissa.trailing_zeros();
+    // `value` is `odd * 2^exponent` exactly, so its decimal is `odd * 5^-exponent` digits long.
+    let (odd, exponent) = (mantissa >> zeros, exponent + zeros as i32);
+    if exponent > -2 {
+        return false;
+    }
+    exponent >= -27 && u128::from(odd) * 5u128.pow(exponent.unsigned_abs()) < 10u128.pow(19)
+}
+
+/// zmij's shortest digits written as `Display` writes them: never an exponent, no `.0` on a
+/// whole number, `NaN`, `inf` and `-inf`. zmij writes `1e21` and `3.0` where `Display`
+/// writes `1000000000000000000000` and `3`.
+#[cfg(not(target_arch = "wasm32"))]
+fn zmij_display(value: f64) -> String {
+    let mut buffer = zmij::Buffer::new();
+    let text = buffer.format(value);
+    let Some((mantissa, exponent)) = text.split_once('e') else {
+        return text.strip_suffix(".0").unwrap_or(text).to_string();
+    };
+    let exponent: i32 = exponent.parse().expect("zmij writes a decimal exponent");
+    let (sign, mantissa) = mantissa.strip_prefix('-').map_or(("", mantissa), |rest| ("-", rest));
+    let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    // At most 17 significant digits, the first before the point.
+    let mut digits = [0u8; 24];
+    let count = whole.len() + fraction.len();
+    digits[..whole.len()].copy_from_slice(whole.as_bytes());
+    digits[whole.len()..count].copy_from_slice(fraction.as_bytes());
+    let digits = std::str::from_utf8(&digits[..count]).expect("ASCII digits");
+    // How many digits come before the decimal point.
+    let point = whole.len() as i32 + exponent;
+    let mut out = String::with_capacity(sign.len() + count + point.unsigned_abs() as usize + 2);
+    out.push_str(sign);
+    if point <= 0 {
+        out.push_str("0.");
+        out.extend(std::iter::repeat_n('0', point.unsigned_abs() as usize));
+        out.push_str(digits);
+    } else if point as usize >= count {
+        out.push_str(digits);
+        out.extend(std::iter::repeat_n('0', point as usize - count));
+    } else {
+        out.push_str(&digits[..point as usize]);
+        out.push('.');
+        out.push_str(&digits[point as usize..]);
+    }
+    out
+}
 
 /// Integers are formatted without `core::fmt`: list rows render ids as text, and the
 /// formatter machinery was a visible share of creating them.

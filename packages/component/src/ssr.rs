@@ -524,7 +524,19 @@ fn is_void(tag: &str) -> bool {
     )
 }
 
+/// Escape `& < >` (and `" '` in attribute values). Strings shorter than 16 bytes, such as ids
+/// and class names, are checked a byte at a time. On the server, longer text is searched with
+/// `memchr3` and longer attribute values eight bytes at a time; the browser build keeps the
+/// byte loop so the client does not grow.
 pub(crate) fn escape_into(out: &mut String, s: &str, attr: bool) {
+    #[cfg(not(target_arch = "wasm32"))]
+    if s.len() >= 16 {
+        return if attr { escape_attr_long(out, s) } else { escape_text_long(out, s) };
+    }
+    escape_bytes(out, s, attr);
+}
+
+fn escape_bytes(out: &mut String, s: &str, attr: bool) {
     let mut last = 0;
     for (i, b) in s.bytes().enumerate() {
         let rep = match b {
@@ -540,6 +552,64 @@ pub(crate) fn escape_into(out: &mut String, s: &str, attr: bool) {
         last = i + 1;
     }
     out.push_str(&s[last..]);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn escape_text_long(out: &mut String, s: &str) {
+    let bytes = s.as_bytes();
+    let mut last = 0;
+    for i in memchr::memchr3_iter(b'&', b'<', b'>', bytes) {
+        out.push_str(&s[last..i]);
+        out.push_str(match bytes[i] {
+            b'&' => "&amp;",
+            b'<' => "&lt;",
+            _ => "&gt;",
+        });
+        last = i + 1;
+    }
+    out.push_str(&s[last..]);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn escape_attr_long(out: &mut String, s: &str) {
+    let bytes = s.as_bytes();
+    let mut last = 0;
+    while let Some(i) = next_attr_escape(bytes, last) {
+        out.push_str(&s[last..i]);
+        out.push_str(match bytes[i] {
+            b'&' => "&amp;",
+            b'<' => "&lt;",
+            b'>' => "&gt;",
+            b'"' => "&quot;",
+            _ => "&#39;",
+        });
+        last = i + 1;
+    }
+    out.push_str(&s[last..]);
+}
+
+/// The index of the first of `& < > " '` at or after `from`. Skips eight bytes at a time while
+/// none of them is one (Corten's `escape_into`), then finds it byte by byte.
+#[cfg(not(target_arch = "wasm32"))]
+#[inline]
+fn next_attr_escape(bytes: &[u8], from: usize) -> Option<usize> {
+    const ONES: u64 = u64::from_ne_bytes([1; 8]);
+    // Nonzero exactly when some byte of `x` is zero.
+    let zero = |x: u64| x.wrapping_sub(ONES) & !x & (ONES << 7);
+    let mut i = from;
+    while let Some(chunk) = bytes.get(i..i + 8) {
+        let x = u64::from_ne_bytes(chunk.try_into().expect("eight bytes"));
+        // `| 1` turns `&` (0x26) into `'` (0x27), so one test finds either.
+        let found = zero(x ^ (ONES * u64::from(b'"')))
+            | zero((x | ONES) ^ (ONES * u64::from(b'\'')))
+            | zero(x ^ (ONES * u64::from(b'<')))
+            | zero(x ^ (ONES * u64::from(b'>')));
+        if found != 0 {
+            break;
+        }
+        i += 8;
+    }
+    bytes[i..].iter().position(|b| matches!(b, b'&' | b'<' | b'>' | b'"' | b'\'')).map(|at| i + at)
 }
 
 /// Write script text so no `<script` or `</script` (any case) can open or close an element:

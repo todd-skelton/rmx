@@ -1146,6 +1146,7 @@ name = "rmx-component"
 version = "0.1.0"
 dependencies = [
  "js-sys",
+ "memchr",
  "rmx-macros",
  "serde",
  "serde_json",
@@ -1153,6 +1154,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+ "zmij",
 ]
 
 [[package]]
