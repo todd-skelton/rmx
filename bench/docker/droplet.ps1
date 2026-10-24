@@ -5,8 +5,8 @@
 #   pwsh bench/docker/droplet.ps1 -Suffix 2026-10-24-droplet [-AbRefs b70fd12,bbdaed2] [-Rounds 2]
 #
 # The working tree's HEAD is benchmarked against Remix (run-docker.ps1 -Build); each -AbRefs
-# commit is built as rmxbench-rmx-<ref> and run rmx-only, alternating with HEAD, -Rounds times.
-# The browser bundle (bench/rmx-app/public/pkg, not in git) is copied from this machine.
+# commit is built as rsmixbench-rsmix-<ref> and run rsmix-only, alternating with HEAD, -Rounds times.
+# The browser bundle (bench/rsmix-app/public/pkg, not in git) is copied from this machine.
 # Results land in bench/results/droplet-<Suffix>/.
 param(
     [Parameter(Mandatory)] [string]$Suffix,
@@ -36,13 +36,13 @@ if (-not $SshKeyId) {
 # Sources: HEAD and each A/B ref as tarballs, plus the browser bundle.
 git archive --format=tar -o (Join-Path $work "head.tar") HEAD
 foreach ($ref in $AbRefs) { git archive --format=tar -o (Join-Path $work "ref-$ref.tar") $ref }
-tar -cf (Join-Path $work "pkg.tar") -C bench/rmx-app/public pkg
+tar -cf (Join-Path $work "pkg.tar") -C bench/rsmix-app/public pkg
 Copy-Item (Join-Path $PSScriptRoot "droplet-run.sh") $work
 
 $ssh = @("-i", $Identity, "-o", "StrictHostKeyChecking=accept-new", "-o", "UserKnownHostsFile=$work/known_hosts", "-o", "ConnectTimeout=10")
 $id = $null
 try {
-    $created = doctl compute droplet create "rmx-bench-$($Suffix.ToLower())" --size $Size --region $Region --image ubuntu-24-04-x64 --ssh-keys $SshKeyId --tag-name rmx-bench --wait --format ID,PublicIPv4 --no-header
+    $created = doctl compute droplet create "rsmix-bench-$($Suffix.ToLower())" --size $Size --region $Region --image ubuntu-24-04-x64 --ssh-keys $SshKeyId --tag-name rsmix-bench --wait --format ID,PublicIPv4 --no-header
     if ($LASTEXITCODE) { throw "droplet create failed" }
     $id, $ip = ($created -split "\s+") | Where-Object { $_ }
     Write-Host "droplet $id at $ip"

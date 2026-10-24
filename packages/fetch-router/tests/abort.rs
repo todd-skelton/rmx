@@ -1,5 +1,5 @@
 //! Ports of fetch-router's router-abort.test.ts. Remix's `router.fetch` rejects with an
-//! `AbortError`; rmx answers with `AbortError::into_response` (status 499, the error in the
+//! `AbortError`; rsmix answers with `AbortError::into_response` (status 499, the error in the
 //! response extensions), which `AbortError::of` recognises.
 
 use std::future::Future;
@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context as TaskContext, Poll};
 use std::time::Duration;
 
-use rmx::fetch::{block_on, AbortController, AbortError, AbortSignal, Body, Request, RequestExt, Response};
-use rmx::response;
-use rmx::router::{Context, Next, Router};
+use rsmix::fetch::{block_on, AbortController, AbortError, AbortSignal, Body, Request, RequestExt, Response};
+use rsmix::response;
+use rsmix::router::{Context, Next, Router};
 
 /// A timer future backed by a thread, so the tests need no runtime.
 struct Sleep {

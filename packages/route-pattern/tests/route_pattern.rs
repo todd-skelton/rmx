@@ -1,7 +1,7 @@
 //! Remix's `route-pattern.test.ts`.
 
-use rmx_route_pattern::{CaptureKind, HrefError, MatchParamMeta, RoutePattern, RoutePatternCapture, RoutePatternJson, UrlPart};
-use rmx_url::Url;
+use rsmix_route_pattern::{CaptureKind, HrefError, MatchParamMeta, RoutePattern, RoutePatternCapture, RoutePatternJson, UrlPart};
+use rsmix_url::Url;
 
 fn capture(part: UrlPart, kind: CaptureKind, name: &str, optional: bool) -> RoutePatternCapture {
     RoutePatternCapture { part, kind, name: name.to_string(), optional }

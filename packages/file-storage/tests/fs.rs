@@ -1,5 +1,5 @@
 //! Remix's `file-storage/src/lib/backends/fs.test.ts`. Remix's backend returns lazy files
-//! that read on demand; rmx reads the stored bytes into a `File`.
+//! that read on demand; rsmix reads the stored bytes into a `File`.
 
 #![cfg(feature = "fs")]
 
@@ -8,15 +8,15 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::{parse_uploads, text, text_file, upload_request};
-use rmx_fetch::File;
-use rmx_file_storage::{FileEntry, FileStorage, FsFileStorage, ListOptions};
+use rsmix_fetch::File;
+use rsmix_file_storage::{FileEntry, FileStorage, FsFileStorage, ListOptions};
 
 /// Remix's `beforeEach`/`afterEach` temporary directory.
 struct TempDir(PathBuf);
 
 impl TempDir {
     fn new() -> TempDir {
-        let dir = std::env::temp_dir().join(format!("fs-file-storage-test-{}", rmx_crypto::random_hex(8)));
+        let dir = std::env::temp_dir().join(format!("fs-file-storage-test-{}", rsmix_crypto::random_hex(8)));
         std::fs::create_dir_all(&dir).unwrap();
         TempDir(dir)
     }

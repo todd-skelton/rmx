@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use rmx_url::SearchParams;
+use rsmix_url::SearchParams;
 
 use crate::split::{split, Span};
 use crate::{Parts, PartPattern, Protocol, Search, Token, UrlPart};

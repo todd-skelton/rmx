@@ -4,9 +4,9 @@
 mod common;
 
 use common::*;
-use rmx_auth::{refresh_external_auth, AuthError, OAuthAccount, OAuthProvider, OAuthResult, OAuthTokens, OAuthTransaction};
-use rmx_fetch::block_on;
-use rmx_url::Url;
+use rsmix_auth::{refresh_external_auth, AuthError, OAuthAccount, OAuthProvider, OAuthResult, OAuthTokens, OAuthTransaction};
+use rsmix_fetch::block_on;
+use rsmix_url::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 

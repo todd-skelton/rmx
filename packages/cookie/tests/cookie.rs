@@ -2,8 +2,8 @@
 
 use std::time::{Duration, UNIX_EPOCH};
 
-use rmx_cookie::{Cookie, CookieProperties, SameSite};
-use rmx_headers::SetCookie;
+use rsmix_cookie::{Cookie, CookieProperties, SameSite};
+use rsmix_headers::SetCookie;
 
 fn cookie_from_set_cookie(set_cookie: &str) -> String {
     let header = SetCookie::parse(set_cookie).unwrap();

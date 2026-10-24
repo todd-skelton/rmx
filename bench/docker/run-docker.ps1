@@ -1,5 +1,5 @@
 # Linux/Docker variant of the server benchmark (run.ps1 covers Windows + the browser bench).
-#   pwsh ./run-docker.ps1 [-Duration 15] [-Connections 50] [-Build] [-Only rmx] [-RmxImage rmxbench-rmx]
+#   pwsh ./run-docker.ps1 [-Duration 15] [-Connections 50] [-Build] [-Only rsmix] [-RsmixImage rsmixbench-rsmix]
 # Each server runs alone in a container pinned to the same CPUs and memory cap; oha runs in
 # its own container on separate CPUs and reaches the server over a Docker network, so no
 # Windows port forwarding or bind mounts are on the measured path.
@@ -14,19 +14,19 @@ param(
     [string]$Only = "",  # regex on config name, e.g. "1 (process|thread)"
     [string]$Out = "docker-server.json",
     [string]$Memory = "8g",
-    [string]$RmxImage = "rmxbench-rmx",  # another rmx build, e.g. one tagged from an older commit
+    [string]$RsmixImage = "rsmixbench-rsmix",  # another rsmix build, e.g. one tagged from an older commit
     [switch]$Build
 )
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $results = Join-Path $PSScriptRoot "../results"
 New-Item -ItemType Directory -Force $results | Out-Null
-$net = "rmxbench"
+$net = "rsmixbench"
 
 if ($Build) {
-    docker build -t rmxbench-oha -f oha.Dockerfile . ; if ($LASTEXITCODE) { throw "oha build failed" }
-    docker build -t rmxbench-remix -f remix.Dockerfile ../remix-app ; if ($LASTEXITCODE) { throw "remix build failed" }
-    docker build -t rmxbench-rmx -f rmx.Dockerfile ../.. ; if ($LASTEXITCODE) { throw "rmx build failed" }
+    docker build -t rsmixbench-oha -f oha.Dockerfile . ; if ($LASTEXITCODE) { throw "oha build failed" }
+    docker build -t rsmixbench-remix -f remix.Dockerfile ../remix-app ; if ($LASTEXITCODE) { throw "remix build failed" }
+    docker build -t rsmixbench-rsmix -f rsmix.Dockerfile ../.. ; if ($LASTEXITCODE) { throw "rsmix build failed" }
 }
 
 docker network inspect $net *> $null
@@ -56,7 +56,7 @@ function Start-Server($c) {
     if ($LASTEXITCODE) { throw "failed to start $($c.Name)" }
     while ($true) {
         # Short oha probe from the load-generator image; exits 0 once the port answers.
-        $probe = docker run --rm --network $net rmxbench-oha -n 1 --no-tui --output-format json "http://rb-server:$($c.Port)/" 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
+        $probe = docker run --rm --network $net rsmixbench-oha -n 1 --no-tui --output-format json "http://rb-server:$($c.Port)/" 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
         if ($probe -and $probe.statusCodeDistribution.'200' -eq 1) { break }
         if ($sw.Elapsed.TotalSeconds -gt 60) { docker logs rb-server; throw "$($c.Name) did not start" }
         Start-Sleep -Milliseconds 100
@@ -65,7 +65,7 @@ function Start-Server($c) {
 }
 
 function Invoke-Load([int]$port, [string]$path, [int]$seconds) {
-    $json = docker run --rm --network $net --cpuset-cpus $OhaCpus rmxbench-oha -z "${seconds}s" -c $Connections --worker-threads $OhaThreads --no-tui --output-format json "http://rb-server:$port$path"
+    $json = docker run --rm --network $net --cpuset-cpus $OhaCpus rsmixbench-oha -z "${seconds}s" -c $Connections --worker-threads $OhaThreads --no-tui --output-format json "http://rb-server:$port$path"
     $j = $json | ConvertFrom-Json
     [pscustomobject]@{
         Rps     = [math]::Round($j.summary.requestsPerSec)
@@ -79,10 +79,10 @@ function Invoke-Load([int]$port, [string]$path, [int]$seconds) {
 
 $tsx = @("node", "--import", "remix/node-tsx")
 $configs = @(
-    @{ Name = "remix (node, 1 process)"; Cores = 1; Cpus = $OneCpu; Image = "rmxbench-remix"; Port = 44100; Env = @{}; Cmd = $tsx + "server.ts" },
-    @{ Name = "rmx (1 thread)"; Cores = 1; Cpus = $OneCpu; Image = $RmxImage; Port = 44101; Env = @{ RMX_THREADS = "1" }; Cmd = @() },
-    @{ Name = "remix (node cluster, 8 workers)"; Cores = 8; Cpus = $ManyCpus; Image = "rmxbench-remix"; Port = 44100; Env = @{ REMIX_WORKERS = "8" }; Cmd = $tsx + "cluster.ts" },
-    @{ Name = "rmx (8 threads)"; Cores = 8; Cpus = $ManyCpus; Image = $RmxImage; Port = 44101; Env = @{ RMX_THREADS = "8" }; Cmd = @() }
+    @{ Name = "remix (node, 1 process)"; Cores = 1; Cpus = $OneCpu; Image = "rsmixbench-remix"; Port = 44100; Env = @{}; Cmd = $tsx + "server.ts" },
+    @{ Name = "rsmix (1 thread)"; Cores = 1; Cpus = $OneCpu; Image = $RsmixImage; Port = 44101; Env = @{ RSMIX_THREADS = "1" }; Cmd = @() },
+    @{ Name = "remix (node cluster, 8 workers)"; Cores = 8; Cpus = $ManyCpus; Image = "rsmixbench-remix"; Port = 44100; Env = @{ REMIX_WORKERS = "8" }; Cmd = $tsx + "cluster.ts" },
+    @{ Name = "rsmix (8 threads)"; Cores = 8; Cpus = $ManyCpus; Image = $RsmixImage; Port = 44101; Env = @{ RSMIX_THREADS = "8" }; Cmd = @() }
 )
 if ($Only) { $configs = @($configs | Where-Object { $_.Name -match $Only }) }
 $paths = @("/", "/ssr/100", "/ssr/1000")
@@ -113,7 +113,7 @@ $meta = [pscustomobject]@{
     date = (Get-Date).ToString("o"); duration_s = $Duration; warmup_s = $Warmup; connections = $Connections
     oha_threads = $OhaThreads; oha_cpus = $OhaCpus; one_cpu = $OneCpu; many_cpus = $ManyCpus; memory_limit = $Memory
     docker = (docker version --format "{{.Server.Version}} {{.Server.KernelVersion}}")
-    node = (docker run --rm rmxbench-remix node --version)
+    node = (docker run --rm rsmixbench-remix node --version)
     rows = $rows
 }
 $meta | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $results $Out) -Encoding utf8

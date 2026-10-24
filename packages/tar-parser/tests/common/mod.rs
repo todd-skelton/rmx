@@ -4,7 +4,7 @@
 
 use std::io::Read;
 
-use rmx_tar_parser::*;
+use rsmix_tar_parser::*;
 
 /// A fixture, gunzipped when it is a `.tgz` or `.tar.gz` (Remix's `readFixture`).
 pub fn fixture(name: &str) -> Vec<u8> {

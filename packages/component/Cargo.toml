@@ -1,5 +1,5 @@
 [package]
-name = "rmx-component"
+name = "rsmix-component"
 description = "A Remix 3 style component model for Rust: setup once, render on update(), server HTML, client entries"
 edition.workspace = true
 version.workspace = true
@@ -19,7 +19,7 @@ frames = []
 navigation = ["frames"]
 
 [dependencies]
-rmx-macros.workspace = true
+rsmix-macros.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["raw_value"] }
 

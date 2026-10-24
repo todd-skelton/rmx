@@ -3,8 +3,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use rmx_data_schema::checks::min_length;
-use rmx_data_schema::{self as s, ParseOptions, PathSegment, Schema, ValidationError, Value};
+use rsmix_data_schema::checks::min_length;
+use rsmix_data_schema::{self as s, ParseOptions, PathSegment, Schema, ValidationError, Value};
 
 #[derive(Debug, Default, PartialEq)]
 struct Person {

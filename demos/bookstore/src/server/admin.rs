@@ -1,14 +1,14 @@
 //! `actions/admin`: the dashboard and CRUD on books, users and orders, behind
 //! `requireAuth()` and `requireAdmin()`.
 
-use rmx::{css, rsx, Mixin, Node};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::middleware::form_data::FormDataExt;
-use rmx::router::routes::ResourcesActions;
-use rmx::router::{action, Context, Controller, Router};
+use rsmix::{css, rsx, Mixin, Node};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::middleware::form_data::FormDataExt;
+use rsmix::router::routes::ResourcesActions;
+use rsmix::router::{action, Context, Controller, Router};
 
-use rmx::data_schema::{self as s, form_data as f};
+use rsmix::data_schema::{self as s, form_data as f};
 
 use super::account::{order_details, orders_table};
 use super::schemas::{parse_form, text_field};
@@ -94,7 +94,7 @@ async fn dashboard(ctx: Context) -> Response {
 
 // --- books ------------------------------------------------------------------------------
 
-fn book_href(route: &rmx::router::Route, book: &Book) -> String {
+fn book_href(route: &rsmix::router::Route, book: &Book) -> String {
     route.href([("bookId", book.id.to_string())])
 }
 
@@ -299,7 +299,7 @@ async fn destroy_book(ctx: Context) -> Response {
 
 // --- users ------------------------------------------------------------------------------
 
-fn user_href(route: &rmx::router::Route, user: &User) -> String {
+fn user_href(route: &rsmix::router::Route, user: &User) -> String {
     route.href([("userId", user.id.to_string())])
 }
 

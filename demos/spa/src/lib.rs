@@ -1,15 +1,15 @@
 //! The spa demo: a client-only app whose router runs in the browser.
 //!
-//! `routes`, `router` and the pages are ordinary rmx code; the same router could run on a
-//! server with `rmx-render-middleware`. In the page, [`start`] hands it to `rmx::spa::run`.
+//! `routes`, `router` and the pages are ordinary rsmix code; the same router could run on a
+//! server with `rsmix-render-middleware`. In the page, [`start`] hands it to `rsmix::spa::run`.
 
 use std::sync::LazyLock;
 
 use http::StatusCode;
-use rmx::{css, on, rsx, Children, Component, FrameEvent, Handle, Mixin, Node};
-use rmx::router::routes::{get, post, Route, RouteMap};
-use rmx::router::{action, Context, Next, Router};
-use rmx::spa::{Render, ResponseInit};
+use rsmix::{css, on, rsx, Children, Component, FrameEvent, Handle, Mixin, Node};
+use rsmix::router::routes::{get, post, Route, RouteMap};
+use rsmix::router::{action, Context, Next, Router};
+use rsmix::spa::{Render, ResponseInit};
 
 // app/routes.ts
 #[derive(RouteMap)]
@@ -47,13 +47,13 @@ fn log(message: &str) {
 }
 
 /// `[SPA] → GET /about` / `[SPA] ← 200 GET /about (701 ms)`
-async fn log_spa_requests(ctx: Context, next: Next) -> rmx::fetch::Response {
+async fn log_spa_requests(ctx: Context, next: Next) -> rsmix::fetch::Response {
     let (method, url) = (ctx.method().clone(), ctx.url().clone());
     let path = format!("{}{}", url.pathname(), url.search());
-    let start = rmx::browser::now();
+    let start = rsmix::browser::now();
     log(&format!("[SPA] \u{2192} {method} {path}"));
     let res = next.run(ctx).await;
-    let ms = (rmx::browser::now() - start).round();
+    let ms = (rsmix::browser::now() - start).round();
     log(&format!("[SPA] \u{2190} {} {method} {} ({ms} ms)", res.status().as_u16(), url.pathname()));
     res
 }
@@ -94,7 +94,7 @@ pub fn router() -> Router {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::spa::run(router(), rmx::spa::RunOptions { fallback: Some(rsx! { <LoadingIndicator/> }) });
+    rsmix::spa::run(router(), rsmix::spa::RunOptions { fallback: Some(rsx! { <LoadingIndicator/> }) });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -121,7 +121,7 @@ impl Component for HomePage {
             <Layout url={props.url.clone()}>
                 <article>
                     <p mix={eyebrow_style()}>"Home"</p>
-                    <h1 mix={title_style()}>"A client-only rmx app"</h1>
+                    <h1 mix={title_style()}>"A client-only rsmix app"</h1>
                     <p mix={body_style()}>
                         "Route handlers use " <code>"ctx.render()"</code> " while the SPA runtime preserves the router's "
                         <code>"Request"</code> "-to-" <code>"Response"</code> " contract."
@@ -288,7 +288,7 @@ impl Component for Layout {
         h.queue_task(|_, h| {
             let frame = h.frame();
             h.on_frame(&frame, FrameEvent::ReloadStart, |this, h| {
-                let loading = rmx::url::Url::parse(&h.frame().src()).map(|u| u.pathname().to_string()).unwrap_or_default();
+                let loading = rsmix::url::Url::parse(&h.frame().src()).map(|u| u.pathname().to_string()).unwrap_or_default();
                 let current = h.props().map(|p| p.url).unwrap_or_default();
                 this.show_loading = loading != current;
                 h.update();
@@ -312,11 +312,11 @@ impl Component for Layout {
             <div mix={app_shell_style()}>
                 <div mix={content_style()}>
                     <header mix={header_style()}>
-                        <a href={ROUTES.home.href(())} mix={brand_style()}>"rmx SPA"</a>
+                        <a href={ROUTES.home.href(())} mix={brand_style()}>"rsmix SPA"</a>
                         <nav aria-label="Main navigation" mix={nav_style()}>{nav.to_vec()}</nav>
                     </header>
                     <main aria-busy={if self.show_loading { "true" } else { "false" }} mix={main_style()}>
-                        {if self.show_loading { rsx! { <LoadingIndicator/> } } else { rmx::IntoNode::into_node(&props.children) }}
+                        {if self.show_loading { rsx! { <LoadingIndicator/> } } else { rsmix::IntoNode::into_node(&props.children) }}
                     </main>
                 </div>
             </div>
@@ -406,11 +406,11 @@ mod tests {
     }
 
     fn render(url: &str, method: &str, form: Option<Vec<(String, String)>>) -> (Option<String>, String) {
-        let request = rmx::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None, signal: rmx::Signal::never() };
-        let res = block_on(rmx::spa::resolve(&router(), request)).expect("route renders");
+        let request = rsmix::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None, signal: rsmix::Signal::never() };
+        let res = block_on(rsmix::spa::resolve(&router(), request)).expect("route renders");
         let html = match res.content {
-            rmx::FrameContent::Node(node) => rmx::render_to_string(&node),
-            rmx::FrameContent::Html(html) => html,
+            rsmix::FrameContent::Node(node) => rsmix::render_to_string(&node),
+            rsmix::FrameContent::Html(html) => html,
         };
         (res.url, html)
     }
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn routes_render_pages() {
         let (_, home) = render("http://localhost/", "GET", None);
-        assert!(home.contains("A client-only rmx app"));
+        assert!(home.contains("A client-only rsmix app"));
         assert!(home.contains(r#"aria-current="page""#));
         let (_, about) = render("http://localhost/about", "GET", None);
         assert!(about.contains("URLs in, rendered UI out"));

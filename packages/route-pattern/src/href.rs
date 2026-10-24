@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use rmx_url::{encode_component, SearchParams, Url};
+use rsmix_url::{encode_component, SearchParams, Url};
 
 use crate::{PartPattern, Protocol, RoutePattern, Search, Token, UrlPart};
 

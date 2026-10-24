@@ -5,12 +5,12 @@
 //! `readonly`), and style objects as strings.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{create_root, css, link, node_ref, on, render_to_string, rsx, unsafe_html, Children, Component, EventHandler, Handle, Node, Root};
+use rsmix::{create_root, css, link, node_ref, on, render_to_string, rsx, unsafe_html, Children, Component, EventHandler, Handle, Node, Root};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -265,7 +265,7 @@ struct Outer;
 
 impl Component for Outer {
     type Props = OuterProps;
-    rmx::client_entry!("Outer");
+    rsmix::client_entry!("Outer");
     fn setup(_: &OuterProps, _: &Handle<Self>) -> Self {
         Outer
     }
@@ -281,7 +281,7 @@ struct Inner;
 
 impl Component for Inner {
     type Props = NoProps;
-    rmx::client_entry!("Inner");
+    rsmix::client_entry!("Inner");
     fn setup(_: &NoProps, _: &Handle<Self>) -> Self {
         Inner
     }

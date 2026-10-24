@@ -1,6 +1,6 @@
 //! Port of data-schema's lazy.test.ts, one test per case.
 
-use rmx_data_schema::{self as s, BoxSchema, PathSegment, Schema, Value};
+use rsmix_data_schema::{self as s, BoxSchema, PathSegment, Schema, Value};
 
 #[derive(Debug, Default)]
 struct NodeOutput {

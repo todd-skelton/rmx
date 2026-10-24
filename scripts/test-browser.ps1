@@ -1,8 +1,8 @@
 # Run a crate's browser tests (tests/browser_*.rs, wasm-bindgen-test) in headless Chromium.
-# Usage: pwsh ./scripts/test-browser.ps1 [-Crate rmx-component] [-Test browser_errors] [-Filter test_name] [-NoDefaultFeatures]
+# Usage: pwsh ./scripts/test-browser.ps1 [-Crate rsmix-component] [-Test browser_errors] [-Filter test_name] [-NoDefaultFeatures]
 # -NoDefaultFeatures builds without the frames and navigation runtime (pair it with -Test browser_no_frames).
 # Env: CHROMEDRIVER (chromedriver.exe), CHROMIUM_PATH (chrome.exe matching the driver).
-param([string]$Crate = "rmx-component", [string]$Test, [string]$Filter, [switch]$NoDefaultFeatures)
+param([string]$Crate = "rsmix-component", [string]$Test, [string]$Filter, [switch]$NoDefaultFeatures)
 $ErrorActionPreference = "Stop"
 # Paths are relative to the repository root.
 Set-Location (Split-Path $PSScriptRoot -Parent)

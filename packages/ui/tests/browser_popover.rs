@@ -1,15 +1,15 @@
 //! Ports of Remix's `ui/src/popover.test.tsx`, with its `PopoverHarness`, layout mock and
 //! `showPopover` / `hidePopover` spies. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_popover`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_popover`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{on, rsx, Component, Handle, Node};
-use rmx_ui::anchor::{AnchorOptions, Placement};
-use rmx_ui::popover::{self, HideReason, HideRequest, SurfaceOptions};
+use rsmix::test::{render, RenderResult};
+use rsmix::{on, rsx, Component, Handle, Node};
+use rsmix_ui::anchor::{AnchorOptions, Placement};
+use rsmix_ui::popover::{self, HideReason, HideRequest, SurfaceOptions};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;

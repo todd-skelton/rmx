@@ -36,16 +36,16 @@ members = [
     "packages/auth",
     "packages/cli",
     "packages/component",
-    "packages/rmx",
+    "packages/rsmix",
     "packages/component/macros",
     "packages/ui",
     "packages/data-schema",
     "packages/terminal",
     "packages/lazy-file",
     "packages/fs",
-    "bench/rmx-app/app",
-    "bench/rmx-app/server",
-    "bench/rmx-app/client",
+    "bench/rsmix-app/app",
+    "bench/rsmix-app/server",
+    "bench/rsmix-app/client",
     "demos/frames",
     "demos/frame-navigation",
     "demos/lazy-frames",
@@ -67,53 +67,53 @@ version = "0.1.0"
 license = "MIT"
 
 [workspace.dependencies]
-rmx = { path = "packages/rmx" }
-# Only the rmx umbrella crate uses this; its features turn the browser runtime parts on.
-rmx-component = { path = "packages/component", default-features = false }
-rmx-macros = { path = "packages/component/macros" }
-rmx-url = { path = "packages/url" }
-rmx-terminal = { path = "packages/terminal" }
-rmx-route-pattern = { path = "packages/route-pattern" }
-rmx-fetch = { path = "packages/fetch" }
-rmx-response = { path = "packages/response" }
-rmx-fetch-router = { path = "packages/fetch-router" }
-rmx-node-fetch-server = { path = "packages/node-fetch-server" }
-rmx-mime = { path = "packages/mime" }
-rmx-auth-middleware = { path = "packages/auth-middleware" }
-rmx-compression-middleware = { path = "packages/compression-middleware" }
-rmx-cop-middleware = { path = "packages/cop-middleware" }
-rmx-cors-middleware = { path = "packages/cors-middleware" }
-rmx-csrf-middleware = { path = "packages/csrf-middleware" }
-rmx-form-data-middleware = { path = "packages/form-data-middleware" }
-rmx-live-reload-middleware = { path = "packages/live-reload-middleware" }
-rmx-logger-middleware = { path = "packages/logger-middleware" }
-rmx-method-override-middleware = { path = "packages/method-override-middleware" }
-rmx-session-middleware = { path = "packages/session-middleware" }
-rmx-static-middleware = { path = "packages/static-middleware" }
-rmx-render-middleware = { path = "packages/render-middleware" }
-rmx-spa = { path = "packages/spa" }
-rmx-assets = { path = "packages/assets" }
-rmx-crypto = { path = "packages/crypto" }
-rmx-session = { path = "packages/session" }
-rmx-file-storage = { path = "packages/file-storage" }
-rmx-tar-parser = { path = "packages/tar-parser" }
-rmx-multipart-parser = { path = "packages/multipart-parser" }
-rmx-html-template = { path = "packages/html-template" }
-rmx-headers = { path = "packages/headers" }
-rmx-fetch-proxy = { path = "packages/fetch-proxy" }
-rmx-auth = { path = "packages/auth" }
-rmx-cli = { path = "packages/cli" }
-rmx-cookie = { path = "packages/cookie" }
-rmx-ui = { path = "packages/ui" }
-rmx-data-schema = { path = "packages/data-schema" }
-rmx-lazy-file = { path = "packages/lazy-file" }
-rmx-fs = { path = "packages/fs" }
+rsmix = { path = "packages/rsmix" }
+# Only the rsmix umbrella crate uses this; its features turn the browser runtime parts on.
+rsmix-component = { path = "packages/component", default-features = false }
+rsmix-macros = { path = "packages/component/macros" }
+rsmix-url = { path = "packages/url" }
+rsmix-terminal = { path = "packages/terminal" }
+rsmix-route-pattern = { path = "packages/route-pattern" }
+rsmix-fetch = { path = "packages/fetch" }
+rsmix-response = { path = "packages/response" }
+rsmix-fetch-router = { path = "packages/fetch-router" }
+rsmix-node-fetch-server = { path = "packages/node-fetch-server" }
+rsmix-mime = { path = "packages/mime" }
+rsmix-auth-middleware = { path = "packages/auth-middleware" }
+rsmix-compression-middleware = { path = "packages/compression-middleware" }
+rsmix-cop-middleware = { path = "packages/cop-middleware" }
+rsmix-cors-middleware = { path = "packages/cors-middleware" }
+rsmix-csrf-middleware = { path = "packages/csrf-middleware" }
+rsmix-form-data-middleware = { path = "packages/form-data-middleware" }
+rsmix-live-reload-middleware = { path = "packages/live-reload-middleware" }
+rsmix-logger-middleware = { path = "packages/logger-middleware" }
+rsmix-method-override-middleware = { path = "packages/method-override-middleware" }
+rsmix-session-middleware = { path = "packages/session-middleware" }
+rsmix-static-middleware = { path = "packages/static-middleware" }
+rsmix-render-middleware = { path = "packages/render-middleware" }
+rsmix-spa = { path = "packages/spa" }
+rsmix-assets = { path = "packages/assets" }
+rsmix-crypto = { path = "packages/crypto" }
+rsmix-session = { path = "packages/session" }
+rsmix-file-storage = { path = "packages/file-storage" }
+rsmix-tar-parser = { path = "packages/tar-parser" }
+rsmix-multipart-parser = { path = "packages/multipart-parser" }
+rsmix-html-template = { path = "packages/html-template" }
+rsmix-headers = { path = "packages/headers" }
+rsmix-fetch-proxy = { path = "packages/fetch-proxy" }
+rsmix-auth = { path = "packages/auth" }
+rsmix-cli = { path = "packages/cli" }
+rsmix-cookie = { path = "packages/cookie" }
+rsmix-ui = { path = "packages/ui" }
+rsmix-data-schema = { path = "packages/data-schema" }
+rsmix-lazy-file = { path = "packages/lazy-file" }
+rsmix-fs = { path = "packages/fs" }
 bytes = "1"
 http = "1"
 http-body = "1"
 memchr = { version = "2.7", default-features = false, features = ["std"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "sync", "fs", "io-util"] }
-bench-app = { path = "bench/rmx-app/app" }
+bench-app = { path = "bench/rsmix-app/app" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Pinned to match the wasm-bindgen CLI used by scripts/build-client.ps1. No
@@ -125,19 +125,19 @@ wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 
 # PBKDF2 runs 100k HMAC rounds per password check; keep it fast in debug builds and tests.
-[profile.dev.package.rmx-crypto]
+[profile.dev.package.rsmix-crypto]
 opt-level = 3
 
 # Compression runs per request; unoptimized brotli is several times slower (quality 11 on a
 # 450 KB wasm file: about 10 s against 1.6 s). Its generic encoder is instantiated in
-# rmx-response (`compress`), so that crate is optimized too.
-[profile.dev.package.rmx-response]
+# rsmix-response (`compress`), so that crate is optimized too.
+[profile.dev.package.rsmix-response]
 opt-level = 3
 
-[profile.dev.package.rmx-compression-middleware]
+[profile.dev.package.rsmix-compression-middleware]
 opt-level = 3
 
-[profile.dev.package.rmx-static-middleware]
+[profile.dev.package.rsmix-static-middleware]
 opt-level = 3
 
 [profile.dev.package.brotli]

@@ -1,21 +1,21 @@
 //! Ports of the frames section of Remix's `stream.test.tsx`. Remix renders with a
-//! `resolveFrame` callback; rmx resolves frames through the router, so each case is a
+//! `resolveFrame` callback; rsmix resolves frames through the router, so each case is a
 //! small app whose frame routes stand in for the callback. A frame route that should stay
 //! pending waits on a [`Gate`] the test opens.
 //!
-//! Not ported: import map and module preload cases (rmx ships one wasm bundle), and
+//! Not ported: import map and module preload cases (rsmix ships one wasm bundle), and
 //! `onError` for frame failures (a failed frame response is used as the frame's content).
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::task::{Context as TaskContext, Waker};
 
-use rmx::__private::serde_json;
+use rsmix::__private::serde_json;
 
-use rmx::{css, rsx, Component, Frame, Handle, Node};
-use rmx_fetch::{block_on, Body, BodySender};
-use rmx_response as response;
-use rmx_fetch_router::{Context, Router};
+use rsmix::{css, rsx, Component, Frame, Handle, Node};
+use rsmix_fetch::{block_on, Body, BodySender};
+use rsmix_response as response;
+use rsmix_fetch_router::{Context, Router};
 
 use super::Render;
 
@@ -372,7 +372,7 @@ fn renders_descendant_frames_in_blocking_and_non_blocking_mixes() {
 }
 
 /// Remix repeats a rule in every frame template that uses it, because its client adopts
-/// rules per frame. rmx pins adopted server rules for the page, so the inlined outer frame's
+/// rules per frame. rsmix pins adopted server rules for the page, so the inlined outer frame's
 /// rule moves into the page head and the streamed inner template carries its own copy.
 #[test]
 fn repeats_selector_addressed_styles_in_each_frame_template_that_uses_them() {

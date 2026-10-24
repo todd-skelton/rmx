@@ -2,18 +2,18 @@ use std::sync::{LazyLock, Mutex};
 
 use frame_navigation_demo::*;
 use http::{header, HeaderValue, StatusCode};
-use rmx::{css, rsx, Component, Frame, Handle, Mixin, Node};
-use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::middleware::form_data::{form_data, FormDataExt};
-use rmx::middleware::logger::logger;
-use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::middleware::render::{Render, ResponseInit};
-use rmx::middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
+use rsmix::{css, rsx, Component, Frame, Handle, Mixin, Node};
+use rsmix::cookie::{Cookie, CookieProperties, SameSite};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::middleware::form_data::{form_data, FormDataExt};
+use rsmix::middleware::logger::logger;
+use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+use rsmix::middleware::render::{Render, ResponseInit};
+use rsmix::middleware::auth::{auth, require_auth as require_auth_for, scheme, scheme_fn, AuthExt, SchemeResult};
 use frame_navigation_demo::routes::{AccountActions, AuthActions, MainActions, SettingsActions, ROUTES};
-use rmx::router::routes::FormActions;
-use rmx::router::{action, Action, Context, Controller, Middleware, Router};
+use rsmix::router::routes::FormActions;
+use rsmix::router::{action, Action, Context, Controller, Middleware, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -22,7 +22,7 @@ pub fn main() {
     let addr = format!("{host}:{port}");
     println!("frame-navigation demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ fn validate(a: &Account) -> AccountErrors {
 
 pub fn router(public: &str) -> Router {
     let mut router = Router::new();
-    if std::env::var("RMX_LOG").is_ok() {
+    if std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
     router.use_middleware(static_files(
@@ -525,7 +525,7 @@ fn login_page() -> Node {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::fetch::{block_on, Body};
+    use rsmix::fetch::{block_on, Body};
 
     fn fetch(router: &Router, method: &str, path: &str, headers: &[(&str, &str)]) -> (u16, Option<String>, String) {
         let mut req = http::Request::builder().method(method).uri(format!("http://localhost{path}"));

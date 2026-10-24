@@ -357,7 +357,7 @@ fn on_navigate(event: JsValue) {
                         crate::report_error(message);
                         return Err(e);
                     }
-                    warn(&format!("rmx: navigation failed, loading the document: {message}"));
+                    warn(&format!("rsmix: navigation failed, loading the document: {message}"));
                     let _ = window().location().assign(&dest);
                 }
             }
@@ -418,7 +418,7 @@ fn intercept_navigation(
         if let Some(styles) = styles {
             styles.remove();
         }
-        warn(&format!("rmx: could not intercept navigation: {}", frames::js_error(&e)));
+        warn(&format!("rsmix: could not intercept navigation: {}", frames::js_error(&e)));
     }
 }
 

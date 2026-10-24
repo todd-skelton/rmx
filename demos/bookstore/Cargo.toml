@@ -1,6 +1,6 @@
 [package]
 name = "bookstore-demo"
-description = "The Remix 3 bookstore demo, in rmx: resource routes, method override, sessions, auth, uploads, frames and client entries"
+description = "The Remix 3 bookstore demo, in rsmix: resource routes, method override, sessions, auth, uploads, frames and client entries"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rmx.workspace = true
+rsmix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -1,14 +1,14 @@
 //! `packages/ui/src/demos/accordion.demo.tsx`: headless accordion behavior with minimal
 //! local styles.
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::accordion;
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::accordion;
 
 pub struct AccordionDemo;
 
 impl Component for AccordionDemo {
     type Props = ();
-    rmx::client_entry!("AccordionDemo");
+    rsmix::client_entry!("AccordionDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         AccordionDemo

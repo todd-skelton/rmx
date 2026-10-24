@@ -1,6 +1,6 @@
-# rmx vs Remix 3 benchmarks
+# rsmix vs Remix 3 benchmarks
 
-Compares rmx (`rmx-app/`: Rust, rmx's router, middleware and server, WASM islands) with
+Compares rsmix (`rsmix-app/`: Rust, rsmix's router, middleware and server, WASM islands) with
 Remix 3.1.0 (`remix-app/`, Node; 3.0.0 before 2026-10-24). Both apps serve the same routes with the same markup, data
 and islands:
 
@@ -19,7 +19,7 @@ Unless a section says otherwise, numbers were measured on one laptop: i9-10885H 
 ## How to Run
 
 ```powershell
-pwsh ../scripts/build-bench.ps1                  # rmx release server + wasm client
+pwsh ../scripts/build-bench.ps1                  # rsmix release server + wasm client
 # or: pwsh ../scripts/build-bench.ps1 -Nightly nightly   # client on nightly, immediate-abort panics
 cd remix-app; npm install; cd ..
 pwsh ./run.ps1 -Suffix -2026-10-22        # Windows: browser bench + server load tests
@@ -30,7 +30,7 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
    Chromium; since 2026-10-23 every operation alternates between the two apps on each
    iteration, so background load hits both alike), then runs oha for 15 s at 50 connections after a 3 s warm-up per path.
    Configs: Remix in 1 Node process, Remix as a Node cluster (one worker per logical core),
-   rmx on 1 thread, and rmx on all threads.
+   rsmix on 1 thread, and rsmix on all threads.
 2. `docker/run-docker.ps1` runs each server alone in a container pinned to the same CPUs
    (`-OneCpu`, default `2`; `-ManyCpus`, default `0-7`) with an 8 GB cap. oha runs in its own
    container on CPUs `8-15` and talks to the server over a Docker network, so Windows port
@@ -62,23 +62,23 @@ the laptop: the server on CPU 2 or CPUs 0-7, oha on CPUs 8-15. Results:
 | Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
 | --- | --- | --- | --- | --- | --- | --- |
 | Remix 3.1, 1 Node process | 1 | 2,292 | 693 | 82 | 76.1 / 341.2 MB | 1.4 s |
-| rmx, 1 thread | 1 | 21,454 | 6,075 | 803 | 0.8 / 2.5 MB | 0.6 s |
+| rsmix, 1 thread | 1 | 21,454 | 6,075 | 803 | 0.8 / 2.5 MB | 0.6 s |
 | Remix 3.1, cluster of 8 workers | 8 | 13,234 | 4,576 | 606 | 628.6 / 2890.8 MB | 1.3 s |
-| rmx, 8 threads | 8 | 121,956 | 31,433 | 5,046 | 1.1 / 8.5 MB | 0.6 s |
+| rsmix, 8 threads | 8 | 121,956 | 31,433 | 5,046 | 1.1 / 8.5 MB | 0.6 s |
 
-| rmx / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
+| rsmix / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
 | --- | --- | --- | --- |
 | 1 CPU | 9.4x | 8.8x | 9.8x |
 | 8 CPUs | 9.2x | 6.9x | 8.3x |
 
-p99 latency on 8 CPUs: Remix 14.72, 38.76 and 178.02 ms; rmx 0.75, 2.95 and 18.44 ms.
+p99 latency on 8 CPUs: Remix 14.72, 38.76 and 178.02 ms; rsmix 0.75, 2.95 and 18.44 ms.
 The droplet is far kinder to Node than the laptop was: Remix's single process served 3.4x
 the morning's laptop figure on `/` and its cluster scaled 5.8x on eight CPUs (3.7x on the
 laptop that morning), so the ratios are lower than the laptop's. This is the run to quote.
 
 ### What Each Change Was Worth Over HTTP
 
-Three rmx builds ran alternately, rmx only, two rounds each: before the router change
+Three rsmix builds ran alternately, rsmix only, two rounds each: before the router change
 (`bbdaed2`), with it (`b70fd12`), and with the static files change (`78a1168`).
 Requests per second:
 
@@ -113,14 +113,14 @@ Also found on the way: the Docker builds shared one cargo target cache, and `COP
 sources' timestamps, so an image built from an older commit could reuse newer artifacts.
 The afternoon's A/B images held the code they were meant to (checked this evening by the
 router's symbols in each binary), but the first rebuild of the profile image this evening
-held the router from before the change and was rebuilt before measuring. `rmx.Dockerfile`
+held the router from before the change and was rebuilt before measuring. `rsmix.Dockerfile`
 and `profile.Dockerfile` now touch the copied sources before building, which the droplet
 builds used.
 
 ## Earlier Run (2026-10-24, Afternoon): Router Without Per-Step Boxes
 
 Corten (Todd's Rust web framework on axum) cut about 4% of instructions per request by not boxing the
-rest of the stack again in every middleware call. rmx's router did the same thing:
+rest of the stack again in every middleware call. rsmix's router did the same thing:
 `Next::run` boxed its own future on every step, on top of the middleware's future, and
 each chain allocated an `Arc` for its endpoint. Since commit `0063a2c`, `Next::run` returns a
 `NextFuture` (a plain state machine that races the abort signal itself), and the endpoint is
@@ -128,7 +128,7 @@ stored by value. Each step now allocates only the future of the middleware it ca
 
 ### In Process (Exact)
 
-`packages/rmx/examples/router_profile.rs` sends `GET /` through four routers that answer
+`packages/rsmix/examples/router_profile.rs` sends `GET /` through four routers that answer
 with a short text body. Instructions per request come from callgrind in a Linux container
 (`bench/docker/profile.Dockerfile` and `profile-router.sh`: 5,000 requests minus 1,000,
 divided by 4,000, so setup drops out). Allocations per request come from a counting
@@ -151,24 +151,24 @@ largest router cost on `/`. Not changed yet.
 ### Server, Linux Containers, Against Remix 3.1
 
 Same settings as the morning run. The Windows host was 70 to 100% busy for the whole run
-(sampled before and during), so every number here is lower than in the morning, rmx's more
+(sampled before and during), so every number here is lower than in the morning, rsmix's more
 than Remix's. Results: `results/docker-server-2026-10-24-nextfuture.json` and the log.
 
 | Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
 | --- | --- | --- | --- | --- | --- | --- |
 | Remix 3.1, 1 Node process | 1 | 508 | 232 | 32 | 92.3 / 350.7 MB | 8.3 s |
-| rmx, 1 thread | 1 | 3,587 | 1,355 | 185 | 4 / 5.8 MB | 5.7 s |
+| rsmix, 1 thread | 1 | 3,587 | 1,355 | 185 | 4 / 5.8 MB | 5.7 s |
 | Remix 3.1, cluster of 8 workers | 8 | 1,118 | 576 | 136 | 550.3 / 2264.1 MB | 16 s |
-| rmx, 8 threads | 8 | 20,051 | 6,311 | 1,392 | 3.1 / 10.9 MB | 3 s |
+| rsmix, 8 threads | 8 | 20,051 | 6,311 | 1,392 | 3.1 / 10.9 MB | 3 s |
 
-| rmx / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
+| rsmix / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
 | --- | --- | --- | --- |
 | 1 CPU | 7x | 6x | 6x |
 | 8 CPUs | 18x | 11x | 10x |
 
 To check whether the router change shows up over HTTP, the bench server was also built from
-the commit before it (`bbdaed2`) and the two images ran alternately, rmx only
-(`run-docker.ps1 -Only rmx -RmxImage ...`; `results/docker-router-ab-2026-10-24-*.json`).
+the commit before it (`bbdaed2`) and the two images ran alternately, rsmix only
+(`run-docker.ps1 -Only rsmix -RsmixImage ...`; `results/docker-router-ab-2026-10-24-*.json`).
 Requests per second:
 
 | Config | Path | Before, round 1 | After, round 1 | Before, round 2 | After, round 2 |
@@ -183,11 +183,11 @@ Requests per second:
 The first run was the fastest of the four and the other three overlap: on this host the
 router change is inside the run-to-run spread over HTTP, as Corten found for its own. The
 in-process counts above are the result; the morning run remains the better measure of
-rmx against Remix 3.1 on a quieter machine.
+rsmix against Remix 3.1 on a quieter machine.
 
 ## Earlier Run (2026-10-24, Morning): Against Remix 3.1
 
-`remix-app` now pins `remix` 3.1.0 (released 2026-10-23), and rmx carries the 3.1 changes
+`remix-app` now pins `remix` 3.1.0 (released 2026-10-23), and rsmix carries the 3.1 changes
 that apply to it: the header, range and tar fixes, streaming uploads (`/future`), keyed
 Fragments in client entry props and prefetching (decision record section 15). Same laptop;
 Node v24.22.1 on the host and v24.19.0 in the container, Rust 1.99.1, nightly 1.101.0
@@ -202,11 +202,11 @@ and the matching logs. The container was checked to run `remix` 3.1.0.
 | Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
 | --- | --- | --- | --- | --- | --- | --- |
 | Remix 3.1, 1 Node process | 1 | 666 | 176 | 24 | 90.9 / 347.4 MB | 8.2 s |
-| rmx, 1 thread | 1 | 7,757 | 2,800 | 375 | 1 / 3.1 MB | 3.4 s |
+| rsmix, 1 thread | 1 | 7,757 | 2,800 | 375 | 1 / 3.1 MB | 3.4 s |
 | Remix 3.1, cluster of 8 workers | 8 | 2,490 | 869 | 156 | 503.8 / 2272.3 MB | 5.6 s |
-| rmx, 8 threads | 8 | 30,681 | 7,259 | 1,367 | 3.2 / 9.8 MB | 5.8 s |
+| rsmix, 8 threads | 8 | 30,681 | 7,259 | 1,367 | 3.2 / 9.8 MB | 5.8 s |
 
-| rmx / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
+| rsmix / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
 | --- | --- | --- | --- |
 | 1 CPU | 12x | 16x | 16x |
 | 8 CPUs | 12x | 8x | 9x |
@@ -214,8 +214,8 @@ and the matching logs. The container was checked to run `remix` 3.1.0.
 Loaded memory is the highest of the three paths. Remix 3.1's single process serves `/` at
 2.9x the 2026-10-22 figure for 3.0 (666 against 233 req/s) and its cluster at 2.5x, which
 narrows the gap on the cheap page; the SSR paths moved less (176 against 195 and 869
-against 903 on `/ssr/100`). rmx on 8 threads came in below its 2026-10-22 run (30,681
-against 42,881 req/s on `/`) while rmx on 1 thread came in above it (7,757 against
+against 903 on `/ssr/100`). rsmix on 8 threads came in below its 2026-10-22 run (30,681
+against 42,881 req/s on `/`) while rsmix on 1 thread came in above it (7,757 against
 3,623), so read the cross-run numbers loosely; the ratios within this run are the result.
 
 ### Server, Windows Host
@@ -223,17 +223,17 @@ against 42,881 req/s on `/`) while rmx on 1 thread came in above it (7,757 again
 | Config | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory |
 | --- | --- | --- | --- | --- |
 | Remix 3.1, 1 Node process | 1,258 | 398 | 54 | 111.9 / 364.6 MB |
-| rmx, 1 thread | 1,540 | 1,311 | 261 | 17.5 / 18.4 MB |
+| rsmix, 1 thread | 1,540 | 1,311 | 261 | 17.5 / 18.4 MB |
 | Remix 3.1, cluster of 16 workers | 2,195 | 1,423 | 390 | 1676.2 / 4961.3 MB |
-| rmx, 16 threads | 3,687 | 11,640 | 2,155 | 18 / 22.6 MB |
+| rsmix, 16 threads | 3,687 | 11,640 | 2,155 | 18 / 22.6 MB |
 
 ### Browser (Chromium, Windows Host)
 
 Median commit ms (click to DOM updated), operations interleaved between the apps. The
-stable and nightly rmx clients ran in separate runs, each against Remix 3.1, both with
+stable and nightly rsmix clients ran in separate runs, each against Remix 3.1, both with
 frames and navigation compiled out.
 
-| Operation | Remix 3.1 | rmx stable | Remix 3.1 | rmx nightly |
+| Operation | Remix 3.1 | rsmix stable | Remix 3.1 | rsmix nightly |
 | --- | --- | --- | --- | --- |
 | create 1k | 20.5 | **15.3** | 28.6 | **20.3** |
 | replace 1k | 31.9 | **18.7** | 40.8 | **29.3** |
@@ -246,8 +246,8 @@ frames and navigation compiled out.
 | clear 1k | 13.9 | **10.3** | 11.4 | **8.5** |
 | Page hydrated (ms after navigation) | 154.1 | **71.9** | 182.45 | **94.3** |
 
-rmx committed first on every operation in both runs. To the next painted frame the two
-were within a few ms on most rows; rmx was later on `create 1k` (88.4 vs 86.7 ms) and
+rsmix committed first on every operation in both runs. To the next painted frame the two
+were within a few ms on most rows; rsmix was later on `create 1k` (88.4 vs 86.7 ms) and
 `select row` (19.6 vs 18.8 and 24.8 vs 18.4 ms). Page errors were 0 for both.
 
 ### Client Size
@@ -256,16 +256,16 @@ were within a few ms on most rows; rmx was later on `create 1k` (88.4 vs 86.7 ms
 | --- | --- | --- | --- | --- | --- |
 | Remix 3.1 | 43 | 122.2 KB | **46.4 KB** | **41.1 KB** | 1x |
 | Remix 3.0 (2026-10-23) | 41 | 112.3 KB | 42.5 KB | 37.7 KB | 0.9x |
-| rmx stable, no frames or navigation | 3 | 244.7 KB | 99.7 KB | 84.9 KB | 2.1x |
-| rmx nightly, no frames or navigation | 3 | 211.8 KB | 87.2 KB | 75.2 KB | 1.9x |
+| rsmix stable, no frames or navigation | 3 | 244.7 KB | 99.7 KB | 84.9 KB | 2.1x |
+| rsmix nightly, no frames or navigation | 3 | 211.8 KB | 87.2 KB | 75.2 KB | 1.9x |
 
 Remix grew by 3.9 KB gzip, partly because `run()` now loads `prefetch.js` on every page.
-rmx's prefetching sits behind the `navigation` feature, so the bench client did not grow;
-the gap is 40.8 KB on nightly, down from 44.7 KB, without rmx shrinking.
+rsmix's prefetching sits behind the `navigation` feature, so the bench client did not grow;
+the gap is 40.8 KB on nightly, down from 44.7 KB, without rsmix shrinking.
 
 ### Streaming Uploads
 
-`cargo run --release -p rmx-fetch --example upload_bench`, median of 7 runs, stable
+`cargo run --release -p rsmix-fetch --example upload_bench`, median of 7 runs, stable
 `FormData::parse` against `form_data::future`, in process (no HTTP):
 
 | Request | Total time | Time to handler | Peak heap growth |
@@ -279,7 +279,7 @@ for a large upload); they were not rerun here, so they are not a like-for-like c
 
 ## Earlier Run (2026-10-23, Afternoon): Frames and Navigation Compiled Out
 
-The bench client now depends on rmx with `default-features = false`, which leaves the
+The bench client now depends on rsmix with `default-features = false`, which leaves the
 browser half of frames, soft navigation and the server HTML differ out of the wasm
 (decision record section 14). The bench page only hydrates two client entries, so it
 behaves the same; the server keeps the defaults. Raw results:
@@ -291,10 +291,10 @@ the matching `run-*.log` files.
 | Build | `.wasm` raw | Total gzip | Total brotli | Gzip vs Remix |
 | --- | --- | --- | --- | --- |
 | Remix 3 (41 JS files) | | **42.5 KB** | **37.7 KB** | 1x |
-| rmx stable, all features (morning run) | 317.3 KiB | 150.4 KB | 127.1 KB | 3.5x |
-| rmx nightly, all features (morning run) | 273.7 KiB | 133.6 KB | 113.5 KB | 3.1x |
-| rmx stable, no frames or navigation | 205.3 KiB | 99.7 KB | 85 KB | 2.3x |
-| rmx nightly, no frames or navigation | 174.6 KiB | 87.2 KB | 75.3 KB | 2.1x |
+| rsmix stable, all features (morning run) | 317.3 KiB | 150.4 KB | 127.1 KB | 3.5x |
+| rsmix nightly, all features (morning run) | 273.7 KiB | 133.6 KB | 113.5 KB | 3.1x |
+| rsmix stable, no frames or navigation | 205.3 KiB | 99.7 KB | 85 KB | 2.3x |
+| rsmix nightly, no frames or navigation | 174.6 KiB | 87.2 KB | 75.3 KB | 2.1x |
 
 Compiling the features out saves 50.7 KB gzip on stable and 46.4 KB on nightly. The
 nightly client is still 44.7 KB above Remix. What is left, measured with twiggy on the
@@ -315,7 +315,7 @@ the same cut: its `run()` starts frames and the navigation listener on every pag
 Median commit ms (click to DOM updated), operations interleaved between the apps. The two
 runs had different background load, so compare within a pair of columns only.
 
-| Operation | Remix 3 | rmx stable | Remix 3 | rmx nightly |
+| Operation | Remix 3 | rsmix stable | Remix 3 | rsmix nightly |
 | --- | --- | --- | --- | --- |
 | create 1k | 13.6 | **12** | 25.1 | **20.9** |
 | replace 1k | 20.8 | **19.1** | 32.5 | **31.3** |
@@ -331,7 +331,7 @@ runs had different background load, so compare within a pair of columns only.
 Leaving the features out did not change list speed. An interleaved A/B of the all-features
 and no-features clients (stable, one browser, 15 to 25 iterations, three rounds) kept every
 operation within noise; create 10k ranged from 0.93x to 1.10x across the rounds. `clear
-1k` still reaches the next painted frame later on rmx (13.6 vs 11.8 ms and 11.8 vs
+1k` still reaches the next painted frame later on rsmix (13.6 vs 11.8 ms and 11.8 vs
 7.3 ms).
 
 ## Earlier Run (2026-10-23, Morning): Faster Lists, Slightly Smaller Client
@@ -343,7 +343,7 @@ versions as below, nightly rustc 1.101.0 (2026-10-22). Other programs kept the h
 (roughly 30 to 90% CPU, sampled between runs), which is why both apps are slower in the
 stable run than in the nightly one; compare columns within a run, not across runs.
 
-What changed in rmx (commit `607bc43`):
+What changed in rsmix (commit `607bc43`):
 
 1. The hot DOM calls go through one small JS object (`packages/component/src/dom/ops.rs`)
    instead of one web-sys call each: an element or text node is created and appended in
@@ -359,7 +359,7 @@ What changed in rmx (commit `607bc43`):
 
 Median commit ms (click to DOM updated), 15 iterations (5 for create 10k):
 
-| Operation | Remix 3 | rmx stable | Remix 3 | rmx nightly | rmx on 2026-10-22 vs Remix |
+| Operation | Remix 3 | rsmix stable | Remix 3 | rsmix nightly | rsmix on 2026-10-22 vs Remix |
 | --- | --- | --- | --- | --- | --- |
 | create 1k | 25.1 | **22.5** | 17.5 | **14.6** | 18.2 vs 20.7 |
 | replace 1k | 42.3 | **39.3** | 20.6 | **20** | 26.3 vs 19.5 |
@@ -371,11 +371,11 @@ Median commit ms (click to DOM updated), 15 iterations (5 for create 10k):
 | remove row | 11.7 | **7.4** | 7.3 | **5.7** | 3.3 vs 8.5 |
 | clear 1k | **6.6** | 6.8 | 8.7 | **7.7** | 5.3 vs 7.7 |
 
-rmx now commits faster than Remix on replace, create 10k and append, the three it lost
+rsmix now commits faster than Remix on replace, create 10k and append, the three it lost
 before. The margins on create 1k, replace 1k, create 10k and append 1k are small (3 to 17%),
 and in the nightly run the next painted frame for create 1k and replace 1k was still a few
-ms later for rmx (78.4 vs 74.9 ms and 73.4 vs 70.3 ms), so call those a tie on screen.
-`clear 1k` reaches the next frame later on rmx in both runs (16.9 vs 12 and 21.3 vs 12.1
+ms later for rsmix (78.4 vs 74.9 ms and 73.4 vs 70.3 ms), so call those a tie on screen.
+`clear 1k` reaches the next frame later on rsmix in both runs (16.9 vs 12 and 21.3 vs 12.1
 ms) with the same commit time; that is not explained yet.
 
 An interleaved A/B of the old and new runtime (stable builds, one browser, 20 iterations, run
@@ -387,9 +387,9 @@ before the commit) put the new one at 0.80x the old on create 10k, 0.64x on appe
 | Build | `.wasm` raw | Total gzip | Total brotli |
 | --- | --- | --- | --- |
 | Remix 3 (41 JS files) | | 42.5 KB | 37.7 KB |
-| rmx on 2026-10-22 | 320.8 KiB | 151.4 KB | 127.6 KB |
-| rmx stable, this run | 317.3 KiB | 150.4 KB | 127.1 KB |
-| rmx nightly, immediate-abort panics | 273.7 KiB | 133.6 KB | 113.5 KB |
+| rsmix on 2026-10-22 | 320.8 KiB | 151.4 KB | 127.6 KB |
+| rsmix stable, this run | 317.3 KiB | 150.4 KB | 127.1 KB |
+| rsmix nightly, immediate-abort panics | 273.7 KiB | 133.6 KB | 113.5 KB |
 
 The size gap is narrowed, not closed: about 3.1x Remix with the nightly build, 3.5x on
 stable. Where the bytes go, measured with twiggy on the nightly build before `wasm-opt`
@@ -418,7 +418,7 @@ console message and `App::on_error` does not hear about it.
 
 ### Load
 
-| Metric | Remix 3 | rmx stable | Remix 3 | rmx nightly |
+| Metric | Remix 3 | rsmix stable | Remix 3 | rsmix nightly |
 | --- | --- | --- | --- | --- |
 | Hydrated at | 241.8 ms | 105.85 ms | 138.15 ms | 64.4 ms |
 | DOMContentLoaded | 228.95 ms | 73.45 ms | 129.55 ms | 45.8 ms |
@@ -427,21 +427,21 @@ console message and `App::on_error` does not hear about it.
 Both counters hydrated and incremented (5 to 6), with no page errors on either side, in
 both runs.
 
-## Previous Run (2026-10-22): rmx on Its Own Stack
+## Previous Run (2026-10-22): rsmix on Its Own Stack
 
-Until this run, the rmx bench server was an axum app that used rmx only to render. It now
-runs on rmx itself, mirroring `remix-app/app/router.tsx` line for line: the static
+Until this run, the rsmix bench server was an axum app that used rsmix only to render. It now
+runs on rsmix itself, mirroring `remix-app/app/router.tsx` line for line: the static
 middleware first, then form data, then routes that call `ctx.render`, served by
-`rmx::node_fetch_server`. The HTML is the same as the axum server's apart from the
+`rsmix::node_fetch_server`. The HTML is the same as the axum server's apart from the
 hydration marker ids (checked for `/`, `/ssr/100`, `/client` and `/app.css`), and the
 form POST still redirects with 303. An A/B on the Windows host put the two servers within
 about 15% of each other (8 s at 50 connections, measured):
 
-| rmx server | 1 thread, `/` | 1 thread, `/ssr/100` | 16 threads, `/` |
+| rsmix server | 1 thread, `/` | 1 thread, `/ssr/100` | 16 threads, `/` |
 | --- | --- | --- | --- |
 | axum (earlier runs) | 6,367 req/s | 1,257 req/s | 34,394 req/s |
-| rmx stack, no static middleware | 6,047 req/s | 1,457 req/s | 34,879 req/s |
-| rmx stack (this run) | 5,448 req/s | 1,394 req/s | 32,436 req/s |
+| rsmix stack, no static middleware | 6,047 req/s | 1,457 req/s | 34,879 req/s |
+| rsmix stack (this run) | 5,448 req/s | 1,394 req/s | 32,436 req/s |
 
 Remix 3.0.0 on Node v24.22.1, Rust 1.99.1, Chromium 148.0.7778.96, same laptop as below. Results:
 `results/docker-server-2026-10-22.json`, `results/server-2026-10-22.json` and
@@ -455,11 +455,11 @@ container on other CPUs.
 | Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
 | --- | --- | --- | --- | --- | --- | --- |
 | Remix, 1 Node process | 1 | 233 | 195 | 31 | 83.9 / 340.4 MB | 5.3 s |
-| rmx, 1 thread | 1 | 3,623 | 2,407 | 443 | 3 / 5.1 MB | 1.4 s |
+| rsmix, 1 thread | 1 | 3,623 | 2,407 | 443 | 3 / 5.1 MB | 1.4 s |
 | Remix, cluster of 8 workers | 8 | 999 | 903 | 109 | 528.7 / 2207.7 MB | 3.4 s |
-| rmx, 8 threads | 8 | 42,881 | 15,601 | 2,165 | 1.1 / 9.1 MB | 1.7 s |
+| rsmix, 8 threads | 8 | 42,881 | 15,601 | 2,165 | 1.1 / 9.1 MB | 1.7 s |
 
-| rmx / Remix | `/` | `/ssr/100` | `/ssr/1000` |
+| rsmix / Remix | `/` | `/ssr/100` | `/ssr/1000` |
 | --- | --- | --- | --- |
 | 1 CPU | 16x | 12x | 14x |
 | 8 CPUs | 43x | 17x | 20x |
@@ -470,7 +470,7 @@ first load.
 ### Server, Windows Host
 
 Same settings, servers unpinned. Other applications kept the CPU about 44% busy during this
-run (measured just before it), so treat these as rough: rmx on 1 thread served `/` at
+run (measured just before it), so treat these as rough: rsmix on 1 thread served `/` at
 1,226 req/s here and at 5,448 req/s in the A/B above, minutes later. The Docker rows are
 the ones to compare.
 
@@ -478,22 +478,22 @@ the ones to compare.
 | --- | --- | --- | --- | --- |
 | Remix, 1 Node process | 182 | 246 | 38 | 113.2 MB |
 | Remix, cluster of 16 workers | 545 | 746 | 111 | 1710.8 MB |
-| rmx, 1 thread | 1,226 | 646 | 140 | 17.6 MB |
-| rmx, 16 threads | 4,034 | 11,214 | 2,006 | 18 MB |
+| rsmix, 1 thread | 1,226 | 646 | 140 | 17.6 MB |
+| rsmix, 16 threads | 4,034 | 11,214 | 2,006 | 18 MB |
 
 ### Browser (Chromium, Windows Host)
 
 Medians over 10 fresh page loads and 15 iterations per operation; commit is click to DOM
 updated, frame adds the next paint. One run.
 
-| Metric | Remix 3 | rmx |
+| Metric | Remix 3 | rsmix |
 | --- | --- | --- |
 | Client assets (gzip) | 42.5 KB in 41 files | 151.4 KB in 3 files (320.8 KiB raw `.wasm`) |
 | Hydrated at | 136.4 ms | 63.45 ms |
 | DOMContentLoaded | 127.9 ms | 43.95 ms |
 | JS heap after run | 4.2 MB | 2.7 MB (excludes WASM memory) |
 
-| Operation | Remix 3 commit / frame ms | rmx commit / frame ms |
+| Operation | Remix 3 commit / frame ms | rsmix commit / frame ms |
 | --- | --- | --- |
 | create 1k | 20.7 / 87.7 | 18.2 / 66.4 |
 | replace 1k | 19.5 / 68 | 26.3 / 71.6 |
@@ -509,22 +509,22 @@ Both counters hydrated and incremented (5 to 6), with no page errors on either s
 
 ## Earlier Runs (2026-10-19 and 2026-10-20, axum Server)
 
-The rest of this file is the first two rounds, when the rmx server was axum with rmx
-rendering. Their client numbers still describe rmx's runtime at the time.
+The rest of this file is the first two rounds, when the rsmix server was axum with rsmix
+rendering. Their client numbers still describe rsmix's runtime at the time.
 
 ### Browser (Chromium, Windows host)
 
 Load metrics are medians over 10 fresh page loads; operations are medians over 15 iterations.
 "Commit" is click to DOM updated; "frame" adds the next paint.
 
-| Metric | Remix 3 | rmx |
+| Metric | Remix 3 | rsmix |
 | --- | --- | --- |
 | Client assets (gzip) | 42.5 KB in 41 files | 63.9 KB in 3 files (59.4 KB is the `.wasm`) |
 | Hydrated at (run 1 / run 2) | 192.6 / 230.7 ms | 83.2 / 82.9 ms |
 | DOMContentLoaded (run 1 / run 2) | 181.9 / 218.4 ms | 64.4 / 66.3 ms |
 | JS heap after run (run 1 / run 2) | 7.4 / 26.7 MB | 2.6 / 6.0 MB (excludes WASM memory) |
 
-| Operation, commit ms (run 1 / run 2) | Remix 3 | rmx |
+| Operation, commit ms (run 1 / run 2) | Remix 3 | rsmix |
 | --- | --- | --- |
 | create 1k rows | 19.3 / 26.9 | 33.6 / 36.1 |
 | replace 1k rows | 28.5 / 37.4 | 47.2 / 45.4 |
@@ -541,18 +541,18 @@ Both counters hydrated and incremented (5 to 6) with no page errors in either ru
 ### Re-run After the Parity Work (2026-10-20)
 
 One run on the same machine and Chromium, same method (`results/browser-2026-10-20.json`;
-`results/browser.json` keeps the 2026-10-19 run). The rmx runtime now carries frames,
+`results/browser.json` keeps the 2026-10-19 run). The rsmix runtime now carries frames,
 Navigation API soft navigation and the rest of the parity work, so its
 client bundle about doubled. Single runs vary by 30% or more.
 
-| Metric | Remix 3 | rmx |
+| Metric | Remix 3 | rsmix |
 | --- | --- | --- |
 | Client assets (gzip) | 42.5 KB in 41 files | 124.8 KB in 3 files (262.4 KiB raw `.wasm`) |
 | Hydrated at | 256 ms | 108 ms |
 | DOMContentLoaded | 243.6 ms | 76.6 ms |
 | JS heap after run | 7.2 MB | 4.4 MB (excludes WASM memory) |
 
-| Operation | Remix 3 commit / frame ms | rmx commit / frame ms |
+| Operation | Remix 3 commit / frame ms | rsmix commit / frame ms |
 | --- | --- | --- |
 | create 1k rows | 28.7 / 118.5 | 39.4 / 131.0 |
 | replace 1k rows | 39.3 / 136.4 | 52.4 / 150.6 |
@@ -571,15 +571,15 @@ Requests per second, 15 s at 50 connections. Docker run 3 (`results/docker-serve
 | Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory |
 | --- | --- | --- | --- | --- | --- |
 | Remix, 1 Node process | 1 | 164 | 118 | 19 | 74 / 306 MB |
-| rmx, 1 thread | 1 | 7,057 | 1,715 | 295 | 0.7 / 2.4 MB |
+| rsmix, 1 thread | 1 | 7,057 | 1,715 | 295 | 0.7 / 2.4 MB |
 | Remix, cluster of 8 workers | 8 | 744 | 637 | 75 | 601 / 2,225 MB |
-| rmx, 8 threads | 8 | 30,609 | 11,772 | 2,021 | 1.2 / 6.8 MB |
+| rsmix, 8 threads | 8 | 30,609 | 11,772 | 2,021 | 1.2 / 6.8 MB |
 
-Absolute throughput moved a lot between identical Docker runs (rmx 1 thread on `/`: 4,904,
+Absolute throughput moved a lot between identical Docker runs (rsmix 1 thread on `/`: 4,904,
 11,170 and 7,057 req/s across three runs; Remix 1 process: 109, 322 and 164). The ratios held
 up better:
 
-| rmx / Remix ratio | `/` | `/ssr/100` | `/ssr/1000` |
+| rsmix / Remix ratio | `/` | `/ssr/100` | `/ssr/1000` |
 | --- | --- | --- | --- |
 | 1 CPU, Docker runs 1 / 2 / 3 | 45x / 35x / 43x | 11x / 19x / 15x | 10x / 18x / 16x |
 | 8 CPUs, Docker runs 1 / 3 | 37x / 41x | 12x / 18x | 19x / 27x |
@@ -596,8 +596,8 @@ Run 2 (`results/server.json`), same oha settings, servers unpinned.
 | --- | --- | --- | --- | --- |
 | Remix, 1 Node process | 147 | 274 | 33 | 110 MB |
 | Remix, cluster of 16 workers | 698 | 1,189 | 185 | 1,657 MB |
-| rmx, 1 thread | 4,866 | 1,711 | 277 | 16 MB |
-| rmx, 16 threads | 37,385 | 16,366 | 2,627 | 17 MB |
+| rsmix, 1 thread | 4,866 | 1,711 | 277 | 16 MB |
+| rsmix, 16 threads | 37,385 | 16,366 | 2,627 | 17 MB |
 
 Windows memory is the working set of the server and its child processes, which includes the
 console host Windows attaches to each server (about 10 MB, estimated from the change between
@@ -624,7 +624,7 @@ In-process timings from `remix-app/diagnose.tsx`, ms per call, NODE_ENV=producti
 2. Rendering itself is the other cost. Pinning Node to one CPU roughly doubles render time
    (renderToString n=1000: 84 ms on CPU 0, 56 ms on CPU 3, 65 ms with all 16 CPUs available
    in a container, 36 to 41 ms on Windows), likely because garbage collection and JIT threads
-   must share that CPU. rmx has no garbage collector or JIT, so the 1-CPU Docker rows are the strict
+   must share that CPU. rsmix has no garbage collector or JIT, so the 1-CPU Docker rows are the strict
    "same hardware" comparison and the Windows rows are the more forgiving one for Node.
 
 ## Caveats
@@ -634,10 +634,10 @@ In-process timings from `remix-app/diagnose.tsx`, ms per call, NODE_ENV=producti
 2. Docker Desktop's VM shares the laptop with Windows and other running containers; vCPUs are
    not pinned to physical cores, so CPU pinning is only approximate.
 3. The browser bench runs on the Windows host only; containers do not change client results.
-4. The JS heap number excludes WASM linear memory, so it understates rmx's client memory.
+4. The JS heap number excludes WASM linear memory, so it understates rsmix's client memory.
 5. This compares a proof of concept against a released framework. The benchmark pages use no
-   frames, and rmx has no import maps, asset fingerprinting or module graph, which cost Remix
+   frames, and rsmix has no import maps, asset fingerprinting or module graph, which cost Remix
    time on every request with a client entry.
 6. Remix runs TypeScript through `remix/node-tsx`, which transpiles on first load; startup
-   numbers (3 to 11 s for Remix, 0.5 to 4 s for rmx in these runs) include that. Docker startup
+   numbers (3 to 11 s for Remix, 0.5 to 4 s for rsmix in these runs) include that. Docker startup
    also includes starting the container and the probe container, so it reads higher than Windows.

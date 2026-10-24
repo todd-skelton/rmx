@@ -2,7 +2,7 @@
 //! header (`None` when the request has none) and prints back with `Display`.
 //!
 //! ```
-//! use rmx_headers::{AcceptLanguage, Vary};
+//! use rsmix_headers::{AcceptLanguage, Vary};
 //!
 //! let accept = AcceptLanguage::parse(Some("fr-CA,fr;q=0.9,en;q=0.8"));
 //! assert_eq!(accept.preferred(&["en", "es", "fr"]), Some("fr"));

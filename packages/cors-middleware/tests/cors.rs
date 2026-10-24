@@ -3,10 +3,10 @@
 
 use http::header::VARY;
 use http::{HeaderValue, StatusCode};
-use rmx_fetch::{block_on, Body, Response};
-use rmx_headers::Vary;
-use rmx_cors_middleware::{cors, Cors};
-use rmx_fetch_router::{Context, Router};
+use rsmix_fetch::{block_on, Body, Response};
+use rsmix_headers::Vary;
+use rsmix_cors_middleware::{cors, Cors};
+use rsmix_fetch_router::{Context, Router};
 
 fn router(cors: Cors) -> Router {
     let mut router = Router::new().with(cors);

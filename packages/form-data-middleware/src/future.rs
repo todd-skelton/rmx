@@ -1,29 +1,29 @@
 //! The `formData()` middleware with streaming uploads (Remix's `form-data-middleware/future`).
 //!
-//! The same middleware as the crate root, parsing with [`rmx_fetch::form_data::future`]: the
+//! The same middleware as the crate root, parsing with [`rsmix_fetch::form_data::future`]: the
 //! upload handler gets each [FileUpload] as soon as its headers arrive and reads its content
 //! from the request as it streams in, so large uploads never sit in memory. Without a
 //! handler, files are read into the form as they are.
 //!
 //! ```
-//! use rmx_form_data_middleware::future::{form_data, FileUpload};
+//! use rsmix_form_data_middleware::future::{form_data, FileUpload};
 //!
 //! let parser = form_data().upload_handler(|mut upload: FileUpload| async move {
 //!     let mut size = 0;
 //!     while let Some(chunk) = upload.chunk().await {
 //!         size += chunk?.len(); // write the chunk to storage here
 //!     }
-//!     Ok::<_, rmx_fetch::FormDataError>(format!("/uploads/{}?size={size}", upload.field_name))
+//!     Ok::<_, rsmix_fetch::FormDataError>(format!("/uploads/{}?size={size}", upload.field_name))
 //! });
 //! ```
 
 use std::future::Future;
 use std::sync::Arc;
 
-use rmx_fetch::form_data::future::{parse, parse_with};
-pub use rmx_fetch::form_data::future::{FileUpload, UploadOutput, UploadValue};
-use rmx_fetch::{BoxError, FormLimits};
-use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
+use rsmix_fetch::form_data::future::{parse, parse_with};
+pub use rsmix_fetch::form_data::future::{FileUpload, UploadOutput, UploadValue};
+use rsmix_fetch::{BoxError, FormLimits};
+use rsmix_fetch_router::{BoxFuture, Context, Middleware, Next};
 
 use crate::parse_into_context;
 
@@ -77,7 +77,7 @@ impl FormDataParser {
 }
 
 impl Middleware for FormDataParser {
-    fn call(&self, ctx: Context, next: Next) -> BoxFuture<rmx_fetch::Response> {
+    fn call(&self, ctx: Context, next: Next) -> BoxFuture<rsmix_fetch::Response> {
         let this = self.clone();
         Box::pin(parse_into_context(ctx, next, this.suppress_errors, move |content_type, body| async move {
             match &this.upload_handler {
@@ -90,8 +90,8 @@ impl Middleware for FormDataParser {
 
 #[cfg(test)]
 mod tests {
-    use rmx_fetch::{block_on, Body, Request};
-    use rmx_fetch_router::Router;
+    use rsmix_fetch::{block_on, Body, Request};
+    use rsmix_fetch_router::Router;
 
     use super::*;
     use crate::FormDataExt;
@@ -108,11 +108,11 @@ mod tests {
         router.post("/", |ctx: Context| async move {
             let form = ctx.form_data();
             let cover = match form.get_value("cover") {
-                Some(rmx_fetch::FormValue::File(f)) => format!("file {} {}", f.name, f.bytes.len()),
-                Some(rmx_fetch::FormValue::Text(t)) => t.clone(),
+                Some(rsmix_fetch::FormValue::File(f)) => format!("file {} {}", f.name, f.bytes.len()),
+                Some(rsmix_fetch::FormValue::Text(t)) => t.clone(),
                 None => "none".into(),
             };
-            rmx_response::text(format!("{} {cover}", form.get("title").unwrap_or("-")))
+            rsmix_response::text(format!("{} {cover}", form.get("title").unwrap_or("-")))
         });
         router
     }
@@ -131,7 +131,7 @@ mod tests {
             while let Some(chunk) = upload.chunk().await {
                 size += chunk?.len();
             }
-            Ok::<_, rmx_fetch::FormDataError>(format!("stored {} {size}", upload.name))
+            Ok::<_, rsmix_fetch::FormDataError>(format!("stored {} {size}", upload.name))
         }));
         assert_eq!(text(&streamed, request(UPLOAD)), (200, "Dune stored dune.png 3".into()));
         assert_eq!(text(&router(form_data()), request(UPLOAD)), (200, "Dune file dune.png 3".into()));

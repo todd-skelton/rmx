@@ -4,9 +4,9 @@ use std::future::Future;
 use std::sync::Arc;
 
 use http::{header, StatusCode};
-pub use rmx_fetch::form_data::FileUpload;
-use rmx_fetch::{Body, BoxError, FormData, FormDataError, FormLimits, FormValue, UploadResult};
-use rmx_fetch_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
+pub use rsmix_fetch::form_data::FileUpload;
+use rsmix_fetch::{Body, BoxError, FormData, FormDataError, FormLimits, FormValue, UploadResult};
+use rsmix_fetch_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
 
 type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Result<Option<FormValue>, BoxError>> + Send + Sync>;
 
@@ -50,8 +50,8 @@ impl FormDataParser {
     /// `Result`; an error stops the request with a 500.
     ///
     /// ```
-    /// use rmx_fetch::FormValue;
-    /// use rmx_form_data_middleware::{form_data, FileUpload};
+    /// use rsmix_fetch::FormValue;
+    /// use rsmix_form_data_middleware::{form_data, FileUpload};
     ///
     /// let parser = form_data().upload_handler(|upload: FileUpload| async move {
     ///     // Save upload.file somewhere, then put its URL in the form instead.
@@ -73,7 +73,7 @@ impl FormDataParser {
 }
 
 impl Middleware for FormDataParser {
-    fn call(&self, ctx: Context, next: Next) -> BoxFuture<rmx_fetch::Response> {
+    fn call(&self, ctx: Context, next: Next) -> BoxFuture<rsmix_fetch::Response> {
         let this = self.clone();
         Box::pin(parse_into_context(ctx, next, this.suppress_errors, move |content_type, body| async move {
             match &this.upload_handler {
@@ -87,7 +87,7 @@ impl Middleware for FormDataParser {
 /// Parse a form request's body with `parse` and put the form in the context, answering
 /// limit errors with a 413, upload handler errors with a 500 and malformed bodies with a 400
 /// (or an empty form, when `suppress_errors` is set).
-async fn parse_into_context<F, Fut>(mut ctx: Context, next: Next, suppress_errors: bool, parse: F) -> rmx_fetch::Response
+async fn parse_into_context<F, Fut>(mut ctx: Context, next: Next, suppress_errors: bool, parse: F) -> rsmix_fetch::Response
 where
     F: FnOnce(Option<String>, Body) -> Fut,
     Fut: Future<Output = Result<FormData, FormDataError>>,
@@ -138,8 +138,8 @@ fn is_form_request(method: &http::Method, content_type: Option<&str>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use rmx_fetch::{block_on, Body, Request};
-    use rmx_fetch_router::Router;
+    use rsmix_fetch::{block_on, Body, Request};
+    use rsmix_fetch_router::Router;
 
     use super::*;
 
@@ -150,11 +150,11 @@ mod tests {
         http::Request::post("http://x/").header("content-type", "multipart/form-data; boundary=b").body(Body::from(body)).unwrap()
     }
 
-    fn echo() -> impl rmx_fetch_router::Handler {
+    fn echo() -> impl rsmix_fetch_router::Handler {
         |ctx: Context| async move {
             let form = ctx.form_data();
             let files: Vec<String> = form.iter().filter_map(|(k, v)| v.as_file().map(|f| format!("{k}={}", f.name))).collect();
-            rmx_response::text(format!("{:?} {:?}", form.to_search_params().to_string(), files))
+            rsmix_response::text(format!("{:?} {:?}", form.to_search_params().to_string(), files))
         }
     }
 
@@ -175,7 +175,7 @@ mod tests {
         router.post("/", |mut ctx: Context| async move {
             let fields = ctx.form_data().iter().count();
             let body = ctx.take_body().text().await.unwrap();
-            rmx_response::text(format!("{fields} {body}"))
+            rsmix_response::text(format!("{fields} {body}"))
         });
         let req = http::Request::post("http://x/").header("content-type", "application/json").body(Body::from("{\"a\":1}")).unwrap();
         let text = block_on(block_on(router.fetch(req)).into_body().text()).unwrap();

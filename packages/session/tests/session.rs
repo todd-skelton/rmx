@@ -1,6 +1,6 @@
 //! Remix's `session.test.ts`. A destroyed session panics where Remix throws.
 
-use rmx_session::{Session, SessionData};
+use rsmix_session::{Session, SessionData};
 use serde_json::{json, Map, Value};
 
 fn data(values: Value, flash: Value) -> SessionData {
@@ -24,7 +24,7 @@ fn creates_a_new_session_with_a_custom_id() {
 
 #[test]
 fn creates_a_new_session_with_initial_data() {
-    let session = Session::with_data(rmx_session::create_session_id(), data(json!({ "hello": "world" }), json!({})));
+    let session = Session::with_data(rsmix_session::create_session_id(), data(json!({ "hello": "world" }), json!({})));
     assert_eq!(session.len(), 1);
     assert_eq!(session.get::<String>("hello").as_deref(), Some("world"));
     assert!(!session.is_dirty());
@@ -32,7 +32,7 @@ fn creates_a_new_session_with_initial_data() {
 
 #[test]
 fn creates_a_new_session_with_initial_flash_data() {
-    let session = Session::with_data(rmx_session::create_session_id(), data(json!({}), json!({ "hello": "world" })));
+    let session = Session::with_data(rsmix_session::create_session_id(), data(json!({}), json!({ "hello": "world" })));
     assert_eq!(session.get::<String>("hello").as_deref(), Some("world"));
     assert!(session.is_dirty());
 }

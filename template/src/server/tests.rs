@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use rmx::fetch::{block_on, Body};
+use rsmix::fetch::{block_on, Body};
 
 use super::home_page::PROMPTS;
 use super::router;

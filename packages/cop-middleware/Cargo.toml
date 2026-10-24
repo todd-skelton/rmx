@@ -1,5 +1,5 @@
 [package]
-name = "rmx-cop-middleware"
+name = "rsmix-cop-middleware"
 description = "Tokenless cross-origin protection middleware (remix cop-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,10 +7,10 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-fetch-router.workspace = true
-rmx-url.workspace = true
+rsmix-fetch.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-url.workspace = true
 
 [dev-dependencies]
-rmx-form-data-middleware.workspace = true
-rmx-method-override-middleware.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-method-override-middleware.workspace = true

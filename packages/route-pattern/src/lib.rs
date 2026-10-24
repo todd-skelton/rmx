@@ -12,8 +12,8 @@
 //! When several patterns match, [`Matcher`] picks the most specific one (see [`specificity`]).
 //!
 //! ```
-//! use rmx_route_pattern::RoutePattern;
-//! use rmx_url::Url;
+//! use rsmix_route_pattern::RoutePattern;
+//! use rsmix_url::Url;
 //!
 //! let p = RoutePattern::parse("blog/:slug(.html)").unwrap();
 //! let m = p.match_url(&Url::parse("https://x.test/blog/hello.html").unwrap()).unwrap().unwrap();
@@ -24,7 +24,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use rmx_url::{SearchParams, Url};
+use rsmix_url::{SearchParams, Url};
 
 mod href;
 mod join;

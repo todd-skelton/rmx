@@ -1,7 +1,7 @@
 //! app/router.test.ts, app/middleware/i18n.test.ts and app/i18n/config.test.ts.
 
-use rmx::fetch::{block_on, Body};
-use rmx::headers::Vary;
+use rsmix::fetch::{block_on, Body};
+use rsmix::headers::Vary;
 
 use super::*;
 

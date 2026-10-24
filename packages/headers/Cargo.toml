@@ -1,6 +1,6 @@
 [package]
-name = "rmx-headers"
-description = "Typed HTTP header values for rmx (Remix's headers package): Accept*, Cache-Control, Content-*, Cookie, Set-Cookie, conditional and range headers, Vary"
+name = "rsmix-headers"
+description = "Typed HTTP header values for rsmix (Remix's headers package): Accept*, Cache-Control, Content-*, Cookie, Set-Cookie, conditional and range headers, Vary"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

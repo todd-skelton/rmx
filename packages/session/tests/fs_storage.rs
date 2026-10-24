@@ -6,14 +6,14 @@ mod common;
 
 use std::path::PathBuf;
 
-use rmx_session::FsStorage;
+use rsmix_session::FsStorage;
 
 /// A fresh directory under the system temp dir, removed on drop.
 struct TempDir(PathBuf);
 
 impl TempDir {
     fn new() -> TempDir {
-        let dir = std::env::temp_dir().join(format!("file-session-storage-test-{}", rmx_crypto::random_hex(8)));
+        let dir = std::env::temp_dir().join(format!("file-session-storage-test-{}", rsmix_crypto::random_hex(8)));
         std::fs::create_dir_all(&dir).unwrap();
         TempDir(dir)
     }

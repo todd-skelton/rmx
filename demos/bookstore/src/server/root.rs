@@ -2,14 +2,14 @@
 //! `actions/fragments` and `actions/api`.
 
 use http::StatusCode;
-use rmx::{css, rsx, IntoNode, Node};
-use rmx::response::{self, FileResponseOptions};
-use rmx::fetch::Response;
-use rmx::file_storage::FileStorage;
-use rmx::middleware::session::SessionExt;
-use rmx::middleware::render::ResponseInit;
-use rmx::router::routes::FormActions;
-use rmx::router::{action, Context, Router};
+use rsmix::{css, rsx, IntoNode, Node};
+use rsmix::response::{self, FileResponseOptions};
+use rsmix::fetch::Response;
+use rsmix::file_storage::FileStorage;
+use rsmix::middleware::session::SessionExt;
+use rsmix::middleware::render::ResponseInit;
+use rsmix::router::routes::FormActions;
+use rsmix::router::{action, Context, Router};
 
 use super::data::Book;
 use super::schemas::book_id;
@@ -80,7 +80,7 @@ fn about_page() -> Node {
                 <h1>"About Our Bookstore"</h1>
                 <p mix={css("margin: 1rem 0;")}>
                     "Welcome to our online bookstore, a demo application built to showcase the capabilities of "
-                    <strong>"rmx"</strong>
+                    <strong>"rsmix"</strong>
                     " - a Rust port of Remix's routing, middleware and component model."
                 </p>
                 <h2 mix={css("margin: 1.5rem 0 0.5rem;")}>"What This Demo Shows"</h2>

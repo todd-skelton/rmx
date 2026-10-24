@@ -1,20 +1,20 @@
 //! Forward requests to another server (Remix's `fetch-proxy`).
 //!
 //! ```
-//! use rmx_fetch::{Body, BoxError, Request, Response};
-//! use rmx_response as response;
-//! use rmx_fetch_proxy::{FetchProxy, FetchProxyOptions};
+//! use rsmix_fetch::{Body, BoxError, Request, Response};
+//! use rsmix_response as response;
+//! use rsmix_fetch_proxy::{FetchProxy, FetchProxyOptions};
 //!
 //! // Any async function from Request to Response can do the forwarding; servers usually pass
-//! // `rmx_node_fetch_server::fetch`, an HTTP/1 client for `http://` targets.
+//! // `rsmix_node_fetch_server::fetch`, an HTTP/1 client for `http://` targets.
 //! async fn upstream(req: Request) -> Result<Response, BoxError> {
 //!     Ok(response::text(format!("{} {}", req.method(), req.uri())))
 //! }
 //!
 //! let proxy = FetchProxy::new("http://127.0.0.1:3000/app", upstream, FetchProxyOptions::default()).unwrap();
 //! let req = http::Request::builder().uri("https://example.com/users?page=2").body(Body::empty()).unwrap();
-//! let res = rmx_fetch::block_on(proxy.fetch(req)).unwrap();
-//! assert_eq!(rmx_fetch::block_on(res.into_body().text()).unwrap(), "GET http://127.0.0.1:3000/app/users?page=2");
+//! let res = rsmix_fetch::block_on(proxy.fetch(req)).unwrap();
+//! assert_eq!(rsmix_fetch::block_on(res.into_body().text()).unwrap(), "GET http://127.0.0.1:3000/app/users?page=2");
 //! ```
 //!
 //! The request path and query are appended to the target URL. Connection-specific headers,
@@ -32,16 +32,16 @@ use std::sync::Arc;
 
 use http::header::{self, HeaderName, HeaderValue};
 use http::Method;
-use rmx_fetch::{request_url, Body, BoxError, Request, Response};
-use rmx_headers::SetCookie;
-use rmx_url::Url;
+use rsmix_fetch::{request_url, Body, BoxError, Request, Response};
+use rsmix_headers::SetCookie;
+use rsmix_url::Url;
 
 /// Request headers that only apply to one connection (RFC 9110 section 7.6.1, plus the legacy
 /// `Proxy-Connection`).
 const HOP_BY_HOP: [&str; 9] = ["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade"];
 
 /// What performs the forwarded request (Remix's `fetch` option); the request URI is absolute.
-pub use rmx_fetch::{BoxFuture, Fetch};
+pub use rsmix_fetch::{BoxFuture, Fetch};
 
 
 /// How upstream redirects are handled (the Fetch API's `RequestRedirect`). Put one in a
@@ -97,7 +97,7 @@ pub struct FetchProxy {
 
 impl FetchProxy {
     /// A proxy to `target` (an absolute URL; a trailing slash is ignored).
-    pub fn new(target: &str, fetch: impl Fetch, options: FetchProxyOptions) -> Result<FetchProxy, rmx_url::ParseError> {
+    pub fn new(target: &str, fetch: impl Fetch, options: FetchProxyOptions) -> Result<FetchProxy, rsmix_url::ParseError> {
         let mut target = Url::parse(target)?;
         let trimmed = target.pathname().trim_end_matches('/').to_string();
         target.set_pathname(if trimmed.is_empty() { "/" } else { &trimmed });

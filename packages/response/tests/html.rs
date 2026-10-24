@@ -3,9 +3,9 @@
 //! and `DataView` bodies are `Bytes`, `Vec<u8>` and `&[u8]`; a `ReadableStream` is a `Body`.
 
 use http::StatusCode;
-use rmx_response::{html, html_with, ResponseInit};
-use rmx_fetch::{block_on, Body, File, Response};
-use rmx_html_template::html as safe_html;
+use rsmix_response::{html, html_with, ResponseInit};
+use rsmix_fetch::{block_on, Body, File, Response};
+use rsmix_html_template::html as safe_html;
 
 const PAGE: &str = "<html><body>Hello</body></html>";
 const PAGE_WITH_DOCTYPE: &str = "<!DOCTYPE html><html><body>Hello</body></html>";
@@ -110,12 +110,12 @@ fn does_not_prepend_doctype_if_already_present_in_blob() {
 
 #[test]
 fn prepends_doctype_to_array_buffer_body() {
-    assert_eq!(text(html(rmx_fetch::Bytes::from_static(PAGE.as_bytes()))), PAGE_WITH_DOCTYPE);
+    assert_eq!(text(html(rsmix_fetch::Bytes::from_static(PAGE.as_bytes()))), PAGE_WITH_DOCTYPE);
 }
 
 #[test]
 fn does_not_prepend_doctype_if_already_present_in_array_buffer() {
-    assert_eq!(text(html(rmx_fetch::Bytes::from_static(PAGE_WITH_DOCTYPE.as_bytes()))), PAGE_WITH_DOCTYPE);
+    assert_eq!(text(html(rsmix_fetch::Bytes::from_static(PAGE_WITH_DOCTYPE.as_bytes()))), PAGE_WITH_DOCTYPE);
 }
 
 // Uint8Array body

@@ -1,6 +1,6 @@
 [package]
 name = "i18n-demo"
-description = "The Remix 3 i18n demo (request-scoped translation, Accept-Language negotiation, locale cookie, RTL), in rmx"
+description = "The Remix 3 i18n demo (request-scoped translation, Accept-Language negotiation, locale cookie, RTL), in rsmix"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rmx.workspace = true
+rsmix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -6,8 +6,8 @@
 //! - [`FsFileStorage`] (feature `fs`, on by default): a directory on disk.
 //!
 //! ```
-//! use rmx_fetch::{block_on, File};
-//! use rmx_file_storage::{FileStorage, ListOptions, MemoryFileStorage};
+//! use rsmix_fetch::{block_on, File};
+//! use rsmix_file_storage::{FileStorage, ListOptions, MemoryFileStorage};
 //!
 //! let storage = MemoryFileStorage::new();
 //! block_on(storage.set("user123/avatar.png", File::new("avatar.png", "image/png", vec![1, 2, 3])))?;
@@ -29,7 +29,7 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "fs")]
 pub use fs::FsFileStorage;
-pub use rmx_fetch::File;
+pub use rsmix_fetch::File;
 
 /// A key/value store for files.
 pub trait FileStorage: Send + Sync + 'static {

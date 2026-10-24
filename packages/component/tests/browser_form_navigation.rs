@@ -4,12 +4,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_form_navigation`.
 #![cfg(all(target_arch = "wasm32", feature = "navigation"))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::test::{FormNavigation, FormNavigationResolver, FormSubmission};
+use rsmix::test::{FormNavigation, FormNavigationResolver, FormSubmission};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;

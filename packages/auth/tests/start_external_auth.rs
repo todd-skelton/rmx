@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_auth::google_provider;
+use rsmix_auth::google_provider;
 
 fn google_login(query: &str) -> (Reply, serde_json::Value) {
     let (fetch, _) = mock(unexpected);

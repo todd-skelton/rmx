@@ -4,7 +4,7 @@
 //! `preferred`; `set(key)` without a weight is `set(key, 1.0)`; `entries`, `forEach` and
 //! direct iteration are `iter` and `for` over a reference.
 
-use rmx_headers::{Accept, AcceptEncoding, AcceptLanguage};
+use rsmix_headers::{Accept, AcceptEncoding, AcceptLanguage};
 
 fn pairs<'a>(entries: impl IntoIterator<Item = (&'a str, f64)>) -> Vec<(String, f64)> {
     entries.into_iter().map(|(k, w)| (k.to_string(), w)).collect()

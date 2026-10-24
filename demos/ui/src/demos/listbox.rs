@@ -3,8 +3,8 @@
 
 use std::rc::Rc;
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::listbox::{self, ListboxOption};
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::listbox::{self, ListboxOption};
 
 pub struct ListboxDemo {
     value: Option<String>,
@@ -22,7 +22,7 @@ pub(crate) fn frameworks() -> Vec<ListboxOption> {
 
 impl Component for ListboxDemo {
     type Props = ();
-    rmx::client_entry!("ListboxDemo");
+    rsmix::client_entry!("ListboxDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         ListboxDemo { value: Some("remix".into()), active_value: Some("remix".into()) }

@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_auth::{okta_provider, ClientOptions, OAuthProvider};
+use rsmix_auth::{okta_provider, ClientOptions, OAuthProvider};
 use serde_json::json;
 
 #[test]

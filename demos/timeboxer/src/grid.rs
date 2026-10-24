@@ -3,9 +3,9 @@
 //! bottom edge to resize, drag a side edge to copy the block across days, Backspace to delete.
 //! Every committed change saves the whole schedule document with `PUT /schedules/:id`.
 
-use rmx::browser::{self, FetchInit};
-use rmx::{css, on, rsx, Component, Handle, Mixin, Node, NodeHandle};
-use rmx::ui::animation::{animate_layout, Layout, SpringPreset};
+use rsmix::browser::{self, FetchInit};
+use rsmix::{css, on, rsx, Component, Handle, Mixin, Node, NodeHandle};
+use rsmix::ui::animation::{animate_layout, Layout, SpringPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::dom_util::{self, Pointer, WindowListeners};
@@ -129,7 +129,7 @@ pub struct ScheduleGrid {
 
 impl Component for ScheduleGrid {
     type Props = ScheduleGridProps;
-    rmx::client_entry!("ScheduleGrid");
+    rsmix::client_entry!("ScheduleGrid");
 
     fn setup(props: &ScheduleGridProps, h: &Handle<Self>) -> Self {
         h.queue_task(|this, h| {
@@ -1076,7 +1076,7 @@ fn resize_handle(props: &ScheduleBlockProps, edge: ResizeEdge) -> Node {
     let active = props.is_resizing && props.active_resize_edge == Some(edge);
     let grid = props.grid.clone();
     let block = props.block.clone();
-    let start = rmx::EventHandler::new(move |event| {
+    let start = rsmix::EventHandler::new(move |event| {
         event.prevent_default();
         event.stop_propagation();
         let (block, pointer) = (block.clone(), Pointer::from_event(event));
@@ -1101,7 +1101,7 @@ fn day_handle(props: &ScheduleBlockProps, edge: DayEdge) -> Node {
     let active = props.is_horizontal_resizing && props.active_day_edge == Some(edge);
     let grid = props.grid.clone();
     let block = props.block.clone();
-    let start = rmx::EventHandler::new(move |event| {
+    let start = rsmix::EventHandler::new(move |event| {
         event.prevent_default();
         event.stop_propagation();
         let (block, pointer) = (block.clone(), Pointer::from_event(event));

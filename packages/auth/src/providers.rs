@@ -4,8 +4,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
-use rmx_fetch::Fetch;
-use rmx_url::Url;
+use rsmix_fetch::Fetch;
+use rsmix_url::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -79,7 +79,7 @@ const GITHUB_AUTHORIZATION_ENDPOINT: &str = "https://github.com/login/oauth/auth
 const GITHUB_TOKEN_ENDPOINT: &str = "https://github.com/login/oauth/access_token";
 const GITHUB_USER_ENDPOINT: &str = "https://api.github.com/user";
 const GITHUB_USER_EMAILS_ENDPOINT: &str = "https://api.github.com/user/emails";
-const GITHUB_HEADERS: [(&str, &str); 1] = [("user-agent", "rmx-auth")];
+const GITHUB_HEADERS: [(&str, &str); 1] = [("user-agent", "rsmix-auth")];
 
 /// A field GitHub sent, possibly as `null` (`Some(None)`); a missing field stays `None`.
 fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(deserializer: D) -> Result<Option<T>, D::Error> {
@@ -515,7 +515,7 @@ impl<Pr> OidcProvider<Pr> {
             None if self.options.issuer.ends_with('/') => format!("{}.well-known/openid-configuration", self.options.issuer),
             None => format!("{}/.well-known/openid-configuration", self.options.issuer),
         };
-        let request = http::Request::get(url.as_str()).body(rmx_fetch::Body::empty()).map_err(|e| AuthError(e.to_string()))?;
+        let request = http::Request::get(url.as_str()).body(rsmix_fetch::Body::empty()).map_err(|e| AuthError(e.to_string()))?;
         let json = fetch_json(&*self.fetch, request, &format!("Failed to load OIDC metadata for \"{name}\".")).await?;
         let metadata: OidcMetadata = decode(json, &format!("OIDC metadata for \"{name}\" did not include an issuer."))?;
         let metadata = metadata.validate(name)?;

@@ -2,7 +2,7 @@
 
 mod common;
 
-use rmx_session::MemoryStorage;
+use rsmix_session::MemoryStorage;
 
 #[test]
 fn does_not_use_unknown_session_ids_by_default() {

@@ -1,6 +1,6 @@
 //! Shared UI (ui/*.tsx, ui/styles.ts, ui/design-system.ts).
 
-use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
+use rsmix::{css, rsx, Children, Component, Handle, Mixin, Node};
 
 // Design tokens and styles ----------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 //! Ports of Remix's `headers/src/lib/vary.test.ts`. `new Vary(string)` and `Vary.from` are
 //! [`Vary::parse`]; an array is `collect()`; `size` is `len`; `forEach` is a `for` loop.
 
-use rmx_headers::Vary;
+use rsmix_headers::Vary;
 
 fn names(v: &Vary) -> Vec<&str> {
     v.header_names().collect()

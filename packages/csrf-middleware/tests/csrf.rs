@@ -1,13 +1,13 @@
 //! Remix's `csrf-middleware/src/lib/csrf.test.ts`.
 
-use rmx_cookie::Cookie;
-use rmx_fetch::{block_on, Body, Response};
-use rmx_csrf_middleware::{csrf, csrf_token, Csrf};
-use rmx_form_data_middleware::form_data;
-use rmx_method_override_middleware::method_override;
-use rmx_session_middleware::session;
-use rmx_fetch_router::{Context, Middleware, Router};
-use rmx_session::CookieStorage;
+use rsmix_cookie::Cookie;
+use rsmix_fetch::{block_on, Body, Response};
+use rsmix_csrf_middleware::{csrf, csrf_token, Csrf};
+use rsmix_form_data_middleware::form_data;
+use rsmix_method_override_middleware::method_override;
+use rsmix_session_middleware::session;
+use rsmix_fetch_router::{Context, Middleware, Router};
+use rsmix_session::CookieStorage;
 
 fn session_mw() -> impl Middleware {
     session(Cookie::new("__session").secrets(vec!["secret1".into()]), CookieStorage::new())

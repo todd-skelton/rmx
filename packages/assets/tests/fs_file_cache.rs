@@ -8,16 +8,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use rmx_assets::{AssetErrorCode, FileCache, FsFileCache, FsFileCacheOptions};
-use rmx_fetch::File;
-use rmx_file_storage::{FsFileStorage, ListOptions};
+use rsmix_assets::{AssetErrorCode, FileCache, FsFileCache, FsFileCacheOptions};
+use rsmix_fetch::File;
+use rsmix_file_storage::{FsFileStorage, ListOptions};
 
 struct Dir(PathBuf);
 
 impl Dir {
     fn new() -> Dir {
         static N: AtomicUsize = AtomicUsize::new(0);
-        let path = std::env::temp_dir().join(format!("rmx-file-cache-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        let path = std::env::temp_dir().join(format!("rsmix-file-cache-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         Dir(path)
@@ -432,7 +432,7 @@ fn treats_a_missing_backing_file_as_a_miss_and_allows_it_to_be_replaced() {
 fn rejects_invalid_limits_before_creating_the_cache_directory() {
     // Rust's unsigned limits rule out Remix's fractional, negative, NaN and unsafe values;
     // zero is the invalid value left.
-    let directory = std::env::temp_dir().join(format!("rmx-file-cache-{}", rmx_crypto::random_uuid()));
+    let directory = std::env::temp_dir().join(format!("rsmix-file-cache-{}", rsmix_crypto::random_uuid()));
     let invalid = [
         ("max_entries", FsFileCacheOptions { max_entries: 0, ..Default::default() }),
         ("max_file_size", FsFileCacheOptions { max_file_size: 0, ..Default::default() }),

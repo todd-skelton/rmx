@@ -1,4 +1,4 @@
-//! `rsx!`: JSX-like templates that compile to `rmx::Node` trees.
+//! `rsx!`: JSX-like templates that compile to `rsmix::Node` trees.
 //!
 //! - Lowercase tags are elements: `<div class="x">"text" {expr}</div>`.
 //! - Capitalized tags are components: `<Counter initial=5/>` builds `Counter`'s `Props`
@@ -7,7 +7,7 @@
 //! - Component props left out of the template use `Default` values.
 //! - Text must be quoted (`"Hello"`); `{expr}` accepts anything implementing `IntoNode`.
 //!
-//! Also `html!`/`html_raw!` for `rmx-html-template`.
+//! Also `html!`/`html_raw!` for `rsmix-html-template`.
 
 mod html;
 mod route_map;
@@ -19,7 +19,7 @@ use rstml::node::{KeyedAttribute, Node, NodeAttribute, NodeElement, NodeName};
 use syn::spanned::Spanned;
 use syn::{Expr, ExprLit, Lit};
 
-/// Escaped HTML template: `html!("<h1>{title}</h1>")`. See `rmx_html_template`.
+/// Escaped HTML template: `html!("<h1>{title}</h1>")`. See `rsmix_html_template`.
 #[proc_macro]
 pub fn html(input: TokenStream) -> TokenStream {
     let template = syn::parse_macro_input!(input as html::Template);
@@ -34,8 +34,8 @@ pub fn html_raw(input: TokenStream) -> TokenStream {
 }
 
 /// `#[derive(RouteMap)]` for a struct of routes and nested route maps. Also generates
-/// `<Name>Actions`, a struct with one `rmx::router::Action` per direct `Route` field, which
-/// `Router::map` takes as the controller for this map. See `rmx::router::routes::RouteMap`.
+/// `<Name>Actions`, a struct with one `rsmix::router::Action` per direct `Route` field, which
+/// `Router::map` takes as the controller for this map. See `rsmix::router::routes::RouteMap`.
 #[proc_macro_derive(RouteMap)]
 pub fn derive_route_map(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -50,7 +50,7 @@ pub fn rsx(input: TokenStream) -> TokenStream {
             let out = if nodes.len() == 1 {
                 nodes.remove(0)
             } else {
-                quote! { ::rmx::Node::Fragment(::std::vec![#(#nodes),*]) }
+                quote! { ::rsmix::Node::Fragment(::std::vec![#(#nodes),*]) }
             };
             out.into()
         }
@@ -63,11 +63,11 @@ fn gen_node(node: &Node) -> Option<Tokens> {
         Node::Element(el) => gen_element(el),
         Node::Text(text) => {
             let s = text.value_string();
-            quote! { ::rmx::Node::Text(::std::borrow::Cow::Borrowed(#s)) }
+            quote! { ::rsmix::Node::Text(::std::borrow::Cow::Borrowed(#s)) }
         }
         Node::RawText(raw) => {
             let s = raw.to_string_best();
-            quote! { ::rmx::Node::Text(::std::borrow::Cow::Borrowed(#s)) }
+            quote! { ::rsmix::Node::Text(::std::borrow::Cow::Borrowed(#s)) }
         }
         Node::Block(block) => {
             let span = block.span();
@@ -75,15 +75,15 @@ fn gen_node(node: &Node) -> Option<Tokens> {
                 rstml::node::NodeBlock::ValidBlock(b) => block_expr(b),
                 invalid => invalid.to_token_stream(),
             };
-            quote_spanned! {span=> ::rmx::IntoNode::into_node(#inner) }
+            quote_spanned! {span=> ::rsmix::IntoNode::into_node(#inner) }
         }
         Node::Fragment(frag) => {
             let children = children(&frag.children);
-            quote! { ::rmx::Node::Fragment(::std::vec![#(#children),*]) }
+            quote! { ::rsmix::Node::Fragment(::std::vec![#(#children),*]) }
         }
         Node::Doctype(doc) => {
             let s = format!("<!DOCTYPE {}>", doc.value.to_string_best());
-            quote! { ::rmx::Node::Raw(::std::borrow::Cow::Borrowed(#s)) }
+            quote! { ::rsmix::Node::Raw(::std::borrow::Cow::Borrowed(#s)) }
         }
         Node::Comment(_) => return None,
         Node::Custom(_) => unreachable!("no custom nodes configured"),
@@ -157,13 +157,13 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
                 return syn::Error::new(attr.span(), "rsx!: key needs a value").to_compile_error();
             };
             let v2 = value_tokens(v);
-            key = quote_spanned! {v.span()=> ::core::option::Option::Some(::rmx::Key::from(#v2)) };
+            key = quote_spanned! {v.span()=> ::core::option::Option::Some(::rsmix::Key::from(#v2)) };
         } else if name == "mix" {
             let Some(v) = value else {
                 return syn::Error::new(attr.span(), "rsx!: mix needs a value").to_compile_error();
             };
             let v2 = value_tokens(v);
-            mixins.push(quote_spanned! {v.span()=> ::rmx::IntoMixins::into_mixins(#v2) });
+            mixins.push(quote_spanned! {v.span()=> ::rsmix::IntoMixins::into_mixins(#v2) });
         } else if let Some(event) = name.strip_prefix("on:") {
             let Some(v) = value else {
                 return syn::Error::new(attr.span(), "rsx!: event needs a handler").to_compile_error();
@@ -173,24 +173,24 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
         } else if name == "outerHTML" {
             return syn::Error::new(attr.span(), "rsx!: outerHTML is not supported on host elements").to_compile_error();
         } else if matches!(name.as_str(), "innerHTML" | "srcdoc" | "srcDoc") {
-            // Raw HTML only from `rmx::unsafe_html(..)` (Remix's `unsafeHTML` branding), checked by type.
+            // Raw HTML only from `rsmix::unsafe_html(..)` (Remix's `unsafeHTML` branding), checked by type.
             let Some(v) = value.filter(|v| string_literal(v).is_none()) else {
-                let msg = format!("rsx!: {name} needs a value created with rmx::unsafe_html(..)");
+                let msg = format!("rsx!: {name} needs a value created with rsmix::unsafe_html(..)");
                 return syn::Error::new(attr.span(), msg).to_compile_error();
             };
             let v2 = value_tokens(v);
-            attrs.push(quote_spanned! {v.span()=> (#name, ::rmx::IntoHtmlAttr::into_html_attr(#v2)) });
+            attrs.push(quote_spanned! {v.span()=> (#name, ::rsmix::IntoHtmlAttr::into_html_attr(#v2)) });
         } else {
             let v = match value {
-                None => quote! { ::rmx::AttrValue::Bool(true) },
+                None => quote! { ::rsmix::AttrValue::Bool(true) },
                 Some(v) => match string_literal(v) {
-                    Some(lit) => quote! { ::rmx::AttrValue::Str(::std::borrow::Cow::Borrowed(#lit)) },
+                    Some(lit) => quote! { ::rsmix::AttrValue::Str(::std::borrow::Cow::Borrowed(#lit)) },
                     // `aria-*` and `data-*` write booleans as "true"/"false" (Remix's rule).
                     None if name.starts_with("aria-") || name.starts_with("data-") => {
                         let v2 = value_tokens(v);
-                        quote_spanned! {v.span()=> ::rmx::AttrValue::stringify_bool(::rmx::IntoAttr::into_attr(#v2)) }
+                        quote_spanned! {v.span()=> ::rsmix::AttrValue::stringify_bool(::rsmix::IntoAttr::into_attr(#v2)) }
                     }
-                    None => { let v2 = value_tokens(v); quote_spanned! {v.span()=> ::rmx::IntoAttr::into_attr(#v2) } }
+                    None => { let v2 = value_tokens(v); quote_spanned! {v.span()=> ::rsmix::IntoAttr::into_attr(#v2) } }
                 },
             };
             attrs.push(quote! { (#name, #v) });
@@ -199,7 +199,7 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
     let children = children(&el.children);
     if mixins.is_empty() {
         return quote! {
-            ::rmx::Node::element(
+            ::rsmix::Node::element(
                 #tag,
                 #key,
                 ::std::vec![#(#attrs),*],
@@ -209,7 +209,7 @@ fn gen_element(el: &NodeElement<rstml::Infallible>) -> Tokens {
         };
     }
     quote! {
-        ::rmx::Node::element_with_mixins(
+        ::rsmix::Node::element_with_mixins(
             #tag,
             #key,
             ::std::vec![#(#attrs),*],
@@ -242,7 +242,7 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
         if name == "key" {
             if let Some(v) = value {
                 let v2 = value_tokens(v);
-            key = quote_spanned! {v.span()=> ::core::option::Option::Some(::rmx::Key::from(#v2)) };
+            key = quote_spanned! {v.span()=> ::core::option::Option::Some(::rsmix::Key::from(#v2)) };
             }
             continue;
         }
@@ -253,7 +253,7 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
             None => quote! { true },
             Some(v) => {
                 let v2 = value_tokens(v);
-                quote_spanned! {v.span()=> ::rmx::IntoProp::into_prop(#v2) }
+                quote_spanned! {v.span()=> ::rsmix::IntoProp::into_prop(#v2) }
             }
         };
         fields.push(quote! { #field: #v });
@@ -262,7 +262,7 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
     if !kids.is_empty() {
         let field = syn::Ident::new("children", Span::call_site());
         fields.push(quote! {
-            #field: ::core::convert::From::from(::rmx::Node::Fragment(::std::vec![#(#kids),*]))
+            #field: ::core::convert::From::from(::rsmix::Node::Fragment(::std::vec![#(#kids),*]))
         });
     }
     // Props not given in the template take their `Default` values, so optional props
@@ -273,12 +273,12 @@ fn gen_component(el: &NodeElement<rstml::Infallible>) -> Tokens {
         quote! {
             {
                 // The props struct is named through the component, so it need not be imported.
-                type __Props = <#component as ::rmx::Component>::Props;
+                type __Props = <#component as ::rsmix::Component>::Props;
                 #[allow(clippy::needless_update)]
                 let __props = __Props { #(#fields,)* ..::core::default::Default::default() };
                 __props
             }
         }
     };
-    quote! { ::rmx::Node::component::<#component>(#key, #props) }
+    quote! { ::rsmix::Node::component::<#component>(#key, #props) }
 }

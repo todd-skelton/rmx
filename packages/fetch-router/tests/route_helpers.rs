@@ -10,7 +10,7 @@
 //! to say both.
 
 use http::Method;
-use rmx::router::routes::{
+use rsmix::router::routes::{
     any, delete, form, form_with, get, head, options, patch, post, prefix, put, resource, resources, resources_with_param, Form, Resources, Route, RouteMap,
 };
 

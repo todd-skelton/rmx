@@ -5,7 +5,7 @@
 //! touching loaded frames; [`FramePlayground`] arrives inside a frame response and keeps
 //! its local count when that frame reloads.
 
-use rmx::{css, node_ref, on, rsx, Children, Component, Frame, Handle, IntoNode, Mixin, Node};
+use rsmix::{css, node_ref, on, rsx, Children, Component, Frame, Handle, IntoNode, Mixin, Node};
 use serde::{Deserialize, Serialize};
 
 pub const THEME_COOKIE: &str = "lazy-frames-theme";
@@ -74,7 +74,7 @@ pub struct LazyFrame {
 
 impl Component for LazyFrame {
     type Props = LazyFrameProps;
-    rmx::client_entry!("LazyFrame");
+    rsmix::client_entry!("LazyFrame");
 
     fn setup(_: &LazyFrameProps, _: &Handle<Self>) -> Self {
         LazyFrame { requested: false, active: false }
@@ -247,7 +247,7 @@ pub struct ThemeToggle {
 
 impl Component for ThemeToggle {
     type Props = ThemeToggleProps;
-    rmx::client_entry!("ThemeToggle");
+    rsmix::client_entry!("ThemeToggle");
 
     fn setup(props: &ThemeToggleProps, _: &Handle<Self>) -> Self {
         ThemeToggle { theme: props.theme }
@@ -326,7 +326,7 @@ pub struct FramePlayground {
 
 impl Component for FramePlayground {
     type Props = FramePlaygroundProps;
-    rmx::client_entry!("FramePlayground");
+    rsmix::client_entry!("FramePlayground");
 
     fn setup(props: &FramePlaygroundProps, h: &Handle<Self>) -> Self {
         h.queue_task(|this, h| {
@@ -405,8 +405,8 @@ fn served_at_style() -> Mixin {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions {
-        entries: vec![rmx::entry::<LazyFrame>(), rmx::entry::<ThemeToggle>(), rmx::entry::<FramePlayground>()],
+    rsmix::run(rsmix::RunOptions {
+        entries: vec![rsmix::entry::<LazyFrame>(), rsmix::entry::<ThemeToggle>(), rsmix::entry::<FramePlayground>()],
         ..Default::default()
     });
 }

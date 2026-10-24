@@ -1,7 +1,7 @@
 //! `tempo-interaction.tsx`: tap tempo. Four or more taps (pointer, Enter or Space) within
 //! four seconds dispatch a `my:tempo` event from the host with the average BPM as `bpm`.
 
-use rmx::{mixin, on, Element, Event, HostMixin, Mixin, MixinHandle};
+use rsmix::{mixin, on, Element, Event, HostMixin, Mixin, MixinHandle};
 
 pub const TEMPO_EVENT: &str = "my:tempo";
 const WINDOW_MS: f64 = 4000.0;

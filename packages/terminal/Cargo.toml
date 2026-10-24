@@ -1,6 +1,6 @@
 [package]
-name = "rmx-terminal"
-description = "ANSI styles, color detection and terminal output for rmx (Remix's remix/terminal)"
+name = "rsmix-terminal"
+description = "ANSI styles, color detection and terminal output for rsmix (Remix's remix/terminal)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

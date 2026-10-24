@@ -1,6 +1,6 @@
 [package]
-name = "rmx-macros"
-description = "rsx! macro for rmx"
+name = "rsmix-macros"
+description = "rsx! macro for rsmix"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

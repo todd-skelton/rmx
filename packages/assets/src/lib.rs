@@ -49,9 +49,9 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use http::{header, HeaderValue, Method, StatusCode};
-use rmx_fetch::{Body, File, Response};
-use rmx_headers::IfNoneMatch;
-use rmx_fetch_router::Context;
+use rsmix_fetch::{Body, File, Response};
+use rsmix_headers::IfNoneMatch;
+use rsmix_fetch_router::Context;
 
 pub use cache::{FsFileCache, FsFileCacheOptions, DEFAULT_CACHE_DIRECTORY};
 pub use glob::glob_match;
@@ -375,7 +375,7 @@ impl AssetServer {
             return Some(res);
         }
         let mut res = Response::new(if head { Body::empty() } else { Body::from((*built.body).clone()) });
-        let ct = rmx_mime::detect_content_type(&built.extension).unwrap_or_else(|| "application/octet-stream".into());
+        let ct = rsmix_mime::detect_content_type(&built.extension).unwrap_or_else(|| "application/octet-stream".into());
         if let Ok(v) = HeaderValue::from_str(&ct) {
             res.headers_mut().insert(header::CONTENT_TYPE, v);
         }
@@ -429,7 +429,7 @@ impl Inner {
     fn file_input(&self, input: &Path) -> Result<PathBuf, AssetError> {
         let text = input.to_string_lossy();
         if let Some(rest) = text.strip_prefix("file://") {
-            let path = rmx_url::decode(rest.split(['?', '#']).next().unwrap_or_default());
+            let path = rsmix_url::decode(rest.split(['?', '#']).next().unwrap_or_default());
             // `file:///C:/x` on Windows.
             let path = if path.len() > 2 && path.as_bytes()[2] == b':' { &path[1..] } else { &path[..] };
             return Ok(PathBuf::from(path));
@@ -480,7 +480,7 @@ impl Inner {
             url = format_fingerprint(&url, hash);
         }
         if !transforms.is_empty() {
-            let mut params = rmx_url::SearchParams::new();
+            let mut params = rsmix_url::SearchParams::new();
             for t in transforms {
                 params.append("transform", t);
             }
@@ -533,7 +533,7 @@ impl Inner {
     fn url_for_file(&self, file: &Path) -> Option<String> {
         self.mounts.iter().find_map(|Mount { url_root, dir, .. }| {
             let rel = file.strip_prefix(dir).ok()?;
-            let segments: Vec<String> = rel.components().map(|c| rmx_url::encode_component(&c.as_os_str().to_string_lossy())).collect();
+            let segments: Vec<String> = rel.components().map(|c| rsmix_url::encode_component(&c.as_os_str().to_string_lossy())).collect();
             Some(format!("{}/{}", url_root.trim_end_matches('/'), segments.join("/")))
         })
     }
@@ -544,7 +544,7 @@ impl Inner {
         let mut path = mount.dir.clone();
         let rest = if mount.url_root == "/" { &pathname[1..] } else { &pathname[mount.url_root.len() + 1..] };
         for segment in rest.split('/') {
-            let segment = rmx_url::decode(segment);
+            let segment = rsmix_url::decode(segment);
             if segment.is_empty() || segment == "." || segment == ".." || segment.contains(['\\', '/', ':']) {
                 return None;
             }
@@ -595,8 +595,8 @@ impl Inner {
         let version = self.version(file, snapshot);
         let key = self.files.cache.as_ref().map(|_| {
             let identity = format!("{file_path:?},{version},{transforms:?}");
-            let digest = rmx_crypto::sha256(format!("[\"transformed-file-v3\",{:?},[{identity}]]", self.files.cache_key).as_bytes());
-            rmx_crypto::hex(&digest)
+            let digest = rsmix_crypto::sha256(format!("[\"transformed-file-v3\",{:?},[{identity}]]", self.files.cache_key).as_bytes());
+            rsmix_crypto::hex(&digest)
         });
         let built = |body: Vec<u8>, extension: String| {
             let hash = hash_content(&body);
@@ -613,7 +613,7 @@ impl Inner {
         };
         if let (Some(cache), Some(key)) = (&self.files.cache, &key) {
             let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-            let content_type = rmx_mime::detect_content_type(&extension).unwrap_or_else(|| "application/octet-stream".into());
+            let content_type = rsmix_mime::detect_content_type(&extension).unwrap_or_else(|| "application/octet-stream".into());
             cache.put(key, File::new(format!("{stem}{extension}"), content_type, body.clone())).map_err(cache_error)?;
         }
         Ok(built(body, extension))
@@ -672,7 +672,7 @@ impl Inner {
         if path_part.is_empty() {
             return Ok(None);
         }
-        let target = dir.join(rmx_url::decode(path_part).replace('/', std::path::MAIN_SEPARATOR_STR)).canonicalize().ok().filter(|t| t.is_file());
+        let target = dir.join(rsmix_url::decode(path_part).replace('/', std::path::MAIN_SEPARATOR_STR)).canonicalize().ok().filter(|t| t.is_file());
         if is_import {
             let Some(target) = target.filter(|t| extension_of(t) == ".css") else {
                 return Err(AssetError::new(AssetErrorCode::ImportResolutionFailed, format!("Failed to resolve import \"{spec}\" in {importer}.")));
@@ -699,7 +699,7 @@ impl Inner {
             ));
         }
         self.check_reference(&target, spec, importer, "URL", AssetErrorCode::UrlNotAllowed, AssetErrorCode::UrlOutsideMounts)?;
-        let mut params = rmx_url::SearchParams::parse(query);
+        let mut params = rsmix_url::SearchParams::parse(query);
         let requested: Vec<String> = params.get_all("transform").into_iter().map(str::to_string).collect();
         params.delete("transform");
         let rest = if params.is_empty() { String::new() } else { format!("?{params}") };
@@ -712,7 +712,7 @@ impl Inner {
             Err(e) => {
                 // Leave the request as written, so the browser gets the 400 for it.
                 eprintln!("Invalid file transform request \"{}\" in CSS asset {importer} for {}: {}", requested.join(","), display(&target), e.message);
-                let mut query = rmx_url::SearchParams::new();
+                let mut query = rsmix_url::SearchParams::new();
                 for t in &requested {
                     query.append("transform", t);
                 }
@@ -732,7 +732,7 @@ impl Inner {
     /// Unresolvable `new URL` references are left as written.
     fn link_script(&self, spec: &str, is_import: bool, dir: &Path, importer: &str, stack: &mut Vec<PathBuf>) -> Result<Option<Link>, AssetError> {
         let (path_part, query, fragment) = split_url(spec);
-        let target = dir.join(rmx_url::decode(path_part).replace('/', std::path::MAIN_SEPARATOR_STR)).canonicalize().ok().filter(|t| t.is_file());
+        let target = dir.join(rsmix_url::decode(path_part).replace('/', std::path::MAIN_SEPARATOR_STR)).canonicalize().ok().filter(|t| t.is_file());
         if !is_import {
             let Some(target) = target.filter(|t| self.kind(t) == AssetKind::File && self.allowed(t)) else { return Ok(None) };
             let Ok(built) = self.build(&target, &[], stack) else { return Ok(None) };
@@ -812,7 +812,7 @@ fn is_script(extension: &str) -> bool {
 /// A content hash for URLs and ETags (Remix's `hashContent`): the first six characters of
 /// the base64url SHA-256 digest.
 fn hash_content(bytes: &[u8]) -> String {
-    let mut hash = rmx_crypto::base64url_encode(&rmx_crypto::sha256(bytes));
+    let mut hash = rsmix_crypto::base64url_encode(&rsmix_crypto::sha256(bytes));
     hash.truncate(6);
     hash
 }

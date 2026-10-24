@@ -1,7 +1,7 @@
-//! `rmx completion <bash|zsh>` (Remix's `remix completion`): a shell script that asks
-//! `rmx completion -- <index> <words...>` for candidates, so completion follows the CLI.
+//! `rsmix completion <bash|zsh>` (Remix's `remix completion`): a shell script that asks
+//! `rsmix completion -- <index> <words...>` for candidates, so completion follows the CLI.
 
-/// The shells `rmx completion` writes scripts for.
+/// The shells `rsmix completion` writes scripts for.
 pub const SHELLS: [&str; 2] = ["bash", "zsh"];
 
 const ROOT_COMMANDS: [&str; 9] = ["assets", "completion", "dev", "doctor", "help", "new", "routes", "test", "version"];
@@ -114,17 +114,17 @@ pub fn complete(words: &[String], index: usize) -> Completion {
 
 /// The completion script; one script serves bash and zsh, as in Remix.
 pub fn script() -> &'static str {
-    r#"###-begin-rmx-completion-###
+    r#"###-begin-rsmix-completion-###
 #
-# rmx command completion script
+# rsmix command completion script
 #
 # Installation:
-#   rmx completion bash >> ~/.bashrc
-#   rmx completion zsh >> ~/.zshrc
+#   rsmix completion bash >> ~/.bashrc
+#   rsmix completion zsh >> ~/.zshrc
 #
 
 if type complete &>/dev/null; then
-  _rmx_completion() {
+  _rsmix_completion() {
     local words cword output mode si
     local lines
 
@@ -135,7 +135,7 @@ if type complete &>/dev/null; then
       words=("${COMP_WORDS[@]}")
     fi
 
-    output=$(rmx completion -- "$cword" "${words[@]}" 2>/dev/null) || return 0
+    output=$(rsmix completion -- "$cword" "${words[@]}" 2>/dev/null) || return 0
     si="$IFS"
     IFS=$'\n' lines=($output)
     IFS="$si"
@@ -154,13 +154,13 @@ if type complete &>/dev/null; then
     COMPREPLY=()
   }
 
-  complete -o default -F _rmx_completion rmx
+  complete -o default -F _rsmix_completion rsmix
 elif type compdef &>/dev/null; then
-  _rmx_completion() {
+  _rsmix_completion() {
     local output mode
     local -a lines values
 
-    output=$(rmx completion -- "$((CURRENT - 1))" "${words[@]}" 2>/dev/null) || return 0
+    output=$(rsmix completion -- "$((CURRENT - 1))" "${words[@]}" 2>/dev/null) || return 0
     lines=("${(@f)output}")
     mode="${lines[1]}"
 
@@ -184,8 +184,8 @@ elif type compdef &>/dev/null; then
     return 0
   }
 
-  compdef _rmx_completion rmx
+  compdef _rsmix_completion rsmix
 fi
-###-end-rmx-completion-###
+###-end-rsmix-completion-###
 "#
 }

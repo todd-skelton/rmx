@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_auth::{google_provider, ClientOptions, OAuthProvider};
+use rsmix_auth::{google_provider, ClientOptions, OAuthProvider};
 
 fn google_client() -> ClientOptions {
     ClientOptions::new("client-id", "client-secret", "https://app.example.com/auth/google/callback")

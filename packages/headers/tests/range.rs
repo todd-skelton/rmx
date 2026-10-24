@@ -1,7 +1,7 @@
 //! Ports of Remix's `headers/src/lib/range.test.ts`. `new Range(string)` and `Range.from`
 //! are [`Range::parse`]; an object init is a struct literal.
 
-use rmx_headers::Range;
+use rsmix_headers::Range;
 
 fn parse(value: &str) -> Range {
     Range::parse(Some(value))

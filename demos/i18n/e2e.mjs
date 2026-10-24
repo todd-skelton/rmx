@@ -33,7 +33,7 @@ const attempt = async (name, fn) => {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
-  page.on('console', (m) => m.type() === 'warning' && m.text().startsWith('rmx') && errors.push(m.text()))
+  page.on('console', (m) => m.type() === 'warning' && m.text().startsWith('rsmix') && errors.push(m.text()))
   const origin = () => page.evaluate(() => performance.timeOrigin)
 
   await page.goto('/en')
@@ -123,7 +123,7 @@ const attempt = async (name, fn) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.screenshot({ path: process.env.SHOT, fullPage: true })
   }
-  check('no page errors or rmx warnings', errors.length === 0, errors)
+  check('no page errors or rsmix warnings', errors.length === 0, errors)
   await context.close()
 }
 

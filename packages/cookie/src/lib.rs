@@ -2,7 +2,7 @@
 //! write `Set-Cookie` headers, with optional signing and secret rotation.
 //!
 //! ```
-//! use rmx_cookie::{Cookie, CookieProperties};
+//! use rsmix_cookie::{Cookie, CookieProperties};
 //!
 //! let auth = Cookie::new("auth").http_only(true);
 //! let set = auth.serialize("1");
@@ -21,8 +21,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-pub use rmx_headers::SameSite;
-use rmx_headers::SetCookie;
+pub use rsmix_headers::SameSite;
+use rsmix_headers::SetCookie;
 
 type Encoder = Arc<dyn Fn(&str) -> String + Send + Sync>;
 type Decoder = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
@@ -207,7 +207,7 @@ impl Cookie {
     /// cookie is missing, the signature does not verify, or the value does not decode.
     pub fn parse(&self, header: Option<&str>) -> Option<String> {
         let header = header.filter(|h| !h.is_empty())?;
-        let cookies = rmx_headers::Cookie::parse(Some(header));
+        let cookies = rsmix_headers::Cookie::parse(Some(header));
         let value = cookies.get(&self.name)?;
         if value.is_empty() {
             return Some(String::new());
@@ -253,7 +253,7 @@ impl Cookie {
 
 /// Remix's default encoder: base64 of the UTF-8 bytes, padded like `btoa`.
 fn default_encode(value: &str) -> String {
-    let mut encoded = rmx_crypto::base64_encode(value.as_bytes());
+    let mut encoded = rsmix_crypto::base64_encode(value.as_bytes());
     while !encoded.len().is_multiple_of(4) {
         encoded.push('=');
     }
@@ -262,19 +262,19 @@ fn default_encode(value: &str) -> String {
 
 /// Remix's default decoder: base64 to UTF-8, `None` when either step fails.
 fn default_decode(value: &str) -> Option<String> {
-    String::from_utf8(rmx_crypto::base64_decode(value)?).ok()
+    String::from_utf8(rsmix_crypto::base64_decode(value)?).ok()
 }
 
 /// `value.signature`, the signature being HMAC-SHA-256 of the value in unpadded base64.
 pub fn sign(value: &str, secret: &str) -> String {
-    let mac = rmx_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
-    format!("{value}.{}", rmx_crypto::base64_encode(&mac))
+    let mac = rsmix_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
+    format!("{value}.{}", rsmix_crypto::base64_encode(&mac))
 }
 
 /// The value of a signed `value.signature` string, if the signature matches `secret`.
 pub fn unsign<'a>(signed: &'a str, secret: &str) -> Option<&'a str> {
     let (value, signature) = signed.rsplit_once('.')?;
-    let given = rmx_crypto::base64_decode(signature)?;
-    let expected = rmx_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
-    rmx_crypto::constant_time_eq(&given, &expected).then_some(value)
+    let given = rsmix_crypto::base64_decode(signature)?;
+    let expected = rsmix_crypto::hmac_sha256(secret.as_bytes(), value.as_bytes());
+    rsmix_crypto::constant_time_eq(&given, &expected).then_some(value)
 }

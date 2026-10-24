@@ -1,6 +1,6 @@
 [package]
-name = "rmx-response"
-description = "Response helpers for rmx (remix response): html, redirect, file and compress"
+name = "rsmix-response"
+description = "Response helpers for rsmix (remix response): html, redirect, file and compress"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -8,11 +8,11 @@ license.workspace = true
 [dependencies]
 bytes.workspace = true
 http.workspace = true
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-headers.workspace = true
-rmx-html-template.workspace = true
-rmx-mime.workspace = true
+rsmix-crypto.workspace = true
+rsmix-fetch.workspace = true
+rsmix-headers.workspace = true
+rsmix-html-template.workspace = true
+rsmix-mime.workspace = true
 brotli = { version = "9", default-features = false, features = ["std"], optional = true }
 flate2 = { version = "1", optional = true }
 serde = { workspace = true, optional = true }
@@ -21,7 +21,7 @@ serde_json = { workspace = true, optional = true }
 [features]
 default = ["json"]
 # `json(value)`.
-json = ["dep:serde", "dep:serde_json", "rmx-fetch/json"]
+json = ["dep:serde", "dep:serde_json", "rsmix-fetch/json"]
 # `compress` (br, gzip and deflate), Remix's `remix/response/compress`.
 compress = ["dep:flate2", "dep:brotli"]
 
@@ -29,7 +29,7 @@ compress = ["dep:flate2", "dep:brotli"]
 http-body.workspace = true
 brotli = { version = "9", default-features = false, features = ["std"] }
 flate2 = "1"
-rmx-lazy-file.workspace = true
+rsmix-lazy-file.workspace = true
 
 [[test]]
 name = "compress"

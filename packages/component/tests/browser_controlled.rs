@@ -2,9 +2,9 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_controlled`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::{create_root, on, rsx, Component, Handle, Node};
+use rsmix::{create_root, on, rsx, Component, Handle, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

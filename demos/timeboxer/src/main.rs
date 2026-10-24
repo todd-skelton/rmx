@@ -9,7 +9,7 @@
 fn main() {
     use timeboxer_demo::server::{asset_server, data::Db, router, session_cookie, TimeboxerOptions};
 
-    rmx::router::routes::routes_command(&*timeboxer_demo::routes::ROUTES);
+    rsmix::router::routes::routes_command(&*timeboxer_demo::routes::ROUTES);
 
     let Ok(secret) = std::env::var("SESSION_SECRET") else {
         eprintln!("SESSION_SECRET is required");
@@ -23,14 +23,14 @@ fn main() {
 
     let options = TimeboxerOptions {
         session_cookie: session_cookie(&secret, production),
-        session_storage: rmx::session::FsStorage::new(tmp.join("sessions")).expect("session directory"),
+        session_storage: rsmix::session::FsStorage::new(tmp.join("sessions")).expect("session directory"),
         db: Db::new(),
         assets: Some(asset_server(std::path::Path::new(&root), production).expect("asset server")),
     };
     let addr = format!("{host}:{port}");
     println!("Timeboxer is running on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(options))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(options))).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

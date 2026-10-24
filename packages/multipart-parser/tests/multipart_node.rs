@@ -1,11 +1,11 @@
-//! Port of Remix's `multipart.node.test.ts`. rmx has one request type, so the Node
+//! Port of Remix's `multipart.node.test.ts`. rsmix has one request type, so the Node
 //! adapter's cases run against `parse_multipart_request` with an `http::Request`.
 
 mod common;
 
 use common::*;
-use rmx_fetch::Body;
-use rmx_multipart_parser::*;
+use rsmix_fetch::Body;
+use rsmix_multipart_parser::*;
 
 const BOUNDARY: &str = "----WebKitFormBoundaryzv5f5B2cY6tjQ0Rn";
 const LARGE_FILE_SIZE: usize = 128 * 1024;

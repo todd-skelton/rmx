@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rmx_fetch::{block_on, Body};
-use rmx_fs::{open_lazy_file, write_file, write_to, OpenLazyFileOptions, Streamable};
+use rsmix_fetch::{block_on, Body};
+use rsmix_fs::{open_lazy_file, write_file, write_to, OpenLazyFileOptions, Streamable};
 
 /// A fresh directory under the system temp directory, removed when dropped (`mkdtempSync` in
 /// `beforeEach`, `rmSync` in `afterEach`).
@@ -17,7 +17,7 @@ struct TempDir(PathBuf);
 impl TempDir {
     fn new() -> TempDir {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!("rmx-fs-test-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::SeqCst)));
+        let dir = std::env::temp_dir().join(format!("rsmix-fs-test-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::SeqCst)));
         fs::create_dir_all(&dir).unwrap();
         TempDir(dir)
     }
@@ -41,7 +41,7 @@ impl Drop for TempDir {
     }
 }
 
-fn open(path: &Path) -> rmx_lazy_file::LazyFile {
+fn open(path: &Path) -> rsmix_lazy_file::LazyFile {
     open_lazy_file(path, OpenLazyFileOptions::default()).unwrap()
 }
 

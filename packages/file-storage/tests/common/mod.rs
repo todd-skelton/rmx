@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use rmx_fetch::{Body, File, FormData, FormLimits};
+use rsmix_fetch::{Body, File, FormData, FormLimits};
 
 pub fn text_file(body: &str, name: &str) -> File {
     File::new(name, "text/plain", body.as_bytes().to_vec())

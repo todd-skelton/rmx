@@ -3,10 +3,10 @@
 mod common;
 
 use common::{parse_uploads, text, text_file, upload_request};
-use rmx_fetch::block_on;
-use rmx_file_storage::{FileStorage, ListOptions, MemoryFileStorage};
+use rsmix_fetch::block_on;
+use rsmix_file_storage::{FileStorage, ListOptions, MemoryFileStorage};
 
-fn keys(files: &[rmx_file_storage::FileEntry]) -> Vec<String> {
+fn keys(files: &[rsmix_file_storage::FileEntry]) -> Vec<String> {
     let mut keys: Vec<String> = files.iter().map(|f| f.key.clone()).collect();
     keys.sort();
     keys

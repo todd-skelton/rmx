@@ -1,9 +1,9 @@
 //! `packages/ui/src/demos/popover.demo.tsx`: anchored popover behavior with focus
 //! restoration and outside-click dismissal.
 
-use rmx::{css, on, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::anchor::{AnchorOptions, Placement};
-use rmx::ui::popover;
+use rsmix::{css, on, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::anchor::{AnchorOptions, Placement};
+use rsmix::ui::popover;
 
 pub struct PopoverDemo {
     open: bool,
@@ -11,7 +11,7 @@ pub struct PopoverDemo {
 
 impl Component for PopoverDemo {
     type Props = ();
-    rmx::client_entry!("PopoverDemo");
+    rsmix::client_entry!("PopoverDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         PopoverDemo { open: false }

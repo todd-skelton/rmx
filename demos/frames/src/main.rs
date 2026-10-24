@@ -7,7 +7,7 @@ mod server;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    rmx::router::routes::routes_command(&*frames_demo::routes::ROUTES);
+    rsmix::router::routes::routes_command(&*frames_demo::routes::ROUTES);
     server::main();
 }
 

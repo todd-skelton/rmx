@@ -2,7 +2,7 @@
 //! `@remix-run/ui/combobox`).
 //!
 //! ```ignore
-//! use rmx_ui::{combobox, listbox::ListboxOption};
+//! use rsmix_ui::{combobox, listbox::ListboxOption};
 //!
 //! rsx! {
 //!     <combobox::Context name="framework">
@@ -26,7 +26,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node};
+use rsmix::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node};
 
 use crate::listbox::{self, ListboxOption, ListboxState, Navigate, RegisteredOption};
 use crate::typeahead::matches_search_text;
@@ -694,7 +694,7 @@ impl HostMixin for Input {
         #[cfg(target_arch = "wasm32")]
         {
             let registered = s.clone();
-            host.mix(rmx::node_ref(move |node, signal| {
+            host.mix(rsmix::node_ref(move |node, signal| {
                 let Ok(el) = wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlInputElement>(node.element().clone()) else { return };
                 *registered.input.borrow_mut() = Some(el.clone());
                 registered.set_input_value(&registered.input_text());
@@ -874,7 +874,7 @@ impl HostMixin for HiddenInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     #[test]
     fn exact_and_prefix_matching_use_search_values() {

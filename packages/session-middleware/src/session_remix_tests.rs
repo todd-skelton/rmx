@@ -5,11 +5,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::header::SET_COOKIE;
-use rmx_cookie::Cookie;
-use rmx_fetch::{Body, Response};
-use rmx_headers::SetCookie;
-use rmx_fetch_router::{Context, Router};
-use rmx_session::{CookieStorage, Error, FsStorage, MemoryStorage, Session, SessionStorage};
+use rsmix_cookie::Cookie;
+use rsmix_fetch::{Body, Response};
+use rsmix_headers::SetCookie;
+use rsmix_fetch_router::{Context, Router};
+use rsmix_session::{CookieStorage, Error, FsStorage, MemoryStorage, Session, SessionStorage};
 
 use super::{session, SessionExt, MOCK_NOW};
 
@@ -122,7 +122,7 @@ fn persists_session_data_across_requests() {
 
 #[test]
 fn allows_for_direct_return_of_a_fetched_response() {
-    // Remix returns `fetch(...)`, whose headers are immutable; rmx responses are always owned.
+    // Remix returns `fetch(...)`, whose headers are immutable; rsmix responses are always owned.
     let mut router = Router::new().with(session(sess_cookie(), CookieStorage::new()));
     router.get("/", |ctx: Context| async move {
         ctx.session().set("count", 1);
@@ -239,7 +239,7 @@ fn enforces_max_age_with_memory_storage() {
 
 #[test]
 fn enforces_max_age_with_filesystem_storage() {
-    let dir = std::env::temp_dir().join(format!("session-expiration-{}", rmx_crypto::random_hex(8)));
+    let dir = std::env::temp_dir().join(format!("session-expiration-{}", rsmix_crypto::random_hex(8)));
     let result = std::panic::catch_unwind(|| {
         set_now(1_000_000);
         let request = create_requests(session_cookie().max_age(60), FsStorage::new(&dir).unwrap());

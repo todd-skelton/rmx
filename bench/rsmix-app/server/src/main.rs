@@ -1,32 +1,32 @@
-//! The rmx benchmark server, on rmx's own stack like the Remix app it is compared with
+//! The rsmix benchmark server, on rsmix's own stack like the Remix app it is compared with
 //! (`bench/remix-app/app/router.tsx`): fetch-router, the static and form-data middleware,
 //! `ctx.render` and node-fetch-server.
 //!
-//! Env: `HOST` (default 127.0.0.1), `PORT` (default 44101), `RMX_THREADS` (tokio worker threads; default = CPU count),
-//! `RMX_PUBLIC` (static dir; default `bench/rmx-app/public`).
+//! Env: `HOST` (default 127.0.0.1), `PORT` (default 44101), `RSMIX_THREADS` (tokio worker threads; default = CPU count),
+//! `RSMIX_PUBLIC` (static dir; default `bench/rsmix-app/public`).
 
 use std::sync::{Arc, Mutex};
 
 use bench_app::Task;
 use http::StatusCode;
-use rmx::middleware::form_data::{form_data, FormDataExt};
-use rmx::middleware::render::Render;
-use rmx::middleware::static_files::{static_files, StaticOptions};
-use rmx::response;
-use rmx::router::{Context, Router};
+use rsmix::middleware::form_data::{form_data, FormDataExt};
+use rsmix::middleware::render::Render;
+use rsmix::middleware::static_files::{static_files, StaticOptions};
+use rsmix::response;
+use rsmix::router::{Context, Router};
 
 fn main() {
-    let threads = std::env::var("RMX_THREADS").ok().and_then(|v| v.parse::<usize>().ok());
+    let threads = std::env::var("RSMIX_THREADS").ok().and_then(|v| v.parse::<usize>().ok());
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     if let Some(n) = threads {
         builder.worker_threads(n);
     }
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44101".into());
-    let public = std::env::var("RMX_PUBLIC").unwrap_or_else(|_| "bench/rmx-app/public".into());
+    let public = std::env::var("RSMIX_PUBLIC").unwrap_or_else(|_| "bench/rsmix-app/public".into());
     let addr = format!("{host}:{port}");
-    println!("rmx bench listening on http://{addr}");
-    builder.enable_all().build().expect("tokio runtime").block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
+    println!("rsmix bench listening on http://{addr}");
+    builder.enable_all().build().expect("tokio runtime").block_on(rsmix::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 fn router(public: &str) -> Router {

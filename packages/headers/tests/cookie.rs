@@ -3,7 +3,7 @@
 //! `None` where Remix returns `null`, `size` is `len`, and `entries`, `forEach` and direct
 //! iteration are `iter`.
 
-use rmx_headers::Cookie;
+use rsmix_headers::Cookie;
 
 fn parse(value: &str) -> Cookie {
     Cookie::parse(Some(value))

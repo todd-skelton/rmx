@@ -1,10 +1,10 @@
-//! rmx-only static file tests: streaming, escaping, listing helpers and per-file options.
+//! rsmix-only static file tests: streaming, escaping, listing helpers and per-file options.
 //! Remix's `static.test.ts` is ported one per case in `tests/static_files.rs`.
 
 use std::path::PathBuf;
 
-use rmx_fetch::{block_on, Body, Response};
-use rmx_fetch_router::{Context, Router};
+use rsmix_fetch::{block_on, Body, Response};
+use rsmix_fetch_router::{Context, Router};
 
 use super::*;
 
@@ -13,7 +13,7 @@ struct TempDir(PathBuf);
 
 impl TempDir {
     fn new(name: &str) -> TempDir {
-        let dir = std::env::temp_dir().join(format!("rmx-static-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rsmix-static-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         TempDir(dir)
@@ -36,7 +36,7 @@ impl Drop for TempDir {
 fn router(root: &std::path::Path, options: StaticOptions) -> Router {
     let mut router = Router::new().with(static_files(root, options));
     router.get("/", |_: Context| async { "home" });
-    router.get("/*path", |_: Context| async { rmx_response::status(http::StatusCode::NOT_FOUND, "Fallback Handler") });
+    router.get("/*path", |_: Context| async { rsmix_response::status(http::StatusCode::NOT_FOUND, "Fallback Handler") });
     router
 }
 

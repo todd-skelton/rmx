@@ -2,8 +2,8 @@
 //! `@remix-run/ui/popover`).
 //!
 //! ```ignore
-//! use rmx_ui::anchor::{AnchorOptions, Placement};
-//! use rmx_ui::popover;
+//! use rsmix_ui::anchor::{AnchorOptions, Placement};
+//! use rsmix_ui::popover;
 //!
 //! rsx! {
 //!     <popover::Context>
@@ -25,7 +25,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{mixin, on, Children, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node};
+use rsmix::{mixin, on, Children, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node};
 
 use crate::anchor::AnchorOptions;
 
@@ -396,7 +396,7 @@ fn call(el: &web_sys::Element, method: &str) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn new_state(event: &rmx::Event) -> Option<String> {
+fn new_state(event: &rsmix::Event) -> Option<String> {
     js_sys::Reflect::get(event.raw(), &"newState".into()).ok()?.as_string()
 }
 
@@ -409,7 +409,7 @@ mod outside_click {
 
     use super::*;
 
-    pub(super) fn listen(h: &MixinHandle<Surface>, node: &rmx::NodeHandle) {
+    pub(super) fn listen(h: &MixinHandle<Surface>, node: &rsmix::NodeHandle) {
         let surface = node.element().clone();
         let handle = h.clone();
         let listener = Closure::<dyn Fn(web_sys::Event)>::new(move |event: web_sys::Event| {
@@ -519,7 +519,7 @@ pub mod scroll_lock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     #[test]
     fn surface_renders_as_a_manual_popover_and_browser_only_mixins_are_skipped() {

@@ -3,8 +3,8 @@
 mod common;
 
 use common::*;
-use rmx_auth::{github_provider, google_provider, refresh_external_auth, x_provider, OAuthTokens};
-use rmx_fetch::block_on;
+use rsmix_auth::{github_provider, google_provider, refresh_external_auth, x_provider, OAuthTokens};
+use rsmix_fetch::block_on;
 use serde_json::json;
 
 fn scopes(list: &[&str]) -> Option<Vec<String>> {
@@ -46,7 +46,7 @@ fn refreshes_google_tokens_and_preserves_the_existing_refresh_token_when_the_pro
 fn refreshes_x_tokens_with_http_basic_auth() {
     let (fetch, _) = mock(|seen| match seen.url.as_str() {
         "https://api.x.com/2/oauth2/token" => {
-            assert_eq!(seen.authorization.as_deref(), Some(format!("Basic {}", rmx_crypto::base64_encode(b"x-client-id:x-client-secret")).as_str()));
+            assert_eq!(seen.authorization.as_deref(), Some(format!("Basic {}", rsmix_crypto::base64_encode(b"x-client-id:x-client-secret")).as_str()));
             assert_eq!(seen.body.get("grant_type"), Some("refresh_token"));
             assert_eq!(seen.body.get("refresh_token"), Some("x-refresh-token"));
             assert_eq!(seen.body.get("client_id"), None);

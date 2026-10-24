@@ -1,6 +1,6 @@
 [package]
 name = "timeboxer-demo"
-description = "The Remix 3 timeboxer demo, in rmx: CSRF, session auth with scrypt passwords, a JSON schedule API, ICS export and a drag-and-drop weekly grid"
+description = "The Remix 3 timeboxer demo, in rsmix: CSRF, session auth with scrypt passwords, a JSON schedule API, ICS export and a drag-and-drop weekly grid"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rmx.workspace = true
+rsmix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -4,8 +4,8 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use rmx_fetch::{block_on, Body, File, FileUpload, FormData, FormDataError, FormLimits, FormValue};
-use rmx_multipart_parser::MultipartError;
+use rsmix_fetch::{block_on, Body, File, FileUpload, FormData, FormDataError, FormLimits, FormValue};
+use rsmix_multipart_parser::MultipartError;
 
 const WEBKIT: &str = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
 
@@ -21,7 +21,7 @@ fn parse_default(request: (String, Body)) -> FormData {
     parse(&request.0, request.1, FormLimits::default()).unwrap()
 }
 
-fn with_handler<R: rmx_fetch::UploadResult>(request: (String, Body), handler: impl FnMut(FileUpload) -> R) -> Result<FormData, FormDataError> {
+fn with_handler<R: rsmix_fetch::UploadResult>(request: (String, Body), handler: impl FnMut(FileUpload) -> R) -> Result<FormData, FormDataError> {
     let mut handler = handler;
     block_on(FormData::parse_with(Some(&request.0), request.1, FormLimits::default(), |upload| std::future::ready(handler(upload))))
 }
@@ -159,7 +159,7 @@ fn does_not_parse_media_types_that_only_start_with_the_urlencoded_media_type() {
 
 #[test]
 fn rejects_unsupported_media_types_even_if_a_native_parser_would_accept_them() {
-    // Remix overrides `request.formData` to prove it is not consulted; rmx has no such fallback.
+    // Remix overrides `request.formData` to prove it is not consulted; rsmix has no such fallback.
     for content_type in ["application/x-www-form-urlencoded-extra", "application/json", ""] {
         let err = parse(content_type, Body::from("tag=red&tag=green"), FormLimits::default()).unwrap_err();
         assert_eq!(err, FormDataError::Parse("Cannot parse form data".into()), "{content_type:?}");

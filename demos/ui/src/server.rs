@@ -1,25 +1,25 @@
 use std::sync::LazyLock;
 
 use http::StatusCode;
-use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
-use rmx::response;
-use rmx::middleware::logger::logger;
-use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::middleware::render::{Render, ResponseInit};
-use rmx::router::routes::{get, Route, RouteMap};
-use rmx::router::{action, Context, Router};
+use rsmix::{css, rsx, Children, Component, Handle, Mixin, Node};
+use rsmix::response;
+use rsmix::middleware::logger::logger;
+use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+use rsmix::middleware::render::{Render, ResponseInit};
+use rsmix::router::routes::{get, Route, RouteMap};
+use rsmix::router::{action, Context, Router};
 use ui_demo::demos::*;
 use ui_demo::{find_demo, Demo, DEMOS};
 
 pub fn main() {
-    rmx::router::routes::routes_command(&*ROUTES);
+    rsmix::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44105".into());
     let public = std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "demos/ui/public".into());
     let addr = format!("{host}:{port}");
     println!("ui demos on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 // config/routes.ts
@@ -33,7 +33,7 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| Routes { index: get("/"),
 
 pub fn router(public: &str) -> Router {
     let mut router = Router::new();
-    if std::env::var("RMX_LOG").is_ok() {
+    if std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
     router.use_middleware(static_files(
@@ -133,12 +133,12 @@ impl Component for DemoIndexDocument {
                 <head>
                     <meta charset="utf-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                    <title>"rmx UI Demos"</title>
+                    <title>"rsmix UI Demos"</title>
                 </head>
                 <body mix={body_css()}>
                     <main mix={index_shell_css()}>
                         <header mix={index_header_css()}>
-                            <p mix={eyebrow_css()}>"rmx interface"</p>
+                            <p mix={eyebrow_css()}>"rsmix interface"</p>
                             <h1 mix={title_css()}>"Demos"</h1>
                             <p mix={description_css()}>{format!("{} demos across the component runtime and mixins.", DEMOS.len())}</p>
                         </header>
@@ -154,8 +154,8 @@ type Group = (&'static str, Vec<&'static Demo>);
 
 fn sections() -> Vec<(&'static str, &'static str, Vec<Group>)> {
     [
-        ("Component runtime", "Rendering, interaction, and mixin demos for rmx."),
-        ("UI", "Demos for @remix-run/ui, ported to rmx-ui."),
+        ("Component runtime", "Rendering, interaction, and mixin demos for rsmix."),
+        ("UI", "Demos for @remix-run/ui, ported to rsmix-ui."),
         ("Cases", "Standalone cases from the Remix ui demos."),
     ]
     .into_iter()
@@ -199,7 +199,7 @@ impl Component for DemoDocument {
                     <meta charset="utf-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
                     <script type="module" async src="/boot.js"></script>
-                    <title>{format!("{} | rmx Interface Demo", demo.title)}</title>
+                    <title>{format!("{} | rsmix Interface Demo", demo.title)}</title>
                 </head>
                 <body mix={body_css()}>
                     <main mix={stage}>{Children::from(content)}</main>

@@ -4,11 +4,11 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_prefetch_assets`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 
-use rmx::{prefetch, PrefetchOptions, RunOptions};
+use rsmix::{prefetch, PrefetchOptions, RunOptions};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -17,7 +17,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
 }
 
 thread_local! {
@@ -42,7 +42,7 @@ impl Drop for Serial {
 
 async fn start() {
     if APP.with(|a| a.borrow().is_none()) {
-        APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions::default())));
+        APP.with(|a| *a.borrow_mut() = Some(rsmix::run(RunOptions::default())));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
     app.ready().await;

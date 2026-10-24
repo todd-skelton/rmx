@@ -1,11 +1,11 @@
-//! `rmx dev` (Remix's `npm run dev` / `npm run hmr`): build the client and the server, run
+//! `rsmix dev` (Remix's `npm run dev` / `npm run hmr`): build the client and the server, run
 //! the app, and rebuild and restart it when a source file changes. Open pages reload through
-//! `rmx::middleware::live_reload`, which the app installs and `rmx dev` switches on with
-//! `RMX_DEV_LIVE_RELOAD`.
+//! `rsmix::middleware::live_reload`, which the app installs and `rsmix dev` switches on with
+//! `RSMIX_DEV_LIVE_RELOAD`.
 //!
 //! Changes are found by polling modification times under `src/` and `app/` (except the
 //! client output) and `Cargo.toml`. A failed build leaves the running server alone. The client
-//! is built with the dev profile for speed; `wasm-bindgen` comes from `RMX_WASM_BINDGEN` or
+//! is built with the dev profile for speed; `wasm-bindgen` comes from `RSMIX_WASM_BINDGEN` or
 //! `PATH`.
 
 use std::collections::BTreeMap;
@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime};
 use super::doctor::{find_file, package_name, read, rust_sources};
 use super::CliError;
 
-/// What `rmx dev` builds and runs for an app.
+/// What `rsmix dev` builds and runs for an app.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DevPlan {
     pub root: PathBuf,
@@ -33,7 +33,7 @@ impl DevPlan {
         let root = cwd
             .ancestors()
             .find(|dir| read(&dir.join("Cargo.toml")).contains("[package]"))
-            .ok_or_else(|| CliError::internal("Could not find Cargo.toml. Run this command inside an rmx project.".into()))?
+            .ok_or_else(|| CliError::internal("Could not find Cargo.toml. Run this command inside an rsmix project.".into()))?
             .to_path_buf();
         let package = package_name(&read(&root.join("Cargo.toml")));
         let has_client = rust_sources(&root.join("src")).iter().any(|(_, source)| source.contains("wasm_bindgen(start)"));
@@ -72,7 +72,7 @@ impl DevPlan {
     /// The copy of the server binary that runs, so a rebuild can replace the original while
     /// the server is up (Windows locks running executables).
     pub fn running_binary(&self) -> PathBuf {
-        self.root.join("target/rmx-dev").join(format!("{}{}", self.package, std::env::consts::EXE_SUFFIX))
+        self.root.join("target/rsmix-dev").join(format!("{}{}", self.package, std::env::consts::EXE_SUFFIX))
     }
 
     /// Modification times of the files a rebuild depends on.
@@ -111,7 +111,7 @@ fn run_build(plan: &DevPlan, wasm_bindgen: &str) -> bool {
             Ok(status) if status.success() => {}
             Ok(_) => return false,
             Err(e) => {
-                eprintln!("rmx dev: could not run {}: {e}", argv[0]);
+                eprintln!("rsmix dev: could not run {}: {e}", argv[0]);
                 return false;
             }
         }
@@ -123,13 +123,13 @@ fn start_server(plan: &DevPlan, args: &[String]) -> Option<Child> {
     let binary = plan.running_binary();
     let copied = binary.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::copy(plan.server_binary(), &binary));
     if let Err(e) = copied {
-        eprintln!("rmx dev: could not copy {} to {}: {e}", plan.server_binary().display(), binary.display());
+        eprintln!("rsmix dev: could not copy {} to {}: {e}", plan.server_binary().display(), binary.display());
         return None;
     }
-    match Command::new(&binary).args(args).current_dir(&plan.root).env("RMX_DEV_LIVE_RELOAD", "1").spawn() {
+    match Command::new(&binary).args(args).current_dir(&plan.root).env("RSMIX_DEV_LIVE_RELOAD", "1").spawn() {
         Ok(child) => Some(child),
         Err(e) => {
-            eprintln!("rmx dev: could not start {}: {e}", binary.display());
+            eprintln!("rsmix dev: could not start {}: {e}", binary.display());
             None
         }
     }
@@ -145,13 +145,13 @@ fn stop(server: &mut Option<Child>) {
 /// Run the dev loop for the app containing `cwd` until interrupted. `args` go to the app.
 pub fn run_dev(cwd: &Path, args: &[String]) -> Result<(), CliError> {
     let plan = DevPlan::for_app(cwd)?;
-    let wasm_bindgen = std::env::var("RMX_WASM_BINDGEN").unwrap_or_else(|_| "wasm-bindgen".into());
+    let wasm_bindgen = std::env::var("RSMIX_WASM_BINDGEN").unwrap_or_else(|_| "wasm-bindgen".into());
     let mut server = None;
     let mut built = plan.snapshot();
     if run_build(&plan, &wasm_bindgen) {
         server = start_server(&plan, args);
     } else {
-        eprintln!("rmx dev: build failed; waiting for changes");
+        eprintln!("rsmix dev: build failed; waiting for changes");
     }
     loop {
         std::thread::sleep(Duration::from_millis(300));
@@ -162,12 +162,12 @@ pub fn run_dev(cwd: &Path, args: &[String]) -> Result<(), CliError> {
         // Let a burst of saves settle before building.
         std::thread::sleep(Duration::from_millis(100));
         built = plan.snapshot();
-        eprintln!("rmx dev: change detected, rebuilding");
+        eprintln!("rsmix dev: change detected, rebuilding");
         if run_build(&plan, &wasm_bindgen) {
             stop(&mut server);
             server = start_server(&plan, args);
         } else {
-            eprintln!("rmx dev: build failed; the previous server keeps running");
+            eprintln!("rsmix dev: build failed; the previous server keeps running");
         }
     }
 }

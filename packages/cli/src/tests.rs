@@ -11,7 +11,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Scratch {
-        let dir = std::env::temp_dir().join(format!("rmx-cli-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rsmix-cli-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Scratch(dir)
@@ -39,11 +39,11 @@ fn new_app(cwd: &Path, list: &[&str]) -> (Result<NewApp, CliError>, Vec<String>)
 fn prints_help_and_the_version() {
     assert_eq!(parse(&[]), Ok(Invocation::Help(HELP)));
     assert_eq!(parse(&args(&["--help"])), Ok(Invocation::Help(HELP)));
-    assert!(HELP.contains("new <name>        Create a new rmx project"));
+    assert!(HELP.contains("new <name>        Create a new rsmix project"));
     assert_eq!(parse(&args(&["help", "new"])), Ok(Invocation::Help(NEW_HELP)));
     assert_eq!(parse(&args(&["new"])), Ok(Invocation::Help(NEW_HELP)), "new without arguments prints its help");
     assert_eq!(parse(&args(&["new", "--help"])), Ok(Invocation::Help(NEW_HELP)));
-    assert!(NEW_HELP.contains("Create a new rmx project in the target directory."));
+    assert!(NEW_HELP.contains("Create a new rsmix project in the target directory."));
     let version = format!("{}\n", env!("CARGO_PKG_VERSION"));
     assert_eq!(parse(&args(&["version"])), Ok(Invocation::Print(version.clone())));
     assert_eq!(parse(&args(&["-v"])), Ok(Invocation::Print(version.clone())));
@@ -61,7 +61,7 @@ fn accepts_the_global_no_color_flag_before_a_separator() {
 
     let (rest, global) = global_options(&args(&["--no-color", "doctor", "--json"]));
     assert_eq!((rest, global.no_color), (args(&["doctor", "--json"]), true));
-    // After `--` it belongs to the app: `rmx dev -- --no-color` passes it on.
+    // After `--` it belongs to the app: `rsmix dev -- --no-color` passes it on.
     let (rest, global) = global_options(&args(&["dev", "--", "--no-color"]));
     assert_eq!((rest, global.no_color), (args(&["dev", "--", "--no-color"]), false));
     assert_eq!(parse(&args(&["dev", "--", "--no-color"])), Ok(Invocation::Dev(args(&["--no-color"]))));
@@ -79,7 +79,7 @@ fn reports_unknown_commands_and_arguments() {
     let err = parse(&args(&["deploy"])).unwrap_err();
     assert_eq!((err.code, err.message.as_str()), ("RMX_UNKNOWN_COMMAND", "Unknown command: deploy"));
     let rendered = err.render(HELP);
-    assert!(rendered.starts_with("Error [RMX_UNKNOWN_COMMAND] Unknown command\nUnknown command: deploy\n\nTry:\n  Run `rmx help` to see available commands.\n\nUsage:"), "{rendered}");
+    assert!(rendered.starts_with("Error [RMX_UNKNOWN_COMMAND] Unknown command\nUnknown command: deploy\n\nTry:\n  Run `rsmix help` to see available commands.\n\nUsage:"), "{rendered}");
     let err = parse(&args(&["new", "my-app", "--remix-version", "1.2.3"])).unwrap_err();
     assert_eq!(err.message, "Unknown argument: --remix-version");
     assert_eq!(parse(&args(&["new", "a", "b"])).unwrap_err().message, "Unexpected extra argument: b");
@@ -137,21 +137,21 @@ fn creates_the_expected_scaffold() {
     let cargo = read(dir, "Cargo.toml");
     assert!(cargo.contains("name = \"my-app\""), "{cargo}");
     assert!(cargo.contains("crate-type = [\"cdylib\", \"rlib\"]"));
-    assert!(cargo.contains("rmx = { path = ") && !cargo.contains('\\'), "{cargo}");
+    assert!(cargo.contains("rsmix = { path = ") && !cargo.contains('\\'), "{cargo}");
     assert!(cargo.contains("wasm-bindgen = \"=0.2.129\""));
     assert!(!cargo.contains("workspace"), "a standalone crate: {cargo}");
 
     let main = read(dir, "src/main.rs");
     assert!(main.contains("my_app::routes::ROUTES") && main.contains("my_app::server::router"), "{main}");
     assert!(main.contains("`cargo run -p my-app`"));
-    assert!(!main.contains("template") && !main.contains("rmx-template:remove") && !main.contains("build-client"), "{main}");
+    assert!(!main.contains("template") && !main.contains("rsmix-template:remove") && !main.contains("build-client"), "{main}");
     assert!(main.contains("unwrap_or_else(|_| \".\".into())"), "APP_ROOT defaults to the app directory: {main}");
     assert!(read(dir, "app/actions/public/entry.js").contains("./pkg/my_app.js"));
     assert!(read(dir, "src/server/tests.rs").contains("my_app.js"));
     assert!(read(dir, "src/server/home_page.rs").contains("unwrap_or(\"My App\")"));
     assert!(read(dir, "src/server/mod.rs").contains("allow_files: vec![\"app/**/public/**\".into()]"));
-    assert!(read(dir, "src/prompt_button.rs").contains("rmx::client_entry!(\"PromptButton\")"));
-    assert!(read(dir, "src/lib.rs").contains("rmx::entry::<prompt_button::PromptButton>()"));
+    assert!(read(dir, "src/prompt_button.rs").contains("rsmix::client_entry!(\"PromptButton\")"));
+    assert!(read(dir, "src/lib.rs").contains("rsmix::entry::<prompt_button::PromptButton>()"));
     assert!(read(dir, "src/routes.rs").contains("#[derive(RouteMap)]"));
     assert!(read(dir, "public/favicon.svg").contains("<svg"));
     assert!(read(dir, "README.md").starts_with("# My App\n"));
@@ -233,7 +233,7 @@ fn marks_scaffold_generation_as_failed_when_a_file_is_in_the_way() {
     assert_eq!(result.unwrap_err().code, "RMX_TARGET_PATH_NOT_DIRECTORY");
 }
 
-// Ports of doctor.test.ts, for rmx's suites (environment, project, client).
+// Ports of doctor.test.ts, for rsmix's suites (environment, project, client).
 
 struct FakeToolchain {
     targets: Option<Vec<&'static str>>,
@@ -308,7 +308,7 @@ fn doctor_skips_later_suites_when_the_environment_warns() {
     let scratch = Scratch::new("doctor-env");
     let report = doctor::run_doctor(&scratch.0, &ready());
     let text = report.render();
-    assert!(text.contains("\u{2717} environment\n  \u{2022} [WARN] Could not find Cargo.toml. Run this command inside an rmx project."), "{text}");
+    assert!(text.contains("\u{2717} environment\n  \u{2022} [WARN] Could not find Cargo.toml. Run this command inside an rsmix project."), "{text}");
     assert!(text.contains("\u{2022} project (skipped: Blocked by environment warnings.)"), "{text}");
     assert!(text.contains("\u{2022} client (skipped: Blocked by environment warnings.)"), "{text}");
     assert_eq!(report.warnings(), 1);
@@ -317,15 +317,15 @@ fn doctor_skips_later_suites_when_the_environment_warns() {
     let no_wasm = FakeToolchain { targets: Some(vec!["x86_64-pc-windows-msvc"]), wasm_bindgen: Some("0.2.100") };
     let text = doctor::run_doctor(&app, &no_wasm).render();
     assert!(text.contains("[WARN] The wasm32-unknown-unknown target is not installed. Run `rustup target add wasm32-unknown-unknown`."), "{text}");
-    assert!(text.contains("[WARN] wasm-bindgen 0.2.100 is on PATH, but rmx uses 0.2.129."), "{text}");
+    assert!(text.contains("[WARN] wasm-bindgen 0.2.100 is on PATH, but rsmix uses 0.2.129."), "{text}");
     let unknown = FakeToolchain { targets: None, wasm_bindgen: None };
     let report = doctor::run_doctor(&app, &unknown);
     assert_eq!(report.warnings(), 0, "missing tools are advice: {}", report.render());
     assert_eq!(report.findings().count(), 3, "{}", report.render());
 
-    std::fs::write(app.join("Cargo.toml"), read(&app, "Cargo.toml").replace("rmx = {", "other = {")).unwrap();
+    std::fs::write(app.join("Cargo.toml"), read(&app, "Cargo.toml").replace("rsmix = {", "other = {")).unwrap();
     let text = doctor::run_doctor(&app, &ready()).render();
-    assert!(text.contains("[WARN] Cargo.toml does not declare an rmx dependency."), "{text}");
+    assert!(text.contains("[WARN] Cargo.toml does not declare an rsmix dependency."), "{text}");
 }
 
 #[test]
@@ -375,20 +375,20 @@ fn doctor_fix_applies_no_fixes_to_a_clean_app() {
 }
 
 #[test]
-fn doctor_fix_adds_the_rmx_dependency() {
+fn doctor_fix_adds_the_rsmix_dependency() {
     let scratch = Scratch::new("doctor-fix-dep");
     let app = scaffold(&scratch);
     let manifest = read(&app, "Cargo.toml");
-    let rmx_line = manifest.lines().find(|l| l.starts_with("rmx = ")).unwrap().to_string();
-    std::fs::write(app.join("Cargo.toml"), manifest.replace(&format!("{rmx_line}\n"), "")).unwrap();
-    assert!(doctor::run_doctor(&app, &ready()).render().contains("[WARN] Cargo.toml does not declare an rmx dependency."));
+    let rsmix_line = manifest.lines().find(|l| l.starts_with("rsmix = ")).unwrap().to_string();
+    std::fs::write(app.join("Cargo.toml"), manifest.replace(&format!("{rsmix_line}\n"), "")).unwrap();
+    assert!(doctor::run_doctor(&app, &ready()).render().contains("[WARN] Cargo.toml does not declare an rsmix dependency."));
 
     let report = fix(&app);
     let text = report.render();
     assert!(text.contains("\u{2713} environment\n  Applied fixes:\n    \u{2022} Updated Cargo.toml\n"), "{text}");
     assert!(text.contains("Applied 1 fix.\n"), "{text}");
     let manifest = read(&app, "Cargo.toml");
-    assert!(manifest.contains(&format!("[dependencies]\n{}\n", super::rmx_dependency())), "{manifest}");
+    assert!(manifest.contains(&format!("[dependencies]\n{}\n", super::rsmix_dependency())), "{manifest}");
     assert_eq!(report.warnings(), 0, "{text}");
 }
 
@@ -446,16 +446,16 @@ fn doctor_fix_adds_cdylib_to_the_crate_types() {
 fn colors_help_headings_and_syntax_tokens() {
     // help-text.test.ts: plain without colors, headings bold light blue, tokens light yellow.
     assert_eq!(style_help(HELP, &Styles::new(false)), HELP);
-    let text = "Usage:\n  rmx demo [options]\n\nRun the demo command.\n\nOptions:\n  --dir <path>  Print JSON to <file>\n  -h, --help    Show help\n\nExamples:\n  rmx demo --json\n  rmx new ./my-rmx-app --force\n  rmx new ./foo--bar --force\n  rmx dev -- --port 4000\n";
+    let text = "Usage:\n  rsmix demo [options]\n\nRun the demo command.\n\nOptions:\n  --dir <path>  Print JSON to <file>\n  -h, --help    Show help\n\nExamples:\n  rsmix demo --json\n  rsmix new ./my-rsmix-app --force\n  rsmix new ./foo--bar --force\n  rsmix dev -- --port 4000\n";
     let out = style_help(text, &Styles::new(true));
     let y = |s: &str| format!("\x1b[93m{s}\x1b[39m");
     assert!(out.starts_with("\x1b[1m\x1b[94mUsage\x1b[39m\x1b[22m:\n"), "{out:?}");
-    assert!(out.contains(&format!("  rmx demo {}\n\nRun the demo command.\n\n", y("[options]"))), "{out:?}");
+    assert!(out.contains(&format!("  rsmix demo {}\n\nRun the demo command.\n\n", y("[options]"))), "{out:?}");
     assert!(out.contains(&format!("  {} {}  Print JSON to <file>\n", y("--dir"), y("<path>"))), "only the label: {out:?}");
     assert!(out.contains(&format!("  {}, {}    Show help\n", y("-h"), y("--help"))), "{out:?}");
-    assert!(out.contains(&format!("  rmx demo {}\n", y("--json"))), "{out:?}");
-    assert!(out.contains(&format!("  rmx new ./foo--bar {}\n", y("--force"))), "{out:?}");
-    assert!(out.contains(&format!("  rmx dev -- {} 4000\n", y("--port"))), "a bare -- is not a flag: {out:?}");
+    assert!(out.contains(&format!("  rsmix demo {}\n", y("--json"))), "{out:?}");
+    assert!(out.contains(&format!("  rsmix new ./foo--bar {}\n", y("--force"))), "{out:?}");
+    assert!(out.contains(&format!("  rsmix dev -- {} 4000\n", y("--port"))), "a bare -- is not a flag: {out:?}");
     assert!(!out.contains("Run the \x1b"), "descriptions stay plain");
     // Every help text keeps its words once the colors are stripped.
     for help in [HELP, NEW_HELP, VERSION_HELP, ROUTES_HELP, ASSETS_HELP, DOCTOR_HELP, DEV_HELP, COMPLETION_HELP, TEST_HELP] {
@@ -479,11 +479,14 @@ fn strip_sgr(text: &str) -> String {
 #[test]
 fn commands_open_with_the_header_on_a_terminal() {
     // reporter.test.ts: a blank line, then the header only on a TTY.
-    assert_eq!(preamble("doctor", &Styles::new(false), true), format!("\nRMX v{} - doctor\n\n", version()));
+    assert_eq!(preamble("doctor", &Styles::new(false), true), format!("\nRSMIX v{} - doctor\n\n", version()));
     assert_eq!(preamble("new", &Styles::new(false), false), "\n");
     // terminal.test.ts: one color per letter when colors are on.
     let colored = preamble("doctor", &Styles::new(true), true);
-    assert!(colored.starts_with("\n\x1b[94mR\x1b[39m\x1b[93mM\x1b[39m\x1b[91mX\x1b[39m v"), "{colored:?}");
+    assert!(
+        colored.starts_with("\n\x1b[94mR\x1b[39m\x1b[92mS\x1b[39m\x1b[93mM\x1b[39m\x1b[95mI\x1b[39m\x1b[91mX\x1b[39m v"),
+        "{colored:?}"
+    );
 
 }
 
@@ -600,7 +603,7 @@ fn doctor_fix_skips_existing_files_and_refuses_paths_outside_the_app() {
     }
 }
 
-// rmx dev
+// rsmix dev
 
 #[test]
 fn dev_parses_app_arguments_after_a_separator() {
@@ -637,7 +640,7 @@ fn dev_plans_the_client_and_server_builds() {
     let plan = dev::DevPlan::for_app(&app).unwrap();
     assert_eq!(plan.client_out, None);
     assert_eq!(plan.build_commands("wb").len(), 1);
-    assert!(dev::DevPlan::for_app(&std::env::temp_dir().join("rmx-cli-no-such-app")).is_err());
+    assert!(dev::DevPlan::for_app(&std::env::temp_dir().join("rsmix-cli-no-such-app")).is_err());
 }
 
 #[test]
@@ -673,9 +676,9 @@ fn completion_prints_the_script_for_bash_and_zsh() {
     let Invocation::Print(bash) = parse(&args(&["completion", "bash"])).unwrap() else { panic!() };
     let Invocation::Print(zsh) = parse(&args(&["completion", "zsh"])).unwrap() else { panic!() };
     assert_eq!(bash, zsh);
-    assert!(bash.starts_with("###-begin-rmx-completion-###\n"));
-    assert!(bash.contains("complete -o default -F _rmx_completion rmx") && bash.contains("compdef _rmx_completion rmx"));
-    assert!(bash.contains(r#"output=$(rmx completion -- "$cword" "${words[@]}" 2>/dev/null)"#), "{bash}");
+    assert!(bash.starts_with("###-begin-rsmix-completion-###\n"));
+    assert!(bash.contains("complete -o default -F _rsmix_completion rsmix") && bash.contains("compdef _rsmix_completion rsmix"));
+    assert!(bash.contains(r#"output=$(rsmix completion -- "$cword" "${words[@]}" 2>/dev/null)"#), "{bash}");
     assert_eq!(parse(&args(&["completion", "fish"])).unwrap_err().message, "Unknown completion shell: fish");
     assert_eq!(parse(&args(&["completion"])), Ok(Invocation::Help(COMPLETION_HELP)));
     // commands/completion.test.ts: help, also when it follows the shell.
@@ -683,50 +686,50 @@ fn completion_prints_the_script_for_bash_and_zsh() {
     assert_eq!(parse(&args(&["completion", "bash", "--help"])), Ok(Invocation::Help(COMPLETION_HELP)));
     // completion.test.ts: the script asks the plumbing mode from bash and zsh, and bash
     // keeps `=` inside words.
-    assert!(bash.contains(r#"rmx completion -- "$((CURRENT - 1))" "${words[@]}""#), "{bash}");
+    assert!(bash.contains(r#"rsmix completion -- "$((CURRENT - 1))" "${words[@]}""#), "{bash}");
     assert!(bash.contains("_get_comp_words_by_ref -n = -w words -i cword"));
-    assert!(HELP.contains("completion        Print shell completion scripts for rmx"));
+    assert!(HELP.contains("completion        Print shell completion scripts for rsmix"));
 }
 
 #[test]
 fn completion_offers_commands_subcommands_flags_and_files() {
     let commands = "assets\ncompletion\ndev\ndoctor\nhelp\nnew\nroutes\ntest\nversion\n";
-    assert_eq!(complete(&["rmx", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n-v\n--version\n"));
-    assert_eq!(complete(&["rmx", "-"]), "mode:values\n-h\n--help\n--no-color\n-v\n--version\n");
-    assert_eq!(complete(&["rmx", "d"]), "mode:values\ndev\ndoctor\n");
-    assert_eq!(complete(&["rmx", "--v"]), "mode:values\n--version\n");
-    assert_eq!(complete(&["rmx", "--version", ""]), "mode:values\n");
-    assert_eq!(complete(&["rmx", "help", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n"));
-    assert_eq!(complete(&["rmx", "help", "ro"]), "mode:values\nroutes\n");
-    assert_eq!(complete(&["rmx", "completion", ""]), "mode:values\nbash\nzsh\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "assets", ""]), "mode:values\ninspect\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "assets", "inspect", "app/"]), "mode:files\n");
-    assert_eq!(complete(&["rmx", "assets", "inspect", "-"]), "mode:values\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "new", ""]), "mode:files\n");
-    assert_eq!(complete(&["rmx", "new", "my-app", "--"]), "mode:values\n--app-name\n--force\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "new", "my-app", "--app-name", ""]), "mode:none\n");
-    assert_eq!(complete(&["rmx", "new", "--app-name", "X", ""]), "mode:files\n", "the name is not the target");
-    assert_eq!(complete(&["rmx", "doctor", "--json", "--"]), "mode:values\n--fix\n--strict\n--no-strict\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n-v\n--version\n"));
+    assert_eq!(complete(&["rsmix", "-"]), "mode:values\n-h\n--help\n--no-color\n-v\n--version\n");
+    assert_eq!(complete(&["rsmix", "d"]), "mode:values\ndev\ndoctor\n");
+    assert_eq!(complete(&["rsmix", "--v"]), "mode:values\n--version\n");
+    assert_eq!(complete(&["rsmix", "--version", ""]), "mode:values\n");
+    assert_eq!(complete(&["rsmix", "help", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n"));
+    assert_eq!(complete(&["rsmix", "help", "ro"]), "mode:values\nroutes\n");
+    assert_eq!(complete(&["rsmix", "completion", ""]), "mode:values\nbash\nzsh\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "assets", ""]), "mode:values\ninspect\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "assets", "inspect", "app/"]), "mode:files\n");
+    assert_eq!(complete(&["rsmix", "assets", "inspect", "-"]), "mode:values\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "new", ""]), "mode:files\n");
+    assert_eq!(complete(&["rsmix", "new", "my-app", "--"]), "mode:values\n--app-name\n--force\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "new", "my-app", "--app-name", ""]), "mode:none\n");
+    assert_eq!(complete(&["rsmix", "new", "--app-name", "X", ""]), "mode:files\n", "the name is not the target");
+    assert_eq!(complete(&["rsmix", "doctor", "--json", "--"]), "mode:values\n--fix\n--strict\n--no-strict\n--help\n--no-color\n");
     // A used --no-color is not offered again, before or after the command.
-    assert_eq!(complete(&["rmx", "--no-color", "doctor", "--"]), "mode:values\n--fix\n--json\n--strict\n--no-strict\n--help\n");
-    assert_eq!(complete(&["rmx", "--no-color", ""]), format!("mode:values\n{commands}-h\n--help\n-v\n--version\n"));
-    assert_eq!(complete(&["rmx", "routes", "--table", "--no-color", "--n"]), "mode:values\n--no-headers\n");
-    assert_eq!(complete(&["rmx", "routes", "--t"]), "mode:values\n--table\n");
-    // completion.test.ts: filters invalid routes flag combinations (rmx has no --verbose).
-    assert_eq!(complete(&["rmx", "routes", "--json", ""]), "mode:values\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "routes", "--table", ""]), "mode:values\n--no-headers\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "routes", "--table", "--no-headers", ""]), "mode:values\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "routes", "--no-headers", ""]), "mode:values\n--json\n--table\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "routes", "extra", ""]), "mode:values\n");
+    assert_eq!(complete(&["rsmix", "--no-color", "doctor", "--"]), "mode:values\n--fix\n--json\n--strict\n--no-strict\n--help\n");
+    assert_eq!(complete(&["rsmix", "--no-color", ""]), format!("mode:values\n{commands}-h\n--help\n-v\n--version\n"));
+    assert_eq!(complete(&["rsmix", "routes", "--table", "--no-color", "--n"]), "mode:values\n--no-headers\n");
+    assert_eq!(complete(&["rsmix", "routes", "--t"]), "mode:values\n--table\n");
+    // completion.test.ts: filters invalid routes flag combinations (rsmix has no --verbose).
+    assert_eq!(complete(&["rsmix", "routes", "--json", ""]), "mode:values\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "routes", "--table", ""]), "mode:values\n--no-headers\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "routes", "--table", "--no-headers", ""]), "mode:values\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "routes", "--no-headers", ""]), "mode:values\n--json\n--table\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "routes", "extra", ""]), "mode:values\n");
     // Keeps --no-color available until it is used, and offers version flags only before a
     // command.
-    assert_eq!(complete(&["rmx", "routes", ""]), "mode:values\n--json\n--table\n-h\n--help\n--no-color\n");
-    assert_eq!(complete(&["rmx", "routes", "--no-color", ""]), "mode:values\n--json\n--table\n-h\n--help\n");
-    assert!(!complete(&["rmx", "doctor", ""]).contains("--version"));
+    assert_eq!(complete(&["rsmix", "routes", ""]), "mode:values\n--json\n--table\n-h\n--help\n--no-color\n");
+    assert_eq!(complete(&["rsmix", "routes", "--no-color", ""]), "mode:values\n--json\n--table\n-h\n--help\n");
+    assert!(!complete(&["rsmix", "doctor", ""]).contains("--version"));
     // commands/completion.test.ts: plumbing mode stays active when the words include help.
-    assert_eq!(parse(&args(&["completion", "--", "2", "rmx", "--help"])), Ok(Invocation::Print("mode:values\n".into())));
-    assert_eq!(complete(&["rmx", "test", ""]), "mode:values\n");
-    assert_eq!(complete(&["rmx", "routes", "--help", ""]), "mode:values\n");
+    assert_eq!(parse(&args(&["completion", "--", "2", "rsmix", "--help"])), Ok(Invocation::Print("mode:values\n".into())));
+    assert_eq!(complete(&["rsmix", "test", ""]), "mode:values\n");
+    assert_eq!(complete(&["rsmix", "routes", "--help", ""]), "mode:values\n");
 }
 
 /// progress.test.ts: a step reports its running then its complete label, and a failing
@@ -772,5 +775,5 @@ fn doctor_colors_marks_and_warnings_only_when_enabled() {
     assert!(colored.contains("\x1b[91m\u{2717}\x1b[39m \x1b[90menvironment\x1b[39m"), "{colored:?}");
     assert!(colored.contains("  \u{2022} \x1b[93m[WARN] Missing target\x1b[39m\n"), "{colored:?}");
     assert!(colored.contains("  \u{2022} [ADVICE] Consider it\n"), "{colored:?}");
-    assert_eq!(rmx_terminal::strip_ansi(&colored), report.render());
+    assert_eq!(rsmix_terminal::strip_ansi(&colored), report.render());
 }

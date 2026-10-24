@@ -22,13 +22,13 @@ pub struct Entry {
     update: UpdateFn,
 }
 
-/// Register a component marked with `rmx::client_entry!` for hydration.
+/// Register a component marked with `rsmix::client_entry!` for hydration.
 pub fn entry<C: Component>() -> Entry
 where
     C::Props: serde::de::DeserializeOwned,
 {
     Entry {
-        name: C::CLIENT_ENTRY.expect("rmx::entry::<C>() needs rmx::client_entry! in C's Component impl"),
+        name: C::CLIENT_ENTRY.expect("rsmix::entry::<C>() needs rsmix::client_entry! in C's Component impl"),
         hydrate: hydrate_entry::<C>,
         update: update_entry::<C>,
     }
@@ -115,7 +115,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
             let def_update = DEFS.with(|d| d.borrow().iter().find(|e| e.name == name).map(|e| e.update));
             if let Some(f) = def_update {
                 if let Err(e) = f(&*inst, &props) {
-                    warn(&format!("rmx: could not update {name}: {e}"));
+                    warn(&format!("rsmix: could not update {name}: {e}"));
                 }
             }
         }
@@ -124,7 +124,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
 
     let hydrate = DEFS.with(|d| d.borrow().iter().find(|e| e.name == name).map(|e| e.hydrate));
     let Some(hydrate) = hydrate else {
-        warn(&format!("rmx: no client entry registered for {name}"));
+        warn(&format!("rsmix: no client entry registered for {name}"));
         return Some(end);
     };
     let parent = start_node.parent_node()?;
@@ -148,7 +148,7 @@ pub(crate) fn hydrate_or_update(start: &web_sys::Comment, frame: Option<Rc<frame
             });
             KEY.with(|k| js_sys::Reflect::set(start_node, k, &JsValue::from(slot as u32)).ok());
         }
-        Err(e) => warn(&format!("rmx: could not hydrate {name}: {e}")),
+        Err(e) => warn(&format!("rsmix: could not hydrate {name}: {e}")),
     }
     Some(end)
 }

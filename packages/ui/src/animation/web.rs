@@ -2,7 +2,7 @@
 //! record of running animations, and the FLIP layout state machine.
 
 use js_sys::{Array, Object, Promise, Reflect, WeakMap};
-use rmx::Key;
+use rsmix::Key;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{AnimationPlayState, HtmlElement};

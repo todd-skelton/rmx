@@ -3,7 +3,7 @@
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use rmx_mime::{
+use rsmix_mime::{
     define_mime_type, detect_content_type, detect_mime_type, is_compressible_mime_type, mime_type_to_content_type,
     reset_mime_types, MimeTypeDefinition,
 };

@@ -27,7 +27,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     };
     let vis = &input.vis;
     let actions = format_ident!("{}Actions", name);
-    let rm = quote!(::rmx::router::routes);
+    let rm = quote!(::rsmix::router::routes);
 
     let keys = fields.iter().map(|f| {
         let ident = f.ident.as_ref().expect("named field");
@@ -40,7 +40,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
         let ident = &f.ident;
         let fvis = &f.vis;
         let doc = format!("The action for `{}.{}`.", name, ident.as_ref().expect("named field"));
-        quote! { #[doc = #doc] #fvis #ident: ::rmx::router::Action }
+        quote! { #[doc = #doc] #fvis #ident: ::rsmix::router::Action }
     });
     let pairs = leaves.iter().map(|f| {
         let ident = &f.ident;
@@ -62,7 +62,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             }
 
             #[allow(unused_variables)]
-            fn pair_actions(&self, actions: #actions) -> ::std::vec::Vec<(#rm::Route, ::rmx::router::Action)> {
+            fn pair_actions(&self, actions: #actions) -> ::std::vec::Vec<(#rm::Route, ::rsmix::router::Action)> {
                 ::std::vec![#(#pairs),*]
             }
         }

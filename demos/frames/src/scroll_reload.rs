@@ -4,7 +4,7 @@
 
 use std::cell::Cell;
 
-use rmx::{css, navigate, on, rsx, Component, Frame, FrameEvent, Handle, History, Mixin, NavigateOptions, Node, ReloadOptions, Reset, TypedEventTarget};
+use rsmix::{css, navigate, on, rsx, Component, Frame, FrameEvent, Handle, History, Mixin, NavigateOptions, Node, ReloadOptions, Reset, TypedEventTarget};
 use serde::{Deserialize, Serialize};
 
 use crate::{lead_style, muted_style, panel_style, section_heading_style};
@@ -55,7 +55,7 @@ pub struct ScrollRestorationList {
 
 impl Component for ScrollRestorationList {
     type Props = LoadedAtProps;
-    rmx::client_entry!("ScrollRestorationList");
+    rsmix::client_entry!("ScrollRestorationList");
 
     fn setup(_: &LoadedAtProps, _: &Handle<Self>) -> Self {
         ScrollRestorationList { interactions: 0 }
@@ -83,7 +83,7 @@ pub struct StoreScrollReproduction {
 
 impl Component for StoreScrollReproduction {
     type Props = VariantProps;
-    rmx::client_entry!("StoreScrollReproduction");
+    rsmix::client_entry!("StoreScrollReproduction");
 
     fn setup(_: &VariantProps, _: &Handle<Self>) -> Self {
         StoreScrollReproduction { interactions: 0 }
@@ -153,7 +153,7 @@ pub struct NewsletterSignup;
 
 impl Component for NewsletterSignup {
     type Props = NewsletterProps;
-    rmx::client_entry!("NewsletterSignup");
+    rsmix::client_entry!("NewsletterSignup");
 
     fn setup(_: &NewsletterProps, _: &Handle<Self>) -> Self {
         NewsletterSignup
@@ -209,7 +209,7 @@ pub struct ScrollAnchoringList;
 
 impl Component for ScrollAnchoringList {
     type Props = LoadedAtProps;
-    rmx::client_entry!("ScrollAnchoringList");
+    rsmix::client_entry!("ScrollAnchoringList");
 
     fn setup(_: &LoadedAtProps, _: &Handle<Self>) -> Self {
         ScrollAnchoringList
@@ -231,7 +231,7 @@ pub struct ScrollAnchoringReproduction {
 
 impl Component for ScrollAnchoringReproduction {
     type Props = VariantProps;
-    rmx::client_entry!("ScrollAnchoringReproduction");
+    rsmix::client_entry!("ScrollAnchoringReproduction");
 
     fn setup(_: &VariantProps, _: &Handle<Self>) -> Self {
         ScrollAnchoringReproduction { interactions: 0 }
@@ -260,7 +260,7 @@ pub struct ScrollAnchoringDetail;
 
 impl Component for ScrollAnchoringDetail {
     type Props = EmptyProps;
-    rmx::client_entry!("ScrollAnchoringDetail");
+    rsmix::client_entry!("ScrollAnchoringDetail");
 
     fn setup(_: &EmptyProps, _: &Handle<Self>) -> Self {
         ScrollAnchoringDetail
@@ -305,7 +305,7 @@ pub struct RootReloadControls {
 
 impl Component for RootReloadControls {
     type Props = RootReloadControlsProps;
-    rmx::client_entry!("RootReloadControls");
+    rsmix::client_entry!("RootReloadControls");
 
     fn setup(_: &RootReloadControlsProps, h: &Handle<Self>) -> Self {
         let disposed = ENTRY_DISPOSED.with(Clone::clone);
@@ -375,7 +375,7 @@ pub struct PersistentRootReloadEntry {
 
 impl Component for PersistentRootReloadEntry {
     type Props = ServerVersionProps;
-    rmx::client_entry!("PersistentRootReloadEntry");
+    rsmix::client_entry!("PersistentRootReloadEntry");
 
     fn setup(_: &ServerVersionProps, h: &Handle<Self>) -> Self {
         h.queue_task(|this, h| {
@@ -410,7 +410,7 @@ pub struct RemovableRootReloadEntry {
 
 impl Component for RemovableRootReloadEntry {
     type Props = ServerVersionProps;
-    rmx::client_entry!("RemovableRootReloadEntry");
+    rsmix::client_entry!("RemovableRootReloadEntry");
 
     fn setup(_: &ServerVersionProps, h: &Handle<Self>) -> Self {
         h.queue_task(|this, h| {

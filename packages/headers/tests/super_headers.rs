@@ -7,8 +7,8 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::header::{self, HeaderMap, HeaderValue};
-use rmx_headers::raw::stringify;
-use rmx_headers::{Accept, AcceptEncoding, AcceptLanguage, CacheControl, ContentType, Cookie, IfMatch, IfNoneMatch, Range, SetCookie, SuperHeaders, Vary};
+use rsmix_headers::raw::stringify;
+use rsmix_headers::{Accept, AcceptEncoding, AcceptLanguage, CacheControl, ContentType, Cookie, IfMatch, IfNoneMatch, Range, SetCookie, SuperHeaders, Vary};
 
 fn some(value: &str) -> Option<String> {
     Some(value.to_string())

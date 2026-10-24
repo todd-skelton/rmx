@@ -5,7 +5,7 @@
 //! [Streamable] (a [LazyFile], [LazyBlob], in-memory [File] or [Body]) to disk.
 //!
 //! ```no_run
-//! use rmx_fs::{open_lazy_file, write_file, OpenLazyFileOptions};
+//! use rsmix_fs::{open_lazy_file, write_file, OpenLazyFileOptions};
 //!
 //! # async fn demo() -> std::io::Result<()> {
 //! let file = open_lazy_file("public/logo.png", OpenLazyFileOptions::default())?;
@@ -20,8 +20,8 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use rmx_fetch::{Body, File};
-use rmx_lazy_file::{LazyBlob, LazyContent, LazyFile, LazyFileOptions};
+use rsmix_fetch::{Body, File};
+use rsmix_lazy_file::{LazyBlob, LazyContent, LazyFile, LazyFileOptions};
 
 /// Overrides for [open_lazy_file].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -68,7 +68,7 @@ pub fn open_lazy_file(path: impl AsRef<Path>, options: OpenLazyFileOptions) -> i
         return Err(io::Error::other(format!("Path \"{}\" is not a file", path.display())));
     }
     let name = options.name.unwrap_or_else(|| path.to_string_lossy().into_owned());
-    let content_type = options.content_type.unwrap_or_else(|| rmx_mime::detect_mime_type(&path.to_string_lossy()).unwrap_or_default().to_string());
+    let content_type = options.content_type.unwrap_or_else(|| rsmix_mime::detect_mime_type(&path.to_string_lossy()).unwrap_or_default().to_string());
     let last_modified = options.last_modified.or_else(|| {
         let modified = metadata.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
         u64::try_from(modified.as_millis()).ok()

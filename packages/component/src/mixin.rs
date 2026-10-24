@@ -246,7 +246,7 @@ fn report_mixin_error(message: &str) {
     #[cfg(target_arch = "wasm32")]
     web_sys::console::error_1(&js_sys::Error::new(message));
     #[cfg(not(target_arch = "wasm32"))]
-    eprintln!("rmx: {message}");
+    eprintln!("rsmix: {message}");
 }
 
 fn add_class(el: &mut Element, class: &str) {

@@ -164,7 +164,7 @@ impl AttrValue {
     }
 }
 
-/// HTML that rmx inserts without escaping (Remix's `unsafeHTML`). Only pass trusted or
+/// HTML that rsmix inserts without escaping (Remix's `unsafeHTML`). Only pass trusted or
 /// already-sanitized content.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnsafeHtml(Str);
@@ -177,24 +177,24 @@ pub struct UnsafeHtml(Str);
 /// neither does `outerHTML`:
 ///
 /// ```compile_fail
-/// # extern crate rmx_component as rmx;
-/// let _ = rmx::rsx! { <div innerHTML="<b>raw</b>"></div> };
+/// # extern crate rsmix_component as rsmix;
+/// let _ = rsmix::rsx! { <div innerHTML="<b>raw</b>"></div> };
 /// ```
 ///
 /// ```compile_fail
-/// # extern crate rmx_component as rmx;
+/// # extern crate rsmix_component as rsmix;
 /// let html = String::from("<p>doc</p>");
-/// let _ = rmx::rsx! { <iframe srcdoc={html}></iframe> };
+/// let _ = rsmix::rsx! { <iframe srcdoc={html}></iframe> };
 /// ```
 ///
 /// ```compile_fail
-/// # extern crate rmx_component as rmx;
-/// let _ = rmx::rsx! { <div outerHTML={rmx::unsafe_html("<p>x</p>")}></div> };
+/// # extern crate rsmix_component as rsmix;
+/// let _ = rsmix::rsx! { <div outerHTML={rsmix::unsafe_html("<p>x</p>")}></div> };
 /// ```
 ///
 /// ```
-/// # extern crate rmx_component as rmx;
-/// let _ = rmx::rsx! { <iframe srcdoc={rmx::unsafe_html("<p>doc</p>")}></iframe> };
+/// # extern crate rsmix_component as rsmix;
+/// let _ = rsmix::rsx! { <iframe srcdoc={rsmix::unsafe_html("<p>doc</p>")}></iframe> };
 /// ```
 pub fn unsafe_html(html: impl Into<Str>) -> UnsafeHtml {
     UnsafeHtml(html.into())

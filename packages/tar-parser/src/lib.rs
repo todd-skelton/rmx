@@ -9,9 +9,9 @@
 //! entry and 20 MiB in total. Decompression (for `.tgz`) is the caller's job.
 //!
 //! ```
-//! # let archive = rmx_tar_parser::tests_support::one_file_archive();
+//! # let archive = rsmix_tar_parser::tests_support::one_file_archive();
 //! let mut names = Vec::new();
-//! rmx_tar_parser::parse_tar(&archive, &Default::default(), |entry| names.push(entry.header.name)).unwrap();
+//! rsmix_tar_parser::parse_tar(&archive, &Default::default(), |entry| names.push(entry.header.name)).unwrap();
 //! assert_eq!(names, ["hello.txt"]);
 //! ```
 

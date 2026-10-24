@@ -1,14 +1,14 @@
 //! Ports of Remix's `ui/src/listbox.test.tsx`. The flash case waits the real 60 ms where
 //! Remix advances fake timers. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_listbox`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_listbox`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{rsx, Component, Handle, Node};
-use rmx_ui::listbox::{self, ListboxOption, ListboxState, OnChange, OnRef, OnSelectSettled, RegisteredOption};
+use rsmix::test::{render, RenderResult};
+use rsmix::{rsx, Component, Handle, Node};
+use rsmix_ui::listbox::{self, ListboxOption, ListboxState, OnChange, OnRef, OnSelectSettled, RegisteredOption};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
@@ -517,7 +517,7 @@ async fn delays_on_select_during_flash_selection_and_ignores_interactions_until_
     assert_eq!(selected(&react).as_deref(), Some("true"));
 }
 
-// rmx: the ref's `select` ignores disabled options and a second selection while the first
+// rsmix: the ref's `select` ignores disabled options and a second selection while the first
 // is still settling (Remix's suite reaches neither path).
 #[wasm_bindgen_test]
 async fn ref_select_ignores_disabled_options_and_reentry_while_settling() {

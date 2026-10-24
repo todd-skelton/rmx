@@ -1,8 +1,8 @@
-//! The Remix bookstore demo in rmx.
+//! The Remix bookstore demo in rsmix.
 //!
 //! What maps to what:
 //!
-//! | Remix | rmx |
+//! | Remix | rsmix |
 //! | --- | --- |
 //! | `route({ ... })` with `form()` and `resources()` | [`routes::ROUTES`] with `form()` and `resources_with_param()` |
 //! | `formData({ uploadHandler })` + `createFsFileStorage` | `form_data().upload_handler(..)` + `FsFileStorage` |
@@ -21,7 +21,7 @@ pub mod routes;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server;
 
-use rmx::{browser, css, on, rsx, Component, Handle, Mixin, Node, ReloadOptions};
+use rsmix::{browser, css, on, rsx, Component, Handle, Mixin, Node, ReloadOptions};
 use serde::{Deserialize, Serialize};
 
 use cart::{money, CartItem};
@@ -46,7 +46,7 @@ pub struct CartButton {
 
 impl Component for CartButton {
     type Props = CartButtonProps;
-    rmx::client_entry!("CartButton");
+    rsmix::client_entry!("CartButton");
 
     fn setup(_: &CartButtonProps, _: &Handle<Self>) -> Self {
         CartButton { pending: false }
@@ -108,7 +108,7 @@ pub struct CartItems {
 
 impl CartItems {
     /// A form submit handler that posts the form with `redirect=none`, then reloads the frame.
-    fn submit(h: &Handle<Self>, action: PendingAction) -> rmx::EventHandler {
+    fn submit(h: &Handle<Self>, action: PendingAction) -> rsmix::EventHandler {
         h.on_event(move |this, h, event| {
             event.prevent_default();
             if this.pending.is_some() {
@@ -141,7 +141,7 @@ fn small_button(min_width: &str) -> Mixin {
 
 impl Component for CartItems {
     type Props = CartItemsProps;
-    rmx::client_entry!("CartItems");
+    rsmix::client_entry!("CartItems");
 
     fn setup(_: &CartItemsProps, _: &Handle<Self>) -> Self {
         CartItems { pending: None }
@@ -231,7 +231,7 @@ fn carousel_button() -> Mixin {
 
 impl Component for ImageCarousel {
     type Props = ImageCarouselProps;
-    rmx::client_entry!("ImageCarousel");
+    rsmix::client_entry!("ImageCarousel");
 
     fn setup(props: &ImageCarouselProps, _: &Handle<Self>) -> Self {
         ImageCarousel { index: props.start_index.unwrap_or(0) }
@@ -289,8 +289,8 @@ impl Component for ImageCarousel {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions {
-        entries: vec![rmx::entry::<CartButton>(), rmx::entry::<CartItems>(), rmx::entry::<ImageCarousel>()],
+    rsmix::run(rsmix::RunOptions {
+        entries: vec![rsmix::entry::<CartButton>(), rsmix::entry::<CartItems>(), rsmix::entry::<ImageCarousel>()],
         ..Default::default()
     });
 }

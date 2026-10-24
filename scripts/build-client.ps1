@@ -1,5 +1,5 @@
 # Build a browser crate to WebAssembly: cargo (wasm-release profile) + wasm-bindgen + wasm-opt.
-# Usage: pwsh ./scripts/build-client.ps1 -Crate bench-client -Out bench/rmx-app/public/pkg [-Nightly nightly]
+# Usage: pwsh ./scripts/build-client.ps1 -Crate bench-client -Out bench/rsmix-app/public/pkg [-Nightly nightly]
 #
 # -Nightly <toolchain> rebuilds std for the browser with `panic=immediate-abort` (needs a nightly
 # toolchain with rust-src). Panic messages and the formatting code behind them leave the binary,

@@ -8,9 +8,9 @@ use std::task::{Context, Poll, Waker};
 
 use bytes::Bytes;
 use http_body::Frame;
-use rmx_fetch::block_on;
-use rmx_multipart_parser::future::{parse_multipart_request, parse_multipart_stream, MultipartStream};
-use rmx_multipart_parser::{parse_multipart, MultipartError, MultipartOptions};
+use rsmix_fetch::block_on;
+use rsmix_multipart_parser::future::{parse_multipart_request, parse_multipart_stream, MultipartStream};
+use rsmix_multipart_parser::{parse_multipart, MultipartError, MultipartOptions};
 
 /// A body that yields `chunks`, then ends, or stays pending when `open` is set.
 struct Chunks {
@@ -127,7 +127,7 @@ fn shares_the_body_chunks_instead_of_copying_content() {
     let message = message(&[Field::File("f", "f.bin", &file)]);
     let body = Bytes::from(message);
     let range = body.as_ptr() as usize..body.as_ptr() as usize + body.len();
-    let mut parts = parse_multipart_stream(rmx_fetch::Body::from(body.clone()), BOUNDARY, &MultipartOptions::default()).unwrap();
+    let mut parts = parse_multipart_stream(rsmix_fetch::Body::from(body.clone()), BOUNDARY, &MultipartOptions::default()).unwrap();
     block_on(async {
         let mut part = parts.next_part().await.unwrap().unwrap();
         let chunk = part.chunk().await.unwrap().unwrap();
@@ -216,10 +216,10 @@ fn yields_no_parts_for_an_empty_multipart_message() {
 #[test]
 fn parses_a_request() {
     let body = message(&[Field::Text("title", "Dune")]);
-    let request = http::Request::post("/").header("content-type", format!("multipart/form-data; boundary={BOUNDARY}")).body(rmx_fetch::Body::from(body)).unwrap();
+    let request = http::Request::post("/").header("content-type", format!("multipart/form-data; boundary={BOUNDARY}")).body(rsmix_fetch::Body::from(body)).unwrap();
     let mut parts = parse_multipart_request(request, &MultipartOptions::default()).unwrap();
     let text = block_on(async { parts.next_part().await.unwrap().unwrap().text().await.unwrap() });
     assert_eq!(text, "Dune");
-    let not_multipart = http::Request::post("/").header("content-type", "text/plain").body(rmx_fetch::Body::from("x")).unwrap();
+    let not_multipart = http::Request::post("/").header("content-type", "text/plain").body(rsmix_fetch::Body::from("x")).unwrap();
     assert_eq!(parse_multipart_request(not_multipart, &MultipartOptions::default()).err(), Some(MultipartError::Parse("Request is not a multipart request".into())));
 }

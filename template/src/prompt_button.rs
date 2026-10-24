@@ -1,7 +1,7 @@
 //! `app/actions/public/prompt-button.tsx`: copies a prompt to the clipboard, confirms it,
 //! then fades back. This component hydrates on its own; the rest of the page stays static HTML.
 
-use rmx::{css, on, rsx, Component, Handle, Mixin, Node};
+use rsmix::{css, on, rsx, Component, Handle, Mixin, Node};
 use serde::{Deserialize, Serialize};
 
 const FADE_MS: u32 = 180;
@@ -34,7 +34,7 @@ impl PromptButton {
 
 impl Component for PromptButton {
     type Props = PromptButtonProps;
-    rmx::client_entry!("PromptButton");
+    rsmix::client_entry!("PromptButton");
 
     fn setup(_: &PromptButtonProps, _: &Handle<Self>) -> Self {
         PromptButton { state: CopyState::Idle }
@@ -58,12 +58,12 @@ impl Component for PromptButton {
                     return;
                 }
                 Self::show(&h, if copied { CopyState::Copied } else { CopyState::Failed }).await;
-                rmx::browser::sleep(HOLD_MS).await;
+                rsmix::browser::sleep(HOLD_MS).await;
                 if signal.aborted() {
                     return;
                 }
                 Self::show(&h, CopyState::Resetting).await;
-                rmx::browser::sleep(FADE_MS).await;
+                rsmix::browser::sleep(FADE_MS).await;
                 if signal.aborted() {
                     return;
                 }

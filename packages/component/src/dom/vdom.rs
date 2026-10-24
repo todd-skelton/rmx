@@ -868,7 +868,7 @@ pub(super) fn set_attr(el: &web_sys::Element, tag: &str, name: &'static str, val
                 }
             }
             AttrValue::Absent | AttrValue::Bool(false) => el.set_inner_html(""),
-            _ => super::warn("rmx: innerHTML needs a value from rmx::unsafe_html()"),
+            _ => super::warn("rsmix: innerHTML needs a value from rsmix::unsafe_html()"),
         }
         return;
     }
@@ -942,7 +942,7 @@ pub(super) fn set_attr(el: &web_sys::Element, tag: &str, name: &'static str, val
 }
 
 /// Remix sets a prop the element defines (`name in element`) as a property. For built-in
-/// elements the attribute reflects the same value, so rmx only does this for custom
+/// elements the attribute reflects the same value, so rsmix only does this for custom
 /// elements, whose properties need not reflect. Returns whether the property was set.
 fn set_custom_element_property(el: &web_sys::Element, name: &'static str, value: &AttrValue) -> bool {
     if name.contains('-') || matches!(name, "class" | "style" | "id") || crate::attrs::is_booleanish_string(name) {
@@ -1227,7 +1227,7 @@ fn create_frame(f: &FrameNode, scope: &Scope) -> Mounted {
 fn frame_stand_in(f: &FrameNode) -> Node {
     thread_local!(static WARNED: Cell<bool> = const { Cell::new(false) });
     if !WARNED.with(|w| w.replace(true)) {
-        super::warn("rmx: <Frame> renders its fallback in the browser without the `frames` feature");
+        super::warn("rsmix: <Frame> renders its fallback in the browser without the `frames` feature");
     }
     f.fallback.clone().unwrap_or_else(empty_text)
 }

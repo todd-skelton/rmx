@@ -1,8 +1,8 @@
-//! The Remix 3 ui demo gallery in rmx (`demos/ui`).
+//! The Remix 3 ui demo gallery in rsmix (`demos/ui`).
 //!
 //! Each demo is a client entry the server renders and the browser hydrates. The component
 //! runtime demos come from `packages/component/src/runtime/demos`, the mixin case from
-//! `demos/ui/cases`. `mixin-lifecycle` is rmx's own page for checking stateful mixins in a
+//! `demos/ui/cases`. `mixin-lifecycle` is rsmix's own page for checking stateful mixins in a
 //! browser.
 
 pub mod demos;
@@ -166,25 +166,25 @@ pub fn find_demo(slug: &str) -> Option<&'static Demo> {
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
     use demos::*;
-    rmx::run(rmx::RunOptions {
+    rsmix::run(rsmix::RunOptions {
         entries: vec![
-            rmx::entry::<basic::BasicCounter>(),
-            rmx::entry::<keyed_list::KeyedList>(),
-            rmx::entry::<controlled::ControlledValues>(),
-            rmx::entry::<lifecycle::MixinLifecycle>(),
-            rmx::entry::<readme::ReadmeExamples>(),
-            rmx::entry::<draggable::DraggableDemo>(),
-            rmx::entry::<drummer::DrummerApp>(),
-            rmx::entry::<animation::AnimationGallery>(),
-            rmx::entry::<accordion::AccordionDemo>(),
-            rmx::entry::<anchor::AnchorDemo>(),
-            rmx::entry::<combobox::ComboboxDemo>(),
-            rmx::entry::<popover::PopoverDemo>(),
-            rmx::entry::<listbox::ListboxDemo>(),
-            rmx::entry::<menu::MenuDemo>(),
-            rmx::entry::<select::SelectDemo>(),
-            rmx::entry::<tabs::TabsDemo>(),
-            rmx::entry::<toggle::ToggleDemo>(),
+            rsmix::entry::<basic::BasicCounter>(),
+            rsmix::entry::<keyed_list::KeyedList>(),
+            rsmix::entry::<controlled::ControlledValues>(),
+            rsmix::entry::<lifecycle::MixinLifecycle>(),
+            rsmix::entry::<readme::ReadmeExamples>(),
+            rsmix::entry::<draggable::DraggableDemo>(),
+            rsmix::entry::<drummer::DrummerApp>(),
+            rsmix::entry::<animation::AnimationGallery>(),
+            rsmix::entry::<accordion::AccordionDemo>(),
+            rsmix::entry::<anchor::AnchorDemo>(),
+            rsmix::entry::<combobox::ComboboxDemo>(),
+            rsmix::entry::<popover::PopoverDemo>(),
+            rsmix::entry::<listbox::ListboxDemo>(),
+            rsmix::entry::<menu::MenuDemo>(),
+            rsmix::entry::<select::SelectDemo>(),
+            rsmix::entry::<tabs::TabsDemo>(),
+            rsmix::entry::<toggle::ToggleDemo>(),
         ],
         ..Default::default()
     });

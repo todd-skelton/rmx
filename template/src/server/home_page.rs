@@ -1,7 +1,7 @@
 //! `app/actions/home-page.tsx` and `app/actions/document.tsx`: the route-owned starter UI.
 
-use rmx::assets::ScriptEntry;
-use rmx::{css, rsx, Mixin, Node};
+use rsmix::assets::ScriptEntry;
+use rsmix::{css, rsx, Mixin, Node};
 
 use crate::prompt_button::PromptButtonProps;
 use crate::prompt_button::PromptButton;
@@ -18,7 +18,7 @@ pub const PROMPTS: [&str; 4] = [
 
 /// `<Document>`: the HTML shell with the client entry script and its module preloads.
 pub fn document(script: Option<&ScriptEntry>, title: Option<&str>, head: Node, children: Node) -> Node {
-    let title = title.unwrap_or("rmx App").to_string();
+    let title = title.unwrap_or("rsmix App").to_string();
     let preloads: Vec<Node> = script
         .map(|s| s.preloads.iter().map(|href| rsx! { <link key={href.clone()} rel="modulepreload" href={href.clone()}/> }).collect())
         .unwrap_or_default();

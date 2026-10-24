@@ -1,4 +1,4 @@
-//! Request-scoped rendering for rmx-fetch-router (Remix's `render-middleware`).
+//! Request-scoped rendering for rsmix-fetch-router (Remix's `render-middleware`).
 //!
 //! `ctx.render(node)` turns a component tree into an HTML [`Response`]. `<Frame>`s in the
 //! tree resolve through the current router, as internal `GET` subrequests like Remix's
@@ -19,7 +19,7 @@
 //! frame reload or a soft navigation receives HTML the runtime can reconcile.
 //!
 //! ```ignore
-//! use rmx_render_middleware::Render;
+//! use rsmix_render_middleware::Render;
 //!
 //! router.get("/", |ctx: Context| async move {
 //!     ctx.render(rsx! { <Layout><Frame src="/activity" fallback={rsx! { <p>"Loading"</p> }}/></Layout> })
@@ -31,11 +31,11 @@ use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 
 use http::{header, HeaderMap, HeaderName, HeaderValue, Method};
-use rmx::ssr::{self, Segment};
-use rmx::Node;
-use rmx_fetch::{AbortError, AbortSignal, Body, BoxError, Response};
-use rmx_fetch_router::{Context, Middleware, Next, Router};
-use rmx_url::Url;
+use rsmix::ssr::{self, Segment};
+use rsmix::Node;
+use rsmix_fetch::{AbortError, AbortSignal, Body, BoxError, Response};
+use rsmix_fetch_router::{Context, Middleware, Next, Router};
+use rsmix_url::Url;
 use std::sync::Arc;
 
 mod renderer;
@@ -122,10 +122,10 @@ fn reporter(ctx: &Context) -> ErrorReporter {
     }
 }
 
-/// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
-pub use rmx_response::ResponseInit;
+/// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rsmix-fetch`).
+pub use rsmix_response::ResponseInit;
 
-/// `ctx.render(node)` for rmx-fetch-router handlers.
+/// `ctx.render(node)` for rsmix-fetch-router handlers.
 pub trait Render {
     /// Render a component tree to a `200 text/html` response.
     fn render(&self, node: Node) -> Response {
@@ -148,7 +148,7 @@ impl Render for Context {
         let url = self.url().clone();
         // Only frame requests name a top frame (Remix's `getTopFrameSrc`).
         let top = self.header(TOP_HEADER).filter(|_| self.is_frame_request()).map_or_else(|| url.href(), str::to_string);
-        rmx::set_server_frame_src(&url.href(), &top);
+        rsmix::set_server_frame_src(&url.href(), &top);
         let rendered = ssr::render(&node);
         drop(node);
         let frames = Frames { router: self.router().clone(), base: url, headers: frame_request_headers(self.headers(), &top), signal: self.signal().clone() };

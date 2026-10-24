@@ -11,19 +11,19 @@ mod tests;
 pub mod ui;
 
 use http::StatusCode;
-use rmx::{rsx, Node};
-use rmx::assets::{AssetOptions, AssetServer};
-use rmx::cookie::{Cookie, SameSite};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::middleware::auth::{auth, scheme, session_scheme, AuthExt};
-use rmx::middleware::csrf::{csrf, csrf_token};
-use rmx::middleware::form_data::form_data;
-use rmx::middleware::logger::logger;
-use rmx::middleware::session::session;
-use rmx::middleware::render::{Render, ResponseInit};
-use rmx::router::{action, Context, Middleware, Next, Router};
-use rmx::session::SessionStorage;
+use rsmix::{rsx, Node};
+use rsmix::assets::{AssetOptions, AssetServer};
+use rsmix::cookie::{Cookie, SameSite};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::middleware::auth::{auth, scheme, session_scheme, AuthExt};
+use rsmix::middleware::csrf::{csrf, csrf_token};
+use rsmix::middleware::form_data::form_data;
+use rsmix::middleware::logger::logger;
+use rsmix::middleware::session::session;
+use rsmix::middleware::render::{Render, ResponseInit};
+use rsmix::router::{action, Context, Middleware, Next, Router};
+use rsmix::session::SessionStorage;
 use serde::{Deserialize, Serialize};
 
 use crate::routes::ROUTES;
@@ -54,7 +54,7 @@ pub fn session_cookie(secret: &str, secure: bool) -> Cookie {
 }
 
 /// `actions/assets/controller.ts`: the asset server for the client entry and its wasm.
-pub fn asset_server(root: &std::path::Path, fingerprint: bool) -> Result<AssetServer, rmx::assets::AssetError> {
+pub fn asset_server(root: &std::path::Path, fingerprint: bool) -> Result<AssetServer, rsmix::assets::AssetError> {
     AssetServer::new(AssetOptions {
         root_dir: root.to_path_buf(),
         base_path: "/assets".into(),
@@ -69,7 +69,7 @@ pub fn asset_server(root: &std::path::Path, fingerprint: bool) -> Result<AssetSe
 pub fn router<S: SessionStorage>(options: TimeboxerOptions<S>) -> Router {
     let TimeboxerOptions { session_cookie, session_storage, db, assets } = options;
     let mut router = Router::new();
-    if std::env::var("RMX_LOG").is_ok() {
+    if std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
     router.use_middleware(session(session_cookie, session_storage));

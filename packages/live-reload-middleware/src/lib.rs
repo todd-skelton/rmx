@@ -1,7 +1,7 @@
-//! Reload open pages when `rmx dev` restarts the app (the browser half of Remix's
+//! Reload open pages when `rsmix dev` restarts the app (the browser half of Remix's
 //! `npm run hmr`, without hot module replacement: wasm modules cannot be swapped in place).
 //!
-//! When the app runs under `rmx dev` (`RMX_DEV_LIVE_RELOAD` is set), [`live_reload`]:
+//! When the app runs under `rsmix dev` (`RSMIX_DEV_LIVE_RELOAD` is set), [`live_reload`]:
 //!
 //! - serves `GET /__rmx/live-reload`, an event stream that sends this server's build id and
 //!   stays open, and
@@ -16,14 +16,14 @@
 use std::sync::Arc;
 
 use http::{header, HeaderValue, Method, StatusCode};
-use rmx_fetch::{Body, Response};
-use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
+use rsmix_fetch::{Body, Response};
+use rsmix_fetch_router::{BoxFuture, Context, Middleware, Next};
 
 /// The event stream's path.
 pub const LIVE_RELOAD_PATH: &str = "/__rmx/live-reload";
 
-/// The environment variable `rmx dev` sets for the app it runs.
-pub const LIVE_RELOAD_ENV: &str = "RMX_DEV_LIVE_RELOAD";
+/// The environment variable `rsmix dev` sets for the app it runs.
+pub const LIVE_RELOAD_ENV: &str = "RSMIX_DEV_LIVE_RELOAD";
 
 /// The script appended to HTML documents.
 pub const LIVE_RELOAD_SCRIPT: &str = concat!(
@@ -40,7 +40,7 @@ pub struct LiveReload {
     build_id: Option<Arc<str>>,
 }
 
-/// Live reload, enabled when `RMX_DEV_LIVE_RELOAD` is set (by `rmx dev`).
+/// Live reload, enabled when `RSMIX_DEV_LIVE_RELOAD` is set (by `rsmix dev`).
 pub fn live_reload() -> LiveReload {
     LiveReload::enabled(std::env::var_os(LIVE_RELOAD_ENV).is_some())
 }
@@ -124,9 +124,9 @@ fn append_to_documents(mut body: Body) -> Body {
 
 #[cfg(test)]
 mod tests {
-    use rmx_fetch::block_on;
-use rmx_response as response;
-    use rmx_fetch_router::Router;
+    use rsmix_fetch::block_on;
+use rsmix_response as response;
+    use rsmix_fetch_router::Router;
 
     use super::*;
 

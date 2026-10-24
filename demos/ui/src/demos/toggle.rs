@@ -1,14 +1,14 @@
 //! `packages/ui/src/demos/toggle.demo.tsx`: headless switch behavior for native inputs and
 //! custom controls.
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::toggle::{toggle, ToggleOptions};
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::toggle::{toggle, ToggleOptions};
 
 pub struct ToggleDemo;
 
 impl Component for ToggleDemo {
     type Props = ();
-    rmx::client_entry!("ToggleDemo");
+    rsmix::client_entry!("ToggleDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         ToggleDemo

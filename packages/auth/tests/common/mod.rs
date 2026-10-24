@@ -1,21 +1,21 @@
 //! Helpers shared by the ports of Remix's auth tests: `test-utils.ts` (`createRequest`,
 //! `mockFetch`) plus the router with the session middleware that every test sets up.
 //!
-//! Remix tests mock the global `fetch`; rmx providers take the fetch they use, so `mock`
+//! Remix tests mock the global `fetch`; rsmix providers take the fetch they use, so `mock`
 //! returns one that records each request. Where a Remix test lets `router.fetch` reject, the
-//! rmx routes here answer 400 with `{ "error": message }`, which is how the Remix tests that
+//! rsmix routes here answer 400 with `{ "error": message }`, which is how the Remix tests that
 //! catch errors report them.
 
 #![allow(dead_code)]
 
 use std::sync::{Arc, Mutex};
 
-use rmx_auth::{finish_external_auth, start_external_auth, ClientOptions, Fetch, FinishExternalAuthOptions, OAuthProvider, StartExternalAuthOptions};
-use rmx_cookie::Cookie;
-use rmx_fetch::{block_on, Body, BoxError, Request, Response};
-use rmx_fetch_router::{Context, Router};
-use rmx_session::{MemoryStorage, Session};
-use rmx_url::{SearchParams, Url};
+use rsmix_auth::{finish_external_auth, start_external_auth, ClientOptions, Fetch, FinishExternalAuthOptions, OAuthProvider, StartExternalAuthOptions};
+use rsmix_cookie::Cookie;
+use rsmix_fetch::{block_on, Body, BoxError, Request, Response};
+use rsmix_fetch_router::{Context, Router};
+use rsmix_session::{MemoryStorage, Session};
+use rsmix_url::{SearchParams, Url};
 use serde_json::{json, Value};
 
 /// A request the mock fetch received.
@@ -62,7 +62,7 @@ pub fn mock(respond: impl Fn(&Seen) -> Response + Send + Sync + 'static) -> (imp
 
 /// `Response.json(value)`.
 pub fn json_response(value: Value) -> Response {
-    rmx_response::json(&value)
+    rsmix_response::json(&value)
 }
 
 /// `Response.json(value, { status })`.
@@ -87,7 +87,7 @@ pub fn client(name: &str) -> ClientOptions {
 
 /// `createRouter({ middleware: [sessionMiddleware(createCookie('__session', { secrets: ['secret1'] }), createMemorySessionStorage())] })`.
 pub fn session_router() -> Router {
-    Router::new().with(rmx_session_middleware::session(Cookie::new("__session").secrets(vec!["secret1".into()]), MemoryStorage::new()))
+    Router::new().with(rsmix_session_middleware::session(Cookie::new("__session").secrets(vec!["secret1".into()]), MemoryStorage::new()))
 }
 
 pub fn error_json(message: &str) -> Response {

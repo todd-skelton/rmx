@@ -4,7 +4,7 @@
 //! `filename_ext`. Remix's `console.warn` for an unknown charset has no counterpart: the
 //! library does not log, and the fallback value is the same.
 
-use rmx_headers::ContentDisposition;
+use rsmix_headers::ContentDisposition;
 
 fn parse(value: &str) -> ContentDisposition {
     ContentDisposition::parse(Some(value))

@@ -94,10 +94,10 @@ app/
     projects.$id.rs       // /projects/:id
 build.rs                  // scans app/routes, generates route tree
 crates/
-  rmx-core/               // Route trait, LoaderCtx, ActionCtx, Params, errors
-  rmx-macros/             // #[loader], #[action], #[route] attribute macros
-  rmx-server/             // axum integration: match, run loaders, render, PRG
-  rmx-client/             // (phase 2+) link/form interception, revalidation
+  rsmix-core/               // Route trait, LoaderCtx, ActionCtx, Params, errors
+  rsmix-macros/             // #[loader], #[action], #[route] attribute macros
+  rsmix-server/             // axum integration: match, run loaders, render, PRG
+  rsmix-client/             // (phase 2+) link/form interception, revalidation
 ```
 
 Route module sketch (built on Leptos for the PoC):
@@ -163,7 +163,7 @@ care about. Keep the Leptos spike as a baseline for WASM size, build times and h
 | Phase | Goal | Done when |
 | --- | --- | --- |
 | 0. Spike | axum + Leptos SSR, one island | Done; numbers in `bench/leptos-spike/README.md` |
-| 0b. Component-model spike | `Component` trait, `Handle::update()`, same `render()` used for SSR and a WASM island | Done; `rmx/` plus the Remix 3 comparison in `bench/` (section 10) |
+| 0b. Component-model spike | `Component` trait, `Handle::update()`, same `render()` used for SSR and a WASM island | Done; `rsmix/` plus the Remix 3 comparison in `bench/` (section 10) |
 | 1. Routes + loaders (SSR only) | `build.rs` route scan, nested layouts, parallel loaders, loader data passed to route components as props | `/projects/1` renders 3 nested layouts with no WASM shipped |
 | 2. Actions + forms | `#[action]`, plain `<form>`, POST/redirect/GET, validation errors | Create/rename works with JS disabled |
 | 3. Frame navigation | Small client runtime: intercept links and forms (Navigation API), fetch server HTML, swap it in; named frames | Same app works with JS; navigation and form posts do not reload the document |
@@ -256,9 +256,9 @@ Open questions for phase 0b:
 4. Size: a runtime without a reactive system should come in under Leptos's 72.5 KB gzip, but that is
    a guess until 0b measures it.
 
-## 10. Phase 0b outcome (rmx vs Remix 3)
+## 10. Phase 0b outcome (rsmix vs Remix 3)
 
-Built: `rmx/` (the component runtime, `rsx!` macro, SSR, WASM hydration with DOM adoption, keyed
+Built: `rsmix/` (the component runtime, `rsx!` macro, SSR, WASM hydration with DOM adoption, keyed
 diffing, delegated events) and `bench/` (a Remix 3.0.0 app with the same pages, markup, data and
 islands, plus browser and server benchmarks). Method and full numbers: `bench/README.md`.
 
@@ -267,28 +267,28 @@ Answers to the section 9 open questions:
 1. Hydration: adopting the server DOM worked from the start, so replace-on-mount was skipped.
 2. Async work: still open; `queue_task` exists, but there is no `spawn` or abort signal yet.
 3. `#[component] fn` sugar: not attempted. The struct form reads close enough to the JS version.
-4. Size (measured): the rmx client `.wasm` is 127.4 KB raw / 59.4 KB gzip with two islands
+4. Size (measured): the rsmix client `.wasm` is 127.4 KB raw / 59.4 KB gzip with two islands
    (counter and a 10k-row table), against 72.5 KB gzip for the one-island Leptos spike. With the JS
    glue the page ships 63.9 KB gzip, versus 42.5 KB gzip for the same Remix 3 page.
 
 What the benchmarks say (details and caveats in `bench/README.md`):
 
-1. Server rendering is where Rust clearly wins: one rmx thread out-serves one Node process by
+1. Server rendering is where Rust clearly wins: one rsmix thread out-serves one Node process by
    6x to 45x depending on page and environment (10x to 45x in CPU-pinned Linux containers), and
-   in containers rmx idles at about 1 MB versus about 74 MB for Node.
-2. In the browser it is mixed. rmx hydrates faster and wins small updates (select, swap, remove,
+   in containers rsmix idles at about 1 MB versus about 74 MB for Node.
+2. In the browser it is mixed. rsmix hydrates faster and wins small updates (select, swap, remove,
    update every 10th row), but loses on creating 1k rows and ships more bytes. Each DOM node costs
    several wasm-to-JS calls; batching node creation (templates plus `cloneNode`, or one call that
    builds a subtree from an encoded buffer) is the main lever.
 
 Next phases unchanged: routes and loaders (phase 1), then frames and soft navigation (phase 3),
-which is the largest Remix 3 feature rmx does not have.
+which is the largest Remix 3 feature rsmix does not have.
 
 ## 11. Parity status (2026-10-20)
 
 Phases 1 to 3 are done: routes and middleware, frames, and soft navigation all exist, and all
 12 Remix 3 demos are ported under `demos/` with Playwright e2e scripts that mirror the
-Remix demo tests where they exist. Details are in `packages/rmx/README.md`.
+Remix demo tests where they exist. Details are in `packages/rsmix/README.md`.
 
 Covered since phase 0b:
 
@@ -330,11 +330,11 @@ Covered since phase 0b:
    `diff-dom.test.tsx`: 41 tests in `browser_diff_dom.rs`, plus the live-range focus case
    in `browser_frame_reloads.rs`, cover the 43 cases that apply (the pending marker case is
    the resolved child frame case in `browser_frame_reloads.rs`). Live client
-   entry owners are attached with `rmx::test::attach_entry_owner` like Remix's
+   entry owners are attached with `rsmix::test::attach_entry_owner` like Remix's
    `setClientEntryBoundaryOwner`, so the hydration range cases (moving live ranges with
    their siblings, pairing repeated ranges by identity in order, balanced boundary lists,
    nested and frame markers owned by a range) run against the real diff. The six HMR URL
-   cases do not apply (rmx has no HMR); an entry's identity is its component name.
+   cases do not apply (rsmix has no HMR); an entry's identity is its component name.
    `stream.test.tsx` escaping and styles: script text escapes `<script` and `</script` in
    any case as `\u0073` or `\u0053` (JSON and JS read it unchanged) and attribute values
    escape `'`, like Remix. Styles follow Remix's `finalizeHtml`: a document gets them at
@@ -345,9 +345,9 @@ Covered since phase 0b:
    no style objects; string `style` passes through). `style.test.ts` (4) is ported the same
    way in `packages/component/src/mixin.rs`: `rmxc-` classes, cached identical text, nothing
    for empty text, and nested selectors and media queries kept. Divergence: an inlined blocking
-   frame's rules move to the page head, because rmx pins adopted server rules for the page
+   frame's rules move to the page head, because rsmix pins adopted server rules for the page
    instead of adopting them per frame; streamed frame templates still carry their own.
-3. `rmx-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
+3. `rsmix-ui`, all ten `@remix-run/ui` modules: accordion, anchor, animation (spring output
    matches Remix's `spring.ts` byte for byte), combobox, listbox, menu (submenus, hover aim,
    context menus), popover, select, tabs and toggle. The ui gallery has every Remix ui demo,
    the two `demos/ui` cases (draggable and the Web Audio drummer) and the four component
@@ -365,7 +365,7 @@ Covered since phase 0b:
    runner's output. `browser-only-mixins.test.tsx` (2) is in `packages/ui/src/lib.rs`, with
    Remix's internal `onKeyDown` and `onOutsideClick` written as plain `on` listeners.
    `animate-mixins.test.tsx` (5) is `browser_animate_mixins.rs`; its `animate` mock returns
-   an object on `Animation.prototype`, since rmx checks that a tracked animation is one.
+   an object on `Animation.prototype`, since rsmix checks that a tracked animation is one.
    `prefers_reduced_motion()` is Remix's new `prefersReducedMotion` (upstream 2026-10-21), with
    `prefers-reduced-motion.test.ts` (3) in `browser_prefers_reduced_motion.rs`.
    `typeahead.test.tsx`: the two matching cases are unit tests in `src/typeahead.rs` and the
@@ -379,7 +379,7 @@ Covered since phase 0b:
    `browser_popover.rs` with Remix's harness, layout mock and popover method spies.
    `select.test.tsx` (11; its two `it.todo` cases have no body) is `browser_select.rs`, waiting
    in real time where Remix advances fake timers. `listbox.test.tsx` (19) is
-   `browser_listbox.rs`, plus an rmx case for the ref's `select` skipping disabled options
+   `browser_listbox.rs`, plus an rsmix case for the ref's `select` skipping disabled options
    and re-entry while settling. Porting it found that an explicit `None` prop
    (`AttrValue::Absent`) blocked mixin defaults (`tabindex={None}` left the list without
    `tabindex="-1"`); `Element::attr` and `attrs(..)` now treat `Absent` as unset, like
@@ -399,14 +399,14 @@ Covered since phase 0b:
 4. Package-level parity passes (this round): compression (br, gzip and deflate negotiation,
    406, weak ETags, per-chunk flushing for HTML and SSE), static files (index lists,
    directory listings, strong SHA-256 ETags, per-file range support, streamed bodies,
-   symlink containment), `rmx-multipart-parser` (the streaming state machine with Remix's
-   limits) and form data with Remix's defaults and upload handlers, and `rmx-auth` (OAuth 2
+   symlink containment), `rsmix-multipart-parser` (the streaming state machine with Remix's
+   limits) and form data with Remix's defaults and upload handlers, and `rsmix-auth` (OAuth 2
    and OpenID Connect with PKCE: GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and
    generic OIDC). The social-auth demo now logs in through Google, GitHub and X when their
-   client credentials are set. `rmx-node-fetch-server` has `node-fetch-server`'s listener options (host,
+   client credentials are set. `rsmix-node-fetch-server` has `node-fetch-server`'s listener options (host,
    protocol, trusted proxy headers, error handler, client address) and answers handler
    panics with 500; the logger has Remix's format tokens and colors.
-5. Validation: `rmx-data-schema` (`rmx::data_schema`) ports `remix/data-schema`: the
+5. Validation: `rsmix-data-schema` (`rsmix::data_schema`) ports `remix/data-schema`: the
    schema combinators, `pipe`/`refine`/`transform`, checks, coercion, `abortEarly`, error
    maps with locale, and the form-data reader. Its eight test files are ported one per case
    (125 of 149: schema 74 of 92, coerce 16 of 22, form-data 14, parse 9, checks 5, variant
@@ -415,7 +415,7 @@ Covered since phase 0b:
    through a closure instead of returning plain objects; `Fields::rest` is
    `unknownKeys: 'passthrough'` and `Object::strict` is `'error'`. Every
    form and JSON body a Remix demo validates with `data-schema` is validated with it in
-   the rmx port (timeboxer, bookstore, social-auth, sse), except the bookstore admin book
+   the rsmix port (timeboxer, bookstore, social-auth, sse), except the bookstore admin book
    form, which keeps accepting `on` for its checkbox.
 6. Controllers: `router.map(routes, controller)` from `fetch-router`. `#[derive(RouteMap)]`
    on a route struct generates `<Name>Actions` with one `Action` per direct route, so a
@@ -425,7 +425,7 @@ Covered since phase 0b:
    `router.test.ts` is ported (`packages/fetch-router/tests/router.rs`: map, verbs with action
    middleware, 404, 405 with Remix's Allow order and body, HEAD falling back to GET by
    specificity, trailing slashes, mounts), as are `router-abort.test.ts` and
-   `request-abort.test.ts`: `request.signal` is an `rmx_fetch::AbortSignal` that `rmx-node-fetch-server`
+   `request-abort.test.ts`: `request.signal` is an `rsmix_fetch::AbortSignal` that `rsmix-node-fetch-server`
    aborts when the client leaves before the response finished, and an aborted request skips
    the rest of the chain and answers 499 with `AbortError` where Remix rejects. The `remix new` starter (`reference/remix/template`)
    is ported as `template` with its controller test and a browser e2e.
@@ -464,7 +464,7 @@ Covered since phase 0b:
    `resolve` (the runtime cases, initial URL and interactive fallback, are covered by the spa
    demo e2e). SPA form submissions now follow `getRequestBody`: `multipart/form-data`,
    `text/plain` (`name=value\r\n` lines) or URL encoding, with `\r\n` line breaks, and a
-   POST that redirects to GET drops its content type. `rmx_spa::render(transform)` is Remix's
+   POST that redirects to GET drops its content type. `rsmix_spa::render(transform)` is Remix's
    `render(transform)` middleware, and a redirect without `Location` is the response.
    `vdom.insert-remove.test.tsx` is ported (`browser_insert_remove.rs`); `bool` children
    render nothing. `client-entry.test.tsx`: the entry marker and ID cases are
@@ -476,31 +476,31 @@ Covered since phase 0b:
    (flattening, dropping falsy values) is `into_mixins_flattens_nesting_and_drops_none` in
    `src/mixin.rs`. Not ported as files: `jsx.test.tsx`, `vnode.test.ts` and the rest of
    `create-element.test.ts` (TypeScript types and JavaScript value validation that Rust's
-   types enforce), `module-preloader` and `client-entry-boundary` (module ids; rmx ships one
+   types enforce), `module-preloader` and `client-entry-boundary` (module ids; rsmix ships one
    wasm bundle), `remix/assert` (Rust's `assert!`) and the `assets` module transform tests
    (`target`, `module-store`, `loaders`, `scripts/cjs-check` and `scripts/transform`: browser
    targets, the module graph and HMR, Node load hooks and CommonJS detection, none of which
-   rmx assets has, since it does not transform JavaScript). `mime/scripts/codegen.test.ts`
-   checks npm codegen output; rmx's table is generated once by `packages/mime/scripts/codegen.mjs`.
+   rsmix assets has, since it does not transform JavaScript). `mime/scripts/codegen.test.ts`
+   checks npm codegen output; rsmix's table is generated once by `packages/mime/scripts/codegen.mjs`.
    `file.test.ts` is ported case by case (`packages/response/tests/file.rs`, 85 cases)
    against `response::file`, Remix's `createFileResponse` for any `FileLike` (an in-memory
    `File`, or a `LazyFile`, which streams only the requested range): ranges only for `GET`,
    an empty type sends no `Content-Type`, and strong ETags take a `DigestAlgorithm`
-   (SHA-1/256/384/512, hand-written in `rmx-crypto`) or `Digest::with(fn)` of the file; an
+   (SHA-1/256/384/512, hand-written in `rsmix-crypto`) or `Digest::with(fn)` of the file; an
    unknown algorithm name fails to parse instead of rejecting. Static files are rebuilt on
    it as Remix's `static.ts` is (`open_lazy_file` plus `response::file`), with
    `static.test.ts` ported case by case (43, symlinks included); `file_response` and
    `file_response_for` are gone.
-   `remix/terminal` is `rmx-terminal` with its test files ported one per case (18 of 20; the
+   `remix/terminal` is `rsmix-terminal` with its test files ported one per case (18 of 20; the
    entrypoint re-export and `getDefaultEnvironment` cases do not apply); the logger's colors and
    detection now come from it. Cursor helpers take unsigned and signed integers, so Remix's
-   NaN and fraction normalization has nothing to port. The `rmx` CLI colors `new` progress and
+   NaN and fraction normalization has nothing to port. The `rsmix` CLI colors `new` progress and
    `doctor` like Remix's reporter (gray steps, green `✓`, red `✗`, yellow warnings) when
    detection allows; it closes each style rather than resetting, so the bytes differ from
    Remix's while the rendering matches.
    Compression now fails the compressed body when the source or encoder fails (it used to
    end early and look complete), with tests for that, source cancellation on drop and the
-   206 skip. `remix/response/compress` now lives in `rmx_fetch::response::compress` (feature
+   206 skip. `remix/response/compress` now lives in `rsmix_fetch::response::compress` (feature
    `compress`, re-exported by the compression middleware) with `compress_response`,
    `create_compression_options` and `compress_stream` over a `Compressor` trait, and
    `compress.test.ts` is ported case by case (83). The "Compressor interactions" cases run
@@ -511,15 +511,15 @@ Covered since phase 0b:
    `compression.test.ts` (9) is ported too.
    `node-fetch-server`'s `request-listener.test.ts` (52) and `request-listener.http2.test.ts`
    (12) are ported case by case against real loopback servers (raw TCP and HTTP/2 clients
-   for Node's mocked request events). Porting changed `rmx-node-fetch-server`: request bodies are read
+   for Node's mocked request events). Porting changed `rsmix-node-fetch-server`: request bodies are read
    by a task at most 16 KiB ahead of the handler (Node's `highWaterMark`), so a client that
    leaves mid-upload aborts the signal while the handler is not reading, and reads then fail
    with `AbortError` (a malformed body keeps its own error); a handler that panics after the
    request aborted is not reported to `on_error` (`isRequestAbortError`); a response body
-   that fails after headers were sent is reported as `ServeError::ResponseBody`. `rmx-url`
+   that fails after headers were sent is reported as `ServeError::ResponseBody`. `rsmix-url`
    now serializes IPv6 hosts as WHATWG URL does (`[2001:db8::1]`), so equivalent `Host` and
    `:authority` values match. `node-fetch-server/test`'s `createTestServer` is
-   `rmx::node_fetch_server::test::create_test_server(router)`: a server on a free `127.0.0.1` port with
+   `rsmix::node_fetch_server::test::create_test_server(router)`: a server on a free `127.0.0.1` port with
    `base_url` and `close()` (dropping it closes it too). Remix's `remix/test` runner itself
    (describe/it, mocks, fake timers, coverage, watch mode) is not ported: `cargo test` is the
    runner, browser tests use the wasm-bindgen harness and Playwright scripts, and mocks and
@@ -535,7 +535,7 @@ Covered since phase 0b:
    The rest of the package is ported too: content-disposition (`filename*` decodes through
    the WHATWG labels for UTF-8, UTF-16, windows-1252, which `latin1` also names, and
    ISO-8859-15, falling back to the percent-decoded text), cookie, set-cookie (`Max-Age`
-   reads like `parseInt`), param-values, raw-headers (`rmx_headers::raw::{parse,
+   reads like `parseInt`), param-values, raw-headers (`rsmix_headers::raw::{parse,
    stringify, canonical_header_name}` over `http::HeaderMap`; `parse` returns an error
    where `Headers` would throw) and super-headers. `SuperHeaders` is a trait on
    `HeaderMap` rather than a subclass: `typed::<H>()`, `set_typed`, `update(|h| ...)`,
@@ -555,13 +555,13 @@ Covered since phase 0b:
    `remix/route-pattern` is ported with its tests (split, parse, serialize, route-pattern,
    join, specificity, href, match and match/limits; 355 cases in
    `packages/route-pattern/src/tests` and `packages/route-pattern/tests`). The umbrella
-   package's `manifest.test.ts` maps to `packages/rmx/tests/manifest.rs`: every library crate is
-   an `rmx` dependency, re-exported as `rmx::<name>` (the component model at the root) and
-   listed in the crate docs, which caught `rmx::terminal` missing from the table; the README,
+   package's `manifest.test.ts` maps to `packages/rsmix/tests/manifest.rs`: every library crate is
+   an `rsmix` dependency, re-exported as `rsmix::<name>` (the component model at the root) and
+   listed in the crate docs, which caught `rsmix::terminal` missing from the table; the README,
    guide, side-effect and package.json export checks are npm tooling. The type-level
    `types/stringify.test.ts` (13) and `types/join.test.ts` (31) run as parse, serialize and
    join checks; `types/split`, `types/parse` and `types/params` test TypeScript inference of
-   the grammar the runtime split and parse tests already cover, and rmx params are runtime
+   the grammar the runtime split and parse tests already cover, and rsmix params are runtime
    values, so they do not apply. The parser reports
    Remix's ten `ParseError` types with UTF-16 indexes and normalizes sources the same way;
    static text is decoded and canonicalized; matching runs compiled part programs behind
@@ -571,11 +571,11 @@ Covered since phase 0b:
    `HrefError` with Remix's detail types (`kind()`) and relative output for a same-origin
    `base_url`. The router's HEAD fallback now stops at the first match that is not
    `specificity::equal`, as in Remix's `router.ts`. Divergences: URLs are parsed (and
-   relative references joined) with `rmx_url` before matching rather than passing a
+   relative references joined) with `rsmix_url` before matching rather than passing a
    string and `baseURL`; the missing-params message has no `Params:` JSON line;
-   `Params` leaves an unmatched optional out instead of holding `undefined`; `rmx_url`
+   `Params` leaves an unmatched optional out instead of holding `undefined`; `rsmix_url`
    does no IDNA, so the punycode tests feed URLs computed by Node's WHATWG `URL`; and the
-   TypeScript type tests have no counterpart. `rmx_url` paths now use the WHATWG path
+   TypeScript type tests have no counterpart. `rsmix_url` paths now use the WHATWG path
    percent-encode set, so a lone `%` and lowercase escapes stay as written. The rewrite
    grew the spa client wasm from 480.2 to 532.1 KiB and timeboxer from 600.1 to 620.5 KiB
    (measured after rebuild77).
@@ -584,7 +584,7 @@ Covered since phase 0b:
    are base64 of their UTF-8 bytes by default (`hello world` is `aGVsbG8gd29ybGQ=`, and a
    value that is not valid base64 or UTF-8 reads as `None`), `encode`/`decode` replace the
    codec (the lazy-frames theme cookie uses the identity codec as in Remix), `Set-Cookie` is
-   printed by `rmx_headers::SetCookie` in Remix's attribute order, and `Expires` and
+   printed by `rsmix_headers::SetCookie` in Remix's attribute order, and `Expires` and
    `Partitioned` (which forces `Secure`) are supported. `serialize_with` takes
    `CookieProperties` overrides; `clear()` is gone, and the demos delete cookies the way
    theirs do (`serialize('', { maxAge: 0 })`). Session middleware now honors an `Expires`
@@ -594,7 +594,7 @@ Covered since phase 0b:
    storage cases in `packages/session/tests/`, 23 middleware cases in
    `packages/session-middleware/src/session_remix_tests.rs`, with `Date.now` mocked by a test-only
    clock). Errors and warnings use Remix's text. Remix checks after `next()` that the
-   context still holds its session; rmx contexts move down the chain, so the middleware
+   context still holds its session; rsmix contexts move down the chain, so the middleware
    stores the session with `Context::set_sealed` instead, and a later `set` or `get_mut`
    of `Session` panics with the same message. Logging the `httpOnly: false` warning is
    checked through the message builder, since tests cannot capture stderr in-process.
@@ -620,14 +620,14 @@ Covered since phase 0b:
    bodies are no longer parsed; upload handlers may return a `Result`, whose error ends
    parsing as `FormDataError::Upload` (the middleware answers 500, or an empty form with
    `suppress_errors`, as Remix's rethrow would); and `File::new` lowercases its type like
-   the web `File`. Where Remix's middleware throws, rmx answers 413, 400 or 500.
+   the web `File`. Where Remix's middleware throws, rsmix answers 413, 400 or 500.
    The parsers and the proxy run their Remix tests one per case: `multipart-parser` (28 of
    29 `multipart.test.ts` cases; the Web Encoding globals case has no Rust counterpart, plus
    39 request, 6 Node and 6 buffer-search cases; an empty body is now reported before a
    missing boundary), `tar-parser` (21 `tar.test.ts` cases with the lodash and npm fixtures,
    49 name and 70 of 73 size cases; the other three need values the types rule out; bodies
    grow from received bytes, and `TarParser::parse` reuses one parser across archives) and
-   `fetch-proxy` (42 cases against real `rmx_node_fetch_server` servers; a new `redirect` option,
+   `fetch-proxy` (42 cases against real `rsmix_node_fetch_server` servers; a new `redirect` option,
    `Manual` by default, follows redirects with fetch's rules when set to `Follow`).
    `remix/auth` runs all 17 test files (50 cases, `packages/auth/tests/`), including the
    browser OIDC flow against a fake provider on a loopback port. They forced:
@@ -638,11 +638,11 @@ Covered since phase 0b:
    that tell `null` from a missing `name` or `email`; and credentials `verify` receiving the
    context and free to return a `Result`. A discovery failure that rejects Remix's
    `router.fetch` is an `AuthError` the route turns into a response.
-7. Distribution: the `rmx` crate is the single dependency, like the `remix` package: the
-   component model at the root and every other crate as a module (`rmx::router`,
-   `rmx::middleware`, `rmx::auth`, ...). Server modules are native-only; wasm builds see
+7. Distribution: the `rsmix` crate is the single dependency, like the `remix` package: the
+   component model at the root and every other crate as a module (`rsmix::router`,
+   `rsmix::middleware`, `rsmix::auth`, ...). Server modules are native-only; wasm builds see
    the component runtime, `ui`, `router`, `fetch`, `spa` and the platform-neutral crates.
-   All examples depend on `rmx` alone.
+   All examples depend on `rsmix` alone.
 
 8. Component runtime behavior is checked against Remix's own test suites, ported test by
    test: 515 browser tests in 29 files (`packages/component/tests/browser_*.rs`, run in
@@ -651,7 +651,7 @@ Covered since phase 0b:
    (focus restore), form navigation, navigation interception, nested client entries,
    frame CSS, child frames during parent reloads, and frame requests and resolvers; native ports cover
    server streaming (`ssr_stream.rs`, `ssr_mixins.rs`, `ssr_hydration.rs`, and the
-   frames section in `rmx-render-middleware`, where frames resolve through the router). Porting found and fixed real
+   frames section in `rsmix-render-middleware`, where frames resolve through the router). Porting found and fixed real
    gaps: host-element listeners, the constructed stylesheet, link mixin options, focus
    restore, detached form submitters, submitter encodings and `text/plain` bodies, frame
    sources after redirects, and runaway mixin expansion, document-relative origins, deferred removal of
@@ -664,14 +664,14 @@ Covered since phase 0b:
    by a superseded ancestor reload that were left running, and streamed templates cut
    short before their end marker that never applied once the document finished parsing.
    `createScheduler` has no separate constructor: Remix passes one scheduler to related
-   roots so their updates batch together, and rmx has one scheduler per wasm thread that
-   every root and frame shares (`rmx::flush()` is `scheduler.dequeue()`). Its phase events
-   and task queues are runtime plumbing that rmx exposes as mixin `on_before_update` /
+   roots so their updates batch together, and rsmix has one scheduler per wasm thread that
+   every root and frame shares (`rsmix::flush()` is `scheduler.dequeue()`). Its phase events
+   and task queues are runtime plumbing that rsmix exposes as mixin `on_before_update` /
    `on_commit` and `Handle::queue_task`, with the same 50-update loop guard and warning.
 
 Remaining gaps:
 
-1. Import maps and per-entry module loading: rmx ships one wasm bundle per app, so the
+1. Import maps and per-entry module loading: rsmix ships one wasm bundle per app, so the
    Remix import map and module preloader tests do not apply.
 2. Errors thrown inside components: Rust does not throw, and wasm32 panics abort the
    module. Errors are reported explicitly (`Handle::report_error`) and reach
@@ -681,27 +681,27 @@ Remaining gaps:
    failures are kept as state and failed in render; `browser_errors.rs` 17). On the
    server a failed component is reported and left out, where Remix rejects the stream.
 3. Tooling: hot module replacement (wasm modules cannot be swapped in place), and the
-   `remix` CLI's `db` command (data access is out of scope). The `rmx` binary (`rmx::cli`, in
-   the `rmx` crate) has `completion` (Remix's bash/zsh script and `completion -- <index>
+   `remix` CLI's `db` command (data access is out of scope). The `rsmix` binary (`rsmix::cli`, in
+   the `rsmix` crate) has `completion` (Remix's bash/zsh script and `completion -- <index>
    <words>` protocol, with the global `--no-color` flag offered like Remix's; checked in Git Bash;
    `completion.test.ts` and `commands/completion.test.ts` are in `cli/tests.rs`, as is `progress.test.ts`
    (`steps_report_running_then_success_or_failure`), and `routes`
    completion now drops flags that cannot combine with those given, like Remix's
    `completeRoutes`; the `db`, `test` runner flag and `--config` cases have no counterpart), the global `--no-color` (before any `--`; commands handed to cargo get `NO_COLOR=1` and `CARGO_TERM_COLOR=never`), `dev` (Remix's `npm run dev` / `hmr` as rebuild, restart and page reload:
    it polls `src/`, `app/`, `public/` and `Cargo.toml`, builds the client and server, runs
-   a copy of the server with `RMX_DEV_LIVE_RELOAD`, and `rmx::middleware::live_reload`
+   a copy of the server with `RSMIX_DEV_LIVE_RELOAD`, and `rsmix::middleware::live_reload`
    appends an event-stream script to documents that reloads the page when the build id
    changes; measured on a new app: an edit to the home page showed in the open page 20 s
-   later, 17 s of it the server rebuild), `doctor` (Remix's suites and output with rmx
-   checks: environment for the `rmx` dependency, the wasm32 target and the pinned
+   later, 17 s of it the server rebuild), `doctor` (Remix's suites and output with rsmix
+   checks: environment for the `rsmix` dependency, the wasm32 target and the pinned
    wasm-bindgen; project for a `RouteMap`; client for `cdylib` and a built, current wasm;
-   `--json`, `--strict`, and `--fix` like Remix's `applyDoctorFixPlans`: it adds the `rmx`
+   `--json`, `--strict`, and `--fix` like Remix's `applyDoctorFixPlans`: it adds the `rsmix`
    dependency, creates or fills an empty `src/routes.rs` and declares it in `lib.rs`, and
    adds `cdylib` to the crate types, making each file once, skipping files that exist and
    refusing paths that leave the app root, even through symlinks, then checks again and
    fails on what is left; no actions suite since controllers are checked at compile time,
    and no `--config` or `remix.json`), the global `--no-color`, Remix's terminal
-   preamble (a blank line, then on a terminal `RMX v0.1.0 - doctor` with one color per
+   preamble (a blank line, then on a terminal `RSMIX v0.1.0 - doctor` with one color per
    letter) and closing ANSI reset on stdout or else stderr when either is a terminal that is
    not `TERM=dumb`, Remix's status channel (on such a terminal a running step redraws
    `• Label.`, `..`, `...` every 250 ms and its result replaces it; elsewhere stable lines),
@@ -711,21 +711,21 @@ Remaining gaps:
    standalone crate with the app's name, Remix's error codes and progress lines; an app made
    this way passed `cargo test` and the template's 10 browser checks outside the workspace),
    `version`, `help`, and `routes`, `assets` and `test`, which run the app through cargo. The
-   `remix/component/test` render helper exists as `rmx::test`; `remix routes` exists as
-   `rmx::router::routes::routes_command`, which every demo binary runs for `-- routes`
-   (tree, `--table`, `--json`; no controller owner column, since rmx has no controller files;
+   `remix/component/test` render helper exists as `rsmix::test`; `remix routes` exists as
+   `rsmix::router::routes::routes_command`, which every demo binary runs for `-- routes`
+   (tree, `--table`, `--json`; no controller owner column, since rsmix has no controller files;
    the table pads every cell like Remix's reporter and bolds the headers on a color terminal);
-   and `remix assets` exists as `rmx::assets::assets_command` over the asset server's
+   and `remix assets` exists as `rsmix::assets::assets_command` over the asset server's
    `assets()` / `asset_details()` inspection (list, `inspect <url-or-file>`, with statuses
    reachable, denied, not-allowed, missing, unmapped and unsupported), run by the assets and template
-   demos for `-- assets`. The asset server's mounts compile through `rmx::assets::routes`
+   demos for `-- assets`. The asset server's mounts compile through `rsmix::assets::routes`
    (Remix's `compileRoutes`, with `paths` for Windows, UNC and POSIX file paths): mount keys
    canonicalize as URL pathnames, absolute directories, query strings, fragments, encoded dot
    segments and overlapping roots are rejected with Remix's messages, and file names are
    percent-encoded like `encodeURIComponent`. `routes.test.ts` (20), `paths.test.ts` (9) and
    the fingerprint format and parse cases of `fingerprint.test.ts` are ported one per case;
    the module graph, script transforms and CommonJS checks are the TypeScript side of
-   Remix's asset server, which rmx apps (Rust compiled to wasm) do not have.
+   Remix's asset server, which rsmix apps (Rust compiled to wasm) do not have.
    The server itself follows Remix's `createAssetServer`: it serves scripts (`.js`, `.mjs`),
    stylesheets and file assets (`files.extensions`, plus `.wasm`); other files, missing or
    denied files and stale or missing fingerprints return `None` so the router continues;
@@ -747,30 +747,30 @@ Remaining gaps:
    `cache.test.ts` cases are ported (`tests/fs_file_cache.rs`, the default directory case in
    its own binary and the overlapping read case as a unit test). `FileCache` methods return
    `io::Result` and a failure reaches `on_error` as `EMIT_FAILED`; the default directory is
-   `target/.cache/rmx/assets` rather than `node_modules/.cache/remix/assets`. The assets demo
+   `target/.cache/rsmix/assets` rather than `node_modules/.cache/remix/assets`. The assets demo
    caches transformed SVGs this way, like Remix's.
 4. Data access (`data-table`, `data-table-mysql`, `data-table-postgres`,
    `data-table-sqlite`) is intentionally left to existing Rust libraries, and so are the
    storage backends `file-storage-s3`, `session-storage-redis` and
-   `session-storage-memcache` (rmx's `FileStorage` and `SessionStorage` traits take any
+   `session-storage-memcache` (rsmix's `FileStorage` and `SessionStorage` traits take any
    backend). The JavaScript tooling packages have no Rust counterpart: `node-tsx` (rsx is
-   compiled by `rustc`), `node-hmr` and `component-hmr` (`rmx dev` rebuilds, restarts and
-   reloads the page instead), `multiple-import-maps-polyfill` (rmx ships one wasm bundle
+   compiled by `rustc`), `node-hmr` and `component-hmr` (`rsmix dev` rebuilds, restarts and
+   reloads the page instead), `multiple-import-maps-polyfill` (rsmix ships one wasm bundle
    and no import maps), `assert` (`assert!`) and `test` (`cargo test`, plus
-   `rmx_node_fetch_server::test` and `rmx::test`). Every other Remix package has an rmx crate or module
-   (`packages/rmx/tests/manifest.rs` checks that each crate is distributed through `rmx`).
+   `rsmix_node_fetch_server::test` and `rsmix::test`). Every other Remix package has an rsmix crate or module
+   (`packages/rsmix/tests/manifest.rs` checks that each crate is distributed through `rsmix`).
    The CLI's internal test files map as follows: `contained-path.test.ts` is the doctor fix
    path check (`doctor_fix_skips_existing_files_and_refuses_paths_outside_the_app`, which
    also follows symlinks); `controller-files.test.ts` and `controller-ownership.test.ts`
-   plan and scan `app/actions` controller files, which rmx replaces with the compile-time
-   `<Name>Actions` check; and `remix-config.test.ts` loads `remix.json`, which rmx does not
-   have. Its sections configure things rmx keeps elsewhere: `assets` is the asset server
+   plan and scan `app/actions` controller files, which rsmix replaces with the compile-time
+   `<Name>Actions` check; and `remix-config.test.ts` loads `remix.json`, which rsmix does not
+   have. Its sections configure things rsmix keeps elsewhere: `assets` is the asset server
    built in the app's code, `test` is `cargo test`, `db` is left to data libraries, and
    `doctor.strict` is the `--strict` flag (`--no-strict` is accepted like Remix's). The
    one `spa-response.test.ts` case (`spaResponse.create` throws outside a browser) does
-   not apply: `rmx_spa::spa_response` only stores the node beside a response, and the
+   not apply: `rsmix_spa::spa_response` only stores the node beside a response, and the
    native tests build routes with it.
-   Test file audit (2026-10-22): of 289 upstream test files, 86 are not cited by name in rmx.
+   Test file audit (2026-10-22): of 289 upstream test files, 86 are not cited by name in rsmix.
    Those that apply are ported under other names: the nine `hydration.*` files in
    `browser_hydration.rs`, the vdom tasks, scheduler, signals, connect and context files in
    `browser_vdom.rs`, the elements, fragments and components cases in `browser_elements.rs`,
@@ -807,13 +807,13 @@ Remaining gaps:
 Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22). Section 15
 updates it for Remix 3.1.
 
-1. Packages: upstream has 50. The 37 in scope each have an rmx crate or module, distributed
-   through the `rmx` crate (`packages/rmx/tests/manifest.rs`): since the 2026-10-22
+1. Packages: upstream has 50. The 37 in scope each have an rsmix crate or module, distributed
+   through the `rsmix` crate (`packages/rsmix/tests/manifest.rs`): since the 2026-10-22
    reorganization each one is a crate in a directory of the same name under `packages/`
-   (`rmx-<name>`), with three exceptions: `async-context-middleware` lives in `fetch-router`
+   (`rsmix-<name>`), with three exceptions: `async-context-middleware` lives in `fetch-router`
    (`async_context`, since the router's `Context` keeps the scope in step), `form-data-parser`
    is `FormData::parse` in `fetch` (the Fetch API's `FormData` lives there), and `remix` is
-   `rmx`. The other 13 are out of scope:
+   `rsmix`. The other 13 are out of scope:
    data access (`data-table` and its three adapters, the memcache and redis session
    stores, `file-storage-s3`), which existing libraries cover, and JavaScript tooling with
    no Rust counterpart (`node-tsx`, `node-hmr`, `component-hmr`,
@@ -840,19 +840,19 @@ updates it for Remix 3.1.
       the exceptions are listed in the README (ICU4X, `ureq`, `nodejs-semver`).
    5. Composition: small crates, middleware as composable functions, and mixins on host
       elements as in Remix.
-   6. Distribute cohesively: one `rmx` dependency re-exports every crate, checked by the
+   6. Distribute cohesively: one `rsmix` dependency re-exports every crate, checked by the
       manifest test.
 5. Documented divergences, not gaps: one wasm bundle per app (no import maps), no thrown
-   errors (explicit `report_error`), string `style`, plain `Event`s in `rmx-ui`, no HMR
-   (`rmx dev` rebuilds and reloads), and slower creation of large lists than Remix's JS
+   errors (explicit `report_error`), string `style`, plain `Event`s in `rsmix-ui`, no HMR
+   (`rsmix dev` rebuilds and reloads), and slower creation of large lists than Remix's JS
    runtime (`bench/README.md`; fixed on 2026-10-23, section 13).
 6. Gate at this audit (measured): workspace tests 2,586 passed, 0 failed (test113);
-   browser tests `rmx-component` 596 and `rmx-ui` 140 passed, 0 failed (browser-all11);
+   browser tests `rsmix-component` 596 and `rsmix-ui` 140 passed, 0 failed (browser-all11);
    all demo e2e suites passed (rebuild105).
 
 ## 13. Client speed and size (2026-10-23)
 
-1. The list benchmarks rmx lost (replace 1k, create 10k, append 1k) were bound by calls
+1. The list benchmarks rsmix lost (replace 1k, create 10k, append 1k) were bound by calls
    from wasm into JavaScript, not by diffing: about 25 calls per table row, each through
    web-sys, plus a `TextDecoder` run for every dynamic string and a SipHash lookup for
    every interned one.
@@ -861,7 +861,7 @@ updates it for Remix 3.1.
    passing template strings as indexes into a JS-side table, and decoding short ASCII
    strings in JS. No generated JS snippet file, so the page still loads three files.
    Keyed lists also patch their common prefix and suffix in place.
-3. Result (measured, `bench/README.md`): rmx commits faster than Remix on every list
+3. Result (measured, `bench/README.md`): rsmix commits faster than Remix on every list
    operation in both runs except `clear 1k` in the stable run, by 3 to 17% on the four
    creation-heavy ones.
 4. Size: narrowed, not closed. 150.4 KB gzip on stable, 133.6 KB with
@@ -878,7 +878,7 @@ updates it for Remix 3.1.
    (35 KB), soft navigation (17 KB) and the DOM differ for frame reloads (9 KB), shallow
    bytes before `wasm-opt`. The bench page uses none of them; it hydrates two client entries.
 2. Decision: Cargo features `frames` and `navigation` (which needs `frames`) on
-   rmx-component, forwarded by `rmx` along with `spa` (which needs both). All are on by
+   rsmix-component, forwarded by `rsmix` along with `spa` (which needs both). All are on by
    default, so existing apps do not change. With them off the browser runtime is the vdom,
    client entry hydration from `rmx-data`, styles and mixins, and the document is the only
    frame:
@@ -889,9 +889,9 @@ updates it for Remix 3.1.
    3. `navigate()` assigns `location`; links and forms are plain browser navigations.
    4. `RunOptions::resolve_frame` is ignored, with a warning.
    5. The server is unaffected and renders `<Frame>` either way.
-3. A client crate opts out with `rmx = { ..., default-features = false }`; the shared app
-   crate does too, and the server crate keeps the defaults. rmx-ui no longer turns the
-   features on, and rmx-spa asks for `navigation`.
+3. A client crate opts out with `rsmix = { ..., default-features = false }`; the shared app
+   crate does too, and the server crate keeps the defaults. rsmix-ui no longer turns the
+   features on, and rsmix-spa asks for `navigation`.
 4. Remix has no equivalent switch: its `run()` starts frames and navigation on every page.
    This is a place where compile-time features fit Rust better than a runtime option.
 5. Result (measured, `bench/README.md`): the bench client went from 150.4 to 99.7 KB gzip
@@ -918,48 +918,48 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
       empty files handled safely (#12043), and the tar parser stops after the
       end-of-archive marker while still counting what follows toward `max_total_size`
       (#12041).
-   3. Streaming uploads (`584ed39`, #12030): `rmx_multipart_parser::future` yields each
+   3. Streaming uploads (`584ed39`, #12030): `rsmix_multipart_parser::future` yields each
       part when its headers arrive, with content as zero-copy views of the body chunks;
-      `rmx_fetch::form_data::future` hands each `FileUpload` to the handler as it starts and
-      streams it from the request; `rmx-form-data-middleware` has a matching `future`
+      `rsmix_fetch::form_data::future` hands each `FileUpload` to the handler as it starts and
+      streams it from the request; `rsmix-form-data-middleware` has a matching `future`
       module. Upstream's #12029 works around a Node.js bug (before 24.20.0 and 26.6.0)
-      that kept streamed `FileUpload` contents in memory; rmx does not run on Node, so there
+      that kept streamed `FileUpload` contents in memory; rsmix does not run on Node, so there
       is nothing to port.
    4. Keyed Fragments in client entry props (`e2fe08b`, #12067).
    5. Prefetching (`fdc6a6a`, #12004): `data-rmx-prefetch="intent"` and `"viewport"`,
       `prefetch()`, and `RunOptions::prefetch` for a custom strategy. It is part of the
       `navigation` feature, so a client built without it carries none of it.
 2. Not ported: S3 multipart uploads (#12070), data access, out of scope as in section 12.
-3. Breaking for rmx users: `RunOptions` gained a field (struct literals need
+3. Breaking for rsmix users: `RunOptions` gained a field (struct literals need
    `..Default::default()`), `raw::parse` returns `HeaderMap`, and a non-`bytes` Range unit
    is served in full instead of rejected.
-4. Uploads (measured, `cargo run --release -p rmx-fetch --example upload_bench`, median of
+4. Uploads (measured, `cargo run --release -p rsmix-fetch --example upload_bench`, median of
    7): a 100 MiB file went from 149.28 to 15.43 ms in total, 125.41 to 0.04 ms to the
    handler, and 200.1 to 0 MiB of peak heap growth.
 5. Benchmarks against Remix 3.1 (measured, `bench/README.md`):
-   1. Docker, pinned CPUs: rmx serves 12x, 16x and 16x Remix's requests per second on
+   1. Docker, pinned CPUs: rsmix serves 12x, 16x and 16x Remix's requests per second on
       `/`, `/ssr/100` and `/ssr/1000` on one CPU, and 12x, 8x and 9x on eight. Remix 3.1's
       single process is 2.9x its 3.0 figure on `/`.
-   2. Browser: rmx commits first on every list operation in both the stable and the
+   2. Browser: rsmix commits first on every list operation in both the stable and the
       nightly run, and hydrates the page in about half the time.
-   3. Client: Remix 3.1 is 46.4 KB gzip (3.0 was 42.5 KB); the rmx nightly client is still
+   3. Client: Remix 3.1 is 46.4 KB gzip (3.0 was 42.5 KB); the rsmix nightly client is still
       87.2 KB, 1.9x.
 6. Gate (measured): workspace tests 2,637 passed, 0 failed (test122); native clippy and
-   wasm clippy for `rmx-component` (default, no default features, `frames` only, all
-   targets), `rmx-fetch`, `rmx-multipart-parser` and `rmx-form-data-middleware` with
-   `-D warnings`; browser tests `rmx-component` 612, `rmx-ui` 140 and no-frames 1 passed,
+   wasm clippy for `rsmix-component` (default, no default features, `frames` only, all
+   targets), `rsmix-fetch`, `rsmix-multipart-parser` and `rsmix-form-data-middleware` with
+   `-D warnings`; browser tests `rsmix-component` 612, `rsmix-ui` 140 and no-frames 1 passed,
    0 failed (browser-all16), plus `browser_prefetch` 9, `browser_prefetch_assets` 4 and
    `browser_entry_props` 2; demo e2e suites 11 of 12 in rebuild110, and the twelfth
    (bookstore, its new viewport-prefetch check) passed after scrolling the links into view.
 
 ## 16. Router steps without boxes (2026-10-24)
 
-1. Prompted by Corten, which removed a per-request re-boxing of its middleware stack. In rmx
+1. Prompted by Corten, which removed a per-request re-boxing of its middleware stack. In rsmix
    each middleware step allocated twice: `Next::run` boxed its own `async fn`, and the
    middleware's future was boxed by `Middleware::call`. Each chain also allocated an `Arc`
    for its endpoint.
 2. Profile first (measured, callgrind in a Linux container,
-   `packages/rmx/examples/router_profile.rs`): a step cost about 1,384 instructions, and the
+   `packages/rsmix/examples/router_profile.rs`): a step cost about 1,384 instructions, and the
    four-middleware router took 21,479 instructions a request against 15,944 for the handler
    alone, so it showed up.
 3. Decision: `Next::run` returns `NextFuture`, a named future that calls the next step on its
@@ -977,8 +977,8 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
 6. Found on the way, not changed: `static_files` calls `canonicalize` on every request path,
    which costs more than all of the router's boxing on `/`.
 7. Gate (measured): workspace tests 2,641 passed, 0 failed (test124); native clippy, wasm
-   clippy for `rmx-fetch-router` and `rmx-spa` with `-D warnings`; all 12 demo e2e suites
-   passed (rebuild111). `rmx-fetch-router`'s wasm `--all-targets` clippy fails on an
+   clippy for `rsmix-fetch-router` and `rsmix-spa` with `-D warnings`; all 12 demo e2e suites
+   passed (rebuild111). `rsmix-fetch-router`'s wasm `--all-targets` clippy fails on an
    `Arc<Mutex<Option<Router>>>` in `tests/router.rs`, at the previous commit as well.
 
 ## 17. Static files without canonicalize, and a clean bench machine (2026-10-24)
@@ -999,7 +999,7 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
 4. Result (measured, `bench/README.md`): on the droplet `/` went from about 17,900 to
    21,400 requests a second on one thread and from about 103,700 to 122,700 on eight
    (15 to 22% in each round); the SSR pages did not move beyond their spread. The router
-   change of section 16 was worth 0 to 7% on `/`. Against Remix 3.1 on the droplet, rmx
+   change of section 16 was worth 0 to 7% on `/`. Against Remix 3.1 on the droplet, rsmix
    serves 7x to 10x the requests per second in 3 to 9 MB against 341 MB to 2.9 GB.
 5. Gate (measured): workspace tests 2,643 passed, 0 failed (test125), with two new static
    tests (directory links inside and outside the root, missing paths); the symlink tests

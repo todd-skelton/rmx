@@ -7,11 +7,11 @@
 //! cancels) the body. Limits are enforced as in the stable parser, on content you skip too.
 //!
 //! ```
-//! use rmx_multipart_parser::future::parse_multipart_stream;
-//! use rmx_multipart_parser::MultipartOptions;
+//! use rsmix_multipart_parser::future::parse_multipart_stream;
+//! use rsmix_multipart_parser::MultipartOptions;
 //!
-//! # rmx_fetch::block_on(async {
-//! let body = rmx_fetch::Body::from("--b\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nDune\r\n--b--");
+//! # rsmix_fetch::block_on(async {
+//! let body = rsmix_fetch::Body::from("--b\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nDune\r\n--b--");
 //! let mut parts = parse_multipart_stream(body, "b", &MultipartOptions::default()).unwrap();
 //! while let Some(part) = parts.next_part().await {
 //!     let part = part.unwrap();

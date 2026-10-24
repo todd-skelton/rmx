@@ -2,8 +2,8 @@
 //! `response::redirect` and `redirect_with`).
 
 use http::{header, HeaderMap, HeaderValue, StatusCode};
-use rmx_response::{redirect, redirect_with, ResponseInit};
-use rmx_fetch::Url;
+use rsmix_response::{redirect, redirect_with, ResponseInit};
+use rsmix_fetch::Url;
 
 #[test]
 fn creates_a_redirect_with_default_302_status() {

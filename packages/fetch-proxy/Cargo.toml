@@ -1,5 +1,5 @@
 [package]
-name = "rmx-fetch-proxy"
+name = "rsmix-fetch-proxy"
 description = "Forward requests to another server and rewrite the response for the client (port of remix fetch-proxy)"
 edition.workspace = true
 version.workspace = true
@@ -8,13 +8,13 @@ license.workspace = true
 [dependencies]
 http.workspace = true
 http-body.workspace = true
-rmx-fetch.workspace = true
-rmx-headers.workspace = true
-rmx-url.workspace = true
+rsmix-fetch.workspace = true
+rsmix-headers.workspace = true
+rsmix-url.workspace = true
 
 [dev-dependencies]
-rmx-response.workspace = true
-rmx-compression-middleware.workspace = true
-rmx-fetch-router.workspace = true
-rmx-node-fetch-server.workspace = true
+rsmix-response.workspace = true
+rsmix-compression-middleware.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-node-fetch-server.workspace = true
 tokio.workspace = true

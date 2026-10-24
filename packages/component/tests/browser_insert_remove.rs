@@ -4,9 +4,9 @@
 //! JavaScript's `bigint` is a `u64`/`u128` here, and `null`/`undefined` are `None` and `()`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::{create_root, rsx, Component, Handle, IntoNode, Node};
+use rsmix::{create_root, rsx, Component, Handle, IntoNode, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

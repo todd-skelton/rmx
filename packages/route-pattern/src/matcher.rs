@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use rmx_url::Url;
+use rsmix_url::Url;
 
 use crate::limits::{check, Budget, MatcherLimit, MatcherLimits, MatcherResourceError};
 use crate::program::{canonicalize_url_part, compile_part, has_static_anchor, has_static_prefix, has_static_suffix, match_part, CanonicalText, PartProgram, Unit};
@@ -417,7 +417,7 @@ fn matches_port(parts: &Parts, protocol: &str, actual: &str) -> bool {
     }
 }
 
-fn matches_search(params: &rmx_url::SearchParams, constraints: &crate::Search, budget: &mut Budget) -> Result<bool, MatcherResourceError> {
+fn matches_search(params: &rsmix_url::SearchParams, constraints: &crate::Search, budget: &mut Budget) -> Result<bool, MatcherResourceError> {
     for (name, required) in constraints {
         budget.consume(params.len() + required.len() + 1)?;
         if required.is_empty() {

@@ -1,4 +1,4 @@
-//! Terminal output for rmx (Remix's `remix/terminal`): raw ANSI sequences ([`ansi`]),
+//! Terminal output for rsmix (Remix's `remix/terminal`): raw ANSI sequences ([`ansi`]),
 //! [`strip_ansi`], color detection ([`should_use_colors`]), style helpers that restore the
 //! outer style after a nested one closes ([`Styles`]), and a [`Terminal`] over injectable
 //! output streams. No dependencies.

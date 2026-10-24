@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use rmx_terminal::Styles;
+use rsmix_terminal::Styles;
 
 /// Remix `clearCurrentLine`.
 pub(crate) const CLEAR_LINE: &str = "\r\x1b[2K";

@@ -1,4 +1,4 @@
-// Same word lists and generator as bench/rmx-app/app so both apps render identical rows.
+// Same word lists and generator as bench/rsmix-app/app so both apps render identical rows.
 const ADJECTIVES = [
   'pretty', 'large', 'big', 'small', 'tall', 'short', 'long', 'handsome', 'plain', 'quaint',
   'clean', 'elegant', 'easy', 'angry', 'crazy', 'helpful', 'mushy', 'odd', 'unsightly',

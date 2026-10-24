@@ -1,5 +1,5 @@
 [package]
-name = "rmx-method-override-middleware"
+name = "rsmix-method-override-middleware"
 description = "Middleware for overriding HTTP request methods from form data (remix method-override-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-form-data-middleware.workspace = true
-rmx-fetch-router.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-fetch-router.workspace = true
 
 [dev-dependencies]
-rmx-fetch.workspace = true
+rsmix-fetch.workspace = true

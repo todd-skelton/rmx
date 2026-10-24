@@ -2,7 +2,7 @@
 //! a bubbling selection event and nested submenus (Remix's `@remix-run/ui/menu`).
 //!
 //! ```ignore
-//! use rmx_ui::menu::{self, ItemOptions, SubmenuTriggerOptions};
+//! use rsmix_ui::menu::{self, ItemOptions, SubmenuTriggerOptions};
 //!
 //! rsx! {
 //!     <menu::Context label="Project actions">
@@ -32,7 +32,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
-use rmx::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node, NodeHandle};
+use rsmix::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node, NodeHandle};
 
 use crate::anchor::{AnchorOptions, Placement};
 use crate::listbox::spawn;
@@ -633,7 +633,7 @@ impl MenuState {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn register_trigger(self: &Rc<Self>, node: &NodeHandle, signal: &rmx::Signal) {
+    fn register_trigger(self: &Rc<Self>, node: &NodeHandle, signal: &rsmix::Signal) {
         let Ok(el) = wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(node.element().clone()) else { return };
         *self.trigger.borrow_mut() = Some(el.clone());
         let menu = self.clone();
@@ -799,7 +799,7 @@ pub fn submenu_trigger(options: SubmenuTriggerOptions) -> Mixin {
 /// The host's own `id`, else `fallback` set on it (Remix's `attrs` only fills props the
 /// element leaves unset).
 fn host_id(host: &mut Element, fallback: &str) -> String {
-    if let Some(rmx::AttrValue::Str(id)) = host.attr("id") {
+    if let Some(rsmix::AttrValue::Str(id)) = host.attr("id") {
         return id.to_string();
     }
     host.set_attr("id", fallback.to_string());
@@ -830,7 +830,7 @@ impl HostMixin for Trigger {
         #[cfg(target_arch = "wasm32")]
         {
             let menu = self.menu.clone();
-            host.mix(rmx::node_ref(move |node, signal| menu.register_trigger(node, signal)));
+            host.mix(rsmix::node_ref(move |node, signal| menu.register_trigger(node, signal)));
         }
         host.mix(crate::popover::anchor(options.clone()));
         host.mix(on(
@@ -900,7 +900,7 @@ impl HostMixin for ContextTrigger {
         #[cfg(target_arch = "wasm32")]
         {
             let menu = self.menu.clone();
-            host.mix(rmx::node_ref(move |node, signal| menu.register_trigger(node, signal)));
+            host.mix(rsmix::node_ref(move |node, signal| menu.register_trigger(node, signal)));
         }
         host.mix(on(
             "contextmenu",
@@ -1079,7 +1079,7 @@ impl HostMixin for List {
         #[cfg(target_arch = "wasm32")]
         {
             let registered = menu.clone();
-            host.mix(rmx::node_ref(move |node, signal| {
+            host.mix(rsmix::node_ref(move |node, signal| {
                 let Ok(el) = wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(node.element().clone()) else { return };
                 *registered.list.borrow_mut() = Some(el.clone());
                 let registered = registered.clone();
@@ -1342,7 +1342,7 @@ impl HostMixin for SubmenuTrigger {
         #[cfg(target_arch = "wasm32")]
         {
             let menu = child.clone();
-            host.mix(rmx::node_ref(move |node, signal| menu.register_trigger(node, signal)));
+            host.mix(rsmix::node_ref(move |node, signal| menu.register_trigger(node, signal)));
         }
         host.mix(crate::popover::anchor(AnchorOptions::new(Placement::RightStart).relative_to(SUBMENU_ANCHOR_RELATIVE_TO)));
         if options.disabled {
@@ -1427,7 +1427,7 @@ impl HostMixin for SubmenuTrigger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     #[test]
     fn renders_roles_checked_state_and_labelling() {

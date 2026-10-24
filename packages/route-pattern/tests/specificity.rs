@@ -2,8 +2,8 @@
 
 use std::cmp::Ordering;
 
-use rmx_route_pattern::{specificity, Match, Matcher};
-use rmx_url::Url;
+use rsmix_route_pattern::{specificity, Match, Matcher};
+use rsmix_url::Url;
 
 fn match_pattern(pattern: &str, url: &Url) -> Option<Match<()>> {
     let mut matcher = Matcher::new();

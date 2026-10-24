@@ -7,7 +7,7 @@
 //! 3. `4 async`: four middleware written as `async move { next.run(ctx).await }`.
 //! 4. `bench stack`: the bench server's middleware (static files, then form data).
 //!
-//! `cargo run --release -p rmx --example router_profile` prints the table. With
+//! `cargo run --release -p rsmix --example router_profile` prints the table. With
 //! `-- <config> <n>` it only runs `n` requests through one router, for a profiler such as
 //! `valgrind --tool=callgrind` (run it with two values of `n` and subtract to drop setup).
 
@@ -16,11 +16,11 @@ use std::hint::black_box;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-use rmx::fetch::{block_on, Body};
-use rmx::middleware::form_data::form_data;
-use rmx::middleware::static_files::{static_files, StaticOptions};
-use rmx::response;
-use rmx::router::{Context, Next, Router};
+use rsmix::fetch::{block_on, Body};
+use rsmix::middleware::form_data::form_data;
+use rsmix::middleware::static_files::{static_files, StaticOptions};
+use rsmix::response;
+use rsmix::router::{Context, Next, Router};
 
 struct Counting;
 
@@ -65,7 +65,7 @@ fn router(config: &str) -> Router {
             }
         }
         "bench stack" => {
-            let public = concat!(env!("CARGO_MANIFEST_DIR"), "/../../bench/rmx-app/public");
+            let public = concat!(env!("CARGO_MANIFEST_DIR"), "/../../bench/rsmix-app/public");
             router.use_middleware(static_files(public, StaticOptions { index: vec![], ..Default::default() }));
             router.use_middleware(form_data());
         }

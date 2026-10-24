@@ -127,7 +127,7 @@ impl AssetServer {
 impl Inner {
     fn resolve_input(&self, input: &str) -> Option<(&Mount, PathBuf)> {
         if let Some(rest) = input.strip_prefix("file://") {
-            let path = rmx_url::decode(rest);
+            let path = rsmix_url::decode(rest);
             // `file:///C:/x` on Windows.
             let path = if path.len() > 2 && path.as_bytes()[2] == b':' { &path[1..] } else { &path[..] };
             return self.mapped_file(Path::new(path));
@@ -137,7 +137,7 @@ impl Inner {
                 && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-'))
         });
         if is_url {
-            let url = rmx_url::Url::parse(input).ok()?;
+            let url = rsmix_url::Url::parse(input).ok()?;
             return self.mapped_url(&parse_fingerprint(url.pathname()).0);
         }
         // A file path when it does not start with `/`, or when it is an absolute path to an
@@ -149,7 +149,7 @@ impl Inner {
                 return self.mapped_file(&path);
             }
         }
-        let url = rmx_url::Url::parse(&format!("http://remix.run{input}")).ok()?;
+        let url = rsmix_url::Url::parse(&format!("http://remix.run{input}")).ok()?;
         self.mapped_url(&parse_fingerprint(url.pathname()).0)
     }
 

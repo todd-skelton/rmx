@@ -1,12 +1,12 @@
 //! Remix's `logger-middleware/src/lib/logger.test.ts`, plus every format token. Remix's
 //! environment and TTY cases mock `process`; here they feed the same detection
-//! (`rmx_terminal::should_use_colors`, which `logger()` calls) an explicit environment.
+//! (`rsmix_terminal::should_use_colors`, which `logger()` calls) an explicit environment.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use rmx_fetch::{block_on, Body};
-use rmx_fetch_router::Router;
+use rsmix_fetch::{block_on, Body};
+use rsmix_fetch_router::Router;
 
 use super::*;
 
@@ -21,7 +21,7 @@ fn log_request(logger: LoggerMiddleware, method: &str, respond: fn() -> Response
     let messages = Arc::new(Mutex::new(Vec::new()));
     let sink = messages.clone();
     let mut router = Router::new().with(logger.log(move |m| sink.lock().unwrap().push(m.to_string())));
-    router.route(rmx_fetch_router::routes::any("/"), move |_: Context| async move { respond() });
+    router.route(rsmix_fetch_router::routes::any("/"), move |_: Context| async move { respond() });
     let req = http::Request::builder().method(method).uri("https://remix.run/").body(Body::empty()).unwrap();
     block_on(router.fetch(req));
     let messages = messages.lock().unwrap();
@@ -30,7 +30,7 @@ fn log_request(logger: LoggerMiddleware, method: &str, respond: fn() -> Response
 }
 
 fn with_headers(status: u16, headers: &[(&'static str, &'static str)]) -> Response {
-    let mut res = rmx_response::text("Home");
+    let mut res = rsmix_response::text("Home");
     *res.status_mut() = http::StatusCode::from_u16(status).unwrap();
     for (name, value) in headers {
         res.headers_mut().insert(*name, value.parse().unwrap());
@@ -49,7 +49,7 @@ fn home() -> Response {
 /// The default color decision for an environment (`[(name, value)]`) and TTY state.
 fn default_colors(env: &[(&str, &str)], is_tty: bool) -> bool {
     let env: HashMap<String, String> = env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-    rmx_terminal::should_use_colors(|name| env.get(name).cloned(), is_tty)
+    rsmix_terminal::should_use_colors(|name| env.get(name).cloned(), is_tty)
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn leaves_colors_off_by_default_outside_tty_environments() {
 
 #[test]
 fn the_default_follows_this_process_environment_and_stdout() {
-    assert_eq!(logger().colors, rmx_terminal::stdout_colors());
+    assert_eq!(logger().colors, rsmix_terminal::stdout_colors());
 }
 
 #[test]

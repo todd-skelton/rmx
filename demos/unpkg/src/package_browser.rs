@@ -1,9 +1,9 @@
 //! `actions/package-browser.ts`: directory listings, file views and error pages.
 
 use http::StatusCode;
-use rmx::fetch::Response;
-use rmx_html_template::{html, SafeHtml};
-use rmx::middleware::render::{Renderer, ResponseInit};
+use rsmix::fetch::Response;
+use rsmix_html_template::{html, SafeHtml};
+use rsmix::middleware::render::{Renderer, ResponseInit};
 
 use crate::format_bytes::format_bytes;
 use crate::mime_type::{detect_file_mime_type, image_mime_type, is_text_content};
@@ -75,7 +75,7 @@ pub fn render_file_content(render: &Renderer<HtmlDocument>, package_name: &str, 
     let breadcrumb = breadcrumb(package_name, version, file_path);
     let size = format_bytes(file.size);
     let body = if let Some(mime_type) = image_mime_type(&file.name) {
-        let base64 = rmx::crypto::base64_encode(data);
+        let base64 = rsmix::crypto::base64_encode(data);
         let name = &file.name;
         html!(r#"<div class="file-content"><img src="data:{mime_type};base64,{base64}" alt="{name}" /></div>"#)
     } else if is_text_content(&file.name, data) {

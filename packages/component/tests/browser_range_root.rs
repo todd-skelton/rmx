@@ -2,12 +2,12 @@
 //! sibling markers. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_range_root`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{create_range_root, rsx, Component, Handle, Node, Root};
+use rsmix::{create_range_root, rsx, Component, Handle, Node, Root};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
@@ -280,7 +280,7 @@ fn attaches_event_handlers() {
     let clicked = Rc::new(Cell::new(false));
     let c = clicked.clone();
     let root = create_range_root(&start, &end);
-    root.render(rsx! { <button mix={rmx::on("click", rmx::EventHandler::new(move |_| c.set(true)))}>"Click me"</button> });
+    root.render(rsx! { <button mix={rsmix::on("click", rsmix::EventHandler::new(move |_| c.set(true)))}>"Click me"</button> });
     root.flush();
     find(&el, "button").unchecked_into::<web_sys::HtmlElement>().click();
     assert!(clicked.get());
@@ -403,7 +403,7 @@ impl Component for Counter {
             this.count += 1;
             h.update();
         });
-        rsx! { <button mix={rmx::on("click", click)}>{self.count}</button> }
+        rsx! { <button mix={rsmix::on("click", click)}>{self.count}</button> }
     }
 }
 

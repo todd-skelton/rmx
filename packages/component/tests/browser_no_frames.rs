@@ -4,9 +4,9 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_no_frames -NoDefaultFeatures`.
 #![cfg(all(target_arch = "wasm32", not(feature = "frames")))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::{create_root, entry, render_to_string, rsx, Component, Frame, Frames, Handle, Node, RunOptions};
+use rsmix::{create_root, entry, render_to_string, rsx, Component, Frame, Frames, Handle, Node, RunOptions};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
@@ -32,7 +32,7 @@ struct Counter {
 
 impl Component for Counter {
     type Props = CounterProps;
-    rmx::client_entry!("Counter");
+    rsmix::client_entry!("Counter");
 
     fn setup(props: &CounterProps, _: &Handle<Self>) -> Self {
         Counter { count: props.initial }
@@ -56,7 +56,7 @@ struct Label;
 
 impl Component for Label {
     type Props = NoProps;
-    rmx::client_entry!("Label");
+    rsmix::client_entry!("Label");
 
     fn setup(_: &NoProps, _: &Handle<Self>) -> Self {
         Label
@@ -80,7 +80,7 @@ async fn hydrates_entries_and_treats_the_document_as_the_only_frame() {
     document().body().unwrap().append_child(&container).unwrap();
     let server_button = find(".count");
 
-    let app = rmx::run(RunOptions { entries: vec![entry::<Counter>(), entry::<Label>()], ..Default::default() });
+    let app = rsmix::run(RunOptions { entries: vec![entry::<Counter>(), entry::<Label>()], ..Default::default() });
     app.ready().await;
 
     // The entry adopted the server button and handles clicks.

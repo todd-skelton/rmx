@@ -1,19 +1,19 @@
 [package]
-name = "rmx-spa"
-description = "Run an rmx-fetch-router in the browser: client-only apps with the server's Request/Response contract (port of remix/spa)"
+name = "rsmix-spa"
+description = "Run an rsmix-fetch-router in the browser: client-only apps with the server's Request/Response contract (port of remix/spa)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
 http.workspace = true
-# Imported as `rmx` so `rsx!` output (`::rmx::...`) resolves without the umbrella crate.
+# Imported as `rsmix` so `rsx!` output (`::rsmix::...`) resolves without the umbrella crate.
 # The browser router loads frames through `resolve_frame` and needs soft navigation.
-rmx = { package = "rmx-component", path = "../component", default-features = false, features = ["navigation"] }
-rmx-fetch.workspace = true
-rmx-response.workspace = true
-rmx-fetch-router.workspace = true
-rmx-url.workspace = true
+rsmix = { package = "rsmix-component", path = "../component", default-features = false, features = ["navigation"] }
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-url.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true

@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_auth::x_provider;
+use rsmix_auth::x_provider;
 use serde_json::{json, Value};
 
 const PROFILE_URL: &str = "https://api.x.com/2/users/me?user.fields=profile_image_url,verified,description,url";
@@ -49,7 +49,7 @@ fn uses_configured_scopes_in_the_x_authorization_url() {
 fn normalizes_x_profiles_and_exchanges_tokens_with_http_basic_auth() {
     let (fetch, _) = mock(|seen| match seen.url.as_str() {
         "https://api.x.com/2/oauth2/token" => {
-            assert_eq!(seen.authorization.as_deref(), Some(format!("Basic {}", rmx_crypto::base64_encode(b"x-client-id:x-client-secret")).as_str()));
+            assert_eq!(seen.authorization.as_deref(), Some(format!("Basic {}", rsmix_crypto::base64_encode(b"x-client-id:x-client-secret")).as_str()));
             assert!(seen.raw_body.contains("grant_type=authorization_code"));
             assert!(seen.raw_body.contains("code_verifier="));
             assert!(seen.raw_body.contains("redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Fx%2Fcallback"));

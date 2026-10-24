@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use bytes::Bytes;
-use rmx::fetch::{block_on, Body};
-use rmx::file_storage::MemoryFileStorage;
+use rsmix::fetch::{block_on, Body};
+use rsmix::file_storage::MemoryFileStorage;
 
 use super::*;
 use crate::fetch::Fetch;

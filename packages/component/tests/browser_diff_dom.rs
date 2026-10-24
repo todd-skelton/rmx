@@ -1,10 +1,10 @@
 //! Ports of Remix's `diff-dom.test.tsx`: basic diffing, comments and hydration ranges,
 //! keys and live browser state. Live client entry owners are attached with
-//! `rmx::test::attach_entry_owner`, as Remix's tests use `setClientEntryBoundaryOwner`; an
-//! entry's identity is its component name. The HMR cases do not apply: rmx has no HMR. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_diff_dom`.
+//! `rsmix::test::attach_entry_owner`, as Remix's tests use `setClientEntryBoundaryOwner`; an
+//! entry's identity is its component name. The HMR cases do not apply: rsmix has no HMR. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_diff_dom`.
 #![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -43,7 +43,7 @@ impl Drop for Attached {
 }
 
 fn diff(el: &web_sys::HtmlElement, next: &str) {
-    rmx::test::diff_html(el, next);
+    rsmix::test::diff_html(el, next);
 }
 
 fn q(el: &web_sys::Element, selector: &str) -> web_sys::Element {
@@ -446,7 +446,7 @@ fn comment_data(c: &web_sys::Comment) -> String {
 fn owner(start: &web_sys::Node, name: &str) -> Rc<Cell<u32>> {
     let disposed = Rc::new(Cell::new(0));
     let count = disposed.clone();
-    rmx::test::attach_entry_owner(start, name, move || count.set(count.get() + 1));
+    rsmix::test::attach_entry_owner(start, name, move || count.set(count.get() + 1));
     disposed
 }
 
@@ -455,7 +455,7 @@ fn updates_hydration_marker_ids_while_fast_forwarding_boundaries() {
     let el = container("<!-- rmx:h:ff-old --><button>Old</button><!-- /rmx:h -->");
     let start = comment(&el, 0);
     owner(&start, "Entry");
-    rmx::test::set_hydration_data(&[("ff-old", "Entry", "{}"), ("ff-new", "Entry", "{}")], &[]);
+    rsmix::test::set_hydration_data(&[("ff-old", "Entry", "{}"), ("ff-new", "Entry", "{}")], &[]);
     diff(&el, "<!-- rmx:h:ff-new --><button>Old</button><!-- /rmx:h -->");
     assert_eq!(comment_data(&start), "rmx:h:ff-new");
     assert!(same(el.first_child(), &start));
@@ -466,7 +466,7 @@ fn replaces_hydration_ranges_with_different_client_entry_identities() {
     let el = container("<!-- rmx:h:id-old --><button>Old</button><!-- /rmx:h -->");
     let old_start = el.first_child().unwrap();
     owner(&old_start, "Old");
-    rmx::test::set_hydration_data(&[("id-old", "Old", "{}"), ("id-new", "New", "{}")], &[]);
+    rsmix::test::set_hydration_data(&[("id-old", "Old", "{}"), ("id-new", "New", "{}")], &[]);
     diff(&el, "<!-- rmx:h:id-new --><button>New</button><!-- /rmx:h -->");
     assert!(!same(el.first_child(), &old_start));
     assert_eq!(q(&el, "button").text_content().as_deref(), Some("New"));
@@ -477,7 +477,7 @@ fn moves_complete_live_hydration_ranges_when_ordinary_siblings_shift() {
     let el = container("<!-- rmx:h:mv-old --><button>Stateful</button><!-- /rmx:h --><span>After</span>");
     let start = comment(&el, 0);
     owner(&start, "Entry");
-    rmx::test::set_hydration_data(&[("mv-new", "Entry", "{}")], &[]);
+    rsmix::test::set_hydration_data(&[("mv-new", "Entry", "{}")], &[]);
     diff(&el, "<p>Before</p><!-- rmx:h:mv-new --><button>Server</button><!-- /rmx:h --><span>After</span>");
     assert!(same(el.child_nodes().item(1), &start));
     assert_eq!(comment_data(&start), "rmx:h:mv-new");
@@ -493,7 +493,7 @@ fn keeps_ordinary_sibling_state_with_its_node_when_a_hydration_range_moves() {
     first.set_value("Edited first");
     second.set_value("Edited second");
     owner(&start, "Entry");
-    rmx::test::set_hydration_data(&[("ks-new", "Entry", "{}")], &[]);
+    rsmix::test::set_hydration_data(&[("ks-new", "Entry", "{}")], &[]);
     diff(&el, r#"<!-- rmx:h:ks-new --><button>Server</button><!-- /rmx:h --><input id="first" value="First"><input id="second" value="Second">"#);
     assert!(q(&el, "#first").is_same_node(Some(&first)));
     assert!(q(&el, "#second").is_same_node(Some(&second)));
@@ -508,7 +508,7 @@ fn pairs_repeated_live_hydration_ranges_by_identity_in_source_order() {
     let second_start = comment(&el, 3);
     let first_disposed = owner(&first_start, "Entry");
     let second_disposed = owner(&second_start, "Entry");
-    rmx::test::set_hydration_data(&[("rp-next", "Entry", "{}")], &[]);
+    rsmix::test::set_hydration_data(&[("rp-next", "Entry", "{}")], &[]);
     diff(&el, "<!-- rmx:h:rp-next --><button>Server</button><!-- /rmx:h -->");
     assert!(same(el.first_child(), &first_start));
     assert!(second_start.parent_node().is_none());
@@ -522,7 +522,7 @@ fn does_not_let_an_unmatched_boundary_consume_a_later_semantic_match() {
     let el = container("<!-- rmx:h:um-current --><button>Stateful</button><!-- /rmx:h -->");
     let current_start = comment(&el, 0);
     let disposed = owner(&current_start, "Entry");
-    rmx::test::set_hydration_data(&[("um-inserted", "Other", "{}"), ("um-preserved", "Entry", "{}")], &[]);
+    rsmix::test::set_hydration_data(&[("um-inserted", "Other", "{}"), ("um-preserved", "Entry", "{}")], &[]);
     diff(&el, "<!-- rmx:h:um-inserted --><button>Inserted</button><!-- /rmx:h --><!-- rmx:h:um-preserved --><button>Server</button><!-- /rmx:h -->");
     assert!(same(el.child_nodes().item(3), &current_start));
     assert_eq!(comment_data(&current_start), "rmx:h:um-preserved");
@@ -577,9 +577,9 @@ fn keeps_generated_boundary_lists_balanced_with_exact_ordinary_destination_dom()
             data.push((id, identities[(seed * 2 + i) % identities.len()]));
         }
         let entries: Vec<(&str, &str, &str)> = data.iter().map(|(id, name)| (id.as_str(), *name, "{}")).collect();
-        rmx::test::set_hydration_data(&entries, &[]);
+        rsmix::test::set_hydration_data(&entries, &[]);
 
-        rmx::test::diff_node_lists(&current, &next);
+        rsmix::test::diff_node_lists(&current, &next);
 
         let comments: Vec<String> = (0..current.child_nodes().length())
             .filter_map(|i| current.child_nodes().item(i)?.dyn_into::<web_sys::Comment>().ok())
@@ -611,7 +611,7 @@ fn does_not_match_keyed_elements_owned_by_nested_hydration_ranges() {
     }
     let disposed = Rc::new(Cell::new(0));
     let (count, owned_el) = (disposed.clone(), owned.clone());
-    rmx::test::attach_entry_owner(&outer_start, "Entry", move || {
+    rsmix::test::attach_entry_owner(&outer_start, "Entry", move || {
         count.set(count.get() + 1);
         owned_el.remove();
     });
@@ -622,7 +622,7 @@ fn does_not_match_keyed_elements_owned_by_nested_hydration_ranges() {
     replacement.set_attribute("data-rmx-key", "entry").unwrap();
     next.append_child(&replacement).unwrap();
 
-    rmx::test::diff_node_lists(&current, &next);
+    rsmix::test::diff_node_lists(&current, &next);
 
     assert_eq!(current.child_nodes().length(), 1);
     assert!(same(current.first_child(), &replacement));
@@ -645,7 +645,7 @@ fn does_not_match_frame_end_markers_owned_by_hydration_ranges() {
     let disposed = Rc::new(Cell::new(0));
     let count = disposed.clone();
     let (fs, fe) = (frame_start.clone(), frame_end.clone());
-    rmx::test::attach_entry_owner(&hydration_start, "Entry", move || {
+    rsmix::test::attach_entry_owner(&hydration_start, "Entry", move || {
         count.set(count.get() + 1);
         // Remove the frame range, as Remix's owner does with a Range.
         let mut node = Some(fs.clone().unchecked_into::<web_sys::Node>());
@@ -665,7 +665,7 @@ fn does_not_match_frame_end_markers_owned_by_hydration_ranges() {
         next.append_child(n).unwrap();
     }
 
-    rmx::test::diff_node_lists(&current, &next);
+    rsmix::test::diff_node_lists(&current, &next);
 
     assert_eq!(current.child_nodes().length(), 3);
     assert!(same(current.child_nodes().item(0), &next_start));

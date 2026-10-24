@@ -12,8 +12,8 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rmx_fetch::{block_on, Body, File};
-use rmx_lazy_file::{BlobPart, LazyBlob, LazyBlobOptions, LazyContent, LazyFile, LazyFileOptions};
+use rsmix_fetch::{block_on, Body, File};
+use rsmix_lazy_file::{BlobPart, LazyBlob, LazyBlobOptions, LazyContent, LazyFile, LazyFileOptions};
 
 /// `createLazyContent(value)`, recording each `stream(start, end)` call (the Remix tests spy on
 /// it with `t.mock.method`).

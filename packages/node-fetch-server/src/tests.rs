@@ -1,5 +1,5 @@
 use super::*;
-use rmx_fetch_router::Context;
+use rsmix_fetch_router::Context;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 fn dechunk(mut body: &str) -> String {
@@ -48,7 +48,7 @@ async fn fetch_proxies_to_another_server() {
     app.post("/app/echo", |mut ctx: Context| async move {
         let body = ctx.take_body().text().await.unwrap();
         let forwarded = ctx.header("x-forwarded-host").unwrap_or("-").to_string();
-        let mut res = rmx_response::text(format!("{} {} {body}", ctx.url().href(), forwarded));
+        let mut res = rsmix_response::text(format!("{} {} {body}", ctx.url().href(), forwarded));
         res.headers_mut().insert("set-cookie", "sid=1; Domain=internal; Path=/app/echo".parse().unwrap());
         res
     });
@@ -56,12 +56,12 @@ async fn fetch_proxies_to_another_server() {
     let app_addr = app_listener.local_addr().unwrap();
     tokio::spawn(serve(app_listener, app));
 
-    let options = rmx_fetch_proxy::FetchProxyOptions { x_forwarded_headers: true, ..Default::default() };
-    let proxy = rmx_fetch_proxy::FetchProxy::new(&format!("http://{app_addr}/app"), fetch, options).unwrap();
+    let options = rsmix_fetch_proxy::FetchProxyOptions { x_forwarded_headers: true, ..Default::default() };
+    let proxy = rsmix_fetch_proxy::FetchProxy::new(&format!("http://{app_addr}/app"), fetch, options).unwrap();
     let mut front = Router::new();
     front.post("/*path", move |ctx: Context| {
         let proxy = proxy.clone();
-        async move { proxy.fetch(ctx.into_request()).await.unwrap_or_else(|e| rmx_response::text(e.to_string())) }
+        async move { proxy.fetch(ctx.into_request()).await.unwrap_or_else(|e| rsmix_response::text(e.to_string())) }
     });
     let front_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let front_addr = front_listener.local_addr().unwrap();
@@ -158,7 +158,7 @@ fn http2_authority_must_match_the_host_header() {
         let res = none.error_response(&error);
         assert_eq!(res.status(), 400);
     }
-    let custom = ServeOptions::default().on_error(|e| Some(rmx_response::status(StatusCode::MISDIRECTED_REQUEST, e.to_string())));
+    let custom = ServeOptions::default().on_error(|e| Some(rsmix_response::status(StatusCode::MISDIRECTED_REQUEST, e.to_string())));
     assert_eq!(custom.error_response(&ServeError::ConflictingAuthority).status(), 421);
 
     for (uri, host, expect) in [
@@ -204,7 +204,7 @@ async fn panicking_handlers_answer_500_or_the_error_handler_response() {
     let log = seen.clone();
     let options = ServeOptions::default().on_error(move |e| {
         log.lock().unwrap().push(e.to_string());
-        Some(rmx_response::status(StatusCode::SERVICE_UNAVAILABLE, "custom"))
+        Some(rsmix_response::status(StatusCode::SERVICE_UNAVAILABLE, "custom"))
     });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -314,12 +314,12 @@ struct Endless {
 }
 
 impl http_body::Body for Endless {
-    type Data = rmx_fetch::Bytes;
+    type Data = rsmix_fetch::Bytes;
     type Error = std::convert::Infallible;
 
     fn poll_frame(self: Pin<&mut Self>, _: &mut TaskContext<'_>) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         self.taken.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Poll::Ready(Some(Ok(http_body::Frame::data(rmx_fetch::Bytes::from(vec![0u8; 1024])))))
+        Poll::Ready(Some(Ok(http_body::Frame::data(rsmix_fetch::Bytes::from(vec![0u8; 1024])))))
     }
 }
 

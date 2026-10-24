@@ -54,13 +54,13 @@ const documentRequests = (page) => {
 {
   const page = await fresh()
   await page.goto(BASE + '/')
-  await heading(page, 'A client-only rmx app')
+  await heading(page, 'A client-only rsmix app')
   const docs = documentRequests(page)
   void page.getByRole('link', { name: 'About' }).click()
   await page.getByRole('status').waitFor({ timeout: 5000 })
   check('a link shows the loading indicator', true)
   await page.getByRole('link', { name: 'Home' }).click()
-  await heading(page, 'A client-only rmx app')
+  await heading(page, 'A client-only rsmix app')
   await page.waitForTimeout(900)
   check('the superseded About load never renders', (await page.getByRole('heading', { name: 'URLs in, rendered UI out' }).count()) === 0)
   check('the URL follows the last navigation', new URL(page.url()).pathname === '/')
@@ -76,7 +76,7 @@ const documentRequests = (page) => {
 {
   const page = await fresh()
   await page.goto(BASE + '/')
-  await heading(page, 'A client-only rmx app')
+  await heading(page, 'A client-only rsmix app')
   const startLength = await page.evaluate(() => history.length)
   await page.getByLabel('What should we call you?').fill('Ada')
   await page.getByRole('button', { name: 'Submit' }).click()
@@ -99,7 +99,7 @@ const documentRequests = (page) => {
   check('a submission to the current URL replaces the entry', (await page.evaluate(() => history.length)) === startLength + 1)
 
   await page.goBack()
-  await heading(page, 'A client-only rmx app')
+  await heading(page, 'A client-only rsmix app')
   check('back returns home', new URL(page.url()).pathname === '/')
   await page.goForward()
   await heading(page, 'Hello, friend!')

@@ -1,4 +1,4 @@
-//! rmx-only cases. The Remix test files are ported one per case in `tests/` (schema,
+//! rsmix-only cases. The Remix test files are ported one per case in `tests/` (schema,
 //! parse, checks, coerce, pipe, variant, lazy and form_data).
 
 use crate::checks::{email, max, min, url};

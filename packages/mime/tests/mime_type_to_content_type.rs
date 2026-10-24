@@ -1,6 +1,6 @@
 //! Ports of Remix's `mime/src/lib/mime-type-to-content-type.test.ts`.
 
-use rmx_mime::mime_type_to_content_type;
+use rsmix_mime::mime_type_to_content_type;
 
 #[test]
 fn content_types() {

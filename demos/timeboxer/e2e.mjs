@@ -91,7 +91,7 @@ const username = `e2e-${Date.now().toString(36)}`
   await page.goto('/')
   await ready(page)
 
-  // Record element.animate() calls (rmx-ui animations go through WAAPI).
+  // Record element.animate() calls (rsmix-ui animations go through WAAPI).
   const recordAnimations = () =>
     page.evaluate(() => {
       window.__animated = []

@@ -1,6 +1,6 @@
 [package]
 name = "frame-navigation-demo"
-description = "The Remix 3 frame-navigation demo, in rmx"
+description = "The Remix 3 frame-navigation demo, in rsmix"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rmx.workspace = true
+rsmix.workspace = true
 serde.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

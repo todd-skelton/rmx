@@ -1,26 +1,26 @@
 [package]
-name = "rmx-auth"
-description = "OAuth 2 and OpenID Connect login for rmx (remix/auth): PKCE flows plus GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and generic OIDC providers"
+name = "rsmix-auth"
+description = "OAuth 2 and OpenID Connect login for rsmix (remix/auth): PKCE flows plus GitHub, Google, X, Facebook, Microsoft, Okta, Auth0 and generic OIDC providers"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-response.workspace = true
-rmx-headers.workspace = true
-rmx-fetch-router.workspace = true
-rmx-session.workspace = true
-rmx-url.workspace = true
+rsmix-crypto.workspace = true
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
+rsmix-headers.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-session.workspace = true
+rsmix-url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-rmx-cookie.workspace = true
-rmx-auth-middleware.workspace = true
-rmx-form-data-middleware.workspace = true
-rmx-session-middleware.workspace = true
-rmx-node-fetch-server.workspace = true
+rsmix-cookie.workspace = true
+rsmix-auth-middleware.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-session-middleware.workspace = true
+rsmix-node-fetch-server.workspace = true
 tokio.workspace = true

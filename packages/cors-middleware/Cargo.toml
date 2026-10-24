@@ -1,5 +1,5 @@
 [package]
-name = "rmx-cors-middleware"
+name = "rsmix-cors-middleware"
 description = "Middleware for handling CORS (remix cors-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-fetch-router.workspace = true
+rsmix-fetch.workspace = true
+rsmix-fetch-router.workspace = true
 
 [dev-dependencies]
-rmx-headers.workspace = true
+rsmix-headers.workspace = true

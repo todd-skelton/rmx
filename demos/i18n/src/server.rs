@@ -9,16 +9,16 @@ use std::sync::LazyLock;
 use std::time::UNIX_EPOCH;
 
 use http::{header, HeaderValue, StatusCode};
-use rmx::{rsx, Children, Component, Handle, Node};
-use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::headers::{AcceptLanguage, Vary};
-use rmx::middleware::form_data::{form_data, FormDataExt};
-use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::middleware::render::Render;
-use rmx::router::routes::{get, post, Route, RouteMap};
-use rmx::router::{action, Context, Controller, Middleware, Next, Router};
+use rsmix::{rsx, Children, Component, Handle, Node};
+use rsmix::cookie::{Cookie, CookieProperties, SameSite};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::headers::{AcceptLanguage, Vary};
+use rsmix::middleware::form_data::{form_data, FormDataExt};
+use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+use rsmix::middleware::render::Render;
+use rsmix::router::routes::{get, post, Route, RouteMap};
+use rsmix::router::{action, Context, Controller, Middleware, Next, Router};
 use serde_json::Value;
 
 use crate::i18n::{DetectionSource, Language, Translator};
@@ -27,14 +27,14 @@ use crate::{CartPreview, NumberPreview};
 use styles::*;
 
 pub fn main() {
-    rmx::router::routes::routes_command(&*ROUTES);
+    rsmix::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44107".into());
     let public = std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "demos/i18n/public".into());
     let addr = format!("{host}:{port}");
     println!("i18n demo running at http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(&public))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ pub static LOCALE_COOKIE: LazyLock<Cookie> = LazyLock::new(|| {
         .max_age(60 * 60 * 24 * 365)
         .path("/")
         .same_site(SameSite::Lax)
-        .secure(std::env::var("RMX_ENV").is_ok_and(|v| v == "production"))
+        .secure(std::env::var("RSMIX_ENV").is_ok_and(|v| v == "production"))
 });
 
 /// `resources`: the translation tables in `locales/*.json`, generated from the Remix

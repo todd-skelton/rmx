@@ -1,6 +1,6 @@
-# Runs the full rmx vs Remix 3 comparison and writes results/*.json.
+# Runs the full rsmix vs Remix 3 comparison and writes results/*.json.
 #   pwsh ./run.ps1 [-Duration 15] [-Connections 50] [-SkipBrowser] [-SkipServer] [-Suffix -2026-10-22]
-# Prereqs: rmx built (../scripts/build-bench.ps1) and `npm install` in remix-app.
+# Prereqs: rsmix built (../scripts/build-bench.ps1) and `npm install` in remix-app.
 param(
     [int]$Duration = 15,
     [int]$Connections = 50,
@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 New-Item -ItemType Directory -Force results | Out-Null
 $oha = Join-Path $PSScriptRoot "tools/oha.exe"
-$rmxDir = Resolve-Path ".."
+$rsmixDir = Resolve-Path ".."
 $remixDir = Resolve-Path "remix-app"
 
 function Stop-Port([int]$port) {
@@ -34,7 +34,7 @@ function Start-Server([string]$name, [hashtable]$envVars) {
         $port = 44100
     } else {
         $env:PORT = "44101"
-        $p = Start-Process (Join-Path $rmxDir "target/release/bench-server.exe") -WorkingDirectory $rmxDir -WindowStyle Hidden -PassThru
+        $p = Start-Process (Join-Path $rsmixDir "target/release/bench-server.exe") -WorkingDirectory $rsmixDir -WindowStyle Hidden -PassThru
         $port = 44101
     }
     while ($true) {
@@ -80,11 +80,11 @@ Stop-Port 44101
 
 if (-not $SkipBrowser) {
     $remix = Start-Server "remix" @{}
-    $rmx = Start-Server "rmx" @{}
+    $rsmix = Start-Server "rsmix" @{}
     # Remix compiles client modules on first request; load once so the timed runs are warm.
     Invoke-WebRequest "http://127.0.0.1:44100/client" | Out-Null
     node browser-bench.mjs --iterations 15 --loads 10 --out "results/browser$Suffix.json"
-    Stop-Process -Id $remix.Process.Id, $rmx.Process.Id -Force
+    Stop-Process -Id $remix.Process.Id, $rsmix.Process.Id -Force
     Stop-Port 44100; Stop-Port 44101
 }
 
@@ -93,8 +93,8 @@ if (-not $SkipServer) {
     $configs = @(
         @{ Name = "remix (node, 1 process)"; Server = "remix"; Env = @{} },
         @{ Name = "remix (node cluster, $cores workers)"; Server = "remix-cluster"; Env = @{} },
-        @{ Name = "rmx (1 thread)"; Server = "rmx"; Env = @{ RMX_THREADS = "1" } },
-        @{ Name = "rmx ($cores threads)"; Server = "rmx"; Env = @{} }
+        @{ Name = "rsmix (1 thread)"; Server = "rsmix"; Env = @{ RSMIX_THREADS = "1" } },
+        @{ Name = "rsmix ($cores threads)"; Server = "rsmix"; Env = @{} }
     )
     $paths = @("/", "/ssr/100", "/ssr/1000")
     $rows = @()

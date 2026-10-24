@@ -7,12 +7,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_nested_entries`.
 #![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{
+use rsmix::{
     create_root, entry, mixin, on, render_to_string, rsx, Children, Component, Element, Frame, FrameContent, FrameRequest, FrameResponse,
     Handle, HostMixin, MixinHandle, Node, Root, RunOptions,
 };
@@ -25,7 +25,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
     static CLICKS: Cell<u32> = const { Cell::new(0) };
     static UPDATE_OUTER: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
     static HIDE_INNER: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
@@ -42,12 +42,12 @@ struct Inner;
 
 impl Component for Inner {
     type Props = NoProps;
-    rmx::client_entry!("Inner");
+    rsmix::client_entry!("Inner");
     fn setup(_: &NoProps, _: &Handle<Self>) -> Self {
         Inner
     }
     fn render(&self, _: &NoProps, _: &Handle<Self>) -> Node {
-        let click = rmx::EventHandler::new(|_| CLICKS.with(|c| c.set(c.get() + 1)));
+        let click = rsmix::EventHandler::new(|_| CLICKS.with(|c| c.set(c.get() + 1)));
         rsx! { <button mix={[on("click", click)]}>"Inner"</button> }
     }
 }
@@ -81,7 +81,7 @@ macro_rules! outer {
 
         impl Component for $name {
             type Props = NoProps;
-            rmx::client_entry!($entry);
+            rsmix::client_entry!($entry);
             fn setup(_: &NoProps, h: &Handle<Self>) -> Self {
                 register_update(h);
                 $name
@@ -126,7 +126,7 @@ struct DeferredEntry;
 
 impl Component for DeferredEntry {
     type Props = NoProps;
-    rmx::client_entry!("DeferredEntry");
+    rsmix::client_entry!("DeferredEntry");
     fn setup(_: &NoProps, _: &Handle<Self>) -> Self {
         DeferredEntry
     }
@@ -156,7 +156,7 @@ macro_rules! hiding_outer {
 
         impl Component for $name {
             type Props = NoProps;
-            rmx::client_entry!($entry);
+            rsmix::client_entry!($entry);
             fn setup(_: &NoProps, h: &Handle<Self>) -> Self {
                 let h = h.clone();
                 HIDE_INNER.with(|f| {
@@ -193,7 +193,7 @@ fn content(path: &str) -> String {
     render_to_string(&node)
 }
 
-fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
+fn resolve(request: FrameRequest) -> rsmix::ResolveFuture {
     let path = web_sys::Url::new(&request.url).unwrap().pathname();
     let html = content(&path);
     Box::pin(async move { Ok(FrameResponse { content: FrameContent::Html(html), url: None }) })
@@ -211,7 +211,7 @@ async fn start() {
             entry::<HidesEntry>(),
             entry::<HidesPlain>(),
         ];
-        let app = rmx::run(RunOptions { entries, resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
+        let app = rsmix::run(RunOptions { entries, resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
         APP.with(|a| *a.borrow_mut() = Some(app));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");

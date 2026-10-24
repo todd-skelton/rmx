@@ -2,13 +2,13 @@
 //! `vdom.context` tests. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_vdom`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 
 use std::rc::Rc;
 
-use rmx::{create_root, node_ref, on, rsx, Children, Component, EventHandler, Handle, Node, Signal};
+use rsmix::{create_root, node_ref, on, rsx, Children, Component, EventHandler, Handle, Node, Signal};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
@@ -510,7 +510,7 @@ fn renders_descendants_in_order_of_appearance() {
 
 // events
 
-fn counter_click() -> rmx::Mixin {
+fn counter_click() -> rsmix::Mixin {
     on("click", EventHandler::new(|_| COUNT.with(|c| c.set(c.get() + 1))))
 }
 
@@ -578,12 +578,12 @@ fn cleans_up_mixin_listeners_when_removed() {
 #[wasm_bindgen_test]
 fn renders_text_numbers_and_nothing() {
     let cases: Vec<(Node, &str)> = vec![
-        (rmx::IntoNode::into_node("Hello, world!"), "Hello, world!"),
-        (rmx::IntoNode::into_node(42), "42"),
-        (rmx::IntoNode::into_node(0), "0"),
-        (rmx::IntoNode::into_node(9007199254740991i128), "9007199254740991"),
-        (rmx::IntoNode::into_node(()), ""),
-        (rmx::IntoNode::into_node(None::<Node>), ""),
+        (rsmix::IntoNode::into_node("Hello, world!"), "Hello, world!"),
+        (rsmix::IntoNode::into_node(42), "42"),
+        (rsmix::IntoNode::into_node(0), "0"),
+        (rsmix::IntoNode::into_node(9007199254740991i128), "9007199254740991"),
+        (rsmix::IntoNode::into_node(()), ""),
+        (rsmix::IntoNode::into_node(None::<Node>), ""),
     ];
     for (node, html) in cases {
         let el = container();

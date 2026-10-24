@@ -17,7 +17,7 @@ const context = await browser.newContext()
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(e.message))
-page.on('console', (m) => m.type() === 'warning' && m.text().startsWith('rmx') && errors.push(m.text()))
+page.on('console', (m) => m.type() === 'warning' && m.text().startsWith('rsmix') && errors.push(m.text()))
 let failures = 0
 const check = (name, ok, detail) => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ' ' + JSON.stringify(detail)}`)
@@ -59,7 +59,7 @@ await page.click('#limit-info a')
 await until(() => document.getElementById('limit-info').innerText.includes('Stream will close after 10 messages.'))
 check('the limit link navigates', new URL(page.url()).search === '?limit=10')
 
-check('no page errors or rmx warnings', errors.length === 0, errors)
+check('no page errors or rsmix warnings', errors.length === 0, errors)
 await browser.close()
 console.log(failures ? `${failures} failed` : 'all passed')
 process.exit(failures ? 1 : 0)

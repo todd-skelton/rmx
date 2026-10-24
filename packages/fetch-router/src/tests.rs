@@ -1,5 +1,5 @@
 use super::*;
-use rmx_fetch::block_on;
+use rsmix_fetch::block_on;
 
 fn req(method: &str, url: &str) -> Request {
     http::Request::builder().method(method).uri(url).body(Body::empty()).unwrap()

@@ -2,12 +2,12 @@
 
 use std::sync::LazyLock;
 
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::file_storage::FileStorage;
-use rmx::middleware::render::{render_with, Renderer, RendererExt, ResponseInit};
-use rmx::router::routes::{get, Route, RouteMap};
-use rmx::router::{action, Context, Router};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::file_storage::FileStorage;
+use rsmix::middleware::render::{render_with, Renderer, RendererExt, ResponseInit};
+use rsmix::router::routes::{get, Route, RouteMap};
+use rsmix::router::{action, Context, Router};
 
 use crate::npm::{files_at_path, is_fully_resolved_version, parse_package_path, resolve_version, FileKind, Npm, NpmError};
 use crate::package_browser::{render_directory_listing, render_error, render_file_content};

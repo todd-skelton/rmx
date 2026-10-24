@@ -1,10 +1,10 @@
 //! Port of Remix's `providers/credentials.test.ts`. `createCredentialsAuthProvider` is
-//! `rmx_auth_middleware::credentials_provider`.
+//! `rsmix_auth_middleware::credentials_provider`.
 
 use std::future::{ready, Ready};
 
-use rmx_auth_middleware::credentials_provider;
-use rmx_fetch_router::Context;
+use rsmix_auth_middleware::credentials_provider;
+use rsmix_fetch_router::Context;
 
 fn parse(ctx: &Context) -> String {
     ctx.url().search_params().get("email").unwrap_or_default().to_string()

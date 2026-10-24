@@ -51,7 +51,7 @@ fn is_url(s: &str) -> bool {
         return false;
     }
     match scheme.to_ascii_lowercase().as_str() {
-        "http" | "https" | "ws" | "wss" | "ftp" => rmx_url::Url::parse(s).is_ok_and(|u| !u.host().is_empty()),
+        "http" | "https" | "ws" | "wss" | "ftp" => rsmix_url::Url::parse(s).is_ok_and(|u| !u.host().is_empty()),
         "file" => s[5..].starts_with("//"),
         _ => true,
     }

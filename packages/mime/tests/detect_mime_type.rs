@@ -1,6 +1,6 @@
 //! Ports of Remix's `mime/src/lib/detect-mime-type.test.ts`.
 
-use rmx_mime::detect_mime_type;
+use rsmix_mime::detect_mime_type;
 
 fn check(cases: &[(&str, Option<&str>)]) {
     for (input, expected) in cases {

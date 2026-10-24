@@ -18,12 +18,12 @@
 //!
 //! Providers make HTTP requests through the [Fetch] they are given, so the app picks the
 //! HTTPS client and tests answer in memory. Credentials login and `completeAuth` live in
-//! `rmx_auth_middleware::auth` (`credentials_provider`, `verify_credentials`, `complete_auth`).
+//! `rsmix_auth_middleware::auth` (`credentials_provider`, `verify_credentials`, `complete_auth`).
 //!
 //! ```
-//! use rmx_auth::{github_provider, start_external_auth, ClientOptions, StartExternalAuthOptions};
-//! use rmx_fetch::{BoxError, Request, Response};
-//! use rmx_fetch_router::Context;
+//! use rsmix_auth::{github_provider, start_external_auth, ClientOptions, StartExternalAuthOptions};
+//! use rsmix_fetch::{BoxError, Request, Response};
+//! use rsmix_fetch_router::Context;
 //!
 //! async fn https_fetch(_req: Request) -> Result<Response, BoxError> {
 //!     unimplemented!("any HTTPS client")
@@ -39,7 +39,7 @@
 //!         let return_to = ctx.url().search_params().get("returnTo").map(str::to_string);
 //!         start_external_auth(&*github, &ctx, StartExternalAuthOptions { return_to, ..Default::default() })
 //!             .await
-//!             .unwrap_or_else(|_| rmx_response::redirect("/"))
+//!             .unwrap_or_else(|_| rsmix_response::redirect("/"))
 //!     }
 //! };
 //! # let _ = login;
@@ -52,10 +52,10 @@ use std::fmt;
 use std::future::Future;
 use std::time::SystemTime;
 
-use rmx_fetch::Response;
-use rmx_fetch_router::Context;
-use rmx_session::Session;
-use rmx_url::Url;
+use rsmix_fetch::Response;
+use rsmix_fetch_router::Context;
+use rsmix_session::Session;
+use rsmix_url::Url;
 use serde::{Deserialize, Serialize};
 
 pub use oauth::{
@@ -67,7 +67,7 @@ pub use providers::{
     ClientOptions, FacebookPicture, FacebookProfile, FacebookProvider, GitHubEmail, GitHubProfile, GitHubProvider, MicrosoftOptions, OidcMetadata,
     OidcOptions, OidcProfile, OidcProfileInput, OidcProvider, XProfile, XProvider,
 };
-pub use rmx_fetch::Fetch;
+pub use rsmix_fetch::Fetch;
 
 /// Why an auth step failed. The messages match Remix's.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -112,14 +112,14 @@ mod iso_date {
 
     pub fn serialize<S: Serializer>(value: &Option<SystemTime>, serializer: S) -> Result<S::Ok, S::Error> {
         match value {
-            Some(t) => serializer.serialize_str(&rmx_headers::UtcDateTime::new(*t).to_iso_string()),
+            Some(t) => serializer.serialize_str(&rsmix_headers::UtcDateTime::new(*t).to_iso_string()),
             None => serializer.serialize_none(),
         }
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<SystemTime>, D::Error> {
         Option::<String>::deserialize(deserializer)?
-            .map(|s| rmx_headers::parse_iso_date(&s).ok_or_else(|| serde::de::Error::custom(format!("invalid date: {s}"))))
+            .map(|s| rsmix_headers::parse_iso_date(&s).ok_or_else(|| serde::de::Error::custom(format!("invalid date: {s}"))))
             .transpose()
     }
 }
@@ -215,7 +215,7 @@ pub fn start_external_auth<'a, P: OAuthProvider>(provider: &'a P, ctx: &Context,
         let mut transaction = create_transaction(provider.name(), sanitize_return_to(options.return_to.as_deref()));
         let url = provider.authorization_url(&mut transaction).await?;
         session.set(options.transaction_key.as_deref().unwrap_or(DEFAULT_TRANSACTION_KEY), &transaction);
-        Ok(rmx_response::redirect_with(&url.href(), http::StatusCode::FOUND))
+        Ok(rsmix_response::redirect_with(&url.href(), http::StatusCode::FOUND))
     }
 }
 

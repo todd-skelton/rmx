@@ -1,14 +1,14 @@
 //! Ports of the server cases of Remix's `mixin-ssr.test.tsx`. A Remix `createMixin(setup,
 //! { ssr })` factory is `mixin_with::<M>(args, MixinOptions { ssr })` here, with the
 //! default taken from `HostMixin::SSR`. Remix's `createMixin(browser().type)` makes a new
-//! factory whose default is server rendering; in rmx the default belongs to the type, so
+//! factory whose default is server rendering; in rsmix the default belongs to the type, so
 //! reusing a browser-only type without options stays browser-only.
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 
-use rmx::{mixin, mixin_with, render_to_string, rsx, AttrValue, Element, HostMixin, Mixin, MixinHandle, MixinOptions};
+use rsmix::{mixin, mixin_with, render_to_string, rsx, AttrValue, Element, HostMixin, Mixin, MixinHandle, MixinOptions};
 
 const BROWSER: MixinOptions = MixinOptions { ssr: Some(false) };
 const SERVER: MixinOptions = MixinOptions { ssr: Some(true) };

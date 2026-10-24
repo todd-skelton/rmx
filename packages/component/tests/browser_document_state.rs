@@ -3,13 +3,13 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_document_state`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::test::DocumentState;
+use rsmix::test::DocumentState;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, flush, rsx, Component, Handle, Node};
+use rsmix::{create_root, flush, rsx, Component, Handle, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

@@ -3,20 +3,20 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::header;
-use rmx_fetch::{Body, Fetch, Request};
-use rmx_url::{SearchParams, Url};
+use rsmix_fetch::{Body, Fetch, Request};
+use rsmix_url::{SearchParams, Url};
 use serde_json::{Map, Value};
 
 use crate::{AuthError, OAuthTokens, OAuthTransaction};
 
 /// A random URL-safe token from `bytes` random bytes.
 fn random_token<const N: usize>() -> String {
-    rmx_crypto::base64url_encode(&rmx_crypto::random_bytes::<N>())
+    rsmix_crypto::base64url_encode(&rsmix_crypto::random_bytes::<N>())
 }
 
 /// The PKCE S256 challenge for a verifier.
 pub fn code_challenge(code_verifier: &str) -> String {
-    rmx_crypto::base64url_encode(&rmx_crypto::sha256(code_verifier.as_bytes()))
+    rsmix_crypto::base64url_encode(&rsmix_crypto::sha256(code_verifier.as_bytes()))
 }
 
 /// A fresh transaction: random state and a 64-character PKCE verifier.
@@ -123,7 +123,7 @@ async fn exchange(fetch: &dyn Fetch, request: TokenRequest<'_>, mut params: Sear
         .header(header::ACCEPT, "application/json")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
     if request.client_authentication == ClientAuthentication::Basic {
-        let credentials = rmx_crypto::base64_encode(format!("{}:{}", request.client_id, request.client_secret).as_bytes());
+        let credentials = rsmix_crypto::base64_encode(format!("{}:{}", request.client_id, request.client_secret).as_bytes());
         builder = builder.header(header::AUTHORIZATION, format!("Basic {credentials}"));
     }
     for (name, value) in request.headers {

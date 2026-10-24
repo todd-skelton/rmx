@@ -4,9 +4,9 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use http::header::{HeaderValue, SET_COOKIE};
-use rmx_cookie::{Cookie, CookieProperties};
-use rmx_fetch_router::{Context, Error, IntoResponse, Middleware, Next};
-use rmx_session::{Session, SessionStorage};
+use rsmix_cookie::{Cookie, CookieProperties};
+use rsmix_fetch_router::{Context, Error, IntoResponse, Middleware, Next};
+use rsmix_session::{Session, SessionStorage};
 use serde_json::json;
 
 /// Puts a [`Session`] in the context (read it with [`SessionExt::session`]) and saves it
@@ -127,10 +127,10 @@ impl SessionExt for Context {
 
 #[cfg(test)]
 mod tests {
-    use rmx_cookie::Cookie;
-    use rmx_fetch::{block_on, Body, Response};
-    use rmx_fetch_router::{Context, Router};
-    use rmx_session::MemoryStorage;
+    use rsmix_cookie::Cookie;
+    use rsmix_fetch::{block_on, Body, Response};
+    use rsmix_fetch_router::{Context, Router};
+    use rsmix_session::MemoryStorage;
 
     use super::*;
 
@@ -190,7 +190,7 @@ mod tests {
         let (_, set) = get(&router, "http://x/", None);
         let id = pair(set.as_deref().unwrap()).trim_start_matches("sid=").split('.').next().unwrap().to_string();
         assert_eq!(get(&router, "http://x/peek", Some(&format!("sid={id}"))).0, "0");
-        let forged = rmx_cookie::sign(&id, "wrong");
+        let forged = rsmix_cookie::sign(&id, "wrong");
         assert_eq!(get(&router, "http://x/peek", Some(&format!("sid={forged}"))).0, "0");
     }
 
@@ -200,7 +200,7 @@ mod tests {
         let (_, set) = get(&router, "http://x/", None);
         let set = set.unwrap();
         let signed = pair(&set).trim_start_matches("sid=");
-        let inner = String::from_utf8(rmx_crypto::base64_decode(rmx_cookie::unsign(signed, "k").unwrap()).unwrap()).unwrap();
+        let inner = String::from_utf8(rsmix_crypto::base64_decode(rsmix_cookie::unsign(signed, "k").unwrap()).unwrap()).unwrap();
         let envelope: serde_json::Value = serde_json::from_str(&inner).unwrap();
         assert!(envelope["value"].is_string() && envelope["expires"].as_i64().unwrap() > now_ms());
         assert_eq!(get(&router, "http://x/peek", Some(pair(&set))).0, "1");
@@ -220,7 +220,7 @@ mod tests {
         let set = set.unwrap();
         let envelope = |set: &str| -> serde_json::Value {
             let signed = pair(set).trim_start_matches("sid=");
-            let inner = String::from_utf8(rmx_crypto::base64_decode(rmx_cookie::unsign(signed, "k").unwrap()).unwrap()).unwrap();
+            let inner = String::from_utf8(rsmix_crypto::base64_decode(rsmix_cookie::unsign(signed, "k").unwrap()).unwrap()).unwrap();
             serde_json::from_str(&inner).unwrap()
         };
         let expires = envelope(&set)["expires"].as_i64().unwrap();

@@ -1,14 +1,14 @@
 //! Ports of Remix's `css-mixin.test.tsx`, `attrs-mixin.test.tsx` and
-//! `ref-mixin.test.tsx`. rmx's `css()` takes CSS text rather than a style object, so the
+//! `ref-mixin.test.tsx`. rsmix's `css()` takes CSS text rather than a style object, so the
 //! object cases become the equivalent declarations. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_css_mixin`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 
-use rmx::{attrs, create_root, css, mixin, node_ref, rsx, AttrValue, Component, Element, Handle, HostMixin, MixinHandle, Node};
+use rsmix::{attrs, create_root, css, mixin, node_ref, rsx, AttrValue, Component, Element, Handle, HostMixin, MixinHandle, Node};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -269,7 +269,7 @@ fn attrs_does_not_merge_class_and_style_when_explicit_props_are_present() {
 
 thread_local! {
     static NODE: RefCell<Option<web_sys::Element>> = const { RefCell::new(None) };
-    static SIGNAL: RefCell<Option<rmx::Signal>> = const { RefCell::new(None) };
+    static SIGNAL: RefCell<Option<rsmix::Signal>> = const { RefCell::new(None) };
     static EVENTS: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
 }
 

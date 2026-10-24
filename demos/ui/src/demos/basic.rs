@@ -1,6 +1,6 @@
 //! `packages/component/src/runtime/demos/basic.demo.tsx`
 
-use rmx::{on, rsx, Component, Handle, Node};
+use rsmix::{on, rsx, Component, Handle, Node};
 
 pub struct BasicCounter {
     count: u32,
@@ -8,7 +8,7 @@ pub struct BasicCounter {
 
 impl Component for BasicCounter {
     type Props = ();
-    rmx::client_entry!("BasicCounter");
+    rsmix::client_entry!("BasicCounter");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         BasicCounter { count: 0 }

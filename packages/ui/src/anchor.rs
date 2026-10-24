@@ -2,7 +2,7 @@
 //! `@remix-run/ui/anchor`).
 //!
 //! ```ignore
-//! use rmx_ui::anchor::{anchor, AnchorOptions, AnchorTarget, Placement};
+//! use rsmix_ui::anchor::{anchor, AnchorOptions, AnchorTarget, Placement};
 //!
 //! // In the browser, with both elements in the document:
 //! let tracking = anchor(&floating, AnchorTarget::Element(button), AnchorOptions::new(Placement::BottomStart).offset(8.0));
@@ -1231,7 +1231,7 @@ mod tests {
         assert_eq!(scene.max_height, Some(484.0));
     }
 
-    // rmx-only
+    // rsmix-only
 
     #[test]
     fn stays_aligned_when_repositioned_after_scrolling() {

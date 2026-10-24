@@ -1,6 +1,6 @@
 //! `ui/styles.ts`, converted mechanically from the Remix style objects.
 
-use rmx::{css, Mixin};
+use rsmix::{css, Mixin};
 
 pub fn body() -> Mixin {
     css("min-width: 320px; min-height: 100vh; margin: 0; background: light-dark(#f3f5f7, #0d0d10); color: light-dark(#1b1b1f, #e7e7ea); color-scheme: light dark; font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; box-sizing: border-box; & *, & *::before, & *::after { box-sizing: inherit; } & ::selection { background: #ffdf5f; color: #1b1b1f; }")

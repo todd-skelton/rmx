@@ -58,6 +58,6 @@ mod os {
 #[cfg(not(any(windows, unix)))]
 mod os {
     pub(super) fn fill(_: &mut [u8]) {
-        unimplemented!("rmx-crypto has no random source for this target")
+        unimplemented!("rsmix-crypto has no random source for this target")
     }
 }

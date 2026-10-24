@@ -5,14 +5,14 @@
 //! the fastest of 15 runs of 200 ms, in microseconds per page, which holds up better than the
 //! median on a busy machine.
 //!
-//! `cargo run --release -p rmx-component --example ssr_bench`
+//! `cargo run --release -p rsmix-component --example ssr_bench`
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::hint::black_box;
 use std::time::Instant;
 
-use rmx::{render_to_string, rsx, Node};
+use rsmix::{render_to_string, rsx, Node};
 
 const WORDS: [&str; 12] = ["pretty", "large", "red", "blue", "table", "chair", "house", "cheap", "fancy", "pony", "desk", "odd"];
 

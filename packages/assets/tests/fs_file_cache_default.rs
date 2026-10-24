@@ -1,13 +1,13 @@
 //! Remix's "defaults to a cache directory under cwd and accepts limits without a
 //! directory". It changes the current directory, so it has a test binary to itself.
 
-use rmx_assets::{FileCache, FsFileCache, FsFileCacheOptions, DEFAULT_CACHE_DIRECTORY};
-use rmx_fetch::File;
-use rmx_file_storage::{FsFileStorage, ListOptions};
+use rsmix_assets::{FileCache, FsFileCache, FsFileCacheOptions, DEFAULT_CACHE_DIRECTORY};
+use rsmix_fetch::File;
+use rsmix_file_storage::{FsFileStorage, ListOptions};
 
 #[test]
 fn defaults_to_a_cache_directory_under_cwd_and_accepts_limits_without_a_directory() {
-    let directory = std::env::temp_dir().join(format!("rmx-file-cache-default-{}", rmx_crypto::random_uuid()));
+    let directory = std::env::temp_dir().join(format!("rsmix-file-cache-default-{}", rsmix_crypto::random_uuid()));
     std::fs::create_dir_all(&directory).unwrap();
     let previous = std::env::current_dir().unwrap();
     std::env::set_current_dir(&directory).unwrap();

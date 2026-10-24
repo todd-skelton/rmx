@@ -1,15 +1,15 @@
 //! Prefetch triggers and eligibility, after Remix's `prefetch.test.ts`: `data-rmx-prefetch`
-//! intent and viewport links and `rmx::prefetch`, with a `RunOptions::prefetch` that
+//! intent and viewport links and `rsmix::prefetch`, with a `RunOptions::prefetch` that
 //! records each request. The default strategy is in `browser_prefetch_assets.rs`. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_prefetch`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, prefetch, rsx, Frame, PrefetchOptions, RunOptions};
+use rsmix::{create_root, prefetch, rsx, Frame, PrefetchOptions, RunOptions};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -18,7 +18,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
     static CALLS: RefCell<Vec<(String, Option<String>)>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -44,8 +44,8 @@ impl Drop for Serial {
 
 async fn start() {
     if APP.with(|a| a.borrow().is_none()) {
-        let record: rmx::PrefetchFrame = Rc::new(|src: &str, options: PrefetchOptions| CALLS.with(|c| c.borrow_mut().push((src.to_string(), options.target))));
-        APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { prefetch: Some(record), ..Default::default() })));
+        let record: rsmix::PrefetchFrame = Rc::new(|src: &str, options: PrefetchOptions| CALLS.with(|c| c.borrow_mut().push((src.to_string(), options.target))));
+        APP.with(|a| *a.borrow_mut() = Some(rsmix::run(RunOptions { prefetch: Some(record), ..Default::default() })));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
     app.ready().await;

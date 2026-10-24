@@ -6,8 +6,8 @@
 //! shared layout, multi-state badge, aspect ratio, color interpolation, interruptible
 //! keyframes) and press.
 
-use rmx::{css, on, rsx, Children, Component, Handle, Mixin, Node};
-use rmx::ui::animation::{
+use rsmix::{css, on, rsx, Children, Component, Handle, Mixin, Node};
+use rsmix::ui::animation::{
     animate_entrance, animate_exit, animate_layout, spring, Animate, Layout, SpringOptions, SpringPreset,
 };
 
@@ -63,7 +63,7 @@ pub struct AnimationGallery;
 
 impl Component for AnimationGallery {
     type Props = ();
-    rmx::client_entry!("AnimationGallery");
+    rsmix::client_entry!("AnimationGallery");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         AnimationGallery
@@ -243,7 +243,7 @@ impl Component for MixinReclaim {
                         h.update();
                         let h2 = h.clone();
                         h.spawn(async move {
-                            rmx::browser::sleep(140).await;
+                            rsmix::browser::sleep(140).await;
                             h2.with(|this, h| {
                                 if this.timer == timer {
                                     this.visible = true;
@@ -269,7 +269,7 @@ impl Component for MixinReclaim {
 
 fn shuffle<T>(items: &mut [T]) {
     for i in (1..items.len()).rev() {
-        let j = (rmx::browser::random() * (i + 1) as f64) as usize;
+        let j = (rsmix::browser::random() * (i + 1) as f64) as usize;
         items.swap(i, j);
     }
 }
@@ -332,9 +332,9 @@ pub struct Reordering {
 impl Reordering {
     /// Shuffle after a second unless a newer render or removal aborted `signal`, then chain
     /// on the signal of the render the shuffle caused.
-    fn schedule_next_shuffle(h: Handle<Self>, signal: rmx::Signal) {
+    fn schedule_next_shuffle(h: Handle<Self>, signal: rsmix::Signal) {
         h.clone().spawn(async move {
-            rmx::browser::sleep(1000).await;
+            rsmix::browser::sleep(1000).await;
             if signal.aborted() || h.with(|this, _| shuffle(&mut this.order)).is_none() {
                 return;
             }
@@ -495,7 +495,7 @@ impl Component for HtmlContent {
             h.spawn(async move {
                 let (from, to) = (0.0, 100.0);
                 for t in spring(spring_options(3000.0, 0.0)) {
-                    rmx::browser::next_frame().await;
+                    rsmix::browser::next_frame().await;
                     let count = (from + (to - from) * t + 0.5).floor() as i64;
                     if h2.with(|this, h| {
                         this.count = count;

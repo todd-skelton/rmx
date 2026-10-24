@@ -1,15 +1,15 @@
 //! Ports of Remix's `ui/src/lib/typeahead.test.tsx` `hiddenTypeahead` cases (the matching
 //! helpers are unit tests in `src/typeahead.rs`). The timeout case waits the real 750 ms
 //! where Remix advances fake timers. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_typeahead`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_typeahead`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::rsx;
-use rmx::test::{render, RenderResult};
-use rmx_ui::typeahead::{hidden_typeahead, HIDDEN_TYPEAHEAD_TIMEOUT_MS};
+use rsmix::rsx;
+use rsmix::test::{render, RenderResult};
+use rsmix_ui::typeahead::{hidden_typeahead, HIDDEN_TYPEAHEAD_TIMEOUT_MS};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;

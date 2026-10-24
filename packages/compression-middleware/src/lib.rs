@@ -1,15 +1,15 @@
 //! The compression middleware (Remix's `remix/middleware/compression`): compresses
 //! responses with a compressible media type through [`compress_response`] (Remix's
-//! `remix/response/compress`, which lives in `rmx_response::compress` and is
+//! `remix/response/compress`, which lives in `rsmix_response::compress` and is
 //! re-exported here).
 
 use std::sync::Arc;
 
 use http::header;
-use rmx_fetch::Response;
-use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
+use rsmix_fetch::Response;
+use rsmix_fetch_router::{BoxFuture, Context, Middleware, Next};
 
-pub use rmx_response::compress::{
+pub use rsmix_response::compress::{
     compress_response, compress_stream, create_compression_options, BrotliOptions, CompressOptions, Compressor, Encoding, ZlibOptions, DEFAULT_ENCODINGS,
 };
 
@@ -25,12 +25,12 @@ pub struct Compression {
     brotli: PerResponse<BrotliOptions>,
 }
 
-/// Compress responses whose media type is compressible (see [`rmx_mime::is_compressible_mime_type`]),
+/// Compress responses whose media type is compressible (see [`rsmix_mime::is_compressible_mime_type`]),
 /// using [`compress_response`] with its defaults.
 pub fn compression() -> Compression {
     Compression {
         threshold: 1024,
-        filter: Arc::new(rmx_mime::is_compressible_mime_type),
+        filter: Arc::new(rsmix_mime::is_compressible_mime_type),
         encodings: Arc::new(|_| DEFAULT_ENCODINGS.to_vec()),
         zlib: Arc::new(|_| ZlibOptions::default()),
         brotli: Arc::new(|_| BrotliOptions::default()),

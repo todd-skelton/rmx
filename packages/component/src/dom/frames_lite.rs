@@ -137,7 +137,7 @@ fn merge_data() {
     for i in 0..scripts.length() {
         let json = scripts.item(i).and_then(|s| s.text_content()).unwrap_or_default();
         let Ok(data) = serde_json::from_str::<Data>(&json) else {
-            warn("rmx: bad rmx-data");
+            warn("rsmix: bad rmx-data");
             continue;
         };
         ENTRIES.with(|e| {

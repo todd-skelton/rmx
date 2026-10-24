@@ -1,6 +1,6 @@
 //! Port of Remix's `byte-range.test.ts`. `Infinity` is `ByteRange::END`.
 
-use rmx_lazy_file::{get_byte_length, get_indexes, ByteRange};
+use rsmix_lazy_file::{get_byte_length, get_indexes, ByteRange};
 
 const INF: i64 = ByteRange::END;
 

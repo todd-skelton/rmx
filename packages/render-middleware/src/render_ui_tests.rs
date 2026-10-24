@@ -1,18 +1,18 @@
 //! Ports of Remix's `render-middleware/src/lib/render-ui.test.ts`, one test per case.
 //!
-//! Not ported: the client entry cases (rmx ships one wasm bundle, no import maps or
+//! Not ported: the client entry cases (rsmix ships one wasm bundle, no import maps or
 //! `clientEntry` module ids), the styles case (covered in `stream_tests.rs`), and the
-//! component render error cases, since a failed rmx component is omitted on the server
+//! component render error cases, since a failed rsmix component is omitted on the server
 //! instead of failing the stream; the error reporting cases run with frame resolution
 //! errors instead. The default reporter prints to stderr, which is not captured here.
 
 use std::sync::{Arc, Mutex};
 
 use http::{HeaderMap, Method};
-use rmx::{rsx, Component, Frame, Handle, Node};
-use rmx_fetch::{block_on, AbortController, Body, BoxError, Response};
-use rmx_response as response;
-use rmx_fetch_router::{Context, Router};
+use rsmix::{rsx, Component, Frame, Handle, Node};
+use rsmix_fetch::{block_on, AbortController, Body, BoxError, Response};
+use rsmix_response as response;
+use rsmix_fetch_router::{Context, Router};
 
 use super::{render, Render, RenderOptions, ResponseInit};
 
@@ -288,7 +288,7 @@ fn cancels_internal_frame_requests_with_the_original_request() {
 
 #[test]
 fn cancels_returned_frame_streams_with_the_original_request() {
-    let sender: Arc<Mutex<Option<rmx_fetch::BodySender>>> = Arc::default();
+    let sender: Arc<Mutex<Option<rsmix_fetch::BodySender>>> = Arc::default();
     let mut router = Router::new();
     router.get("/", |ctx: Context| async move { ctx.render(rsx! { <Frame src="/stream"/> }) });
     let keep = sender.clone();

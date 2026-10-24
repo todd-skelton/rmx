@@ -8,10 +8,10 @@
 //! handler) gets it read into a [File].
 //!
 //! ```
-//! use rmx_fetch::form_data::future::{parse_with, FileUpload};
-//! use rmx_fetch::{Body, FormDataError, FormLimits};
+//! use rsmix_fetch::form_data::future::{parse_with, FileUpload};
+//! use rsmix_fetch::{Body, FormDataError, FormLimits};
 //!
-//! # rmx_fetch::block_on(async {
+//! # rsmix_fetch::block_on(async {
 //! let body = Body::from("--b\r\nContent-Disposition: form-data; name=\"cover\"; filename=\"a.txt\"\r\n\r\nhello\r\n--b--");
 //! let form = parse_with(Some("multipart/form-data; boundary=b"), body, FormLimits::default(), |mut upload: FileUpload| async move {
 //!     let mut stored = 0;
@@ -31,7 +31,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use bytes::Bytes;
-use rmx_multipart_parser::future::{parse_multipart_stream, MultipartStream};
+use rsmix_multipart_parser::future::{parse_multipart_stream, MultipartStream};
 
 use super::{form_body, File, FormBody, FormData, FormDataError, FormLimits, FormValue};
 use crate::{Body, BoxError};

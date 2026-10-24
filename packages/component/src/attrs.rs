@@ -7,7 +7,7 @@ use crate::AttrValue;
 
 /// What a `javascript:` URL is replaced with.
 pub(crate) const BLOCKED_JAVASCRIPT_URL: &str =
-    "javascript:throw new Error('rmx has blocked a javascript: URL as a security precaution.')";
+    "javascript:throw new Error('rsmix has blocked a javascript: URL as a security precaution.')";
 
 /// Whether an attribute name may be written. Inline event handler attributes (`on*`),
 /// names that could break out of the tag, `__proto__` and `outerHTML` are dropped.

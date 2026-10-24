@@ -2,7 +2,7 @@
 //! `@remix-run/ui/animation`).
 //!
 //! ```ignore
-//! use rmx_ui::animation::{animate_entrance, animate_exit, animate_layout, spring_transition, Animate, SpringPreset};
+//! use rsmix_ui::animation::{animate_entrance, animate_exit, animate_layout, spring_transition, Animate, SpringPreset};
 //!
 //! rsx! {
 //!     <div
@@ -55,7 +55,7 @@ pub fn prefers_reduced_motion() -> bool {
     false
 }
 
-use rmx::{mixin, Element, HostMixin, Mixin, MixinHandle, NodeHandle};
+use rsmix::{mixin, Element, HostMixin, Mixin, MixinHandle, NodeHandle};
 
 /// How animation effects combine with the underlying value (WAAPI `composite`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -368,7 +368,7 @@ impl HostMixin for AnimateLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     #[test]
     fn animation_mixins_do_not_render_on_the_server() {

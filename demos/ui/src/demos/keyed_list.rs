@@ -1,7 +1,7 @@
 //! `packages/component/src/runtime/demos/keyed-list.demo.tsx`
 
-use rmx::browser::{random, Interval};
-use rmx::{on, rsx, Component, Handle, Node};
+use rsmix::browser::{random, Interval};
+use rsmix::{on, rsx, Component, Handle, Node};
 
 #[derive(Clone)]
 struct ListItem {
@@ -37,7 +37,7 @@ impl KeyedList {
 
 impl Component for KeyedList {
     type Props = ();
-    rmx::client_entry!("KeyedList");
+    rsmix::client_entry!("KeyedList");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         let items = [("a", "Item A"), ("b", "Item B"), ("c", "Item C"), ("d", "Item D")];

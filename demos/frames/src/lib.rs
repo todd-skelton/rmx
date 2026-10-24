@@ -1,9 +1,9 @@
 //! Components for the frames demo, shared by the server (HTML) and the browser (WASM).
 //!
 //! A port of `remix/demos/frames`: the same pages, frames and client entries, written as
-//! rmx components. Client entries are listed in [`start`].
+//! rsmix components. Client entries are listed in [`start`].
 
-use rmx::{css, on, rsx, Children, Component, Frame, FrameEvent, Handle, Mixin, Node, NodeHandle};
+use rsmix::{css, on, rsx, Children, Component, Frame, FrameEvent, Handle, Mixin, Node, NodeHandle};
 use serde::{Deserialize, Serialize};
 
 pub mod routes;
@@ -121,7 +121,7 @@ pub struct Counter {
 
 impl Component for Counter {
     type Props = CounterProps;
-    rmx::client_entry!("Counter");
+    rsmix::client_entry!("Counter");
 
     fn setup(props: &CounterProps, _: &Handle<Self>) -> Self {
         Counter { count: props.initial_count }
@@ -153,7 +153,7 @@ pub struct ClientFrameExample {
 
 impl Component for ClientFrameExample {
     type Props = NoProps;
-    rmx::client_entry!("ClientFrameExample");
+    rsmix::client_entry!("ClientFrameExample");
 
     fn setup(_: &NoProps, _: &Handle<Self>) -> Self {
         ClientFrameExample { mounted: false }
@@ -188,7 +188,7 @@ pub struct ReloadTime {
 
 impl Component for ReloadTime {
     type Props = NoProps;
-    rmx::client_entry!("ReloadTime");
+    rsmix::client_entry!("ReloadTime");
 
     fn setup(_: &NoProps, h: &Handle<Self>) -> Self {
         let frame = h.frame();
@@ -221,7 +221,7 @@ pub struct ReloadScope {
 
 impl Component for ReloadScope {
     type Props = NoProps;
-    rmx::client_entry!("ReloadScope");
+    rsmix::client_entry!("ReloadScope");
 
     fn setup(_: &NoProps, h: &Handle<Self>) -> Self {
         let frame = h.frame();
@@ -256,7 +256,7 @@ pub struct ReloadTopFrame {
 
 impl Component for ReloadTopFrame {
     type Props = NoProps;
-    rmx::client_entry!("ReloadTopFrame");
+    rsmix::client_entry!("ReloadTopFrame");
 
     fn setup(_: &NoProps, h: &Handle<Self>) -> Self {
         let top = h.frames().top();
@@ -295,7 +295,7 @@ pub struct StateSearchPage {
 
 impl Component for StateSearchPage {
     type Props = StateSearchProps;
-    rmx::client_entry!("StateSearchPage");
+    rsmix::client_entry!("StateSearchPage");
 
     fn setup(props: &StateSearchProps, _: &Handle<Self>) -> Self {
         StateSearchPage { query: props.initial_query.clone(), input: None }
@@ -347,7 +347,7 @@ pub struct ClientMountedPageExample {
 
 impl Component for ClientMountedPageExample {
     type Props = NoProps;
-    rmx::client_entry!("ClientMountedPageExample");
+    rsmix::client_entry!("ClientMountedPageExample");
 
     fn setup(_: &NoProps, _: &Handle<Self>) -> Self {
         ClientMountedPageExample { show: false }
@@ -405,24 +405,24 @@ pub fn search_united_states(query: &str) -> Vec<&'static str> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions {
+    rsmix::run(rsmix::RunOptions {
         entries: vec![
-            rmx::entry::<Counter>(),
-            rmx::entry::<ClientFrameExample>(),
-            rmx::entry::<ReloadTime>(),
-            rmx::entry::<ReloadScope>(),
-            rmx::entry::<ReloadTopFrame>(),
-            rmx::entry::<StateSearchPage>(),
-            rmx::entry::<ClientMountedPageExample>(),
-            rmx::entry::<scroll_reload::ScrollRestorationList>(),
-            rmx::entry::<scroll_reload::StoreScrollReproduction>(),
-            rmx::entry::<scroll_reload::NewsletterSignup>(),
-            rmx::entry::<scroll_reload::ScrollAnchoringList>(),
-            rmx::entry::<scroll_reload::ScrollAnchoringReproduction>(),
-            rmx::entry::<scroll_reload::ScrollAnchoringDetail>(),
-            rmx::entry::<scroll_reload::RootReloadControls>(),
-            rmx::entry::<scroll_reload::PersistentRootReloadEntry>(),
-            rmx::entry::<scroll_reload::RemovableRootReloadEntry>(),
+            rsmix::entry::<Counter>(),
+            rsmix::entry::<ClientFrameExample>(),
+            rsmix::entry::<ReloadTime>(),
+            rsmix::entry::<ReloadScope>(),
+            rsmix::entry::<ReloadTopFrame>(),
+            rsmix::entry::<StateSearchPage>(),
+            rsmix::entry::<ClientMountedPageExample>(),
+            rsmix::entry::<scroll_reload::ScrollRestorationList>(),
+            rsmix::entry::<scroll_reload::StoreScrollReproduction>(),
+            rsmix::entry::<scroll_reload::NewsletterSignup>(),
+            rsmix::entry::<scroll_reload::ScrollAnchoringList>(),
+            rsmix::entry::<scroll_reload::ScrollAnchoringReproduction>(),
+            rsmix::entry::<scroll_reload::ScrollAnchoringDetail>(),
+            rsmix::entry::<scroll_reload::RootReloadControls>(),
+            rsmix::entry::<scroll_reload::PersistentRootReloadEntry>(),
+            rsmix::entry::<scroll_reload::RemovableRootReloadEntry>(),
         ],
         ..Default::default()
     });

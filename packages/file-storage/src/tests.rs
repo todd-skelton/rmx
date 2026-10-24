@@ -1,4 +1,4 @@
-use rmx_fetch::block_on;
+use rsmix_fetch::block_on;
 
 use super::*;
 
@@ -62,7 +62,7 @@ fn memory_storage() {
 #[cfg(feature = "fs")]
 #[test]
 fn fs_storage() {
-    let dir = std::env::temp_dir().join(format!("rmx-file-storage-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("rsmix-file-storage-{}", std::process::id()));
     let storage = FsFileStorage::new(&dir).unwrap();
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     rt.block_on(async { tokio::task::spawn_blocking(move || exercise(&storage)).await.unwrap() });

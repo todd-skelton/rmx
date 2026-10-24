@@ -2,11 +2,11 @@
 //! `Element.prototype.animate` records plain mock animations, `requestAnimationFrame` runs on
 //! a microtask, and each element's `getBoundingClientRect` returns a fixed rect or a
 //! sequence of rects (the last one repeats). Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_animate_layout`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_animate_layout`.
 #![cfg(target_arch = "wasm32")]
 
-use rmx::{create_root, rsx, Root};
-use rmx_ui::animation::{animate_layout, Layout, LayoutConfig};
+use rsmix::{create_root, rsx, Root};
+use rsmix_ui::animation::{animate_layout, Layout, LayoutConfig};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
@@ -206,7 +206,7 @@ fn mock_projected_rects(node: &web_sys::Element, natural: &[Rect], visual: Rect)
     .unwrap();
 }
 
-// rmx: an interrupted animation's snapshot is the on-screen box (with its projection
+// rsmix: an interrupted animation's snapshot is the on-screen box (with its projection
 // transform), not the natural box; Remix's sequence mocks cannot tell the two apart.
 #[wasm_bindgen_test]
 fn snapshots_the_on_screen_box_of_a_running_animation() {

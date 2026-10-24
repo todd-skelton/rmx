@@ -8,13 +8,13 @@
 fn main() {
     use std::path::PathBuf;
 
-    use rmx::response::{self, FileResponseOptions};
-    use rmx::fs::{open_lazy_file, OpenLazyFileOptions};
-    use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-    use rmx::router::{Context, Router};
+    use rsmix::response::{self, FileResponseOptions};
+    use rsmix::fs::{open_lazy_file, OpenLazyFileOptions};
+    use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+    use rsmix::router::{Context, Router};
 
     // The browser router's routes (`routes`); this server only serves files.
-    rmx::router::routes::routes_command(&*spa_demo::ROUTES);
+    rsmix::router::routes::routes_command(&*spa_demo::ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44103".into());
     let public = PathBuf::from(std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "demos/spa/public".into()));
@@ -34,7 +34,7 @@ fn main() {
     let addr = format!("{host}:{port}");
     println!("spa demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router)).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router)).expect("serve");
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_auth::facebook_provider;
+use rsmix_auth::facebook_provider;
 use serde_json::{json, Value};
 
 /// Log in and call back with Facebook answering `profile`.
@@ -63,7 +63,7 @@ fn normalizes_facebook_profiles_and_tokens() {
     assert_eq!(result["tokens"]["accessToken"], "facebook-token");
     assert_eq!(result["tokens"]["tokenType"], "bearer");
     let expires_at = result["tokens"]["expiresAt"].as_str().expect("expiresAt is a string");
-    assert!(rmx_headers::parse_iso_date(expires_at).is_some(), "{expires_at}");
+    assert!(rsmix_headers::parse_iso_date(expires_at).is_some(), "{expires_at}");
 }
 
 #[test]

@@ -1,0 +1,67 @@
+[package]
+name = "rsmix"
+description = "Remix 3 for Rust in one dependency: components and rsx! at the root, plus the router, middleware, auth, sessions and the rest of the toolkit as modules"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[features]
+default = ["ui", "frames", "navigation", "spa"]
+# The rsmix-ui component library (accordion, menu, popover, ...).
+ui = ["dep:rsmix-ui"]
+# Browser runtime parts a client build can leave out (wasm32 only; the server always renders
+# <Frame>). `frames`: <Frame> loading, reloads and streamed content in the browser.
+# `navigation`: links and forms as soft navigations. A client that only hydrates client
+# entries can use `default-features = false`; see rsmix-component's Cargo.toml for what changes.
+frames = ["rsmix-component/frames"]
+navigation = ["rsmix-component/navigation", "frames"]
+# Client-side routing (`rsmix::spa`): runs the router in the browser through frames.
+spa = ["dep:rsmix-spa", "navigation"]
+
+[dependencies]
+rsmix-component.workspace = true
+rsmix-data-schema.workspace = true
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
+rsmix-headers.workspace = true
+rsmix-lazy-file.workspace = true
+rsmix-mime.workspace = true
+rsmix-route-pattern.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-spa = { workspace = true, optional = true }
+rsmix-ui = { workspace = true, optional = true }
+rsmix-url.workspace = true
+
+# The server side is native only. Browser builds get the component runtime and the crates
+# above (route maps and hrefs are shared between server and client, and `spa` runs the router in
+# the browser).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rsmix-assets.workspace = true
+rsmix-auth.workspace = true
+rsmix-cli.workspace = true
+rsmix-cookie.workspace = true
+rsmix-crypto.workspace = true
+rsmix-fetch-proxy.workspace = true
+rsmix-file-storage.workspace = true
+rsmix-fs.workspace = true
+rsmix-html-template.workspace = true
+rsmix-auth-middleware.workspace = true
+rsmix-compression-middleware.workspace = true
+rsmix-cop-middleware.workspace = true
+rsmix-cors-middleware.workspace = true
+rsmix-csrf-middleware.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-live-reload-middleware.workspace = true
+rsmix-logger-middleware.workspace = true
+rsmix-method-override-middleware.workspace = true
+rsmix-session-middleware.workspace = true
+rsmix-static-middleware.workspace = true
+rsmix-multipart-parser.workspace = true
+rsmix-render-middleware.workspace = true
+rsmix-node-fetch-server.workspace = true
+rsmix-session.workspace = true
+rsmix-tar-parser.workspace = true
+rsmix-terminal.workspace = true
+
+[dev-dependencies]
+http.workspace = true

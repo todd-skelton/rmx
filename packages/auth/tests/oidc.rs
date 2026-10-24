@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use common::*;
-use rmx_auth::{oidc_provider, ClientOptions, OidcMetadata, OidcOptions, OidcProfileInput};
+use rsmix_auth::{oidc_provider, ClientOptions, OidcMetadata, OidcOptions, OidcProfileInput};
 use serde::Serialize;
 use serde_json::{json, Value};
 

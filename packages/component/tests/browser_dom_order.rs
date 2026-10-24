@@ -1,15 +1,15 @@
 //! Ports of Remix's `vdom.dom-order.test.tsx`. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_dom_order`.
 //!
-//! A component that renders nothing keeps an empty text node as its position in rmx (Remix
+//! A component that renders nothing keeps an empty text node as its position in rsmix (Remix
 //! keeps none), so sibling checks use `nextElementSibling`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 
-use rmx::{create_root, rsx, Component, Handle, Node};
+use rsmix::{create_root, rsx, Component, Handle, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

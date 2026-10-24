@@ -1,10 +1,10 @@
 //! Escaping and number text in server HTML: the fast paths write what the plain ones write.
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::borrow::Cow;
 
-use rmx::{render_to_string, rsx, AttrValue, IntoAttr};
+use rsmix::{render_to_string, rsx, AttrValue, IntoAttr};
 
 fn reference(s: &str, attr: bool) -> String {
     let mut out = String::new();

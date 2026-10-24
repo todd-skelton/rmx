@@ -1,9 +1,9 @@
 [package]
-name = "rmx-route-pattern"
+name = "rsmix-route-pattern"
 description = "URL pattern matching, ranking and href generation (port of remix route-pattern)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
-rmx-url.workspace = true
+rsmix-url.workspace = true

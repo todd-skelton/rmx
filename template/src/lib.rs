@@ -1,11 +1,11 @@
-//! The `remix new` starter app in rmx (`reference/remix/template`): a home page rendered on
+//! The `remix new` starter app in rsmix (`reference/remix/template`): a home page rendered on
 //! the server, with one interactive client entry, the copy-to-clipboard `PromptButton`.
 //!
-//! | Remix | rmx |
+//! | Remix | rsmix |
 //! | --- | --- |
 //! | `app/routes.ts` | [`routes`] |
 //! | `app/router.ts`, `app/actions/controller.tsx` | `server::router` with `RoutesActions` |
-//! | `app/assets.ts` (`createAssetServer`) | `rmx::assets::AssetServer` |
+//! | `app/assets.ts` (`createAssetServer`) | `rsmix::assets::AssetServer` |
 //! | `app/actions/home-page.tsx`, `document.tsx` | `server::home_page` |
 //! | `app/actions/public/prompt-button.tsx` (`clientEntry`) | [`prompt_button::PromptButton`] |
 //! | `app/actions/public/entry.ts` | `app/actions/public/entry.js` plus [`start`] |
@@ -20,5 +20,5 @@ pub mod server;
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions { entries: vec![rmx::entry::<prompt_button::PromptButton>()], ..Default::default() });
+    rsmix::run(rsmix::RunOptions { entries: vec![rsmix::entry::<prompt_button::PromptButton>()], ..Default::default() });
 }

@@ -34,7 +34,7 @@ impl FsFileStorage {
     }
 
     fn paths(&self, key: &str) -> (PathBuf, PathBuf, PathBuf) {
-        let hash = rmx_crypto::hex(&rmx_crypto::sha256(key.as_bytes()));
+        let hash = rsmix_crypto::hex(&rsmix_crypto::sha256(key.as_bytes()));
         let dir = self.root.join(&hash[..2]);
         (dir.clone(), dir.join(format!("{hash}.dat")), dir.join(format!("{hash}.meta.json")))
     }

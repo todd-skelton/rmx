@@ -1,6 +1,6 @@
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::{render_to_string, rsx, Children, Component, Handle, Node};
+use rsmix::{render_to_string, rsx, Children, Component, Handle, Node};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default)]
@@ -33,7 +33,7 @@ struct Counter {
 
 impl Component for Counter {
     type Props = CounterProps;
-    rmx::client_entry!("Counter");
+    rsmix::client_entry!("Counter");
 
     fn setup(p: &CounterProps, _: &Handle<Self>) -> Self {
         Counter { count: p.initial }

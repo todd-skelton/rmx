@@ -4,8 +4,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 
-use rmx_fetch::{block_on, Body, BoxError, Request, Response};
-use rmx_fetch_router::{Context, Router};
+use rsmix_fetch::{block_on, Body, BoxError, Request, Response};
+use rsmix_fetch_router::{Context, Router};
 use serde_json::json;
 
 use super::*;
@@ -31,7 +31,7 @@ fn mock(respond: impl Fn(&str) -> Response + Send + Sync + 'static) -> (impl Fet
 }
 
 fn status_json(status: u16, value: serde_json::Value) -> Response {
-    let mut res = rmx_response::json(&value);
+    let mut res = rsmix_response::json(&value);
     *res.status_mut() = http::StatusCode::from_u16(status).unwrap();
     res
 }
@@ -55,11 +55,11 @@ fn token_errors_carry_the_provider_message_or_the_fallback() {
         let tokens = TokenRequest { token_endpoint: "https://provider.example/token", client_id: "id", client_secret: "secret", client_authentication: ClientAuthentication::RequestBody, headers: &[] };
         block_on(exchange_authorization_code(fetch, tokens, "https://app.example/callback", "code", "verifier")).unwrap_err().0
     };
-    let (fetch, _) = mock(|_| rmx_response::json(&json!({ "error": "bad_verification_code", "error_description": "The code passed is incorrect or expired." })));
+    let (fetch, _) = mock(|_| rsmix_response::json(&json!({ "error": "bad_verification_code", "error_description": "The code passed is incorrect or expired." })));
     assert_eq!(request(&fetch), "The code passed is incorrect or expired.");
     let (fetch, _) = mock(|_| status_json(500, json!({})));
     assert_eq!(request(&fetch), "OAuth token exchange failed.");
-    let (fetch, _) = mock(|_| rmx_response::json(&json!({ "token_type": "bearer" })));
+    let (fetch, _) = mock(|_| rsmix_response::json(&json!({ "token_type": "bearer" })));
     assert_eq!(request(&fetch), "OAuth token response did not include an access token.");
 
     let callback = Url::parse("https://app.example.com/callback?state=s").unwrap();
@@ -70,7 +70,7 @@ fn token_errors_carry_the_provider_message_or_the_fallback() {
 fn hosted_providers_derive_discovery_urls() {
     let (fetch, log) = mock(|url| {
         let issuer = url.trim_end_matches("/.well-known/openid-configuration");
-        rmx_response::json(&json!({ "issuer": issuer, "authorization_endpoint": format!("{issuer}/authorize"), "token_endpoint": format!("{issuer}/token") }))
+        rsmix_response::json(&json!({ "issuer": issuer, "authorization_endpoint": format!("{issuer}/authorize"), "token_endpoint": format!("{issuer}/token") }))
     });
     let check = |provider: OidcProvider, discovery_url: &str| {
         log.lock().unwrap().clear();

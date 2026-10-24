@@ -921,7 +921,7 @@ pub(crate) fn dispose(start: &web_sys::Node) {
 fn merge_data(root: &web_sys::Node, remove: bool) {
     for script in query_all(root, r#"script[type="application/json"][id="rmx-data"]"#) {
         let Some(data) = HydrationData::from_json(&script.text_content().unwrap_or_default()) else {
-            warn("rmx: bad rmx-data");
+            warn("rsmix: bad rmx-data");
             continue;
         };
         DATA.with(|d| {

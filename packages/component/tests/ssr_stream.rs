@@ -3,11 +3,11 @@
 //! `stroke-linecap`), so the JSX camelCase mapping cases become their HTML spelling, and
 //! void elements are written `<input>` rather than `<input />`.
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 
-use rmx::{css, render_to_string, rsx, unsafe_html, AttrValue, Children, Component, Handle, Node};
+use rsmix::{css, render_to_string, rsx, unsafe_html, AttrValue, Children, Component, Handle, Node};
 
 fn html(node: Node) -> String {
     render_to_string(&node)
@@ -322,20 +322,20 @@ impl Component for Inspect {
 
 #[test]
 fn exposes_the_current_and_top_frame_src_during_ssr() {
-    rmx::set_server_frame_src("https://example.com/dashboard", "https://example.com/dashboard");
+    rsmix::set_server_frame_src("https://example.com/dashboard", "https://example.com/dashboard");
     let out = html(rsx! { <Inspect/> });
     let seen = SEEN.with(|s| s.borrow_mut().take());
     assert_eq!(seen, Some(("https://example.com/dashboard".to_string(), "https://example.com/dashboard".to_string(), true)));
     assert_eq!(out, "<div>https://example.com/dashboard</div>");
 
-    rmx::set_server_frame_src("https://example.com/sidebar", "https://example.com/dashboard");
+    rsmix::set_server_frame_src("https://example.com/sidebar", "https://example.com/dashboard");
     html(rsx! { <Inspect/> });
     let seen = SEEN.with(|s| s.borrow_mut().take());
     assert_eq!(seen, Some(("https://example.com/sidebar".to_string(), "https://example.com/dashboard".to_string(), false)));
 }
 
-/// rmx has no throw: a render that fails returns `h.fail(error)`. Remix rejects the whole
-/// stream; rmx reports the error (stderr and the app's error listeners) and leaves the
+/// rsmix has no throw: a render that fails returns `h.fail(error)`. Remix rejects the whole
+/// stream; rsmix reports the error (stderr and the app's error listeners) and leaves the
 /// component out, so the rest of the page still renders.
 struct Failing;
 

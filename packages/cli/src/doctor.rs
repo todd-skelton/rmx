@@ -1,18 +1,18 @@
-//! `rmx doctor` (Remix's `remix doctor`): check the toolchain and the app's conventions.
+//! `rsmix doctor` (Remix's `remix doctor`): check the toolchain and the app's conventions.
 //!
 //! Suites run in order and a suite with warnings skips the ones after it, as in Remix:
 //!
-//! 1. environment: a `Cargo.toml` with an `rmx` dependency, the `wasm32-unknown-unknown`
-//!    target, and a `wasm-bindgen` CLI matching the version rmx pins.
+//! 1. environment: a `Cargo.toml` with an `rsmix` dependency, the `wasm32-unknown-unknown`
+//!    target, and a `wasm-bindgen` CLI matching the version rsmix pins.
 //! 2. project: a route map (`#[derive(RouteMap)]`) under `src/`.
 //! 3. client: for apps with a browser entry (`wasm_bindgen(start)`), a `cdylib` crate type
 //!    and a built, current `<crate>_bg.wasm`.
 //!
-//! Remix's `actions` suite checks controller file conventions; rmx checks controllers at
+//! Remix's `actions` suite checks controller file conventions; rsmix checks controllers at
 //! compile time (`<Name>Actions` must name every route), so it has no counterpart.
 //! `Cargo.toml` is read line by line, which covers the usual layouts.
 //!
-//! `--fix` applies the low-risk fixes, like Remix: it adds the `rmx` dependency, creates
+//! `--fix` applies the low-risk fixes, like Remix: it adds the `rsmix` dependency, creates
 //! `src/routes.rs` (or replaces one holding only comments) and declares it in `src/lib.rs`,
 //! and adds `"cdylib"` to the crate types. Fixes are planned per suite and the suite is
 //! checked again after them; a fix whose path would leave the project root (including
@@ -21,9 +21,9 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use rmx_terminal::Styles;
+use rsmix_terminal::Styles;
 
-/// The `wasm-bindgen` version rmx builds against (the `=0.2.129` pin).
+/// The `wasm-bindgen` version rsmix builds against (the `=0.2.129` pin).
 pub const WASM_BINDGEN_VERSION: &str = "0.2.129";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -427,22 +427,22 @@ fn contained_fix_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
 }
 
 fn environment_fixes(_root: &Path, manifest: &str) -> Vec<FixPlan> {
-    if section_lines(manifest, "dependencies").any(|line| dependency_name(line) == Some("rmx")) {
+    if section_lines(manifest, "dependencies").any(|line| dependency_name(line) == Some("rsmix")) {
         return Vec::new();
     }
-    let dependency = super::rmx_dependency();
+    let dependency = super::rsmix_dependency();
     let updated = match manifest.lines().position(|line| line.trim() == "[dependencies]") {
         Some(i) => insert_line(manifest, i + 1, &dependency),
         None => format!("{}\n[dependencies]\n{dependency}\n", manifest.trim_end()),
     };
-    vec![update("rmx-dependency-missing", "environment", "Cargo.toml", updated)]
+    vec![update("rsmix-dependency-missing", "environment", "Cargo.toml", updated)]
 }
 
 const ROUTES_RS: &str = "//! The route map shared by the server and the browser.
 
 use std::sync::LazyLock;
 
-use rmx::router::routes::{any, Route, RouteMap};
+use rsmix::router::routes::{any, Route, RouteMap};
 
 #[derive(RouteMap)]
 pub struct Routes {
@@ -544,11 +544,11 @@ fn advice(code: &'static str, message: impl Into<String>) -> Finding {
 fn environment(root: Option<&Path>, manifest: &str, toolchain: &dyn Toolchain) -> Vec<Finding> {
     let mut findings = Vec::new();
     if root.is_none() {
-        findings.push(warn("project-root-not-found", "Could not find Cargo.toml. Run this command inside an rmx project."));
+        findings.push(warn("project-root-not-found", "Could not find Cargo.toml. Run this command inside an rsmix project."));
         return findings;
     }
-    if !section_lines(manifest, "dependencies").any(|line| dependency_name(line) == Some("rmx")) {
-        findings.push(warn("rmx-dependency-missing", "Cargo.toml does not declare an rmx dependency."));
+    if !section_lines(manifest, "dependencies").any(|line| dependency_name(line) == Some("rsmix")) {
+        findings.push(warn("rsmix-dependency-missing", "Cargo.toml does not declare an rsmix dependency."));
     }
     match toolchain.installed_targets() {
         None => findings.push(advice("rustup-unavailable", "Could not run rustup to check for the wasm32-unknown-unknown target.")),
@@ -566,7 +566,7 @@ fn environment(root: Option<&Path>, manifest: &str, toolchain: &dyn Toolchain) -
         Some(version) if version != WASM_BINDGEN_VERSION => findings.push(warn(
             "wasm-bindgen-version-mismatch",
             format!(
-                "wasm-bindgen {version} is on PATH, but rmx uses {WASM_BINDGEN_VERSION}. Run `cargo install wasm-bindgen-cli --version {WASM_BINDGEN_VERSION}`."
+                "wasm-bindgen {version} is on PATH, but rsmix uses {WASM_BINDGEN_VERSION}. Run `cargo install wasm-bindgen-cli --version {WASM_BINDGEN_VERSION}`."
             ),
         )),
         Some(_) => {}
@@ -634,7 +634,7 @@ pub(crate) fn package_name(manifest: &str) -> String {
         .unwrap_or_default()
 }
 
-/// `rmx = ...`, `rmx.workspace = true` and `rmx = { ... }` all name `rmx`.
+/// `rsmix = ...`, `rsmix.workspace = true` and `rsmix = { ... }` all name `rsmix`.
 fn dependency_name(line: &str) -> Option<&str> {
     let line = line.trim();
     if line.starts_with('#') {

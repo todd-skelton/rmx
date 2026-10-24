@@ -6,7 +6,7 @@
 //!
 //! ```
 //! use std::sync::LazyLock;
-//! use rmx_fetch_router::routes::{form, get, prefix, Form, Route};
+//! use rsmix_fetch_router::routes::{form, get, prefix, Form, Route};
 //!
 //! pub struct Routes { pub home: Route, pub contact: Form, pub blog: Blog }
 //! pub struct Blog { pub index: Route, pub show: Route }
@@ -27,8 +27,8 @@
 use std::fmt;
 
 use http::Method;
-use rmx_route_pattern::{HrefParams, RoutePattern};
-use rmx_url::SearchParams;
+use rsmix_route_pattern::{HrefParams, RoutePattern};
+use rsmix_url::SearchParams;
 
 /// A request method (or any method) plus a pattern.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,14 +59,14 @@ impl Route {
         self.try_href(params).unwrap_or_else(|e| panic!("href for {}: {e}", self.pattern))
     }
 
-    pub fn try_href(&self, params: impl HrefParams) -> Result<String, rmx_route_pattern::HrefError> {
+    pub fn try_href(&self, params: impl HrefParams) -> Result<String, rsmix_route_pattern::HrefError> {
         self.pattern.href(params)
     }
 
     /// Build a link with options (Remix's `route.href(params, { baseURL, searchParams })`):
     /// search params first, and a path-relative href when the target shares `base_url`'s
     /// origin.
-    pub fn href_with(&self, params: impl HrefParams, options: &rmx_route_pattern::HrefOptions) -> String {
+    pub fn href_with(&self, params: impl HrefParams, options: &rsmix_route_pattern::HrefOptions) -> String {
         self.pattern.href_with(params, options).unwrap_or_else(|e| panic!("href for {}: {e}", self.pattern))
     }
 
@@ -297,8 +297,8 @@ pub fn resource(base: &str) -> Resource {
 /// which is what [`Router::map`](crate::Router::map) takes as a controller:
 ///
 /// ```
-/// use rmx::router::routes::{get, post, Route, RouteMap};
-/// use rmx::router::{action, Context, Router};
+/// use rsmix::router::routes::{get, post, Route, RouteMap};
+/// use rsmix::router::{action, Context, Router};
 ///
 /// #[derive(RouteMap)]
 /// pub struct Routes { pub home: Route, pub blog: Blog }
@@ -312,16 +312,16 @@ pub fn resource(base: &str) -> Resource {
 ///     index: action(|_: Context| async { "Blog" }),
 ///     create: action(|_: Context| async { "Created" }),
 /// });
-/// let res = rmx::fetch::block_on(router.fetch_url("https://remix.run/blog"));
-/// assert_eq!(rmx::fetch::block_on(res.into_body().text()).unwrap(), "Blog");
+/// let res = rsmix::fetch::block_on(router.fetch_url("https://remix.run/blog"));
+/// assert_eq!(rsmix::fetch::block_on(res.into_body().text()).unwrap(), "Blog");
 /// ```
 ///
 /// Remix checks controllers when they are mapped; here the compiler does. A controller must
 /// name every direct route, and only those:
 ///
 /// ```compile_fail,E0063
-/// # use rmx::router::routes::{get, Route, RouteMap};
-/// # use rmx::router::{action, Context};
+/// # use rsmix::router::routes::{get, Route, RouteMap};
+/// # use rsmix::router::{action, Context};
 /// #[derive(RouteMap)]
 /// pub struct Routes { pub home: Route, pub about: Route }
 /// // error: missing field `about` (Remix: "Missing action `about` in controller")
@@ -329,8 +329,8 @@ pub fn resource(base: &str) -> Resource {
 /// ```
 ///
 /// ```compile_fail,E0560
-/// # use rmx::router::routes::{get, Route, RouteMap};
-/// # use rmx::router::{action, Context};
+/// # use rsmix::router::routes::{get, Route, RouteMap};
+/// # use rsmix::router::{action, Context};
 /// #[derive(RouteMap)]
 /// pub struct Routes { pub home: Route, pub blog: Blog }
 /// #[derive(RouteMap)]
@@ -343,8 +343,8 @@ pub fn resource(base: &str) -> Resource {
 /// ```
 ///
 /// ```compile_fail,E0560
-/// # use rmx::router::routes::{get, Route, RouteMap};
-/// # use rmx::router::{action, Context};
+/// # use rsmix::router::routes::{get, Route, RouteMap};
+/// # use rsmix::router::{action, Context};
 /// #[derive(RouteMap)]
 /// pub struct Routes { pub home: Route }
 /// // error: no field `missing` (Remix: "Unknown action `missing` in controller")
@@ -359,8 +359,8 @@ pub fn resource(base: &str) -> Resource {
 /// (Remix: "Expected a controller with an object `actions` property"):
 ///
 /// ```compile_fail,E0277
-/// # use rmx::router::routes::{get, Route, RouteMap};
-/// # use rmx::router::{Context, Router};
+/// # use rsmix::router::routes::{get, Route, RouteMap};
+/// # use rsmix::router::{Context, Router};
 /// #[derive(RouteMap)]
 /// pub struct Routes { pub home: Route }
 /// let mut router = Router::new();
@@ -368,8 +368,8 @@ pub fn resource(base: &str) -> Resource {
 /// ```
 ///
 /// ```compile_fail,E0308
-/// # use rmx::router::routes::{get, Route, RouteMap};
-/// # use rmx::router::{Controller, Router};
+/// # use rsmix::router::routes::{get, Route, RouteMap};
+/// # use rsmix::router::{Controller, Router};
 /// #[derive(RouteMap)]
 /// pub struct Routes { pub home: Route }
 /// let mut router = Router::new();
@@ -380,7 +380,7 @@ pub fn resource(base: &str) -> Resource {
 /// object with a function `handler` property"):
 ///
 /// ```compile_fail,E0277
-/// # use rmx::router::action;
+/// # use rsmix::router::action;
 /// let _ = action(1);
 /// ```
 pub trait RouteMap {
@@ -388,7 +388,7 @@ pub trait RouteMap {
     /// route, or a struct with one action per direct route.
     type Actions;
 
-    /// The routes as a tree, for listing them (`rmx routes`).
+    /// The routes as a tree, for listing them (`rsmix routes`).
     fn route_tree(&self) -> RouteTree;
 
     /// Pair each direct route with its action.
@@ -396,7 +396,7 @@ pub trait RouteMap {
     fn pair_actions(&self, actions: Self::Actions) -> Vec<(Route, crate::Action)>;
 }
 
-pub use rmx_macros::RouteMap;
+pub use rsmix_macros::RouteMap;
 
 impl RouteMap for Route {
     type Actions = crate::Action;
@@ -585,7 +585,7 @@ impl RouteTree {
     }
 
     /// The tree as JSON, shaped like `remix routes --json`'s `tree` (without controller
-    /// owners, since rmx has no controller file convention).
+    /// owners, since rsmix has no controller file convention).
     pub fn to_json(&self) -> String {
         fn string(s: &str) -> String {
             let mut out = String::from("\"");
@@ -626,11 +626,11 @@ impl RouteTree {
 /// thing in `main`:
 ///
 /// ```no_run
-/// # use rmx::router::routes::{get, Route, RouteMap};
+/// # use rsmix::router::routes::{get, Route, RouteMap};
 /// # #[derive(RouteMap)] pub struct Routes { pub home: Route }
 /// # static ROUTES: std::sync::LazyLock<Routes> = std::sync::LazyLock::new(|| Routes { home: get("/") });
 /// fn main() {
-///     rmx::router::routes::routes_command(&*ROUTES); // cargo run -- routes --table
+///     rsmix::router::routes::routes_command(&*ROUTES); // cargo run -- routes --table
 ///     // start the server...
 /// }
 /// ```
@@ -641,7 +641,7 @@ pub fn routes_command(map: &impl RouteMap) {
         return;
     }
     let args: Vec<String> = args.collect();
-    let styles = rmx_terminal::Styles::detect();
+    let styles = rsmix_terminal::Styles::detect();
     match routes_command_output_with(map, &args, &|header| styles.bold(header)) {
         Ok(out) => {
             print!("{out}");

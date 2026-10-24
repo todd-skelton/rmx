@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use http::{HeaderMap, StatusCode};
-use rmx_fetch::block_on;
+use rsmix_fetch::block_on;
 
 use super::*;
 

@@ -7,9 +7,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use http::HeaderValue;
-use rmx_fetch::{block_on, Body, Response};
-use rmx_compression_middleware::{compression, BrotliOptions, Encoding, ZlibOptions};
-use rmx_fetch_router::{Context, Router};
+use rsmix_fetch::{block_on, Body, Response};
+use rsmix_compression_middleware::{compression, BrotliOptions, Encoding, ZlibOptions};
+use rsmix_fetch_router::{Context, Router};
 
 fn response(body: &'static str, headers: &[(&'static str, &'static str)]) -> Response {
     let mut response = Response::new(Body::from(body));
@@ -134,7 +134,7 @@ fn respects_custom_filter_media_type() {
 #[test]
 fn allows_custom_filter_media_type_to_use_is_compressible_mime_type() {
     // Only compress if it's compressible AND not HTML
-    let filter = |media_type: &str| rmx_mime::is_compressible_mime_type(media_type) && !media_type.contains("html");
+    let filter = |media_type: &str| rsmix_mime::is_compressible_mime_type(media_type) && !media_type.contains("html");
     let mut router = Router::new().with(compression().filter_media_type(filter));
     json_and_html(&mut router);
 
@@ -178,7 +178,7 @@ fn allows_disabling_compression_per_response_via_empty_encodings_array() {
     assert_eq!(header(&fetch(&router, "/compress", "gzip"), "Content-Encoding").as_deref(), Some("gzip"));
 }
 
-// rmx only: the zlib and brotli options can depend on the response too.
+// rsmix only: the zlib and brotli options can depend on the response too.
 
 #[test]
 fn zlib_and_brotli_options_per_response() {

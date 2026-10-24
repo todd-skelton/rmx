@@ -1,12 +1,12 @@
 //! Ports of Remix's `ui/src/lib/wait-for-css-transition.test.ts`. `requestAnimationFrame` is
 //! mocked the same way, so frames run only when a test flushes them. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_wait_for_css_transition`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_wait_for_css_transition`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rmx_ui::wait_for_css_transition;
+use rsmix_ui::wait_for_css_transition;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use wasm_bindgen_test::*;

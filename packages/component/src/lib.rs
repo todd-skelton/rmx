@@ -1,4 +1,4 @@
-//! `rmx`: the Remix 3 component model in idiomatic Rust.
+//! `rsmix`: the Remix 3 component model in idiomatic Rust.
 //!
 //! A component is a struct. `setup` runs once and returns the initial state, `render` turns
 //! that state into a [`Node`] tree, and nothing re-renders until a handler calls
@@ -9,9 +9,9 @@
 //! streams server content into the page, and the browser runtime ([`run`]) turns links and
 //! forms into soft navigations that reconcile server HTML into the live document.
 
-// Lets `rsx!` (which names `::rmx`) work in this crate's own tests.
+// Lets `rsx!` (which names `::rsmix`) work in this crate's own tests.
 #[cfg(test)]
-extern crate self as rmx;
+extern crate self as rsmix;
 
 mod app;
 mod attrs;
@@ -43,7 +43,7 @@ pub use node::{
     unsafe_html, AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoHtmlAttr, IntoNode, IntoProp, Key, Node,
     Str, StyleRule, UnsafeHtml,
 };
-pub use rmx_macros::rsx;
+pub use rsmix_macros::rsx;
 pub use signal::{ListenerId, Signal, TypedEventTarget};
 pub use ssr::{render_to_string, Rendered};
 
@@ -71,7 +71,7 @@ pub mod __private {
 /// ```ignore
 /// impl Component for Counter {
 ///     type Props = CounterProps;
-///     rmx::client_entry!("Counter");
+///     rsmix::client_entry!("Counter");
 ///     // setup / render ...
 /// }
 /// ```
@@ -80,12 +80,12 @@ pub mod __private {
 /// once the entry is used), and the props must serialize to JSON:
 ///
 /// ```compile_fail
-/// # extern crate rmx_component as rmx;
-/// use rmx::{rsx, Component, Handle, Node};
+/// # extern crate rsmix_component as rsmix;
+/// use rsmix::{rsx, Component, Handle, Node};
 /// struct Empty;
 /// impl Component for Empty {
 ///     type Props = ();
-///     rmx::client_entry!("");
+///     rsmix::client_entry!("");
 ///     fn setup(_: &(), _: &Handle<Self>) -> Self { Empty }
 ///     fn render(&self, _: &(), _: &Handle<Self>) -> Node { rsx! { <p>"x"</p> } }
 /// }
@@ -93,14 +93,14 @@ pub mod __private {
 /// ```
 ///
 /// ```compile_fail
-/// # extern crate rmx_component as rmx;
-/// use rmx::{rsx, Component, Handle, Node};
+/// # extern crate rsmix_component as rsmix;
+/// use rsmix::{rsx, Component, Handle, Node};
 /// #[derive(Clone)]
 /// struct NotSerializable(std::rc::Rc<()>);
 /// struct Entry;
 /// impl Component for Entry {
 ///     type Props = NotSerializable;
-///     rmx::client_entry!("Entry");
+///     rsmix::client_entry!("Entry");
 ///     fn setup(_: &NotSerializable, _: &Handle<Self>) -> Self { Entry }
 ///     fn render(&self, _: &NotSerializable, _: &Handle<Self>) -> Node { rsx! { <p>"x"</p> } }
 /// }

@@ -1,14 +1,14 @@
 [package]
-name = "rmx-lazy-file"
-description = "Lazy, streaming files and blobs for rmx (Remix's lazy-file): LazyFile and LazyBlob read their content only when streamed, with byte-range slicing"
+name = "rsmix-lazy-file"
+description = "Lazy, streaming files and blobs for rsmix (Remix's lazy-file): LazyFile and LazyBlob read their content only when streamed, with byte-range slicing"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
 bytes.workspace = true
-rmx-fetch.workspace = true
-rmx-response.workspace = true
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys.workspace = true

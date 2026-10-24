@@ -2,7 +2,7 @@
 //! transforms, the transformed-output cache, CSS rewriting, fingerprints, preloads, access
 //! rules, mounts, option validation and error handling. Cases about TypeScript and JSX
 //! compilation, source maps, import maps, bare and package imports, barrel files, module
-//! loaders, CommonJS detection, watch mode and HMR have no counterpart: rmx serves
+//! loaders, CommonJS detection, watch mode and HMR have no counterpart: rsmix serves
 //! JavaScript as written (scripts are .js and .mjs, usually wasm-bindgen output).
 
 use std::collections::HashMap;
@@ -11,16 +11,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use http::{header, Method, StatusCode};
-use rmx_assets::*;
-use rmx_fetch::{Body, File, Response};
-use rmx_fetch_router::Context;
+use rsmix_assets::*;
+use rsmix_fetch::{Body, File, Response};
+use rsmix_fetch_router::Context;
 
 struct Dir(PathBuf);
 
 impl Dir {
     fn new() -> Dir {
         static N: AtomicUsize = AtomicUsize::new(0);
-        let path = std::env::temp_dir().join(format!("rmx-asset-server-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        let path = std::env::temp_dir().join(format!("rsmix-asset-server-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         Dir(path.canonicalize().unwrap())
@@ -93,7 +93,7 @@ fn request(server: &AssetServer, method: Method, url: &str, headers: &[(&str, &s
     let ctx = Context::new(req.body(Body::empty()).unwrap());
     let res: Response = server.fetch(&ctx)?;
     let (parts, body) = res.into_parts();
-    Some(Res { status: parts.status, headers: parts.headers, body: rmx_fetch::block_on(body.text()).unwrap() })
+    Some(Res { status: parts.status, headers: parts.headers, body: rsmix_fetch::block_on(body.text()).unwrap() })
 }
 
 fn get(server: &AssetServer, url: &str) -> Option<Res> {
@@ -537,7 +537,7 @@ fn matches_transform_extension_filters_against_the_current_extension_in_the_pipe
     }));
     let href = s.href_with("app/content/value.txt", &["finalize", "publish"]).unwrap();
     let res = get_ok(&s, &href);
-    // Remix falls back to the source file's type; rmx uses the output extension's, and
+    // Remix falls back to the source file's type; rsmix uses the output extension's, and
     // `.done` has none.
     assert_eq!(header(&res, header::CONTENT_TYPE), "application/octet-stream");
     assert_eq!(res.body, "hello\n|finalize:.txt|publish:.done|global:.done");
@@ -764,8 +764,8 @@ fn accepts_file_storage_backends_as_file_cache_implementations() {
     let dir = Dir::new();
     dir.write("app/content/value.txt", "hello");
     let caches: Vec<Arc<dyn FileCache>> = vec![
-        Arc::new(rmx_file_storage::MemoryFileStorage::new()),
-        Arc::new(rmx_file_storage::FsFileStorage::new(dir.0.join("custom-file-storage-cache")).unwrap()),
+        Arc::new(rsmix_file_storage::MemoryFileStorage::new()),
+        Arc::new(rsmix_file_storage::FsFileStorage::new(dir.0.join("custom-file-storage-cache")).unwrap()),
     ];
     for cache in caches {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -1263,7 +1263,7 @@ fn fingerprints_all_modules_with_filename_fingerprint_ext_urls_and_returns_none_
     let body = get_ok(&s, &entry).body;
     assert_eq!(unfingerprint(&entry).0, "/assets/app/entry.js");
     assert_eq!(unfingerprint(&dep).0, "/assets/app/dep.js");
-    // Remix keeps the specifier and maps it with an import map; rmx rewrites it.
+    // Remix keeps the specifier and maps it with an import map; rsmix rewrites it.
     assert!(body.contains(&format!("import '{dep}'")), "{body}");
     let res = get_ok(&s, &dep);
     assert_eq!(res.status, 200);
@@ -1739,7 +1739,7 @@ fn uses_a_custom_response_returned_from_on_error() {
     let dir = Dir::new();
     dir.write("app/entry.js", "import './missing.js'\nexport const entry = true");
     let s = server(AssetOptions {
-        on_error: Some(Arc::new(|_| Some(rmx_response::status(StatusCode::IM_A_TEAPOT, "Custom build error")))),
+        on_error: Some(Arc::new(|_| Some(rsmix_response::status(StatusCode::IM_A_TEAPOT, "Custom build error")))),
         ..options(&dir)
     });
     let res = get_ok(&s, "/assets/app/entry.js");

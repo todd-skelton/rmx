@@ -1,7 +1,7 @@
 //! Headless accordion (Remix's `@remix-run/ui/accordion`).
 //!
 //! ```ignore
-//! use rmx_ui::accordion;
+//! use rsmix_ui::accordion;
 //!
 //! rsx! {
 //!     <accordion::Context default_value="shipping">
@@ -26,7 +26,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, IntoProp, Mixin, MixinHandle, Node, NodeHandle};
+use rsmix::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, IntoProp, Mixin, MixinHandle, Node, NodeHandle};
 
 /// The event dispatched from the root when items open or close.
 pub const ACCORDION_CHANGE_EVENT: &str = "rmx:accordion-change";
@@ -449,7 +449,7 @@ impl HostMixin for Trigger {
         host.set_attr("disabled", self.disabled);
         host.set_attr("id", item.trigger_id.clone());
         let slot = item.trigger.clone();
-        host.mix(rmx::node_ref(move |node, _| {
+        host.mix(rsmix::node_ref(move |node, _| {
             *slot.borrow_mut() = Some(Rc::new(node.clone()));
         }));
         host.mix(on(
@@ -504,7 +504,7 @@ impl HostMixin for Content {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     fn example(props: ContextProps) -> Node {
         let items: Vec<Node> = [("shipping", false), ("billing", false), ("archived", true)]

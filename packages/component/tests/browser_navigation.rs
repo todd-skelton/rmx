@@ -9,12 +9,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_navigation`.
 #![cfg(all(target_arch = "wasm32", feature = "navigation"))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, navigate, rsx, Frame, FrameContent, FrameRequest, FrameResponse, Frames, NavigateOptions, Root, RunOptions};
+use rsmix::{create_root, navigate, rsx, Frame, FrameContent, FrameRequest, FrameResponse, Frames, NavigateOptions, Root, RunOptions};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -22,10 +22,10 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-type Resolver = Box<dyn FnOnce(FrameRequest) -> rmx::ResolveFuture>;
+type Resolver = Box<dyn FnOnce(FrameRequest) -> rsmix::ResolveFuture>;
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
     static GUARD: RefCell<Option<JsValue>> = const { RefCell::new(None) };
     static REQUESTS: RefCell<Vec<FrameRequest>> = const { RefCell::new(Vec::new()) };
     /// When set, the next resolve waits for this promise.
@@ -34,7 +34,7 @@ thread_local! {
     static RESOLVE_NEXT: RefCell<Option<Resolver>> = const { RefCell::new(None) };
 }
 
-fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
+fn resolve(request: FrameRequest) -> rsmix::ResolveFuture {
     REQUESTS.with(|r| r.borrow_mut().push(request.clone()));
     if let Some(next) = RESOLVE_NEXT.with(|n| n.borrow_mut().take()) {
         return next(request);
@@ -67,7 +67,7 @@ fn navigation() -> JsValue {
 /// Start the runtime and the guard once for the page.
 async fn start() {
     if APP.with(|a| a.borrow().is_none()) {
-        let app = rmx::run(RunOptions { resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
+        let app = rsmix::run(RunOptions { resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
         APP.with(|a| *a.borrow_mut() = Some(app));
         let install = js_sys::Function::new_with_args(
             "",
@@ -858,7 +858,7 @@ async fn passes_runtime_state_via_navigate_history_state() {
 #[wasm_bindgen_test]
 async fn normalizes_reset_options_to_manual_history_state() {
     let _page = Page::new().await;
-    let options = NavigateOptions { target: Some("details".into()), reset_scroll: Some(false.into()), reset_focus: Some(rmx::Reset::Manual), ..Default::default() };
+    let options = NavigateOptions { target: Some("details".into()), reset_scroll: Some(false.into()), reset_focus: Some(rsmix::Reset::Manual), ..Default::default() };
     navigate(&page_url("manual-state"), options);
     settle().await;
     let state = current_state();
@@ -1311,7 +1311,7 @@ async fn falls_back_to_document_navigation(hidden: &str, replace: bool) {
     let restore = hide(hidden);
     let guard = GUARD.with(|g| g.borrow().clone().unwrap());
     js_sys::Reflect::set(&guard, &"allow".into(), &JsValue::TRUE).unwrap();
-    let history = replace.then_some(rmx::History::Replace);
+    let history = replace.then_some(rsmix::History::Replace);
     navigate(&destination, NavigateOptions { history, ..Default::default() });
     hash_changed().await;
     let (url, seen) = (current_url(), decisions());
@@ -1476,7 +1476,7 @@ async fn replays_same_location_post_submissions_as_replace_navigations_without_p
 #[wasm_bindgen_test]
 async fn accepts_after_transition_scroll_and_focus_options() {
     let _page = Page::new().await;
-    let after = Some(rmx::Reset::AfterTransition);
+    let after = Some(rsmix::Reset::AfterTransition);
     navigate(&page_url("after-state"), NavigateOptions { target: Some("details".into()), reset_scroll: after, reset_focus: after, ..Default::default() });
     settle().await;
     let state = current_state();
@@ -1510,7 +1510,7 @@ async fn resets_focus_after_the_transition_by_default() {
     let input: web_sys::HtmlElement = page.add("<input>").unchecked_into();
     input.focus().unwrap();
     let release = hold_next_resolve();
-    let options = NavigateOptions { target: Some("details".into()), history: Some(rmx::History::Replace), reset_scroll: Some(rmx::Reset::Manual), ..Default::default() };
+    let options = NavigateOptions { target: Some("details".into()), history: Some(rsmix::History::Replace), reset_scroll: Some(rsmix::Reset::Manual), ..Default::default() };
     navigate(&page_url("focus-default"), options);
     wait_for_request().await;
     let during = document().active_element();
@@ -1538,7 +1538,7 @@ fn start_listeners_without(what: &str) -> Vec<String> {
         spy(navigation, 'updateCurrentEntry');
         return { calls, restore: () => restores.forEach((restore) => restore()) };");
     let restore = hide(what);
-    rmx::test::start_navigation_listener();
+    rsmix::test::start_navigation_listener();
     restore.call0(&JsValue::NULL).unwrap();
     get(&spies, "restore").unchecked_into::<js_sys::Function>().call0(&JsValue::NULL).unwrap();
     get(&spies, "calls").unchecked_into::<js_sys::Array>().iter().map(|c| c.as_string().unwrap()).collect()

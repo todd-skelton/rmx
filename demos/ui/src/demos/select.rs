@@ -3,8 +3,8 @@
 
 use std::rc::Rc;
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::{popover, select};
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::{popover, select};
 
 use super::listbox::frameworks;
 
@@ -14,7 +14,7 @@ pub struct SelectDemo {
 
 impl Component for SelectDemo {
     type Props = ();
-    rmx::client_entry!("SelectDemo");
+    rsmix::client_entry!("SelectDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         SelectDemo { value: "remix".into() }

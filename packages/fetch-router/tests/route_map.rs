@@ -4,9 +4,9 @@
 //! method and pattern type) are the field types and values of the structs here.
 
 use http::Method;
-use rmx::route_pattern::HrefOptions;
-use rmx::router::routes::{any, prefix, Route, RouteMap};
-use rmx::url::{SearchParams, Url};
+use rsmix::route_pattern::HrefOptions;
+use rsmix::router::routes::{any, prefix, Route, RouteMap};
+use rsmix::url::{SearchParams, Url};
 
 #[test]
 fn stores_route_method_and_pattern() {

@@ -5,12 +5,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_entry_props`.
 #![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, entry, render_to_string, rsx, Component, Fragment, Frame, FrameContent, FrameRequest, FrameResponse, Handle, Node, RunOptions};
+use rsmix::{create_root, entry, render_to_string, rsx, Component, Fragment, Frame, FrameContent, FrameRequest, FrameResponse, Handle, Node, RunOptions};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -19,7 +19,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
     static REVERSE: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
 }
 
@@ -35,7 +35,7 @@ struct Reversible {
 
 impl Component for Reversible {
     type Props = ItemsProps;
-    rmx::client_entry!("Reversible");
+    rsmix::client_entry!("Reversible");
     fn setup(_: &ItemsProps, h: &Handle<Self>) -> Self {
         let h = h.clone();
         REVERSE.with(|r| {
@@ -69,14 +69,14 @@ fn content(path: &str) -> String {
     render_to_string(&rsx! { <Reversible items={items}/> })
 }
 
-fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
+fn resolve(request: FrameRequest) -> rsmix::ResolveFuture {
     let html = content(&web_sys::Url::new(&request.url).unwrap().pathname());
     Box::pin(async move { Ok(FrameResponse { content: FrameContent::Html(html), url: None }) })
 }
 
 async fn start() {
     if APP.with(|a| a.borrow().is_none()) {
-        let app = rmx::run(RunOptions { entries: vec![entry::<Reversible>()], resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
+        let app = rsmix::run(RunOptions { entries: vec![entry::<Reversible>()], resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
         APP.with(|a| *a.borrow_mut() = Some(app));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
@@ -92,7 +92,7 @@ async fn tick() {
 }
 
 /// Mount `<Frame src>` and wait for its hydrated list; the container and root.
-async fn mount(src: &'static str) -> (web_sys::Element, rmx::Root) {
+async fn mount(src: &'static str) -> (web_sys::Element, rsmix::Root) {
     start().await;
     let document = web_sys::window().unwrap().document().unwrap();
     let el = document.create_element("div").unwrap();

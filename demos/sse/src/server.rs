@@ -2,27 +2,27 @@ use std::sync::LazyLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::{header, HeaderValue};
-use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
-use rmx::fetch::{Body, Response};
-use rmx::middleware::compression::compression;
-use rmx::middleware::logger::logger;
-use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::middleware::render::Render;
-use rmx::router::routes::{get, Route, RouteMap};
-use rmx::router::{action, Context, Router};
-use rmx::data_schema::{self as s, coerce, form_data as f};
-use rmx::url::Url;
+use rsmix::{css, rsx, Children, Component, Handle, Mixin, Node};
+use rsmix::fetch::{Body, Response};
+use rsmix::middleware::compression::compression;
+use rsmix::middleware::logger::logger;
+use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+use rsmix::middleware::render::Render;
+use rsmix::router::routes::{get, Route, RouteMap};
+use rsmix::router::{action, Context, Router};
+use rsmix::data_schema::{self as s, coerce, form_data as f};
+use rsmix::url::Url;
 use sse_demo::*;
 
 pub fn main() {
-    rmx::router::routes::routes_command(&*ROUTES);
+    rsmix::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44102".into());
     let public = std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "demos/sse/public".into());
     let addr = format!("{host}:{port}");
     println!("Server-Sent Events demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(&public, Duration::from_secs(1)))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(&public, Duration::from_secs(1)))).expect("serve");
 }
 
 // app/routes.ts
@@ -37,7 +37,7 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| Routes { home: get("/"), 
 /// `interval` is the time between messages.
 pub fn router(public: &str, interval: Duration) -> Router {
     let mut router = Router::new();
-    if std::env::var("RMX_LOG").is_ok() {
+    if std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
     router.use_middleware(compression());

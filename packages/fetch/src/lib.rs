@@ -1,6 +1,6 @@
 //! The Fetch API, Rust edition: `Request`, `Response`, and a streaming [`Body`].
 //!
-//! rmx builds on the `http` crate's request/response types the way Remix builds on the
+//! rsmix builds on the `http` crate's request/response types the way Remix builds on the
 //! web's `Request`/`Response`. This crate adds what `http` leaves out: a body type that is
 //! either buffered or streamed, helpers to read it (`bytes`, `text`, `form`), and a few
 //! constructors for common responses.
@@ -15,7 +15,7 @@ use std::task::{Context, Poll, Waker};
 pub use bytes::Bytes;
 pub use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use http_body::Frame;
-pub use rmx_url::{SearchParams, Url};
+pub use rsmix_url::{SearchParams, Url};
 
 pub mod abort;
 pub mod form_data;
@@ -23,9 +23,9 @@ pub mod form_data;
 pub use abort::{AbortController, AbortError, AbortSignal, RequestExt};
 pub use form_data::{File, FileUpload, FormData, FormDataError, FormLimits, FormValue, UploadResult};
 
-/// An HTTP request with an rmx [`Body`].
+/// An HTTP request with an rsmix [`Body`].
 pub type Request = http::Request<Body>;
-/// An HTTP response with an rmx [`Body`].
+/// An HTTP response with an rsmix [`Body`].
 pub type Response = http::Response<Body>;
 /// A boxed, thread-safe error.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -34,8 +34,8 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 
 /// Something that performs HTTP requests, like the web's `fetch()`. Implemented for async
 /// functions and closures from [`Request`] to `Result<Response, BoxError>`. Libraries that
-/// call out over HTTP (`rmx-fetch-proxy`, `rmx-auth`) take one, so the app chooses the client
-/// (`rmx_node_fetch_server::fetch` for `http://`, or any HTTPS client) and tests can answer in memory.
+/// call out over HTTP (`rsmix-fetch-proxy`, `rsmix-auth`) take one, so the app chooses the client
+/// (`rsmix_node_fetch_server::fetch` for `http://`, or any HTTPS client) and tests can answer in memory.
 pub trait Fetch: Send + Sync + 'static {
     fn fetch(&self, request: Request) -> BoxFuture<Result<Response, BoxError>>;
 }

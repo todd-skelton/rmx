@@ -1,5 +1,5 @@
 [package]
-name = "rmx-logger-middleware"
+name = "rsmix-logger-middleware"
 description = "Middleware for logging HTTP requests and responses (remix logger-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,11 +7,11 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-headers.workspace = true
-rmx-fetch-router.workspace = true
-rmx-terminal.workspace = true
-rmx-url.workspace = true
+rsmix-fetch.workspace = true
+rsmix-headers.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-terminal.workspace = true
+rsmix-url.workspace = true
 
 [dev-dependencies]
-rmx-response.workspace = true
+rsmix-response.workspace = true

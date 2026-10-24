@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use rmx_session::{Session, SessionStorage};
+use rsmix_session::{Session, SessionStorage};
 
 pub struct Step {
     pub cookie: Option<String>,

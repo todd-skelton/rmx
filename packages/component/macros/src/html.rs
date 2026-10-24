@@ -1,4 +1,4 @@
-//! `html!` and `html_raw!`: format-style templates that build `rmx_html_template::SafeHtml`.
+//! `html!` and `html_raw!`: format-style templates that build `rsmix_html_template::SafeHtml`.
 
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote};
@@ -93,7 +93,7 @@ fn pieces(template: &str, span: Span) -> syn::Result<Vec<Piece>> {
 pub fn expand(template: Template, raw: bool) -> syn::Result<Tokens> {
     let span = template.literal.span();
     let pieces = pieces(&template.literal.value(), span)?;
-    let krate = quote!(::rmx_html_template::__private);
+    let krate = quote!(::rsmix_html_template::__private);
     let push = if raw { quote!(push_raw) } else { quote!(push) };
 
     let mut bindings = Vec::new();

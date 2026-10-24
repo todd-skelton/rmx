@@ -10,8 +10,8 @@
 //! properties. Rust has no properties to install; a value is read by its type.
 
 use http::{HeaderMap, Method};
-use rmx::fetch::{Body, File, FormData, Request};
-use rmx::router::Context;
+use rsmix::fetch::{Body, File, FormData, Request};
+use rsmix::router::Context;
 
 fn request(url: &str) -> Request {
     http::Request::builder().uri(url).body(Body::empty()).unwrap()
@@ -219,16 +219,16 @@ fn supports_class_constructors_as_context_keys() {
 
 #[test]
 fn header_changes_reach_the_async_context() {
-    // rmx: middleware that changes the context's headers changes what `get_context()` sees.
-    use rmx::router::async_context::{async_context, get_context};
-    use rmx::router::{Next, Router};
+    // rsmix: middleware that changes the context's headers changes what `get_context()` sees.
+    use rsmix::router::async_context::{async_context, get_context};
+    use rsmix::router::{Next, Router};
     let mut router = Router::new().with(async_context()).with(|mut ctx: Context, next: Next| {
         ctx.headers_mut().insert("x-user", "jane".parse().unwrap());
         next.run(ctx)
     });
     router.get("/", |_: Context| async { get_context().unwrap().header("x-user").unwrap_or_default() });
 
-    let res = rmx::fetch::block_on(router.fetch(request("https://remix.run/")));
+    let res = rsmix::fetch::block_on(router.fetch(request("https://remix.run/")));
 
-    assert_eq!(rmx::fetch::block_on(res.into_body().text()).unwrap(), "jane");
+    assert_eq!(rsmix::fetch::block_on(res.into_body().text()).unwrap(), "jane");
 }

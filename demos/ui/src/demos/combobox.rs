@@ -1,9 +1,9 @@
 //! `packages/ui/src/demos/combobox.demo.tsx`: headless combobox behavior with minimal local
 //! styles.
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::combobox;
-use rmx::ui::listbox::ListboxOption;
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::combobox;
+use rsmix::ui::listbox::ListboxOption;
 
 pub struct ComboboxDemo {
     value: String,
@@ -20,7 +20,7 @@ fn frameworks() -> Vec<ListboxOption> {
 
 impl Component for ComboboxDemo {
     type Props = ();
-    rmx::client_entry!("ComboboxDemo");
+    rsmix::client_entry!("ComboboxDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         ComboboxDemo { value: "none".into() }

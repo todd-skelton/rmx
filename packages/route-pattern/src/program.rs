@@ -222,7 +222,7 @@ fn canonicalize_text(text: &str, kind: UrlPart, ignore_case: bool, strict: bool,
 fn encoded_width(value: char, kind: UrlPart) -> usize {
     match kind {
         UrlPart::Pathname if value == '.' || value == '/' => 3,
-        UrlPart::Pathname => rmx_url::encode_component(value.encode_utf8(&mut [0; 4])).len(),
+        UrlPart::Pathname => rsmix_url::encode_component(value.encode_utf8(&mut [0; 4])).len(),
         UrlPart::Hostname => value.len_utf16(),
     }
 }

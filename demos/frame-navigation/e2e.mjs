@@ -79,10 +79,10 @@ await page.click('#account-form button[type=submit]')
 await page.waitForSelector('.field-error')
 check('account: 422 shows validation errors in the frame', (await page.locator('.field-error').innerText()) === 'Enter a display name.' && (await soft()))
 await page.evaluate(() => (document.querySelector('#account-form').noValidate = true))
-await page.fill('#displayName', 'Rmx Rustacean')
+await page.fill('#displayName', 'Rsmix Rustacean')
 await page.click('#account-form button[type=submit]')
 await page.waitForSelector('#saved')
-const saved = await page.evaluate(() => [location.pathname + location.search, document.querySelector('#account-details').innerText.includes('Rmx Rustacean')])
+const saved = await page.evaluate(() => [location.pathname + location.search, document.querySelector('#account-details').innerText.includes('Rsmix Rustacean')])
 check('account: save redirects to the saved view', saved[0] === '/account?saved' && saved[1] && (await soft()), saved)
 
 // Settings: nested navigation inside a named frame, back button.

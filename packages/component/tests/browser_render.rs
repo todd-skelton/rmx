@@ -1,11 +1,11 @@
-//! Ports of Remix's `render.test.tsx` for the `rmx::test` helpers.
+//! Ports of Remix's `render.test.tsx` for the `rsmix::test` helpers.
 //! Run with `pwsh ./scripts/test-browser.ps1 -Test browser_render`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::test::render;
-use rmx::{on, rsx, Component, Handle, Node};
+use rsmix::test::render;
+use rsmix::{on, rsx, Component, Handle, Node};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -40,7 +40,7 @@ impl Component for Counter {
     }
 }
 
-fn count(t: &rmx::test::RenderResult) -> i32 {
+fn count(t: &rsmix::test::RenderResult) -> i32 {
     t.text("[data-testid=count]").parse().unwrap()
 }
 

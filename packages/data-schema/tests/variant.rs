@@ -1,6 +1,6 @@
 //! Port of data-schema's variant.test.ts, one test per case.
 
-use rmx_data_schema::{self as s, PathSegment, Schema, Value};
+use rsmix_data_schema::{self as s, PathSegment, Schema, Value};
 
 /// `{ type: 'created'; id: string } | { type: 'updated'; id: string; version: number }`
 #[derive(Debug, Default, PartialEq)]

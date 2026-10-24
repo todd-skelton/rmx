@@ -1,6 +1,6 @@
 //! `ui/*`: the document shell, the layout, book cards and `RestfulForm`.
 
-use rmx::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
+use rsmix::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
 
 use super::data::{Book, User};
 use crate::cart::money;
@@ -122,7 +122,7 @@ impl Component for Layout {
                 </main>
                 <footer>
                     <div class="container">
-                        <p>{format!("\u{a9} {} Bookstore Demo. Built with rmx.", current_year())}</p>
+                        <p>{format!("\u{a9} {} Bookstore Demo. Built with rsmix.", current_year())}</p>
                     </div>
                 </footer>
             </Document>

@@ -1,13 +1,13 @@
 //! Ports of Remix's `ui/src/accordion.test.tsx`. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_accordion`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_accordion`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{rsx, Component, EventHandler, Handle, Node};
-use rmx_ui::accordion::{self, accordion_change, on_accordion_change, AccordionChange, ContextProps, OnValueChange, Value};
+use rsmix::test::{render, RenderResult};
+use rsmix::{rsx, Component, EventHandler, Handle, Node};
+use rsmix_ui::accordion::{self, accordion_change, on_accordion_change, AccordionChange, ContextProps, OnValueChange, Value};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

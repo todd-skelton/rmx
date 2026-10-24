@@ -1,5 +1,5 @@
 [package]
-name = "rmx-multipart-parser"
+name = "rsmix-multipart-parser"
 description = "A streaming multipart/form-data parser (remix/multipart-parser) with header, part, file and total size limits"
 edition.workspace = true
 version.workspace = true
@@ -10,7 +10,7 @@ bytes.workspace = true
 http.workspace = true
 http-body.workspace = true
 memchr.workspace = true
-rmx-headers.workspace = true
+rsmix-headers.workspace = true
 
 [dev-dependencies]
-rmx-fetch.workspace = true
+rsmix-fetch.workspace = true

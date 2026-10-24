@@ -1,6 +1,6 @@
 //! `ui/document.ts`, `ui/home-page.ts`, `ui/icons.ts` and `ui/styles.ts`.
 
-use rmx_html_template::{html, html_raw, SafeHtml};
+use rsmix_html_template::{html, html_raw, SafeHtml};
 
 /// What controllers render (`HtmlDocument` in `middleware/render.ts`).
 pub struct HtmlDocument {

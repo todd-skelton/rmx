@@ -2,16 +2,16 @@
 //! case. `runMiddleware` is internal to Remix's router; here each chain runs as a route's
 //! action middleware through `router.fetch`.
 //!
-//! Two cases are compile errors in rmx and are `compile_fail` doctests on `Next`
+//! Two cases are compile errors in rsmix and are `compile_fail` doctests on `Next`
 //! (packages/fetch-router/src/lib.rs): "rejects when a middleware neither returns a response nor calls
 //! next()" (a middleware returns a `Response`) and "rejects when a middleware calls next()
 //! multiple times" (`Next::run` takes `self`).
 
 use std::sync::{Arc, Mutex};
 
-use rmx::fetch::{block_on, Body, Response};
-use rmx::response;
-use rmx::router::{action, catch_panic, Action, BoxFuture, Context, Next, NextFuture, Router};
+use rsmix::fetch::{block_on, Body, Response};
+use rsmix::response;
+use rsmix::router::{action, catch_panic, Action, BoxFuture, Context, Next, NextFuture, Router};
 
 /// Run `action`'s middleware and handler for a `GET https://remix.run`.
 fn run_middleware(action: Action) -> Response {

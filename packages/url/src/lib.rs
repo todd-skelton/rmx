@@ -1,4 +1,4 @@
-//! Minimal URL handling for rmx: parsing absolute URLs, resolving relative references,
+//! Minimal URL handling for rsmix: parsing absolute URLs, resolving relative references,
 //! percent-encoding, and an ordered `SearchParams` (the `URLSearchParams` web API).
 //!
 //! Scope is deliberately small: http(s) URLs as seen by a web server and browser runtime.
@@ -53,7 +53,7 @@ impl Url {
         };
         let auth_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
         let authority = &rest[..auth_end];
-        // Drop userinfo; rmx never needs it.
+        // Drop userinfo; rsmix never needs it.
         let authority = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
         let (host, port) = split_host_port(authority)?;
         let mut url = Url {

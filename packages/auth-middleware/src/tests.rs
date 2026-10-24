@@ -1,10 +1,10 @@
-use rmx_cookie::Cookie;
-use rmx_fetch::{block_on, Body};
-use rmx_fetch_router::{middleware, Context, Router};
-use rmx_session::MemoryStorage;
+use rsmix_cookie::Cookie;
+use rsmix_fetch::{block_on, Body};
+use rsmix_fetch_router::{middleware, Context, Router};
+use rsmix_session::MemoryStorage;
 
 use super::*;
-use rmx_session_middleware::SessionExt;
+use rsmix_session_middleware::SessionExt;
 
 #[derive(Clone, Debug, PartialEq)]
 struct User {
@@ -17,7 +17,7 @@ async fn find_user(id: u32) -> Option<User> {
 
 fn app(schemes: Vec<Arc<dyn AuthScheme<User>>>) -> Router {
     let mut router = Router::new()
-        .with(rmx_session_middleware::session(Cookie::new("sid").secrets(vec!["k".into()]), MemoryStorage::new()))
+        .with(rsmix_session_middleware::session(Cookie::new("sid").secrets(vec!["k".into()]), MemoryStorage::new()))
         .with(auth(schemes));
     router.get("/whoami", |ctx: Context| async move {
         match ctx.auth::<User>() {
@@ -36,7 +36,7 @@ fn app(schemes: Vec<Arc<dyn AuthScheme<User>>>) -> Router {
         r.get("/private", |_ctx: Context| async { "secret" });
     });
     router.group(
-        vec![middleware(require_auth::<User>().on_failure(|_, _| rmx_response::redirect("/login")))],
+        vec![middleware(require_auth::<User>().on_failure(|_, _| rsmix_response::redirect("/login")))],
         |r| {
             r.get("/page", |_ctx: Context| async { "page" });
         },

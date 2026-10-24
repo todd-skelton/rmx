@@ -2,12 +2,12 @@
 //! download and the schedule page.
 
 use http::{header, HeaderValue, StatusCode};
-use rmx::{css, rsx, Component, Handle, Node};
-use rmx::fetch::{Body, Response};
-use rmx::response;
-use rmx::router::{action, Context, Router};
-use rmx::data_schema::checks::{max_length, min_length};
-use rmx::data_schema::{self as s, Issue, PathSegment, Schema};
+use rsmix::{css, rsx, Component, Handle, Node};
+use rsmix::fetch::{Body, Response};
+use rsmix::response;
+use rsmix::router::{action, Context, Router};
+use rsmix::data_schema::checks::{max_length, min_length};
+use rsmix::data_schema::{self as s, Issue, PathSegment, Schema};
 use serde_json::{json, Map, Value};
 
 use super::data::{ReplaceInput, Schedule, ScheduleDataError};

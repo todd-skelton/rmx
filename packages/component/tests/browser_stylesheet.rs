@@ -2,12 +2,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_stylesheet`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::StyleManager;
+use rsmix::StyleManager;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -85,7 +85,7 @@ fn inserts_a_rule_once_and_increments_count_on_repeat() {
 
 #[wasm_bindgen_test]
 fn uses_default_layer_name_when_not_provided() {
-    let mgr = StyleManager::new(rmx::STYLE_LAYER);
+    let mgr = StyleManager::new(rsmix::STYLE_LAYER);
     mgr.insert("rmx-a", ".rmx-a { color: red; }");
     assert!(rule_texts(&last_sheet())[0].contains("@layer rmx"));
     mgr.dispose();
@@ -227,7 +227,7 @@ fn adopts_server_rendered_style_tag() {
     document().head().unwrap().append_child(&tag).unwrap();
     assert!(has_server_tag());
 
-    let mgr = StyleManager::new("rmx");
+    let mgr = StyleManager::new("rsmix");
     mgr.adopt_server_styles(&document());
 
     assert!(!has_server_tag());
@@ -309,7 +309,7 @@ async fn does_not_start_transitions_when_adopting_server_rendered_styles() {
 
 #[wasm_bindgen_test]
 fn adopts_server_style_tags_added_after_manager_creation() {
-    let mgr = StyleManager::new("rmx");
+    let mgr = StyleManager::new("rsmix");
     let tag = style_tag("rmxc-stream1", "@layer rmx { .rmxc-stream1 { color: green; } }");
     document().head().unwrap().append_child(&tag).unwrap();
     mgr.adopt_server_styles(&document());
@@ -320,7 +320,7 @@ fn adopts_server_style_tags_added_after_manager_creation() {
 
 #[wasm_bindgen_test]
 fn deduplicates_streamed_server_style_tags_by_selector_identity() {
-    let mgr = StyleManager::new("rmx");
+    let mgr = StyleManager::new("rsmix");
     let append = || {
         let tag = style_tag("rmxc-stream1", "@layer rmx { .rmxc-stream1 { color: green; } }");
         document().head().unwrap().append_child(&tag).unwrap();
@@ -341,7 +341,7 @@ fn deduplicates_streamed_server_style_tags_by_selector_identity() {
 
 #[wasm_bindgen_test]
 fn adopts_server_style_tags_in_document_order() {
-    let mgr = StyleManager::new("rmx");
+    let mgr = StyleManager::new("rsmix");
     let container = document().create_element("div").unwrap();
     for selector in ["rmxc-base", "rmxc-trigger", "rmxc-user"] {
         container.append_child(&style_tag(selector, &format!("@layer rmx {{ .{selector} {{ color: red; }} }}"))).unwrap();

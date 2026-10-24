@@ -1,7 +1,7 @@
 //! Port of data-schema's form-data.test.ts, one test per case.
 
-use rmx_data_schema::checks::min_length;
-use rmx_data_schema::{self as s, coerce, form_data as f, File, FormData, PathSegment, Schema, SearchParams, ValidationError, Value};
+use rsmix_data_schema::checks::min_length;
+use rsmix_data_schema::{self as s, coerce, form_data as f, File, FormData, PathSegment, Schema, SearchParams, ValidationError, Value};
 
 #[derive(Debug, Default, PartialEq)]
 struct Login {

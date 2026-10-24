@@ -1,9 +1,9 @@
-//! The Remix i18n demo in rmx: request-scoped translation, `Accept-Language` negotiation,
+//! The Remix i18n demo in rsmix: request-scoped translation, `Accept-Language` negotiation,
 //! a locale preference cookie, plural rules, `Intl` formatting and right-to-left layout.
 //!
 //! What maps to what:
 //!
-//! | Remix | rmx |
+//! | Remix | rsmix |
 //! | --- | --- |
 //! | i18next with request-local instances | [`i18n::Translator`] over `locales/*.json` |
 //! | Node's `Intl` on the server | ICU4X ([`intl`]) |
@@ -23,7 +23,7 @@ pub mod server;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rmx::{css, on, rsx, Component, Handle, Mixin, Node};
+use rsmix::{css, on, rsx, Component, Handle, Mixin, Node};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -83,7 +83,7 @@ pub struct CartPreview {
 
 impl Component for CartPreview {
     type Props = CartPreviewProps;
-    rmx::client_entry!("CartPreview");
+    rsmix::client_entry!("CartPreview");
 
     fn setup(props: &CartPreviewProps, h: &Handle<Self>) -> Self {
         let cart = Cart(Rc::new(CartState {
@@ -236,7 +236,7 @@ pub struct NumberPreview {
 
 impl Component for NumberPreview {
     type Props = NumberPreviewProps;
-    rmx::client_entry!("NumberPreview");
+    rsmix::client_entry!("NumberPreview");
 
     fn setup(_: &NumberPreviewProps, h: &Handle<Self>) -> Self {
         h.queue_task(|this, h| {
@@ -275,5 +275,5 @@ fn button_style() -> Mixin {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions { entries: vec![rmx::entry::<CartPreview>(), rmx::entry::<NumberPreview>()], ..Default::default() });
+    rsmix::run(rsmix::RunOptions { entries: vec![rsmix::entry::<CartPreview>(), rsmix::entry::<NumberPreview>()], ..Default::default() });
 }

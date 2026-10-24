@@ -1,14 +1,14 @@
 [package]
-name = "rmx-live-reload-middleware"
-description = "Reload open pages when `rmx dev` restarts the app (stands in for remix node-hmr)"
+name = "rsmix-live-reload-middleware"
+description = "Reload open pages when `rsmix dev` restarts the app (stands in for remix node-hmr)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-fetch-router.workspace = true
+rsmix-fetch.workspace = true
+rsmix-fetch-router.workspace = true
 
 [dev-dependencies]
-rmx-response.workspace = true
+rsmix-response.workspace = true

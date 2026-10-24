@@ -1,8 +1,8 @@
 //! The form schemas the Remix bookstore controllers share (`remix/data-schema`).
 
-use rmx::data_schema::{self as s, form_data as f, Schema};
-use rmx::middleware::form_data::FormDataExt;
-use rmx::router::Context;
+use rsmix::data_schema::{self as s, form_data as f, Schema};
+use rsmix::middleware::form_data::FormDataExt;
+use rsmix::router::Context;
 
 /// `textField`: `f.field(s.defaulted(s.string(), ''))`
 pub fn text_field() -> impl Schema<Output = String> {

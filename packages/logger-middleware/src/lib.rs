@@ -1,8 +1,8 @@
 //! Request logging (`remix/middleware/logger`).
 //!
 //! ```
-//! use rmx_logger_middleware::{logger, LoggerExt};
-//! use rmx_fetch_router::{Context, Router};
+//! use rsmix_logger_middleware::{logger, LoggerExt};
+//! use rsmix_fetch_router::{Context, Router};
 //!
 //! let router = Router::new().with(logger().format("%method %path %status %duration ms").colors(false));
 //! # let mut router = router;
@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use http::header;
-use rmx_headers::UtcDateTime;
-use rmx_terminal::Styles;
-use rmx_fetch::Response;
-use rmx_fetch_router::{BoxFuture, Context, Middleware, Next};
+use rsmix_headers::UtcDateTime;
+use rsmix_terminal::Styles;
+use rsmix_fetch::Response;
+use rsmix_fetch_router::{BoxFuture, Context, Middleware, Next};
 
 /// Remix's default format.
 pub const DEFAULT_FORMAT: &str = "[%date] %method %path %status %contentLength";
@@ -65,7 +65,7 @@ pub struct LoggerMiddleware {
 
 /// Log every request with [DEFAULT_FORMAT] to stdout, coloring when stdout is a terminal.
 pub fn logger() -> LoggerMiddleware {
-    LoggerMiddleware { format: DEFAULT_FORMAT.into(), log: Logger::stdout(), colors: rmx_terminal::stdout_colors() }
+    LoggerMiddleware { format: DEFAULT_FORMAT.into(), log: Logger::stdout(), colors: rsmix_terminal::stdout_colors() }
 }
 
 impl LoggerMiddleware {
@@ -131,7 +131,7 @@ impl LoggerMiddleware {
 struct RequestInfo {
     start: SystemTime,
     method: String,
-    url: rmx_url::Url,
+    url: rsmix_url::Url,
     referer: Option<String>,
     user_agent: Option<String>,
 }

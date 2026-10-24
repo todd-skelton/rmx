@@ -6,7 +6,7 @@
 //! (positional arguments); `{{` and `}}` are literal braces.
 //!
 //! ```
-//! use rmx_html_template::{html, html_raw, SafeHtml};
+//! use rsmix_html_template::{html, html_raw, SafeHtml};
 //!
 //! let unsafe_text = "<script>alert(1)</script>";
 //! assert_eq!(html!("<h1>{unsafe_text}</h1>"), "<h1>&lt;script&gt;alert(1)&lt;/script&gt;</h1>");
@@ -19,20 +19,20 @@
 //! Mistakes are compile errors, as with `format!`:
 //!
 //! ```compile_fail
-//! let _ = rmx_html_template::html!("<p>{}</p>"); // no argument for {}
+//! let _ = rsmix_html_template::html!("<p>{}</p>"); // no argument for {}
 //! ```
 //!
 //! ```compile_fail
-//! let _ = rmx_html_template::html!("<p>{x:?}</p>", x = 1); // format specs are not supported
+//! let _ = rsmix_html_template::html!("<p>{x:?}</p>", x = 1); // format specs are not supported
 //! ```
 
 use std::borrow::Cow;
 use std::fmt;
 
-pub use rmx_macros::{html, html_raw};
+pub use rsmix_macros::{html, html_raw};
 
-// The macros expand to `::rmx_html_template::..`, which must also resolve inside this crate.
-extern crate self as rmx_html_template;
+// The macros expand to `::rsmix_html_template::..`, which must also resolve inside this crate.
+extern crate self as rsmix_html_template;
 
 /// A string that is safe to render as HTML without escaping.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]

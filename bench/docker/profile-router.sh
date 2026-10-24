@@ -1,7 +1,7 @@
 #!/bin/sh
 # Instructions per request for each router config in the router_profile example: callgrind
 # runs it with 1,000 and with 5,000 requests and the difference is divided by 4,000, so setup
-# drops out. Run inside rmxbench-profile (see profile.Dockerfile).
+# drops out. Run inside rsmixbench-profile (see profile.Dockerfile).
 set -e
 for config in "handler" "4 pass-through" "4 async" "bench stack"; do
   small=$(valgrind --tool=callgrind --callgrind-out-file=/tmp/small.out /router_profile "$config" 1000 2>&1 | sed -n 's/.*Collected : *//p')

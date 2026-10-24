@@ -28,7 +28,7 @@ name = "assets-demo"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
+ "rsmix",
  "tokio",
  "wasm-bindgen",
  "web-sys",
@@ -67,7 +67,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 name = "bench-app"
 version = "0.1.0"
 dependencies = [
- "rmx",
+ "rsmix",
  "serde",
 ]
 
@@ -76,7 +76,7 @@ name = "bench-client"
 version = "0.1.0"
 dependencies = [
  "bench-app",
- "rmx",
+ "rsmix",
  "wasm-bindgen",
 ]
 
@@ -86,7 +86,7 @@ version = "0.1.0"
 dependencies = [
  "bench-app",
  "http",
- "rmx",
+ "rsmix",
  "tokio",
 ]
 
@@ -95,7 +95,7 @@ name = "bookstore-demo"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
+ "rsmix",
  "serde",
  "serde_json",
  "tokio",
@@ -259,7 +259,7 @@ version = "0.1.0"
 dependencies = [
  "http",
  "js-sys",
- "rmx",
+ "rsmix",
  "serde",
  "tokio",
  "wasm-bindgen",
@@ -272,7 +272,7 @@ name = "frames-demo"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
+ "rsmix",
  "serde",
  "tokio",
  "wasm-bindgen",
@@ -435,7 +435,7 @@ dependencies = [
  "icu_locale_core",
  "icu_plurals",
  "js-sys",
- "rmx",
+ "rsmix",
  "serde",
  "serde_json",
  "tokio",
@@ -825,7 +825,7 @@ version = "0.1.0"
 dependencies = [
  "http",
  "js-sys",
- "rmx",
+ "rsmix",
  "serde",
  "tokio",
  "wasm-bindgen",
@@ -1038,116 +1038,116 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmx"
+name = "rsmix"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-assets",
- "rmx-auth",
- "rmx-auth-middleware",
- "rmx-cli",
- "rmx-component",
- "rmx-compression-middleware",
- "rmx-cookie",
- "rmx-cop-middleware",
- "rmx-cors-middleware",
- "rmx-crypto",
- "rmx-csrf-middleware",
- "rmx-data-schema",
- "rmx-fetch",
- "rmx-fetch-proxy",
- "rmx-fetch-router",
- "rmx-file-storage",
- "rmx-form-data-middleware",
- "rmx-fs",
- "rmx-headers",
- "rmx-html-template",
- "rmx-lazy-file",
- "rmx-live-reload-middleware",
- "rmx-logger-middleware",
- "rmx-method-override-middleware",
- "rmx-mime",
- "rmx-multipart-parser",
- "rmx-node-fetch-server",
- "rmx-render-middleware",
- "rmx-response",
- "rmx-route-pattern",
- "rmx-session",
- "rmx-session-middleware",
- "rmx-spa",
- "rmx-static-middleware",
- "rmx-tar-parser",
- "rmx-terminal",
- "rmx-ui",
- "rmx-url",
+ "rsmix-assets",
+ "rsmix-auth",
+ "rsmix-auth-middleware",
+ "rsmix-cli",
+ "rsmix-component",
+ "rsmix-compression-middleware",
+ "rsmix-cookie",
+ "rsmix-cop-middleware",
+ "rsmix-cors-middleware",
+ "rsmix-crypto",
+ "rsmix-csrf-middleware",
+ "rsmix-data-schema",
+ "rsmix-fetch",
+ "rsmix-fetch-proxy",
+ "rsmix-fetch-router",
+ "rsmix-file-storage",
+ "rsmix-form-data-middleware",
+ "rsmix-fs",
+ "rsmix-headers",
+ "rsmix-html-template",
+ "rsmix-lazy-file",
+ "rsmix-live-reload-middleware",
+ "rsmix-logger-middleware",
+ "rsmix-method-override-middleware",
+ "rsmix-mime",
+ "rsmix-multipart-parser",
+ "rsmix-node-fetch-server",
+ "rsmix-render-middleware",
+ "rsmix-response",
+ "rsmix-route-pattern",
+ "rsmix-session",
+ "rsmix-session-middleware",
+ "rsmix-spa",
+ "rsmix-static-middleware",
+ "rsmix-tar-parser",
+ "rsmix-terminal",
+ "rsmix-ui",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-assets"
+name = "rsmix-assets"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-crypto",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-file-storage",
- "rmx-headers",
- "rmx-mime",
- "rmx-response",
- "rmx-url",
+ "rsmix-crypto",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-file-storage",
+ "rsmix-headers",
+ "rsmix-mime",
+ "rsmix-response",
+ "rsmix-url",
  "serde_json",
 ]
 
 [[package]]
-name = "rmx-auth"
+name = "rsmix-auth"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-auth-middleware",
- "rmx-cookie",
- "rmx-crypto",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-form-data-middleware",
- "rmx-headers",
- "rmx-node-fetch-server",
- "rmx-response",
- "rmx-session",
- "rmx-session-middleware",
- "rmx-url",
+ "rsmix-auth-middleware",
+ "rsmix-cookie",
+ "rsmix-crypto",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-form-data-middleware",
+ "rsmix-headers",
+ "rsmix-node-fetch-server",
+ "rsmix-response",
+ "rsmix-session",
+ "rsmix-session-middleware",
+ "rsmix-url",
  "serde",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
-name = "rmx-auth-middleware"
+name = "rsmix-auth-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-cookie",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-form-data-middleware",
- "rmx-response",
- "rmx-session",
- "rmx-session-middleware",
+ "rsmix-cookie",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-form-data-middleware",
+ "rsmix-response",
+ "rsmix-session",
+ "rsmix-session-middleware",
 ]
 
 [[package]]
-name = "rmx-cli"
+name = "rsmix-cli"
 version = "0.1.0"
 dependencies = [
- "rmx-terminal",
+ "rsmix-terminal",
 ]
 
 [[package]]
-name = "rmx-component"
+name = "rsmix-component"
 version = "0.1.0"
 dependencies = [
  "js-sys",
  "memchr",
- "rmx-macros",
+ "rsmix-macros",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -1158,200 +1158,200 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmx-compression-middleware"
+name = "rsmix-compression-middleware"
 version = "0.1.0"
 dependencies = [
  "brotli",
  "flate2",
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-mime",
- "rmx-response",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-mime",
+ "rsmix-response",
 ]
 
 [[package]]
-name = "rmx-cookie"
+name = "rsmix-cookie"
 version = "0.1.0"
 dependencies = [
- "rmx-crypto",
- "rmx-headers",
+ "rsmix-crypto",
+ "rsmix-headers",
 ]
 
 [[package]]
-name = "rmx-cop-middleware"
-version = "0.1.0"
-dependencies = [
- "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-form-data-middleware",
- "rmx-method-override-middleware",
- "rmx-url",
-]
-
-[[package]]
-name = "rmx-cors-middleware"
+name = "rsmix-cop-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-headers",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-form-data-middleware",
+ "rsmix-method-override-middleware",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-crypto"
-version = "0.1.0"
-
-[[package]]
-name = "rmx-csrf-middleware"
+name = "rsmix-cors-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-cookie",
- "rmx-crypto",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-form-data-middleware",
- "rmx-method-override-middleware",
- "rmx-session",
- "rmx-session-middleware",
- "rmx-url",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-headers",
 ]
 
 [[package]]
-name = "rmx-data-schema"
+name = "rsmix-crypto"
+version = "0.1.0"
+
+[[package]]
+name = "rsmix-csrf-middleware"
 version = "0.1.0"
 dependencies = [
- "rmx-fetch",
- "rmx-url",
+ "http",
+ "rsmix-cookie",
+ "rsmix-crypto",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-form-data-middleware",
+ "rsmix-method-override-middleware",
+ "rsmix-session",
+ "rsmix-session-middleware",
+ "rsmix-url",
+]
+
+[[package]]
+name = "rsmix-data-schema"
+version = "0.1.0"
+dependencies = [
+ "rsmix-fetch",
+ "rsmix-url",
  "serde_json",
 ]
 
 [[package]]
-name = "rmx-fetch"
+name = "rsmix-fetch"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "http",
  "http-body",
  "js-sys",
- "rmx-multipart-parser",
- "rmx-url",
+ "rsmix-multipart-parser",
+ "rsmix-url",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "rmx-fetch-proxy"
+name = "rsmix-fetch-proxy"
 version = "0.1.0"
 dependencies = [
  "http",
  "http-body",
- "rmx-compression-middleware",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-headers",
- "rmx-node-fetch-server",
- "rmx-response",
- "rmx-url",
+ "rsmix-compression-middleware",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-headers",
+ "rsmix-node-fetch-server",
+ "rsmix-response",
+ "rsmix-url",
  "tokio",
 ]
 
 [[package]]
-name = "rmx-fetch-router"
+name = "rsmix-fetch-router"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
- "rmx-fetch",
- "rmx-macros",
- "rmx-response",
- "rmx-route-pattern",
- "rmx-terminal",
- "rmx-url",
+ "rsmix",
+ "rsmix-fetch",
+ "rsmix-macros",
+ "rsmix-response",
+ "rsmix-route-pattern",
+ "rsmix-terminal",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-file-storage"
+name = "rsmix-file-storage"
 version = "0.1.0"
 dependencies = [
- "rmx-crypto",
- "rmx-fetch",
+ "rsmix-crypto",
+ "rsmix-fetch",
  "serde",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
-name = "rmx-form-data-middleware"
+name = "rsmix-form-data-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-response",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-response",
 ]
 
 [[package]]
-name = "rmx-fs"
+name = "rsmix-fs"
 version = "0.1.0"
 dependencies = [
- "rmx-fetch",
- "rmx-lazy-file",
- "rmx-mime",
+ "rsmix-fetch",
+ "rsmix-lazy-file",
+ "rsmix-mime",
 ]
 
 [[package]]
-name = "rmx-headers"
+name = "rsmix-headers"
 version = "0.1.0"
 dependencies = [
  "http",
 ]
 
 [[package]]
-name = "rmx-html-template"
+name = "rsmix-html-template"
 version = "0.1.0"
 dependencies = [
- "rmx-macros",
+ "rsmix-macros",
 ]
 
 [[package]]
-name = "rmx-lazy-file"
+name = "rsmix-lazy-file"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "js-sys",
- "rmx-fetch",
- "rmx-response",
+ "rsmix-fetch",
+ "rsmix-response",
 ]
 
 [[package]]
-name = "rmx-live-reload-middleware"
+name = "rsmix-live-reload-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-response",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-response",
 ]
 
 [[package]]
-name = "rmx-logger-middleware"
+name = "rsmix-logger-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-headers",
- "rmx-response",
- "rmx-terminal",
- "rmx-url",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-headers",
+ "rsmix-response",
+ "rsmix-terminal",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-macros"
+name = "rsmix-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -1361,61 +1361,61 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmx-method-override-middleware"
+name = "rsmix-method-override-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-form-data-middleware",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-form-data-middleware",
 ]
 
 [[package]]
-name = "rmx-mime"
+name = "rsmix-mime"
 version = "0.1.0"
 
 [[package]]
-name = "rmx-multipart-parser"
+name = "rsmix-multipart-parser"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "http",
  "http-body",
  "memchr",
- "rmx-fetch",
- "rmx-headers",
+ "rsmix-fetch",
+ "rsmix-headers",
 ]
 
 [[package]]
-name = "rmx-node-fetch-server"
+name = "rsmix-node-fetch-server"
 version = "0.1.0"
 dependencies = [
  "http",
  "http-body",
  "hyper",
  "hyper-util",
- "rmx-fetch",
- "rmx-fetch-proxy",
- "rmx-fetch-router",
- "rmx-response",
- "rmx-url",
+ "rsmix-fetch",
+ "rsmix-fetch-proxy",
+ "rsmix-fetch-router",
+ "rsmix-response",
+ "rsmix-url",
  "tokio",
 ]
 
 [[package]]
-name = "rmx-render-middleware"
+name = "rsmix-render-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-component",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-response",
- "rmx-url",
+ "rsmix-component",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-response",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-response"
+name = "rsmix-response"
 version = "0.1.0"
 dependencies = [
  "brotli",
@@ -1423,99 +1423,99 @@ dependencies = [
  "flate2",
  "http",
  "http-body",
- "rmx-crypto",
- "rmx-fetch",
- "rmx-headers",
- "rmx-html-template",
- "rmx-lazy-file",
- "rmx-mime",
+ "rsmix-crypto",
+ "rsmix-fetch",
+ "rsmix-headers",
+ "rsmix-html-template",
+ "rsmix-lazy-file",
+ "rsmix-mime",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "rmx-route-pattern"
+name = "rsmix-route-pattern"
 version = "0.1.0"
 dependencies = [
- "rmx-url",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-session"
+name = "rsmix-session"
 version = "0.1.0"
 dependencies = [
- "rmx-crypto",
- "rmx-fetch",
+ "rsmix-crypto",
+ "rsmix-fetch",
  "serde",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
-name = "rmx-session-middleware"
+name = "rsmix-session-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-cookie",
- "rmx-crypto",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-headers",
- "rmx-session",
+ "rsmix-cookie",
+ "rsmix-crypto",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-headers",
+ "rsmix-session",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
-name = "rmx-spa"
+name = "rsmix-spa"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-component",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-response",
- "rmx-url",
+ "rsmix-component",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-response",
+ "rsmix-url",
  "tokio",
  "wasm-bindgen",
  "web-sys",
 ]
 
 [[package]]
-name = "rmx-static-middleware"
+name = "rsmix-static-middleware"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx-fetch",
- "rmx-fetch-router",
- "rmx-form-data-middleware",
- "rmx-fs",
- "rmx-html-template",
- "rmx-lazy-file",
- "rmx-method-override-middleware",
- "rmx-mime",
- "rmx-response",
- "rmx-url",
+ "rsmix-fetch",
+ "rsmix-fetch-router",
+ "rsmix-form-data-middleware",
+ "rsmix-fs",
+ "rsmix-html-template",
+ "rsmix-lazy-file",
+ "rsmix-method-override-middleware",
+ "rsmix-mime",
+ "rsmix-response",
+ "rsmix-url",
 ]
 
 [[package]]
-name = "rmx-tar-parser"
+name = "rsmix-tar-parser"
 version = "0.1.0"
 dependencies = [
  "flate2",
- "rmx-crypto",
+ "rsmix-crypto",
 ]
 
 [[package]]
-name = "rmx-terminal"
+name = "rsmix-terminal"
 version = "0.1.0"
 
 [[package]]
-name = "rmx-ui"
+name = "rsmix-ui"
 version = "0.1.0"
 dependencies = [
  "js-sys",
- "rmx-component",
+ "rsmix-component",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -1523,7 +1523,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmx-url"
+name = "rsmix-url"
 version = "0.1.0"
 
 [[package]]
@@ -1662,7 +1662,7 @@ name = "social-auth-demo"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
+ "rsmix",
  "serde",
  "serde_json",
  "tokio",
@@ -1685,7 +1685,7 @@ version = "0.1.0"
 dependencies = [
  "http",
  "js-sys",
- "rmx",
+ "rsmix",
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1697,7 +1697,7 @@ name = "sse-demo"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
+ "rsmix",
  "serde",
  "serde_json",
  "tokio",
@@ -1744,7 +1744,7 @@ name = "template-demo"
 version = "0.1.0"
 dependencies = [
  "http",
- "rmx",
+ "rsmix",
  "serde",
  "tokio",
  "wasm-bindgen",
@@ -1778,7 +1778,7 @@ version = "0.1.0"
 dependencies = [
  "http",
  "js-sys",
- "rmx",
+ "rsmix",
  "serde",
  "serde_json",
  "tokio",
@@ -1875,7 +1875,7 @@ version = "0.1.0"
 dependencies = [
  "http",
  "js-sys",
- "rmx",
+ "rsmix",
  "serde",
  "tokio",
  "wasm-bindgen",
@@ -1897,8 +1897,8 @@ dependencies = [
  "flate2",
  "http",
  "nodejs-semver",
- "rmx",
- "rmx-html-template",
+ "rsmix",
+ "rsmix-html-template",
  "serde",
  "serde_json",
  "tokio",

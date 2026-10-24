@@ -1,7 +1,7 @@
 //! Port of data-schema's checks.test.ts, one test per case.
 
-use rmx_data_schema::checks::{email, max, max_length, min, min_length, url};
-use rmx_data_schema::{self as s, Schema, Value};
+use rsmix_data_schema::checks::{email, max, max_length, min, min_length, url};
+use rsmix_data_schema::{self as s, Schema, Value};
 
 #[test]
 fn exposes_code_and_values_for_message_mapping() {

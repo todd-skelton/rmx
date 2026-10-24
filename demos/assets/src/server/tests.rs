@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use http::header;
-use rmx::fetch::Body;
+use rsmix::fetch::Body;
 
 use super::*;
 
 fn fixture() -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!("rmx-assets-demo-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let dir = std::env::temp_dir().join(format!("rsmix-assets-demo-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
     let public = dir.join("app/actions/public");
     std::fs::create_dir_all(public.join("pkg")).unwrap();
     std::fs::create_dir_all(public.join("styles")).unwrap();
@@ -104,7 +104,7 @@ fn modules_css_and_svgs_are_rewritten_and_transformed() {
     let (_, purple) = get(&router, "/assets/app/actions/public/images/image.svg?transform=recolor%3A%238B5CF6", &[]);
     assert!(purple.contains("fill=\"#8B5CF6\"") && !purple.contains("currentColor"), "{purple}");
     // The recolored SVG is kept in the disk cache under the root.
-    let files = dir.join(rmx::assets::DEFAULT_CACHE_DIRECTORY).join("files");
+    let files = dir.join(rsmix::assets::DEFAULT_CACHE_DIRECTORY).join("files");
     let cached = std::fs::read_dir(&files).unwrap().flat_map(|d| std::fs::read_dir(d.unwrap().path()).unwrap()).any(|f| {
         let path = f.unwrap().path();
         path.extension().is_some_and(|e| e == "dat") && String::from_utf8_lossy(&std::fs::read(&path).unwrap()).ends_with(&purple)

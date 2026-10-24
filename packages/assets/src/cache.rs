@@ -11,13 +11,13 @@ use std::io::{self, ErrorKind};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use rmx_fetch::File;
-use rmx_file_storage::{FileMetadata, FileStorage, FsFileStorage, ListOptions, MemoryFileStorage};
+use rsmix_fetch::File;
+use rsmix_file_storage::{FileMetadata, FileStorage, FsFileStorage, ListOptions, MemoryFileStorage};
 
 use crate::{AssetError, AssetErrorCode, FileCache};
 
 /// Where [`FsFileCacheOptions::default`] puts the cache, relative to the current directory.
-pub const DEFAULT_CACHE_DIRECTORY: &str = "target/.cache/rmx/assets";
+pub const DEFAULT_CACHE_DIRECTORY: &str = "target/.cache/rsmix/assets";
 
 /// Directory and limits for an [`FsFileCache`].
 #[derive(Clone, Debug)]
@@ -54,12 +54,12 @@ impl Default for FsFileCacheOptions {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use rmx_assets::{FilesOptions, FsFileCache, FsFileCacheOptions};
+/// use rsmix_assets::{FilesOptions, FsFileCache, FsFileCacheOptions};
 ///
 /// let cache = FsFileCache::new(FsFileCacheOptions::default())?;
 /// let files = FilesOptions { cache: Some(Arc::new(cache)), ..Default::default() };
 /// # let _ = files;
-/// # Ok::<(), rmx_assets::AssetError>(())
+/// # Ok::<(), rsmix_assets::AssetError>(())
 /// ```
 pub struct FsFileCache {
     root: PathBuf,
@@ -293,11 +293,11 @@ impl FileCache for FsFileCache {
 /// backends as `FileCache` implementations).
 impl FileCache for MemoryFileStorage {
     fn get(&self, key: &str) -> io::Result<Option<File>> {
-        rmx_fetch::block_on(FileStorage::get(self, key))
+        rsmix_fetch::block_on(FileStorage::get(self, key))
     }
 
     fn put(&self, key: &str, file: File) -> io::Result<()> {
-        rmx_fetch::block_on(FileStorage::set(self, key, file))
+        rsmix_fetch::block_on(FileStorage::set(self, key, file))
     }
 }
 
@@ -312,7 +312,7 @@ impl FileCache for FsFileStorage {
 }
 
 fn hex_digest(bytes: &[u8]) -> String {
-    rmx_crypto::hex(&rmx_crypto::sha256(bytes))
+    rsmix_crypto::hex(&rsmix_crypto::sha256(bytes))
 }
 
 fn remove_dir_all(path: &std::path::Path) -> io::Result<()> {
@@ -361,7 +361,7 @@ mod tests {
     use super::*;
 
     fn temp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("rmx-file-cache-unit-{}", rmx_crypto::random_uuid()));
+        let dir = std::env::temp_dir().join(format!("rsmix-file-cache-unit-{}", rsmix_crypto::random_uuid()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

@@ -1,13 +1,13 @@
 //! Ports of Remix's `ui/src/toggle.test.tsx`. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_toggle`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_toggle`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::render;
-use rmx::{rsx, EventHandler};
-use rmx_ui::toggle::{on_toggle_change, toggle, toggle_checked, ToggleOptions};
+use rsmix::test::render;
+use rsmix::{rsx, EventHandler};
+use rsmix_ui::toggle::{on_toggle_change, toggle, toggle_checked, ToggleOptions};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

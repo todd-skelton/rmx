@@ -2,7 +2,7 @@
 //! keyboard navigation and active state provided by mixins.
 //!
 //! ```ignore
-//! use rmx_ui::tabs;
+//! use rsmix_ui::tabs;
 //!
 //! rsx! {
 //!     <tabs::Context default_active_tab="overview">
@@ -26,7 +26,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node};
+use rsmix::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node};
 
 /// The event dispatched from the root when the active tab changes.
 pub const TABS_CHANGE_EVENT: &str = "rmx:tabs-change";
@@ -62,7 +62,7 @@ struct RegisteredTab {
 }
 
 /// The live element of a tab, set by its ref.
-type NodeSlot = Rc<RefCell<Option<Rc<rmx::NodeHandle>>>>;
+type NodeSlot = Rc<RefCell<Option<Rc<rsmix::NodeHandle>>>>;
 
 /// The state the provider shares with its mixins (Remix's `TabsContextValue`).
 pub struct TabsState {
@@ -360,7 +360,7 @@ impl HostMixin for Tab {
             host.set_attr("type", "button");
         }
         let slot = self.node.clone();
-        host.mix(rmx::node_ref(move |node, signal| {
+        host.mix(rsmix::node_ref(move |node, signal| {
             let node = Rc::new(node.clone());
             *slot.borrow_mut() = Some(node.clone());
             let slot = slot.clone();
@@ -418,7 +418,7 @@ impl HostMixin for Panel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     fn example(default_active_tab: Option<&str>) -> Node {
         let default_active_tab = default_active_tab.map(str::to_string);

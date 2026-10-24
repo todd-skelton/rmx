@@ -600,9 +600,9 @@ const HASH_PREFIX: &str = "pbkdf2_sha256";
 const ITERATIONS: u32 = 100_000;
 
 pub fn hash_password(password: &str) -> String {
-    let salt = rmx::crypto::random_bytes::<16>();
-    let hash = rmx::crypto::pbkdf2_sha256(password.as_bytes(), &salt, ITERATIONS, 32);
-    format!("{HASH_PREFIX}${ITERATIONS}${}${}", rmx::crypto::base64url_encode(&salt), rmx::crypto::base64url_encode(&hash))
+    let salt = rsmix::crypto::random_bytes::<16>();
+    let hash = rsmix::crypto::pbkdf2_sha256(password.as_bytes(), &salt, ITERATIONS, 32);
+    format!("{HASH_PREFIX}${ITERATIONS}${}${}", rsmix::crypto::base64url_encode(&salt), rsmix::crypto::base64url_encode(&hash))
 }
 
 pub fn verify_password(password: &str, encoded: &str) -> bool {
@@ -611,14 +611,14 @@ pub fn verify_password(password: &str, encoded: &str) -> bool {
         return false;
     };
     let Some(iterations) = iterations.parse::<u32>().ok().filter(|i| *i >= 1) else { return false };
-    let (Some(salt), Some(expected)) = (rmx::crypto::base64url_decode(salt), rmx::crypto::base64url_decode(hash)) else {
+    let (Some(salt), Some(expected)) = (rsmix::crypto::base64url_decode(salt), rsmix::crypto::base64url_decode(hash)) else {
         return false;
     };
     if salt.is_empty() || expected.is_empty() {
         return false;
     }
-    let actual = rmx::crypto::pbkdf2_sha256(password.as_bytes(), &salt, iterations, expected.len());
-    rmx::crypto::constant_time_eq(&actual, &expected)
+    let actual = rsmix::crypto::pbkdf2_sha256(password.as_bytes(), &salt, iterations, expected.len());
+    rsmix::crypto::constant_time_eq(&actual, &expected)
 }
 
 /// `toLocaleDateString()` in en-US for a UTC timestamp: `3/1/2024`.

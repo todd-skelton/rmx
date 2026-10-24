@@ -125,7 +125,7 @@ pub(crate) type FastMap<K, V> = HashMap<K, V, BuildHasherDefault<FastHasher>>;
 thread_local! {
     static OPS: Ops = js_sys::Function::new_with_args("mem", OPS_JS)
         .call1(&JsValue::NULL, &wasm_bindgen::memory())
-        .expect("rmx DOM ops")
+        .expect("rsmix DOM ops")
         .unchecked_into();
     /// Ids of `&'static str`s in the JS string table, by address and length.
     static STRINGS: RefCell<FastMap<(usize, usize), u32>> = RefCell::default();

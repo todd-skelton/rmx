@@ -4,9 +4,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use rmx::browser::{self, FetchInit, FetchResponse};
-use rmx::{css, on, rsx, Component, Handle, Mixin, NavigateOptions, Node, NodeHandle};
-use rmx::ui::animation::{animate_entrance, animate_exit, Animate, SpringPreset};
+use rsmix::browser::{self, FetchInit, FetchResponse};
+use rsmix::{css, on, rsx, Component, Handle, Mixin, NavigateOptions, Node, NodeHandle};
+use rsmix::ui::animation::{animate_entrance, animate_exit, Animate, SpringPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::dom_util;
@@ -39,7 +39,7 @@ pub struct ScheduleSidebar {
 
 impl Component for ScheduleSidebar {
     type Props = ScheduleSidebarProps;
-    rmx::client_entry!("ScheduleSidebar");
+    rsmix::client_entry!("ScheduleSidebar");
 
     fn setup(_: &ScheduleSidebarProps, _: &Handle<Self>) -> Self {
         ScheduleSidebar { deleted: HashSet::new(), deleting: HashSet::new(), errors: HashMap::new() }
@@ -78,7 +78,7 @@ impl Component for ScheduleSidebar {
 }
 
 impl ScheduleSidebar {
-    fn delete_handler(h: &Handle<Self>, schedule: SidebarSchedule, csrf_token: String, active: bool) -> rmx::EventHandler {
+    fn delete_handler(h: &Handle<Self>, schedule: SidebarSchedule, csrf_token: String, active: bool) -> rsmix::EventHandler {
         h.on_event(move |this, h, event| {
             event.prevent_default();
             event.stop_propagation();
@@ -118,7 +118,7 @@ impl ScheduleSidebar {
                 }
                 let next = response.json::<Deleted>().ok().and_then(|d| d.next_schedule_href).unwrap_or_else(|| "/".into());
                 if active {
-                    rmx::navigate_async(&next, NavigateOptions::default()).await;
+                    rsmix::navigate_async(&next, NavigateOptions::default()).await;
                     return;
                 }
                 h.with(|this, h| {
@@ -162,7 +162,7 @@ fn delete_error_message(response: &FetchResponse) -> String {
     .into()
 }
 
-fn sidebar_row(schedule: &SidebarSchedule, active: bool, deleting: bool, error: Option<String>, on_delete: rmx::EventHandler) -> Node {
+fn sidebar_row(schedule: &SidebarSchedule, active: bool, deleting: bool, error: Option<String>, on_delete: rsmix::EventHandler) -> Node {
     let error_id = format!("delete-schedule-{}-error", schedule.id);
     let link = css(&format!(
         "align-items: center; border-radius: {RADIUS}; color: {}; display: grid; gap: {xs}; grid-template-columns: minmax(0, 1fr) auto; min-width: 0;
@@ -319,7 +319,7 @@ impl NewScheduleAction {
                 id: i64,
             }
             let Ok(created) = response.json::<Created>() else { return failed("Could not create schedule. Please try again.".into()) };
-            rmx::navigate_async(&schedule_href(created.schedule.id), NavigateOptions::default()).await;
+            rsmix::navigate_async(&schedule_href(created.schedule.id), NavigateOptions::default()).await;
             h.with(|this, h| {
                 this.state = State::Idle;
                 this.error = None;

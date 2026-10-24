@@ -5,7 +5,7 @@
 //! allocation (strings and maps too), not only byte buffers, so the linear-buffering bounds
 //! below are looser than Remix's `4 * length` while still ruling out quadratic growth.
 //!
-//! Remix's handlers receive an entry whose body is a stream; rmx's [parse_tar] hands the
+//! Remix's handlers receive an entry whose body is a stream; rsmix's [parse_tar] hands the
 //! handler complete entries, and the streaming view is [TarParser::write]'s events. So
 //! where Remix checks that an unfinished body reader rejects, these tests check that the
 //! handler never saw the incomplete entry and that the events stop without an `End`.
@@ -23,7 +23,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use common::*;
-use rmx_tar_parser::*;
+use rsmix_tar_parser::*;
 
 struct Counting;
 

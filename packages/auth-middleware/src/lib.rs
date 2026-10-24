@@ -1,8 +1,8 @@
 //! Resolve who is making the request ([`auth`]) and require it on routes ([`require_auth`]).
 //!
 //! ```
-//! use rmx_auth_middleware::{auth, require_auth, scheme, session_scheme};
-//! use rmx_fetch_router::{middleware, Context, Router};
+//! use rsmix_auth_middleware::{auth, require_auth, scheme, session_scheme};
+//! use rsmix_fetch_router::{middleware, Context, Router};
 //!
 //! #[derive(Clone)]
 //! struct User { name: String }
@@ -14,7 +14,7 @@
 //! let mut router = Router::new().with(load_auth);
 //! router.group(vec![middleware(require_auth::<User>())], |r| {
 //!     r.get("/account", |ctx: Context| async move {
-//!         use rmx_auth_middleware::AuthExt;
+//!         use rsmix_auth_middleware::AuthExt;
 //!         format!("hi {}", ctx.auth::<User>().identity().unwrap().name)
 //!     });
 //! });
@@ -26,9 +26,9 @@ use std::sync::Arc;
 
 use http::header::{HeaderValue, WWW_AUTHENTICATE};
 use http::StatusCode;
-use rmx_fetch::Response;
-use rmx_fetch_router::{BoxFuture, Context, IntoResponse, MaybeSend, MaybeSync, Middleware, Next};
-use rmx_session::Session;
+use rsmix_fetch::Response;
+use rsmix_fetch_router::{BoxFuture, Context, IntoResponse, MaybeSend, MaybeSync, Middleware, Next};
+use rsmix_session::Session;
 
 /// Why authentication failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -260,8 +260,8 @@ pub fn complete_auth(ctx: &Context) -> Session {
 /// [verify_credentials] hands back unchanged.
 ///
 /// ```
-/// use rmx_auth_middleware::{credentials_provider, verify_credentials};
-/// use rmx_form_data_middleware::FormDataExt;
+/// use rsmix_auth_middleware::{credentials_provider, verify_credentials};
+/// use rsmix_form_data_middleware::FormDataExt;
 ///
 /// let password = credentials_provider(
 ///     |ctx| (ctx.form_data().get("email").unwrap_or_default().trim().to_lowercase(), ctx.form_data().get("password").unwrap_or_default().to_string()),

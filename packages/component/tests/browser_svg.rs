@@ -5,11 +5,11 @@
 //! names in rsx (`stroke-linecap`, `xlink:href`), so there is no name translation.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::Cell;
 
-use rmx::{create_root, on, rsx, Children, Component, EventHandler, Handle, Node};
+use rsmix::{create_root, on, rsx, Children, Component, EventHandler, Handle, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

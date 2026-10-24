@@ -3,7 +3,7 @@
 //! `wasm-bindgen-test` tests that run in a browser.
 //!
 //! ```ignore
-//! use rmx::test::render;
+//! use rsmix::test::render;
 //!
 //! #[wasm_bindgen_test]
 //! fn increments() {

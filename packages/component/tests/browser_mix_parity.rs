@@ -1,16 +1,16 @@
 //! Ports of Remix's `mix-ssr-parity.test.tsx`: the same `mix` list gives the same host
 //! attributes from a client render and from server HTML. Remix cases that Rust rules out at
 //! compile time are not ported: a mixin returning an element of another host type or a
-//! non-element (rmx mixins patch the host in place), and a throwing mixin (a Rust panic is
+//! non-element (rsmix mixins patch the host in place), and a throwing mixin (a Rust panic is
 //! not caught). Run with `pwsh ./scripts/test-browser.ps1 -Test browser_mix_parity`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
 
-use rmx::{create_root, mixin, on, render_to_string, rsx, unsafe_html, AttrValue, Element, EventHandler, HostMixin, Mixin, MixinHandle, Node};
+use rsmix::{create_root, mixin, on, render_to_string, rsx, unsafe_html, AttrValue, Element, EventHandler, HostMixin, Mixin, MixinHandle, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

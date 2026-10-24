@@ -2,7 +2,7 @@
 //! `remix/middleware/async-context`, built on `AsyncLocalStorage`).
 //!
 //! ```
-//! use rmx_fetch_router::{async_context::{async_context, get_context}, Context, Router};
+//! use rsmix_fetch_router::{async_context::{async_context, get_context}, Context, Router};
 //!
 //! fn current_user_id() -> String {
 //!     get_context().expect("async_context() is installed").param("id").unwrap_or_default()
@@ -11,8 +11,8 @@
 //! let mut router = Router::new().with(async_context());
 //! router.get("/users/:id", |_: Context| async { format!("user {}", current_user_id()) });
 //!
-//! let res = rmx_fetch::block_on(router.fetch_url("https://example.com/users/7"));
-//! assert_eq!(rmx_fetch::block_on(res.into_body().text()).unwrap(), "user 7");
+//! let res = rsmix_fetch::block_on(router.fetch_url("https://example.com/users/7"));
+//! assert_eq!(rsmix_fetch::block_on(res.into_body().text()).unwrap(), "user 7");
 //! ```
 //!
 //! The middleware runs the rest of the request inside a scope that [`get_context`] reads
@@ -28,11 +28,11 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context as TaskContext, Poll};
 
 use http::{Extensions, HeaderMap, Method};
-use rmx_route_pattern::Params;
-use rmx_url::Url;
+use rsmix_route_pattern::Params;
+use rsmix_url::Url;
 
 use crate::{Context, Middleware, Next, NextFuture};
-use rmx_fetch::Response;
+use rsmix_fetch::Response;
 
 /// What the scope holds; kept in step with the request's [`Context`].
 pub(crate) struct Shared {

@@ -7,7 +7,7 @@
 //! out of `router.fetch` and which middleware catches with `catch_panic`.
 //!
 //! Seven cases check controller and action shapes that Remix verifies with TypeScript or at
-//! `map()` time; in rmx the compiler checks them, so six are `compile_fail` doctests on
+//! `map()` time; in rsmix the compiler checks them, so six are `compile_fail` doctests on
 //! `RouteMap` (packages/fetch-router/src/routes.rs) and the positive one is a test here:
 //! "requires controllers to define actions under `actions`", "rejects controllers without an
 //! object actions property", "rejects action objects without function handlers", "rejects
@@ -18,12 +18,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use http::StatusCode;
-use rmx::fetch::{block_on, Body, Request, Response};
-use rmx::response;
-use rmx::route_pattern::{Match, Matcher, MatcherResourceError, MultiMatcher, RoutePattern};
-use rmx::router::routes::{any, get, post, prefix, Route, RouteMap};
-use rmx::router::{action, catch_panic, Action, BoxFuture, Context, Controller, IntoResponse, Next, RouteEntry, Router};
-use rmx::url::Url;
+use rsmix::fetch::{block_on, Body, Request, Response};
+use rsmix::response;
+use rsmix::route_pattern::{Match, Matcher, MatcherResourceError, MultiMatcher, RoutePattern};
+use rsmix::router::routes::{any, get, post, prefix, Route, RouteMap};
+use rsmix::router::{action, catch_panic, Action, BoxFuture, Context, Controller, IntoResponse, Next, RouteEntry, Router};
+use rsmix::url::Url;
 
 fn req(method: &str, url: &str) -> Request {
     http::Request::builder().method(method).uri(url).body(Body::empty()).unwrap()

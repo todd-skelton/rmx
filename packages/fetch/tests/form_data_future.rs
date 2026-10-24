@@ -2,9 +2,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use rmx_fetch::form_data::future::{parse, parse_with, FileUpload};
-use rmx_fetch::{block_on, Body, File, FormData, FormDataError, FormLimits, FormValue};
-use rmx_multipart_parser::MultipartError;
+use rsmix_fetch::form_data::future::{parse, parse_with, FileUpload};
+use rsmix_fetch::{block_on, Body, File, FormData, FormDataError, FormLimits, FormValue};
+use rsmix_multipart_parser::MultipartError;
 
 const B: &str = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
 

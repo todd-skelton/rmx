@@ -1,22 +1,22 @@
 [package]
-name = "rmx-file-storage"
+name = "rsmix-file-storage"
 description = "Key/value storage for files with memory and filesystem backends (Remix's file-storage package)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
-rmx-crypto = { workspace = true, optional = true }
-rmx-fetch.workspace = true
+rsmix-crypto = { workspace = true, optional = true }
+rsmix-fetch.workspace = true
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
 [features]
 default = ["fs"]
-fs = ["dep:rmx-crypto", "dep:serde", "dep:serde_json", "dep:tokio"]
+fs = ["dep:rsmix-crypto", "dep:serde", "dep:serde_json", "dep:tokio"]
 
 [dev-dependencies]
-rmx-crypto.workspace = true
+rsmix-crypto.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

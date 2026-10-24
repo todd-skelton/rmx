@@ -1,6 +1,6 @@
 //! `packages/component/src/runtime/demos/controlled-uncontrolled-values.demo.tsx`
 
-use rmx::{css, on, rsx, Component, Handle, Mixin, Node};
+use rsmix::{css, on, rsx, Component, Handle, Mixin, Node};
 
 pub struct ControlledValues {
     controlled_text: String,
@@ -26,7 +26,7 @@ fn json(s: &str) -> String {
 
 impl Component for ControlledValues {
     type Props = ();
-    rmx::client_entry!("ControlledValues");
+    rsmix::client_entry!("ControlledValues");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         ControlledValues {

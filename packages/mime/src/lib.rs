@@ -2,7 +2,7 @@
 //! compressibility rules, and a registry for custom types.
 //!
 //! ```
-//! use rmx_mime::{define_mime_type, detect_content_type, detect_mime_type, MimeTypeDefinition};
+//! use rsmix_mime::{define_mime_type, detect_content_type, detect_mime_type, MimeTypeDefinition};
 //!
 //! assert_eq!(detect_mime_type("app.min.js"), Some("text/javascript"));
 //! assert_eq!(detect_content_type("style.css").as_deref(), Some("text/css; charset=utf-8"));

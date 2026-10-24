@@ -5,7 +5,7 @@
 //!
 //! ```
 //! use http::HeaderMap;
-//! use rmx_headers::{ContentType, SuperHeaders, Vary};
+//! use rsmix_headers::{ContentType, SuperHeaders, Vary};
 //!
 //! let mut headers = HeaderMap::new();
 //! headers.update(|t: &mut ContentType| t.media_type = Some("text/html".into())).unwrap();

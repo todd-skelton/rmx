@@ -2,8 +2,8 @@
 
 #![allow(dead_code)]
 
-use rmx_fetch::{block_on, Body};
-use rmx_multipart_parser::{MultipartError, MultipartPart, MultipartStream};
+use rsmix_fetch::{block_on, Body};
+use rsmix_multipart_parser::{MultipartError, MultipartPart, MultipartStream};
 
 pub const CRLF: &str = "\r\n";
 

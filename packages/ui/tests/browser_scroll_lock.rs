@@ -1,9 +1,9 @@
 //! Ports of Remix's `ui/src/lib/scroll-lock.test.tsx`, with the same window mocks: the page
 //! is scrolled to (24, 120), `innerWidth` is 1000 and the root's `clientWidth` is 980, so
-//! there is a 20px scrollbar. Run with `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui`.
+//! there is a 20px scrollbar. Run with `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui`.
 #![cfg(target_arch = "wasm32")]
 
-use rmx_ui::popover::scroll_lock::lock;
+use rsmix_ui::popover::scroll_lock::lock;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 

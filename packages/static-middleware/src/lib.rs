@@ -9,15 +9,15 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use http::{Method, StatusCode};
-use rmx_response as response;
-use rmx_response::FileResponseOptions;
-use rmx_fetch::Response;
-use rmx_fs::{open_lazy_file, OpenLazyFileOptions};
-use rmx_html_template::escape_html;
-use rmx_lazy_file::LazyFile;
-use rmx_fetch_router::{Context, Middleware, Next};
+use rsmix_response as response;
+use rsmix_response::FileResponseOptions;
+use rsmix_fetch::Response;
+use rsmix_fs::{open_lazy_file, OpenLazyFileOptions};
+use rsmix_html_template::escape_html;
+use rsmix_lazy_file::LazyFile;
+use rsmix_fetch_router::{Context, Middleware, Next};
 
-pub use rmx_response::{Digest, DigestFn, ETag};
+pub use rsmix_response::{Digest, DigestFn, ETag};
 
 /// Decides per file whether to serve byte ranges (Remix's `AcceptRangesFunction`).
 pub type AcceptRangesFn = Arc<dyn Fn(&LazyFile) -> bool + Send + Sync>;
@@ -90,7 +90,7 @@ pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Mi
             if ctx.method() != Method::GET && ctx.method() != Method::HEAD {
                 return next.run(ctx).await;
             }
-            let rel = rmx_url::decode(ctx.url().pathname().trim_start_matches('/'));
+            let rel = rsmix_url::decode(ctx.url().pathname().trim_start_matches('/'));
             if options.filter.as_ref().is_some_and(|filter| !filter(&rel)) {
                 return next.run(ctx).await;
             }
@@ -189,7 +189,7 @@ fn needs_resolving(_: &OsStr) -> bool {
 /// The file at `real` as a [LazyFile] named and typed by the requested path `name`, with the
 /// file response options for it.
 fn open(real: &Path, name: &str, options: &StaticOptions) -> Option<(LazyFile, FileResponseOptions<LazyFile>)> {
-    let content_type = rmx_mime::detect_mime_type(name).unwrap_or_default().to_string();
+    let content_type = rsmix_mime::detect_mime_type(name).unwrap_or_default().to_string();
     let file = open_lazy_file(real, OpenLazyFileOptions { name: Some(name.to_string()), content_type: Some(content_type), last_modified: None }).ok()?;
     let accept_ranges = match &options.accept_ranges {
         AcceptRanges::Auto => None,
@@ -226,7 +226,7 @@ fn directory_listing(dir: &Path, pathname: &str) -> Response {
                 (0, "")
             } else {
                 let size = std::fs::metadata(entry.path()).map_or(0, |m| m.len());
-                (size, rmx_mime::detect_mime_type(&name).unwrap_or("application/octet-stream"))
+                (size, rsmix_mime::detect_mime_type(&name).unwrap_or("application/octet-stream"))
             };
             Entry { name, is_dir, size, mime_type }
         })

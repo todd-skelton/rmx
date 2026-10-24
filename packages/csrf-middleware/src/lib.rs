@@ -3,11 +3,11 @@
 use std::sync::Arc;
 
 use http::{Method, StatusCode};
-use rmx_fetch::Response;
-use rmx_fetch_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
-use rmx_session::Session;
+use rsmix_fetch::Response;
+use rsmix_fetch_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
+use rsmix_session::Session;
 
-use rmx_form_data_middleware::FormDataExt;
+use rsmix_form_data_middleware::FormDataExt;
 
 /// Why [`Csrf`] rejected a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,8 +32,8 @@ enum Origins {
 /// [`csrf_token`] and put it in forms as `_csrf`), and unsafe requests must send it back
 /// in a header or form field and come from an allowed origin.
 ///
-/// Needs the session middleware (`rmx_session_middleware::session()`) before it, and
-/// [`rmx_form_data_middleware::form_data()`] before it for form tokens.
+/// Needs the session middleware (`rsmix_session_middleware::session()`) before it, and
+/// [`rsmix_form_data_middleware::form_data()`] before it for form tokens.
 #[derive(Clone)]
 pub struct Csrf {
     token_key: String,
@@ -145,7 +145,7 @@ impl Csrf {
                 .map(str::to_string),
         };
         let submitted = submitted.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or(CsrfFailure::MissingToken)?;
-        if rmx_crypto::constant_time_eq(submitted.as_bytes(), expected.as_bytes()) {
+        if rsmix_crypto::constant_time_eq(submitted.as_bytes(), expected.as_bytes()) {
             Ok(())
         } else {
             Err(CsrfFailure::InvalidToken)
@@ -193,7 +193,7 @@ fn token_in(session: &Session, key: &str) -> String {
     if let Some(token) = session.get::<String>(key).filter(|t| !t.is_empty()) {
         return token;
     }
-    let token = rmx_crypto::random_hex(32);
+    let token = rsmix_crypto::random_hex(32);
     session.set(key, &token);
     token
 }
@@ -203,15 +203,15 @@ fn request_origin(ctx: &Context) -> Option<String> {
         return Some(origin.to_string());
     }
     let referer = ctx.header("referer").filter(|r| !r.trim().is_empty())?;
-    rmx_url::Url::parse(referer).ok().map(|u| u.origin())
+    rsmix_url::Url::parse(referer).ok().map(|u| u.origin())
 }
 
 #[cfg(test)]
 mod tests {
-    use rmx_cookie::Cookie;
-    use rmx_fetch::{block_on, Body};
-    use rmx_fetch_router::{Context, Router};
-    use rmx_session::MemoryStorage;
+    use rsmix_cookie::Cookie;
+    use rsmix_fetch::{block_on, Body};
+    use rsmix_fetch_router::{Context, Router};
+    use rsmix_session::MemoryStorage;
 
     use super::*;
 
@@ -224,9 +224,9 @@ mod tests {
     impl Client {
         fn new(csrf: Csrf) -> Client {
             let mut router = Router::new()
-                .with(rmx_session_middleware::session(Cookie::new("sid").secrets(vec!["k".into()]), MemoryStorage::new()))
-                .with(rmx_form_data_middleware::form_data())
-                .with(rmx_method_override_middleware::method_override())
+                .with(rsmix_session_middleware::session(Cookie::new("sid").secrets(vec!["k".into()]), MemoryStorage::new()))
+                .with(rsmix_form_data_middleware::form_data())
+                .with(rsmix_method_override_middleware::method_override())
                 .with(csrf);
             router.get("/form", |ctx: Context| async move { csrf_token(&ctx) });
             router.post("/submit", |_ctx: Context| async { "ok" });

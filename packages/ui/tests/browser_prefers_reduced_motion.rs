@@ -1,9 +1,9 @@
 //! Ports of Remix's `ui/src/animation/prefers-reduced-motion.test.ts`, with `window.matchMedia`
 //! replaced the same way. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_prefers_reduced_motion`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_prefers_reduced_motion`.
 #![cfg(target_arch = "wasm32")]
 
-use rmx_ui::animation::prefers_reduced_motion;
+use rsmix_ui::animation::prefers_reduced_motion;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 

@@ -3,12 +3,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_on_mixin`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, on, on_capture, rsx, EventHandler, Root, Signal};
+use rsmix::{create_root, on, on_capture, rsx, EventHandler, Root, Signal};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
@@ -284,7 +284,7 @@ fn aborts_the_previous_handler_signal_on_reentry() {
     assert!(!signals[1].aborted());
 }
 
-// rmx: an element unmounted with its subtree keeps its DOM listener, so an event that
+// rsmix: an element unmounted with its subtree keeps its DOM listener, so an event that
 // still reaches it (a `toggle` queued by `hidePopover`) must not run the handler that
 // took over its freed slot.
 #[wasm_bindgen_test]

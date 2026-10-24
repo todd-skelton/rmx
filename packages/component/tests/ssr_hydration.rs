@@ -1,18 +1,18 @@
-//! Ports of the hydration section of Remix's `stream.test.tsx`. rmx ships one wasm bundle,
+//! Ports of the hydration section of Remix's `stream.test.tsx`. rsmix ships one wasm bundle,
 //! so hydration data names the registered entry (`{"n":name,"p":props}`) instead of a
 //! module URL and export; the `resolveClientEntry` and import map cases do not apply.
 //!
 //! Divergence: Remix marks an entry rendered inside another entry as its own hydration
-//! entry, because each entry is a separately loaded module. rmx's outer entry hydrates its
+//! entry, because each entry is a separately loaded module. rsmix's outer entry hydrates its
 //! whole subtree (every component is in the bundle), so a nested entry is part of the outer
 //! one: one marker, one data record.
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::Cell;
 
-use rmx::__private::serde_json::{self, json, Value};
-use rmx::{render_to_string, rsx, Children, Component, Frame, Handle, Node};
+use rsmix::__private::serde_json::{self, json, Value};
+use rsmix::{render_to_string, rsx, Children, Component, Frame, Handle, Node};
 use serde::{Deserialize, Serialize, Serializer};
 
 /// The `rmx-data` script's JSON.
@@ -40,7 +40,7 @@ struct Counter;
 
 impl Component for Counter {
     type Props = CounterProps;
-    rmx::client_entry!("Counter");
+    rsmix::client_entry!("Counter");
     fn setup(_: &CounterProps, _: &Handle<Self>) -> Self {
         Counter
     }
@@ -70,7 +70,7 @@ struct Label;
 
 impl Component for Label {
     type Props = LabelProps;
-    rmx::client_entry!("Label");
+    rsmix::client_entry!("Label");
     fn setup(_: &LabelProps, _: &Handle<Self>) -> Self {
         Label
     }
@@ -126,7 +126,7 @@ struct Snapshot;
 
 impl Component for Snapshot {
     type Props = SnapshotProps;
-    rmx::client_entry!("Snapshot");
+    rsmix::client_entry!("Snapshot");
     fn setup(_: &SnapshotProps, _: &Handle<Self>) -> Self {
         Snapshot
     }
@@ -158,7 +158,7 @@ struct Broken;
 
 impl Component for Broken {
     type Props = Unserializable;
-    rmx::client_entry!("Broken");
+    rsmix::client_entry!("Broken");
     fn setup(_: &Unserializable, _: &Handle<Self>) -> Self {
         Broken
     }
@@ -191,7 +191,7 @@ struct Card;
 
 impl Component for Card {
     type Props = CardProps;
-    rmx::client_entry!("Card");
+    rsmix::client_entry!("Card");
     fn setup(_: &CardProps, _: &Handle<Self>) -> Self {
         Card
     }
@@ -238,7 +238,7 @@ struct Panel;
 
 impl Component for Panel {
     type Props = BoxProps;
-    rmx::client_entry!("Panel");
+    rsmix::client_entry!("Panel");
     fn setup(_: &BoxProps, _: &Handle<Self>) -> Self {
         Panel
     }

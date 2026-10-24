@@ -2,11 +2,11 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_replacements`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::Cell;
 
-use rmx::{create_root, rsx, Component, Handle, IntoNode, Node};
+use rsmix::{create_root, rsx, Component, Handle, IntoNode, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

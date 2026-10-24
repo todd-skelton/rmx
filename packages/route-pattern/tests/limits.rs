@@ -1,8 +1,8 @@
 //! Remix's `match/limits.test.ts`. Remix's negative-limit `RangeError` has no counterpart:
 //! limits are `usize`.
 
-use rmx_route_pattern::{AddError, MatcherLimit, MatcherLimits, MatcherOptions, MatcherResourceError, Matcher};
-use rmx_url::Url;
+use rsmix_route_pattern::{AddError, MatcherLimit, MatcherLimits, MatcherOptions, MatcherResourceError, Matcher};
+use rsmix_url::Url;
 
 fn matcher(limits: MatcherLimits) -> Matcher<()> {
     Matcher::with_options(MatcherOptions { limits, ..Default::default() })
@@ -145,7 +145,7 @@ fn matches_long_linear_variables_within_a_small_match_work_limit() {
 
 #[test]
 fn route_pattern_match_url_reports_resource_errors() {
-    let pattern = rmx_route_pattern::RoutePattern::parse("/a").unwrap();
+    let pattern = rsmix_route_pattern::RoutePattern::parse("/a").unwrap();
     let options = MatcherOptions { limits: match_work(9), ..Default::default() };
     let error = pattern.match_url_with(&Url::parse("https://example.com/a").unwrap(), options).unwrap_err();
     assert_eq!(error, resource_error(MatcherLimit::MaxMatchWork, 9, 10));

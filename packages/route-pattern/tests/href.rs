@@ -1,8 +1,8 @@
 //! Remix's `href.test.ts`. Remix's `{ id: 123 }` number params are strings here, and
 //! `null`/`undefined` params are left out.
 
-use rmx_route_pattern::{HrefError, HrefOptions, HrefParams, Params, RoutePattern};
-use rmx_url::{SearchParams, Url};
+use rsmix_route_pattern::{HrefError, HrefOptions, HrefParams, Params, RoutePattern};
+use rsmix_url::{SearchParams, Url};
 
 fn pattern(source: &str) -> RoutePattern {
     RoutePattern::parse(source).unwrap_or_else(|e| panic!("{e}"))
@@ -419,7 +419,7 @@ fn hostname_rejects_backslashes_in_hostname_wildcards() {
     assert_href_err("://*tenant.example.com/path", [("tenant", "preview.test\\")], expected);
 }
 
-/// Remix also checks that `new URL` turns the labels into punycode; rmx_url does no IDNA,
+/// Remix also checks that `new URL` turns the labels into punycode; rsmix_url does no IDNA,
 /// so only the generated hrefs are checked.
 #[test]
 fn hostname_preserves_host_labels_in_generated_urls() {

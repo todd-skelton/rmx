@@ -14,9 +14,9 @@ use std::time::Duration;
 
 use http::{Method, StatusCode, Version};
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use rmx_fetch::{AbortError, Body, Request, RequestExt};
-use rmx_fetch_router::{Context, Router};
-use rmx_node_fetch_server::{create_request, serve_with, ClientAddress, ServeError, ServeOptions};
+use rsmix_fetch::{AbortError, Body, Request, RequestExt};
+use rsmix_fetch_router::{Context, Router};
+use rsmix_node_fetch_server::{create_request, serve_with, ClientAddress, ServeError, ServeOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -83,7 +83,7 @@ fn body_of(raw: &str) -> String {
 }
 
 /// A router that answers every `GET` (and `POST`) to `/` and `/*path` with `handler`.
-fn router<H: rmx_fetch_router::Handler + Clone>(handler: H) -> Router {
+fn router<H: rsmix_fetch_router::Handler + Clone>(handler: H) -> Router {
     let mut router = Router::new();
     router.any("/", handler.clone());
     router.any("/*path", handler);
@@ -233,7 +233,7 @@ async fn drops_the_response_without_writing_when_the_request_was_aborted_before_
             let _ = started.send(());
             // Resolve with a normal-looking response after the abort, as an outer catch would.
             ctx.signal().until_aborted().await;
-            rmx_response::status(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+            rsmix_response::status(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
         }
     };
     let addr = start(router(handler), options).await;
@@ -245,7 +245,7 @@ async fn drops_the_response_without_writing_when_the_request_was_aborted_before_
 }
 
 /// A handler that answers only when the test sends the response, without reading the signal.
-fn late_handler(started: tokio::sync::mpsc::UnboundedSender<()>, release: Arc<tokio::sync::Notify>, finished: Arc<AtomicBool>) -> impl rmx_fetch_router::Handler + Clone {
+fn late_handler(started: tokio::sync::mpsc::UnboundedSender<()>, release: Arc<tokio::sync::Notify>, finished: Arc<AtomicBool>) -> impl rsmix_fetch_router::Handler + Clone {
     move |_: Context| {
         let (started, release, finished) = (started.clone(), release.clone(), finished.clone());
         async move {
@@ -274,7 +274,7 @@ async fn drops_a_late_response_after_close_when_the_handler_does_not_read_the_re
 
 #[tokio::test]
 async fn drops_a_late_zero_argument_handler_response_after_close() {
-    // Every rmx handler receives the context; this one ignores it entirely.
+    // Every rsmix handler receives the context; this one ignores it entirely.
     let (options, errors) = recording();
     let (started, mut started_rx) = report();
     let (release, finished) = (Arc::new(tokio::sync::Notify::new()), Arc::new(AtomicBool::new(false)));
@@ -338,7 +338,7 @@ async fn does_not_send_an_error_response_when_a_response_stream_errors_after_hea
     let log = errors.clone();
     let options = ServeOptions::default().on_error(move |error| {
         log.lock().unwrap().push(error.clone());
-        Some(rmx_response::status(StatusCode::INTERNAL_SERVER_ERROR, "fallback"))
+        Some(rsmix_response::status(StatusCode::INTERNAL_SERVER_ERROR, "fallback"))
     });
     let addr = start(router(|_: Context| async { failing_body() }), options).await;
 
@@ -381,7 +381,7 @@ type BodyRead = (Result<String, String>, bool);
 
 /// A handler that reads the body with `read` in a task (so the read finishes even when the
 /// connection goes away) and reports the outcome.
-fn body_reader(reads: tokio::sync::mpsc::UnboundedSender<BodyRead>, wait_for_abort: bool, buffered: bool) -> impl rmx_fetch_router::Handler + Clone {
+fn body_reader(reads: tokio::sync::mpsc::UnboundedSender<BodyRead>, wait_for_abort: bool, buffered: bool) -> impl rsmix_fetch_router::Handler + Clone {
     move |mut ctx: Context| {
         let reads = reads.clone();
         async move {
@@ -462,7 +462,7 @@ async fn treats_request_body_errors_as_request_abort_errors() {
 
 #[tokio::test]
 async fn does_not_forward_a_handler_failure_from_a_failed_request_body_to_on_error() {
-    // rmx: the handler rethrows (panics on) the body error, which is the signal's abort reason
+    // rsmix: the handler rethrows (panics on) the body error, which is the signal's abort reason
     // in Remix, so `onError` is skipped (`isRequestAbortError`).
     let (options, errors) = recording();
     let (reads, mut reads_rx) = report();
@@ -598,7 +598,7 @@ async fn construction_error_server(handler_called: Arc<AtomicBool>, reads_client
     let counted = calls.clone();
     let options = ServeOptions::default().on_error(move |_| {
         counted.fetch_add(1, Ordering::SeqCst);
-        Some(rmx_response::status(StatusCode::INTERNAL_SERVER_ERROR, "boom"))
+        Some(rsmix_response::status(StatusCode::INTERNAL_SERVER_ERROR, "boom"))
     });
     let handler = move |ctx: Context| {
         let called = handler_called.clone();
@@ -925,7 +925,7 @@ fn throws_when_host_and_authority_identify_different_hosts() {
 // createRequest abort behavior
 
 /// A handler that reports when its signal aborts, and answers when `answer` is notified.
-fn abort_watcher(aborted: Arc<AtomicBool>) -> impl rmx_fetch_router::Handler + Clone {
+fn abort_watcher(aborted: Arc<AtomicBool>) -> impl rsmix_fetch_router::Handler + Clone {
     move |ctx: Context| {
         let (aborted, signal) = (aborted.clone(), ctx.signal().clone());
         async move {
@@ -1061,7 +1061,7 @@ async fn aborts_the_request_signal_and_rejects_body_reads_when_the_request_alrea
 
 
 // Port of `request-listener.http2.test.ts` ("HTTP/2 request authority"). Remix varies the
-// handler's arity (no arguments, request, request and client); an rmx handler always gets the
+// handler's arity (no arguments, request, request and client); an rsmix handler always gets the
 // one `Context`, so those cases differ only in the options they pass.
 
 /// Send a `GET /` over HTTP/2 with `uri` giving `:scheme` and `:authority` and the extra

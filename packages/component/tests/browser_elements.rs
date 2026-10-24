@@ -1,15 +1,15 @@
 //! Ports of Remix's `vdom.elements-fragments` and `vdom.components` tests. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_elements`.
 //!
-//! Style objects are a JSX convenience; rmx takes `style` as a string, so the style
+//! Style objects are a JSX convenience; rsmix takes `style` as a string, so the style
 //! tests check string updates instead.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 
-use rmx::{create_root, rsx, Component, Handle, Node};
+use rsmix::{create_root, rsx, Component, Handle, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

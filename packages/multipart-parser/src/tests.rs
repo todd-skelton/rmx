@@ -1,6 +1,6 @@
 //! Ports of Remix's `multipart.test.ts` and `multipart-request.test.ts`.
 
-use rmx_fetch::{block_on, Body};
+use rsmix_fetch::{block_on, Body};
 
 use super::*;
 

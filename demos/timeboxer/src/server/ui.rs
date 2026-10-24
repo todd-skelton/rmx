@@ -1,6 +1,6 @@
 //! `ui/document.tsx` and `ui/layout.tsx`.
 
-use rmx::{css, rsx, Children, Component, Handle, Node};
+use rsmix::{css, rsx, Children, Component, Handle, Node};
 
 use crate::routes::ROUTES;
 use crate::theme::{self, border, font_size, space, surface, text};

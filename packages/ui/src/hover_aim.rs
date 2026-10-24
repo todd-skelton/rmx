@@ -552,7 +552,7 @@ mod tests {
         assert!(aim.accepts(mv(80.0, 80.0), 0.0));
     }
 
-    // rmx-only
+    // rsmix-only
 
     #[test]
     fn starts_from_the_last_pointer_without_an_event() {

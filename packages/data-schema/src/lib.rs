@@ -11,7 +11,7 @@
 //! has the reusable checks and [`coerce`] the schemas that convert strings.
 //!
 //! ```
-//! use rmx_data_schema::{self as s, checks::min_length, coerce, form_data as f, Schema, SearchParams};
+//! use rsmix_data_schema::{self as s, checks::min_length, coerce, form_data as f, Schema, SearchParams};
 //!
 //! #[derive(Debug)]
 //! struct Signup {
@@ -49,8 +49,8 @@ pub mod checks;
 pub mod coerce;
 pub mod form_data;
 
-pub use rmx_fetch::{File, FormData, FormValue};
-pub use rmx_url::SearchParams;
+pub use rsmix_fetch::{File, FormData, FormValue};
+pub use rsmix_url::SearchParams;
 
 // ---------------------------------------------------------------------------------------
 // Values, issues and options
@@ -895,7 +895,7 @@ impl<T: TupleItems> Schema for Tuple<T> {
 /// An object with a fixed shape, built into a Rust value by `build`:
 ///
 /// ```
-/// use rmx_data_schema::{self as s, Value};
+/// use rsmix_data_schema::{self as s, Value};
 ///
 /// #[derive(Debug, PartialEq)]
 /// struct User { name: String, age: f64 }
@@ -948,7 +948,7 @@ impl Fields<'_, '_> {
     /// 'passthrough'`). Call it after the fields it should leave out:
     ///
     /// ```
-    /// use rmx_data_schema::{self as s, Value};
+    /// use rsmix_data_schema::{self as s, Value};
     ///
     /// let schema = s::object(|o| (o.field("name", s::string()), o.rest()));
     /// let (name, rest) = s::parse(&schema, Value::object([("name", "Ada"), ("extra", "x")])).unwrap();
@@ -1106,7 +1106,7 @@ impl<T> Schema for Variant<'_, T> {
 /// A schema built when it is used, for recursive shapes:
 ///
 /// ```
-/// use rmx_data_schema::{self as s, BoxSchema, Schema, Value};
+/// use rsmix_data_schema::{self as s, BoxSchema, Schema, Value};
 ///
 /// #[derive(Debug, Default, PartialEq)]
 /// struct Node { name: String, children: Vec<Node> }

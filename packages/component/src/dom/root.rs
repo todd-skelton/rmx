@@ -16,7 +16,7 @@ use crate::node::{Children, IntoNode, Node};
 /// A root returned by [`create_root`] or [`create_range_root`].
 ///
 /// ```ignore
-/// let root = rmx::create_root(&container);
+/// let root = rsmix::create_root(&container);
 /// root.render(rsx! { <App/> });
 /// ```
 #[derive(Clone)]

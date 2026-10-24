@@ -1,6 +1,6 @@
 //! `components.tsx`: the drum machine's presentational pieces.
 
-use rmx::{css, rsx, Children, Component, Handle, Mixin, Node};
+use rsmix::{css, rsx, Children, Component, Handle, Mixin, Node};
 
 #[derive(Clone, Default)]
 pub struct ChildrenProps {

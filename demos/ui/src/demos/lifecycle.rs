@@ -1,10 +1,10 @@
-//! rmx's own browser check for stateful mixins (not a Remix demo). Every lifecycle event
+//! rsmix's own browser check for stateful mixins (not a Remix demo). Every lifecycle event
 //! is appended to a log shown on the page and mirrored to `<html data-mixin-log>`.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{css, mixin, on, rsx, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node, NodeHandle};
+use rsmix::{css, mixin, on, rsx, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node, NodeHandle};
 
 /// Event log shared through context.
 #[derive(Default)]
@@ -13,7 +13,7 @@ pub struct Log(RefCell<Vec<String>>);
 impl Log {
     fn push(&self, line: String) {
         self.0.borrow_mut().push(line);
-        rmx::browser::set_document_data("mixinLog", &self.0.borrow().join("|"));
+        rsmix::browser::set_document_data("mixinLog", &self.0.borrow().join("|"));
     }
 }
 
@@ -100,7 +100,7 @@ impl HostMixin for FadeOut {
                     if let Some(node) = &node {
                         let _ = node.element().set_attribute("data-leaving", "");
                     }
-                    rmx::browser::sleep(300).await;
+                    rsmix::browser::sleep(300).await;
                     if let Some(log) = log {
                         log.push(format!("persisted:{name}:{}", signal.aborted()));
                     }
@@ -135,7 +135,7 @@ pub struct MixinLifecycle {
 
 impl Component for MixinLifecycle {
     type Props = ();
-    rmx::client_entry!("MixinLifecycle");
+    rsmix::client_entry!("MixinLifecycle");
 
     fn setup(_: &(), h: &Handle<Self>) -> Self {
         h.set_context(Log::default());

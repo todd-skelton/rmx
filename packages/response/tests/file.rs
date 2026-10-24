@@ -2,16 +2,16 @@
 //! Remix's `etag: false | 'weak' | 'strong'` is [ETag]; a digest name is a [DigestAlgorithm], so
 //! an unsupported name (`'MD5'`) fails to parse instead of rejecting at request time. Dates like
 //! `new Date('2025-01-01')` are millisecond constants, and `toUTCString()` is
-//! `rmx_headers::format_http_date`.
+//! `rsmix_headers::format_http_date`.
 
 use std::time::{Duration, UNIX_EPOCH};
 
 use http::Method;
-use rmx_crypto::DigestAlgorithm;
-use rmx_response::{file as create_file_response, Digest, ETag, FileLike, FileResponseOptions};
-use rmx_fetch::{block_on, Body, File, Request, Response};
-use rmx_headers::format_http_date;
-use rmx_lazy_file::{BlobPart, LazyFile, LazyFileOptions};
+use rsmix_crypto::DigestAlgorithm;
+use rsmix_response::{file as create_file_response, Digest, ETag, FileLike, FileResponseOptions};
+use rsmix_fetch::{block_on, Body, File, Request, Response};
+use rsmix_headers::format_http_date;
+use rsmix_lazy_file::{BlobPart, LazyFile, LazyFileOptions};
 
 /// `new Date('2024-01-01').getTime()`.
 const JAN_2024: u64 = 1_704_067_200_000;
@@ -1008,7 +1008,7 @@ fn handles_file_with_empty_type() {
     assert_eq!(header(&response, "Content-Type"), None);
 }
 
-// rmx only: a ranged LazyFile streams just the requested bytes.
+// rsmix only: a ranged LazyFile streams just the requested bytes.
 
 #[test]
 fn serves_a_range_of_a_lazy_file() {

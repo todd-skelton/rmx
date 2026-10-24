@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_tar_parser::*;
+use rsmix_tar_parser::*;
 
 fn options() -> TarOptions {
     TarOptions::default()

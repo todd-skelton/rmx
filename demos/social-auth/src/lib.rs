@@ -1,16 +1,16 @@
-//! The Remix social-auth demo in rmx: credentials login, Google, GitHub and X login through
-//! rmx-auth, signup, forgot and reset password, flash messages, and session-backed route
+//! The Remix social-auth demo in rsmix: credentials login, Google, GitHub and X login through
+//! rsmix-auth, signup, forgot and reset password, flash messages, and session-backed route
 //! protection.
 //!
 //! What maps to what:
 //!
-//! | Remix | rmx |
+//! | Remix | rsmix |
 //! | --- | --- |
 //! | `session(cookie, createFsSessionStorage(dir))` | `session(cookie, FsStorage::new(dir))` |
 //! | `auth({ schemes: [createSessionAuthScheme(..)] })` | `auth(vec![scheme(session_scheme(..))])` |
 //! | `requireAuth({ onFailure })` | `require_auth().on_failure(..)` |
 //! | `completeAuth(context)` | `complete_auth(&ctx)` |
-//! | `startExternalAuth` / `finishExternalAuth` | `rmx::auth::start_external_auth` / `finish_external_auth` |
+//! | `startExternalAuth` / `finishExternalAuth` | `rsmix::auth::start_external_auth` / `finish_external_auth` |
 //! | `createExternalProviderRegistry({ env, origin })` | `ExternalProviders::from_env(origin, env, fetch)` |
 //! | `session.flash('error', ..)` / `session.get('error')` | the same, on `ctx.session()` |
 //!
@@ -23,20 +23,20 @@ pub mod routes;
 pub mod ui;
 
 use http::StatusCode;
-use rmx::{css, rsx, Node};
-use rmx::cookie::Cookie;
-use rmx::data_schema::checks::{email, min_length};
-use rmx::data_schema::{self as s, form_data as f, Schema};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
-use rmx::middleware::form_data::{form_data, FormDataExt};
-use rmx::middleware::session::{session, SessionExt};
-use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::middleware::render::{Render, ResponseInit};
-use rmx::router::routes::FormActions;
-use rmx::router::{action, Context, IntoResponse, Middleware, Next, Router};
-use rmx::session::{Session, SessionStorage};
+use rsmix::{css, rsx, Node};
+use rsmix::cookie::Cookie;
+use rsmix::data_schema::checks::{email, min_length};
+use rsmix::data_schema::{self as s, form_data as f, Schema};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::middleware::auth::{auth, complete_auth, require_auth, scheme, session_scheme, Auth, AuthExt};
+use rsmix::middleware::form_data::{form_data, FormDataExt};
+use rsmix::middleware::session::{session, SessionExt};
+use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+use rsmix::middleware::render::{Render, ResponseInit};
+use rsmix::router::routes::FormActions;
+use rsmix::router::{action, Context, IntoResponse, Middleware, Next, Router};
+use rsmix::session::{Session, SessionStorage};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -174,7 +174,7 @@ fn post_auth_redirect(ctx: &Context) -> String {
 /// `path` with the request's safe `returnTo` carried along.
 fn with_return_to(path: &str, ctx: &Context) -> String {
     match safe_return_to(ctx) {
-        Some(r) => format!("{path}?{}", [("returnTo", r)].into_iter().collect::<rmx::url::SearchParams>()),
+        Some(r) => format!("{path}?{}", [("returnTo", r)].into_iter().collect::<rsmix::url::SearchParams>()),
         None => path.to_string(),
     }
 }

@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use rmx::{mixin, on, Element, HostMixin, Mixin, MixinHandle};
+use rsmix::{mixin, on, Element, HostMixin, Mixin, MixinHandle};
 
 /// How long typed characters accumulate before the search text resets.
 pub const HIDDEN_TYPEAHEAD_TIMEOUT_MS: i32 = 750;

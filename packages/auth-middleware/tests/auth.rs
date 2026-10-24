@@ -10,15 +10,15 @@ use std::sync::{Arc, Mutex};
 
 use http::header::WWW_AUTHENTICATE;
 use http::StatusCode;
-use rmx_cookie::Cookie;
-use rmx_fetch::{block_on, Body, Response};
-use rmx_auth_middleware::{
+use rsmix_cookie::Cookie;
+use rsmix_fetch::{block_on, Body, Response};
+use rsmix_auth_middleware::{
     api_key_scheme, auth, bearer_scheme, require_auth, scheme, scheme_fn, session_scheme, Auth, AuthExt, AuthFailure, AuthScheme,
     FailureCode, SchemeResult,
 };
-use rmx_session_middleware::session;
-use rmx_fetch_router::{middleware, Context, IntoResponse, Middleware, Next, Router};
-use rmx_session::{MemoryStorage, Session};
+use rsmix_session_middleware::session;
+use rsmix_fetch_router::{middleware, Context, IntoResponse, Middleware, Next, Router};
+use rsmix_session::{MemoryStorage, Session};
 
 #[derive(Clone, Debug, PartialEq)]
 struct Id(u32);

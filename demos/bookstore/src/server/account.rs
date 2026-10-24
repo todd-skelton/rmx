@@ -1,14 +1,14 @@
 //! `actions/account` (profile, settings, orders) and `actions/checkout`, all behind
 //! `requireAuth()`.
 
-use rmx::{css, rsx, Node};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::middleware::session::SessionExt;
-use rmx::router::{action, Context, Controller, Router};
+use rsmix::{css, rsx, Node};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::middleware::session::SessionExt;
+use rsmix::router::{action, Context, Controller, Router};
 
-use rmx::data_schema::checks::min_length;
-use rmx::data_schema::{self as s, form_data as f, Schema};
+use rsmix::data_schema::checks::min_length;
+use rsmix::data_schema::{self as s, form_data as f, Schema};
 
 use super::data::{hash_password, locale_date, Order, ShippingAddress, UserInput};
 use super::schemas::{parse_form, text_field};

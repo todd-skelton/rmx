@@ -6,10 +6,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use common::*;
-use rmx_auth::github_provider;
+use rsmix_auth::github_provider;
 use serde_json::{json, Value};
 
-fn token(seen: &Seen) -> Option<rmx_fetch::Response> {
+fn token(seen: &Seen) -> Option<rsmix_fetch::Response> {
     (seen.url == "https://github.com/login/oauth/access_token").then(|| json_response(json!({ "access_token": "github-token", "token_type": "bearer", "scope": "read:user,user:email" })))
 }
 

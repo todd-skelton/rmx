@@ -2,7 +2,7 @@
 //! `@remix-run/ui/toggle`).
 //!
 //! ```ignore
-//! use rmx_ui::toggle::{toggle, ToggleOptions};
+//! use rsmix_ui::toggle::{toggle, ToggleOptions};
 //!
 //! rsx! {
 //!     <label><input name="notifications" mix={toggle(ToggleOptions::default().default_checked(true))}/>"Email notifications"</label>
@@ -18,7 +18,7 @@
 
 use std::rc::Rc;
 
-use rmx::{mixin, node_ref, on, AttrValue, Element, Event, EventHandler, HostMixin, Mixin, MixinHandle, NodeHandle, Signal};
+use rsmix::{mixin, node_ref, on, AttrValue, Element, Event, EventHandler, HostMixin, Mixin, MixinHandle, NodeHandle, Signal};
 
 use crate::event::{attr_bool, attr_is_true};
 
@@ -226,7 +226,7 @@ impl HostMixin for Toggle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     #[test]
     fn native_input_renders_a_switch_checkbox() {

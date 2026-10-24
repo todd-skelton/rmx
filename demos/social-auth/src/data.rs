@@ -79,7 +79,7 @@ pub fn normalize_optional_text(value: &str) -> Option<String> {
 
 impl Db {
     /// The two demo accounts from db/seed.sql (password `password123`), with the hashes
-    /// Node produced, so logging in also checks rmx-crypto against Web Crypto.
+    /// Node produced, so logging in also checks rsmix-crypto against Web Crypto.
     pub fn seeded() -> Db {
         let seed = |id, email: &str, hash: &str, name: &str, avatar: &str| User {
             id,
@@ -206,7 +206,7 @@ impl Db {
     }
 
     pub fn create_reset_token(&self, user_id: u64) -> String {
-        let token = rmx::crypto::random_uuid().replace('-', "");
+        let token = rsmix::crypto::random_uuid().replace('-', "");
         let row = ResetToken { token: token.clone(), user_id, expires_at: now_ms() + 1000 * 60 * 60 };
         self.tables().reset_tokens.insert(token.clone(), row);
         token
@@ -253,12 +253,12 @@ const ITERATIONS: u32 = 100_000;
 
 /// `pbkdf2_sha256$iterations$salt$hash`, salt and hash base64url.
 pub fn hash_password(password: &str) -> String {
-    let salt = rmx::crypto::random_bytes::<16>();
-    let hash = rmx::crypto::pbkdf2_sha256(password.as_bytes(), &salt, ITERATIONS, 32);
+    let salt = rsmix::crypto::random_bytes::<16>();
+    let hash = rsmix::crypto::pbkdf2_sha256(password.as_bytes(), &salt, ITERATIONS, 32);
     format!(
         "{HASH_PREFIX}${ITERATIONS}${}${}",
-        rmx::crypto::base64url_encode(&salt),
-        rmx::crypto::base64url_encode(&hash)
+        rsmix::crypto::base64url_encode(&salt),
+        rsmix::crypto::base64url_encode(&hash)
     )
 }
 
@@ -271,12 +271,12 @@ pub fn verify_password(password: &str, encoded: &str) -> bool {
     let Some(iterations) = iterations.parse::<u32>().ok().filter(|i| *i >= 1) else {
         return false;
     };
-    let (Some(salt), Some(expected)) = (rmx::crypto::base64url_decode(salt), rmx::crypto::base64url_decode(hash)) else {
+    let (Some(salt), Some(expected)) = (rsmix::crypto::base64url_decode(salt), rsmix::crypto::base64url_decode(hash)) else {
         return false;
     };
     if salt.is_empty() || expected.is_empty() {
         return false;
     }
-    let actual = rmx::crypto::pbkdf2_sha256(password.as_bytes(), &salt, iterations, expected.len());
-    rmx::crypto::constant_time_eq(&actual, &expected)
+    let actual = rsmix::crypto::pbkdf2_sha256(password.as_bytes(), &salt, iterations, expected.len());
+    rsmix::crypto::constant_time_eq(&actual, &expected)
 }

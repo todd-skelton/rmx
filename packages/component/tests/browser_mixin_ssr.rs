@@ -3,12 +3,12 @@
 //! adopted server elements. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_mixin_ssr`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{create_root, mixin_with, node_ref, on, render_to_string, rsx, Element, EventHandler, HostMixin, MixinHandle, MixinOptions, Node};
+use rsmix::{create_root, mixin_with, node_ref, on, render_to_string, rsx, Element, EventHandler, HostMixin, MixinHandle, MixinOptions, Node};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

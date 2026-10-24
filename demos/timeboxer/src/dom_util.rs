@@ -1,7 +1,7 @@
-//! The few DOM reads the client entries need beyond `rmx::Event`: pointer coordinates,
+//! The few DOM reads the client entries need beyond `rsmix::Event`: pointer coordinates,
 //! focus targets and element geometry. On the server they return neutral values.
 
-use rmx::{Event, NodeHandle};
+use rsmix::{Event, NodeHandle};
 
 /// `event.target === event.currentTarget`
 pub fn target_is_current(event: &Event) -> bool {

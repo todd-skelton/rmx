@@ -4,7 +4,7 @@
 //! start-only and end-only objects, which print as `*`, have no separate form; and the size
 //! is a number or `*`, so "size not set" has no form either.
 
-use rmx_headers::ContentRange;
+use rsmix_headers::ContentRange;
 
 fn parse(value: &str) -> Option<ContentRange> {
     ContentRange::parse(Some(value))

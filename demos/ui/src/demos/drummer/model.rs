@@ -4,7 +4,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rmx::TypedEventTarget;
+use rsmix::TypedEventTarget;
 
 /// What happened (Remix's `DrummerEventMap` keys). Every event but `Change` is followed by
 /// a `Change`.

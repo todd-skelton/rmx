@@ -1,10 +1,10 @@
-//! The `rmx` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `completion`, `routes`, `assets`, `test`,
+//! The `rsmix` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `completion`, `routes`, `assets`, `test`,
 //! `version` and `help`. Install it with `cargo install --path packages/cli`.
 //!
 //! `new` writes the starter app (`template/`, like Remix's `template`) as a standalone
 //! crate. `routes` and `assets` need the app's own route map and asset server, so they run
 //! the app binary (`cargo run --quiet -- routes`), whose `main` handles them with
-//! `rmx::router::routes::routes_command` and `rmx::assets::assets_command`. `test` runs
+//! `rsmix::router::routes::routes_command` and `rsmix::assets::assets_command`. `test` runs
 //! `cargo test`.
 
 use std::fmt;
@@ -12,7 +12,7 @@ use std::io::IsTerminal;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use rmx_terminal::Styles;
+use rsmix_terminal::Styles;
 
 pub mod completion;
 pub mod dev;
@@ -36,7 +36,7 @@ pub enum Invocation {
     Dev(Vec<String>),
 }
 
-/// Options for `rmx new`.
+/// Options for `rsmix new`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NewOptions {
     pub target_dir: PathBuf,
@@ -80,11 +80,11 @@ impl CliError {
     }
 
     fn unknown_command(command: &str) -> CliError {
-        Self::usage("RMX_UNKNOWN_COMMAND", "Unknown command", "Run `rmx help` to see available commands.", format!("Unknown command: {command}"))
+        Self::usage("RMX_UNKNOWN_COMMAND", "Unknown command", "Run `rsmix help` to see available commands.", format!("Unknown command: {command}"))
     }
 
     fn internal(message: String) -> CliError {
-        CliError { code: "RMX_INTERNAL_ERROR", title: "Unexpected rmx CLI error", message, fix: None, show_help: false }
+        CliError { code: "RMX_INTERNAL_ERROR", title: "Unexpected rsmix CLI error", message, fix: None, show_help: false }
     }
 
     /// The error text, followed by `help` for usage errors.
@@ -111,18 +111,18 @@ impl std::error::Error for CliError {}
 
 pub const HELP: &str = "\
 Usage:
-  rmx <command> [options]
+  rsmix <command> [options]
 
 Commands:
   assets [command]  List or inspect browser-reachable assets
-  completion        Print shell completion scripts for rmx
+  completion        Print shell completion scripts for rsmix
   dev [-- args]     Build and run the app, rebuilding and reloading on changes
   doctor            Check project health for the current project
-  help [command]    Show help for rmx commands
-  new <name>        Create a new rmx project
+  help [command]    Show help for rsmix commands
+  new <name>        Create a new rsmix project
   routes            Show the route tree for the current project
   test [filter]     Run tests for the current project
-  version           Show the current rmx version
+  version           Show the current rsmix version
 
 Options:
   -h, --help     Show help
@@ -130,61 +130,61 @@ Options:
   -v, --version  Show version
 
 Examples:
-  rmx assets
-  rmx completion bash
-  rmx dev
-  rmx doctor
-  rmx help
-  rmx new my-rmx-app
-  rmx new my-rmx-app --app-name \"My rmx App\"
-  rmx routes
-  rmx test
-  rmx version
+  rsmix assets
+  rsmix completion bash
+  rsmix dev
+  rsmix doctor
+  rsmix help
+  rsmix new my-rsmix-app
+  rsmix new my-rsmix-app --app-name \"My rsmix App\"
+  rsmix routes
+  rsmix test
+  rsmix version
 ";
 
 const NEW_HELP: &str = "\
 Usage:
-  rmx new <target-dir> [--app-name <name>] [--force]
+  rsmix new <target-dir> [--app-name <name>] [--force]
 
-Create a new rmx project in the target directory.
+Create a new rsmix project in the target directory.
 
 Examples:
-  rmx new ./my-rmx-app
-  rmx new ./my-rmx-app --app-name \"My rmx App\"
-  rmx new ./my-rmx-app --force
+  rsmix new ./my-rsmix-app
+  rsmix new ./my-rsmix-app --app-name \"My rsmix App\"
+  rsmix new ./my-rsmix-app --force
 ";
 
 const VERSION_HELP: &str = "\
 Usage:
-  rmx version
+  rsmix version
 
-Show the current rmx version.
+Show the current rsmix version.
 
 Examples:
-  rmx version
-  rmx --version
+  rsmix version
+  rsmix --version
 ";
 
 const ROUTES_HELP: &str = "\
 Usage:
-  rmx routes [--json | --table] [--no-headers]
+  rsmix routes [--json | --table] [--no-headers]
 
 Show the route tree for the current project (runs `cargo run --quiet -- routes`).
 ";
 
 const ASSETS_HELP: &str = "\
 Usage:
-  rmx assets
-  rmx assets inspect <url-or-file>
+  rsmix assets
+  rsmix assets inspect <url-or-file>
 
 List or inspect browser-reachable assets (runs `cargo run --quiet -- assets`).
 ";
 
 const DOCTOR_HELP: &str = "\
 Usage:
-  rmx doctor [--json] [--strict] [--fix] [--no-color]
+  rsmix doctor [--json] [--strict] [--fix] [--no-color]
 
-Check the toolchain and rmx app conventions for the current project.
+Check the toolchain and rsmix app conventions for the current project.
 
 Options:
   --json       Print doctor findings as JSON
@@ -193,47 +193,47 @@ Options:
   --fix        Apply available low-risk fixes
 
 Examples:
-  rmx doctor
-  rmx doctor --json
-  rmx doctor --strict
-  rmx doctor --fix
+  rsmix doctor
+  rsmix doctor --json
+  rsmix doctor --strict
+  rsmix doctor --fix
 ";
 
 const DEV_HELP: &str = "\
 Usage:
-  rmx dev [-- <app args>]
+  rsmix dev [-- <app args>]
 
 Build the client and the server, run the app, and rebuild and restart it when src/, app/,
 public/ or Cargo.toml change. Pages reload when the app installs
-rmx::middleware::live_reload. Set RMX_WASM_BINDGEN to use a wasm-bindgen that is not on PATH.
+rsmix::middleware::live_reload. Set RSMIX_WASM_BINDGEN to use a wasm-bindgen that is not on PATH.
 
 Examples:
-  rmx dev
-  rmx dev -- --port 4000
+  rsmix dev
+  rsmix dev -- --port 4000
 ";
 
 const COMPLETION_HELP: &str = "\
 Usage:
-  rmx completion <bash|zsh>
+  rsmix completion <bash|zsh>
 
-Print a shell completion script for rmx.
+Print a shell completion script for rsmix.
 
 Examples:
-  rmx completion bash >> ~/.bashrc
-  rmx completion zsh >> ~/.zshrc
+  rsmix completion bash >> ~/.bashrc
+  rsmix completion zsh >> ~/.zshrc
 ";
 
 const TEST_HELP: &str = "\
 Usage:
-  rmx test [filter] [cargo test options] [-- <test binary options>]
+  rsmix test [filter] [cargo test options] [-- <test binary options>]
 
 Run tests for the current project. The arguments go to `cargo test` unchanged, and
 everything after `--` (`-h` and `--help` too) goes to the test binaries.
 
 Examples:
-  rmx test
-  rmx test frame
-  rmx test -p my-app -- --nocapture
+  rsmix test
+  rsmix test frame
+  rsmix test -p my-app -- --nocapture
 ";
 
 /// The help text for `command`, or the root help.
@@ -253,7 +253,7 @@ pub fn help_for(command: Option<&str>) -> Result<&'static str, CliError> {
     })
 }
 
-/// The rmx version this CLI belongs to.
+/// The rsmix version this CLI belongs to.
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -262,7 +262,7 @@ pub fn version() -> &'static str {
 /// parsed (Remix's `extractGlobalOptions`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GlobalOptions {
-    /// `--no-color`: no ANSI styling, here or in the cargo commands `rmx` runs.
+    /// `--no-color`: no ANSI styling, here or in the cargo commands `rsmix` runs.
     pub no_color: bool,
 }
 
@@ -337,7 +337,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             [shell] => Err(CliError::usage(
                 "RMX_UNKNOWN_COMPLETION_SHELL",
                 "Unknown completion shell",
-                "Use `rmx completion bash` or `rmx completion zsh`.",
+                "Use `rsmix completion bash` or `rsmix completion zsh`.",
                 format!("Unknown completion shell: {shell}"),
             )),
             [_, extra, ..] => Err(CliError::unexpected_extra_argument(extra)),
@@ -421,7 +421,7 @@ fn parse_new(args: &[&str]) -> Result<NewOptions, CliError> {
         return Err(CliError::usage(
             "RMX_MISSING_TARGET_DIRECTORY",
             "Missing target directory",
-            "Pass a target directory, for example `rmx new my-rmx-app`.",
+            "Pass a target directory, for example `rsmix new my-rsmix-app`.",
             "A target directory is required.".into(),
         ));
     };
@@ -429,14 +429,14 @@ fn parse_new(args: &[&str]) -> Result<NewOptions, CliError> {
     Ok(options)
 }
 
-/// Run the `rmx` command line and return the exit code: help and errors go to stdout and
+/// Run the `rsmix` command line and return the exit code: help and errors go to stdout and
 /// stderr, `new` reports its steps on stderr, and `routes`, `assets` and `test` hand over to
 /// cargo.
 pub fn run(args: &[String], cwd: &Path) -> i32 {
     let code = run_command(args, cwd);
     match restore_target(ansi(std::io::stdout().is_terminal()), ansi(std::io::stderr().is_terminal())) {
-        Some(Stream::Stdout) => print!("{}", rmx_terminal::ansi::RESET),
-        Some(Stream::Stderr) => eprint!("{}", rmx_terminal::ansi::RESET),
+        Some(Stream::Stdout) => print!("{}", rsmix_terminal::ansi::RESET),
+        Some(Stream::Stderr) => eprint!("{}", rsmix_terminal::ansi::RESET),
         None => {}
     }
     code
@@ -468,12 +468,19 @@ fn restore_target(stdout_ansi: bool, stderr_ansi: bool) -> Option<Stream> {
 
 /// Remix's command header (`REMIX v1.2.3 - doctor`) after the blank line that opens a
 /// command's output: the header only on a terminal, with the wordmark colored a letter at a
-/// time like Remix's (R blue, M yellow, X red).
+/// time in Remix's wordmark colors (R blue, S green, M yellow, I magenta, X red).
 fn preamble(command: &str, styles: &Styles, is_tty: bool) -> String {
     if !is_tty {
         return "\n".into();
     }
-    let wordmark = format!("{}{}{}", styles.blue_bright("R"), styles.yellow_bright("M"), styles.red_bright("X"));
+    let wordmark = format!(
+        "{}{}{}{}{}",
+        styles.blue_bright("R"),
+        styles.green_bright("S"),
+        styles.yellow_bright("M"),
+        styles.magenta_bright("I"),
+        styles.red_bright("X")
+    );
     format!("\n{wordmark} v{} - {command}\n\n", version())
 }
 
@@ -485,7 +492,7 @@ fn ansi(is_tty: bool) -> bool {
 fn run_command(args: &[String], cwd: &Path) -> i32 {
     let (args, global) = global_options(args);
     let args = &args[..];
-    let colors = |is_tty: bool| !global.no_color && rmx_terminal::should_use_colors(|name| std::env::var(name).ok(), is_tty);
+    let colors = |is_tty: bool| !global.no_color && rsmix_terminal::should_use_colors(|name| std::env::var(name).ok(), is_tty);
     let help = |args: &[String]| help_for(args.first().map(String::as_str).filter(|c| *c != "help")).unwrap_or(HELP);
     // Help under an error goes to stderr, so it follows stderr's colors.
     let error_help = |text: &str| style_help(text, &Styles::new(colors(std::io::stderr().is_terminal())));
@@ -583,7 +590,7 @@ fn style_help(text: &str, styles: &Styles) -> String {
         match body.strip_suffix(':') {
             Some(title @ ("Usage" | "Commands" | "Options" | "Examples")) => {
                 section = title;
-                out.push_str(&styles.format(title, &[rmx_terminal::Style::Bold, rmx_terminal::Style::BlueBright]));
+                out.push_str(&styles.format(title, &[rsmix_terminal::Style::Bold, rsmix_terminal::Style::BlueBright]));
                 out.push(':');
             }
             _ => match (section, body.strip_prefix("  ")) {
@@ -669,8 +676,8 @@ fn doctor_exit_code(strict: bool, fix: bool, warnings: usize) -> i32 {
     i32::from((strict || fix) && warnings > 0)
 }
 
-/// The command `rmx` hands over to (`cargo run`, `cargo test`); `--no-color` reaches it
-/// as `NO_COLOR` (read by the app and `rmx_terminal`) and `CARGO_TERM_COLOR=never`.
+/// The command `rsmix` hands over to (`cargo run`, `cargo test`); `--no-color` reaches it
+/// as `NO_COLOR` (read by the app and `rsmix_terminal`) and `CARGO_TERM_COLOR=never`.
 pub fn exec_command(argv: &[String], cwd: &Path, global: &GlobalOptions) -> std::process::Command {
     let mut command = std::process::Command::new(&argv[0]);
     command.args(&argv[1..]).current_dir(cwd);
@@ -702,11 +709,11 @@ const TEMPLATE: &[(&str, &str)] = &[
 ];
 
 /// The default document title in the template, replaced by the app's display name.
-const TEMPLATE_TITLE: &str = "unwrap_or(\"rmx App\")";
+const TEMPLATE_TITLE: &str = "unwrap_or(\"rsmix App\")";
 
 /// Create an app in `options.target_dir` (relative to `cwd`): Remix's `bootstrapProject`.
 /// `progress` receives `• Step...` when a step starts and `✓ Step` or `✗ Step` when it ends.
-/// The app depends on `rmx` by path (this crate's directory) unless `RMX_VERSION` names a
+/// The app depends on `rsmix` by path (this crate's directory) unless `RSMIX_VERSION` names a
 /// version.
 pub fn new_project(options: &NewOptions, cwd: &Path, progress: &mut dyn FnMut(&str)) -> Result<NewApp, CliError> {
     let target_dir = normalize(&cwd.join(&options.target_dir));
@@ -724,7 +731,7 @@ pub fn new_project(options: &NewOptions, cwd: &Path, progress: &mut dyn FnMut(&s
     }
     let display_name = options.app_name.clone().unwrap_or_else(|| humanize_name(&raw_name));
     let package_name = to_package_name(&raw_name)?;
-    let dependency = rmx_dependency();
+    let dependency = rsmix_dependency();
 
     step(progress, "Prepare target directory", || prepare_target_directory(&target_dir, options.force))?;
     step(progress, "Generate scaffold files", || {
@@ -785,14 +792,14 @@ fn prepare_target_directory(dir: &Path, force: bool) -> Result<(), CliError> {
     std::fs::create_dir_all(dir).map_err(|e| io_error(dir, e))
 }
 
-/// The `rmx = ...` dependency line for new apps and `doctor --fix`: the version in
-/// `RMX_VERSION`, or this checkout's `packages/rmx` by path.
-pub(crate) fn rmx_dependency() -> String {
-    match std::env::var("RMX_VERSION").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
-        Some(version) => format!("rmx = {}", toml_string(&version)),
+/// The `rsmix = ...` dependency line for new apps and `doctor --fix`: the version in
+/// `RSMIX_VERSION`, or this checkout's `packages/rsmix` by path.
+pub(crate) fn rsmix_dependency() -> String {
+    match std::env::var("RSMIX_VERSION").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
+        Some(version) => format!("rsmix = {}", toml_string(&version)),
         None => {
-            let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("packages/").join("rmx");
-            format!("rmx = {{ path = {} }}", toml_string(&checkout.display().to_string().replace('\\', "/")))
+            let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("packages/").join("rsmix");
+            format!("rsmix = {{ path = {} }}", toml_string(&checkout.display().to_string().replace('\\', "/")))
         }
     }
 }
@@ -816,8 +823,8 @@ fn render_template(file: &str, source: &str, package_name: &str, display_name: &
     let mut removing = false;
     for line in source.split_inclusive('\n') {
         match line.trim() {
-            "// rmx-template:remove-start" => removing = true,
-            "// rmx-template:remove-end" => removing = false,
+            "// rsmix-template:remove-start" => removing = true,
+            "// rsmix-template:remove-end" => removing = false,
             _ if removing => {}
             _ => out.push_str(line),
         }
@@ -874,7 +881,7 @@ fn readme(display_name: &str, package_name: &str) -> String {
     format!(
         "# {display_name}
 
-A minimal rmx application starter with a home page.
+A minimal rsmix application starter with a home page.
 
 ## Starter Shape
 
@@ -911,13 +918,13 @@ fn agents_guide(display_name: &str) -> String {
     format!(
         "# {display_name} Agent Guide
 
-This app was scaffolded with `rmx new`. Use these conventions when continuing to build it out.
+This app was scaffolded with `rsmix new`. Use these conventions when continuing to build it out.
 
 ## Starter Layout
 
 - `src/routes.rs` defines the shared route contract; add routes to the `Routes` struct and the compiler lists the actions the controller must provide.
 - Put top-level route actions in `src/server/mod.rs`; `src/server/tests.rs` is the router smoke test.
-- `src/server/home_page.rs` renders the starter UI; client entries live next to it as components with `rmx::client_entry!`.
+- `src/server/home_page.rs` renders the starter UI; client entries live next to it as components with `rsmix::client_entry!`.
 - `app/actions/public/` contains the browser entry and the compiled client.
 - Root `public/` contains static files served unchanged from the app root.
 
@@ -941,7 +948,7 @@ fn humanize_name(value: &str) -> String {
         })
         .collect();
     if parts.is_empty() {
-        "rmx App".into()
+        "rsmix App".into()
     } else {
         parts.join(" ")
     }

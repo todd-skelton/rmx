@@ -1,7 +1,7 @@
 //! `packages/ui/src/demos/anchor.demo.tsx`: position a floating element against an anchor
 //! with the low-level anchor primitive.
 
-use rmx::{css, node_ref, rsx, Component, Handle, Mixin, Node};
+use rsmix::{css, node_ref, rsx, Component, Handle, Mixin, Node};
 
 pub struct AnchorDemo {
     #[cfg(target_arch = "wasm32")]
@@ -9,13 +9,13 @@ pub struct AnchorDemo {
     #[cfg(target_arch = "wasm32")]
     floating: Option<web_sys::HtmlElement>,
     #[cfg(target_arch = "wasm32")]
-    tracking: Option<rmx::ui::anchor::Anchored>,
+    tracking: Option<rsmix::ui::anchor::Anchored>,
 }
 
 impl AnchorDemo {
     #[cfg(target_arch = "wasm32")]
     fn position(&mut self) {
-        use rmx::ui::anchor::{anchor, AnchorOptions, AnchorTarget, Placement};
+        use rsmix::ui::anchor::{anchor, AnchorOptions, AnchorTarget, Placement};
         self.tracking = None;
         if let (Some(a), Some(f)) = (&self.anchor, &self.floating) {
             self.tracking = Some(anchor(f, AnchorTarget::Element(a.clone()), AnchorOptions::new(Placement::BottomStart).offset(8.0)));
@@ -53,7 +53,7 @@ impl AnchorDemo {
 
 impl Component for AnchorDemo {
     type Props = ();
-    rmx::client_entry!("AnchorDemo");
+    rsmix::client_entry!("AnchorDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         AnchorDemo {

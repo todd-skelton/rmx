@@ -6,9 +6,9 @@
 //! `X_CLIENT_ID`/`X_CLIENT_SECRET` to enable each provider. Register
 //! `http://127.0.0.1:<PORT>/auth/<provider>/callback` as the provider's redirect URI.
 
-use rmx::cookie::{Cookie, SameSite};
-use rmx::fetch::{Body, BoxError, Request, Response};
-use rmx::session::FsStorage;
+use rsmix::cookie::{Cookie, SameSite};
+use rsmix::fetch::{Body, BoxError, Request, Response};
+use rsmix::session::FsStorage;
 use social_auth_demo::external::{demo_origin, provider_label, ExternalProviders, PROVIDER_NAMES};
 use social_auth_demo::{data::Db, router};
 
@@ -33,7 +33,7 @@ fn https_fetch() -> impl Fn(Request) -> std::pin::Pin<Box<dyn std::future::Futur
 }
 
 fn main() {
-    rmx::router::routes::routes_command(&*social_auth_demo::routes::ROUTES);
+    rsmix::router::routes::routes_command(&*social_auth_demo::routes::ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44106".into());
     let secret = std::env::var("SESSION_SECRET").unwrap_or_else(|_| "social-auth-demo-secret".into());
@@ -62,5 +62,5 @@ fn main() {
     }
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(cookie, storage, Db::seeded(), &public, providers))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(cookie, storage, Db::seeded(), &public, providers))).expect("serve");
 }

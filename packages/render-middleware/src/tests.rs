@@ -1,7 +1,7 @@
-use rmx::{rsx, Frame};
-use rmx_fetch::block_on;
-use rmx_response as response;
-use rmx_fetch_router::{Context, Router};
+use rsmix::{rsx, Frame};
+use rsmix_fetch::block_on;
+use rsmix_response as response;
+use rsmix_fetch_router::{Context, Router};
 
 use super::Render;
 

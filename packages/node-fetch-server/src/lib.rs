@@ -1,10 +1,10 @@
-//! Serve an [`rmx_fetch_router::Router`] over TCP (Remix's `node-fetch-server`).
+//! Serve an [`rsmix_fetch_router::Router`] over TCP (Remix's `node-fetch-server`).
 //!
 //! ```no_run
-//! # async fn run(router: rmx_fetch_router::Router) -> std::io::Result<()> {
+//! # async fn run(router: rsmix_fetch_router::Router) -> std::io::Result<()> {
 //! let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-//! let options = rmx_node_fetch_server::ServeOptions::default().trust_proxy(true);
-//! rmx_node_fetch_server::serve_with(listener, router, options).await
+//! let options = rsmix_node_fetch_server::ServeOptions::default().trust_proxy(true);
+//! rsmix_node_fetch_server::serve_with(listener, router, options).await
 //! # }
 //! ```
 //!
@@ -15,7 +15,7 @@
 //! `ctx.get::<ClientAddress>()`. A handler that panics answers 500 "Internal Server Error"
 //! (Remix's response for a thrown error) unless [`ServeOptions::on_error`] supplies a response.
 //!
-//! Each request also carries an [`AbortSignal`](rmx_fetch::AbortSignal) (`ctx.signal()`)
+//! Each request also carries an [`AbortSignal`](rsmix_fetch::AbortSignal) (`ctx.signal()`)
 //! that aborts when the response can no longer be written before it finished: the client
 //! disconnected while the handler ran or while the body streamed.
 //!
@@ -40,9 +40,9 @@ use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
-use rmx_fetch::{AbortController, AbortError, Body, Request, RequestExt, Response};
-use rmx_fetch_router::Router;
-use rmx_url::Url;
+use rsmix_fetch::{AbortController, AbortError, Body, Request, RequestExt, Response};
+use rsmix_fetch_router::Router;
+use rsmix_url::Url;
 use tokio::net::TcpListener;
 
 /// The socket peer, available to handlers via `ctx.get::<RemoteAddr>()`.
@@ -164,7 +164,7 @@ impl ServeOptions {
             }
         };
         custom.unwrap_or_else(|| match error {
-            ServeError::ConflictingAuthority => rmx_response::status(StatusCode::BAD_REQUEST, "Bad Request"),
+            ServeError::ConflictingAuthority => rsmix_response::status(StatusCode::BAD_REQUEST, "Bad Request"),
             _ => internal_server_error(),
         })
     }
@@ -191,7 +191,7 @@ pub async fn serve_with(listener: TcpListener, router: Router, options: ServeOpt
             // Transient accept errors (too many open files, aborted handshakes) should not
             // take the server down.
             Err(e) => {
-                eprintln!("rmx-node-fetch-server: accept failed: {e}");
+                eprintln!("rsmix-node-fetch-server: accept failed: {e}");
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                 continue;
             }
@@ -256,10 +256,10 @@ struct RequestBody {
 
 #[derive(Default)]
 struct BodyQueue {
-    frames: VecDeque<http_body::Frame<rmx_fetch::Bytes>>,
+    frames: VecDeque<http_body::Frame<rsmix_fetch::Bytes>>,
     queued: usize,
     ended: bool,
-    error: Option<rmx_fetch::BoxError>,
+    error: Option<rsmix_fetch::BoxError>,
     reader: Option<Waker>,
     pump: Option<Waker>,
     reader_gone: bool,
@@ -276,8 +276,8 @@ impl BodyQueue {
 impl RequestBody {
     fn new<B>(body: B, controller: Arc<AbortController>) -> RequestBody
     where
-        B: http_body::Body<Data = rmx_fetch::Bytes> + Send + Unpin + 'static,
-        B::Error: Into<rmx_fetch::BoxError>,
+        B: http_body::Body<Data = rsmix_fetch::Bytes> + Send + Unpin + 'static,
+        B::Error: Into<rsmix_fetch::BoxError>,
     {
         let hint = body.size_hint();
         let remaining = hint.exact();
@@ -295,8 +295,8 @@ impl RequestBody {
 /// [`REQUEST_BODY_HIGH_WATER_MARK`] bytes ahead of the reader.
 async fn read_ahead<B>(mut body: B, queue: Arc<Mutex<BodyQueue>>, controller: Arc<AbortController>)
 where
-    B: http_body::Body<Data = rmx_fetch::Bytes> + Unpin,
-    B::Error: Into<rmx_fetch::BoxError>,
+    B: http_body::Body<Data = rsmix_fetch::Bytes> + Unpin,
+    B::Error: Into<rsmix_fetch::BoxError>,
 {
     loop {
         let polled = poll_fn(|cx| {
@@ -330,7 +330,7 @@ where
                 return;
             }
         };
-        let error: rmx_fetch::BoxError = error.into();
+        let error: rsmix_fetch::BoxError = error.into();
         let error = if error.downcast_ref::<hyper::Error>().is_some_and(is_disconnect) { AbortError.into() } else { error };
         controller.abort();
         let mut queue = queue.lock().expect("request body lock");
@@ -359,8 +359,8 @@ fn is_disconnect(error: &hyper::Error) -> bool {
 }
 
 impl http_body::Body for RequestBody {
-    type Data = rmx_fetch::Bytes;
-    type Error = rmx_fetch::BoxError;
+    type Data = rsmix_fetch::Bytes;
+    type Error = rsmix_fetch::BoxError;
 
     fn poll_frame(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let this = &mut *self;
@@ -416,7 +416,7 @@ impl Drop for RequestBody {
 struct ServedBody {
     body: Body,
     lifecycle: Option<Lifecycle>,
-    signal: rmx_fetch::AbortSignal,
+    signal: rsmix_fetch::AbortSignal,
     options: Arc<ServeOptions>,
 }
 
@@ -438,8 +438,8 @@ impl ServedBody {
 }
 
 impl http_body::Body for ServedBody {
-    type Data = rmx_fetch::Bytes;
-    type Error = rmx_fetch::BoxError;
+    type Data = rsmix_fetch::Bytes;
+    type Error = rsmix_fetch::BoxError;
 
     fn poll_frame(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let this = &mut *self;
@@ -476,7 +476,7 @@ async fn handle(router: &Router, options: &ServeOptions, req: Request, remote: S
     };
     let signal = req.signal();
     // A panicking handler answers 500 instead of dropping the connection.
-    match rmx_fetch_router::catch_panic(router.fetch(req)).await {
+    match rsmix_fetch_router::catch_panic(router.fetch(req)).await {
         Ok(res) => res,
         // A handler that fails because the client went away is not a server error, and no
         // one is left to read the response (Remix's `isRequestAbortError`).
@@ -647,12 +647,12 @@ fn unquote(value: &str) -> String {
 
 /// Send `request` (with an absolute `http://` URI) over a new HTTP/1.1 connection and return the
 /// response as it streams in: the Fetch API's `fetch` for servers, enough for
-/// `rmx-fetch-proxy` and calls to local services. Redirects are returned, not followed, and
+/// `rsmix-fetch-proxy` and calls to local services. Redirects are returned, not followed, and
 /// bodies are not decoded. There is no TLS; use an HTTP client library for `https://` URLs.
-pub async fn fetch(request: rmx_fetch::Request) -> Result<rmx_fetch::Response, rmx_fetch::BoxError> {
+pub async fn fetch(request: rsmix_fetch::Request) -> Result<rsmix_fetch::Response, rsmix_fetch::BoxError> {
     let (mut parts, body) = request.into_parts();
     if parts.uri.scheme_str() != Some("http") {
-        return Err(format!("rmx_node_fetch_server::fetch only supports http:// URLs, got {}", parts.uri).into());
+        return Err(format!("rsmix_node_fetch_server::fetch only supports http:// URLs, got {}", parts.uri).into());
     }
     let authority = parts.uri.authority().cloned().ok_or("request URI has no host")?;
     let host = authority.host().trim_start_matches('[').trim_end_matches(']');
@@ -718,8 +718,8 @@ pub mod test {
     /// Dropping the server closes it too.
     ///
     /// ```no_run
-    /// # async fn run(router: rmx_fetch_router::Router) -> std::io::Result<()> {
-    /// let server = rmx_node_fetch_server::test::create_test_server(router).await?;
+    /// # async fn run(router: rsmix_fetch_router::Router) -> std::io::Result<()> {
+    /// let server = rsmix_node_fetch_server::test::create_test_server(router).await?;
     /// let url = format!("{}/books", server.base_url);
     /// // ... drive the app at `url` ...
     /// server.close().await;

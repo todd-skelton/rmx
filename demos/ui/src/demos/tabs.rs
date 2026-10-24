@@ -1,13 +1,13 @@
 //! `packages/ui/src/demos/tabs.demo.tsx`: headless tabs with app-owned markup.
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::tabs;
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::tabs;
 
 pub struct TabsDemo;
 
 impl Component for TabsDemo {
     type Props = ();
-    rmx::client_entry!("TabsDemo");
+    rsmix::client_entry!("TabsDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         TabsDemo

@@ -3,19 +3,19 @@
 //! frame; here the parent is a named client-created `<Frame>`, since a top frame reload
 //! would replace the test runner's page. The parent loads through `fetch`, stubbed with
 //! routes that stream their chunks and can hold one back until the test releases it. The
-//! responses are written the way `rmx-render-middleware` streams them: frame regions, the
+//! responses are written the way `rsmix-render-middleware` streams them: frame regions, the
 //! `rmx-data` script, the flush marker, then `<template>`s. Remix's client entries that
 //! trigger the reloads are replaced by frame handles from `Frames.get(name)`. Run with
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_frame_reloads`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::ssr::{flush_marker, HydrationData, TEMPLATE_END};
-use rmx::{create_root, on, rsx, Component, Frame, FrameEvent, FrameHandle, Frames, Handle, Node, ReloadOptions, Root, RunOptions};
+use rsmix::ssr::{flush_marker, HydrationData, TEMPLATE_END};
+use rsmix::{create_root, on, rsx, Component, Frame, FrameEvent, FrameHandle, Frames, Handle, Node, ReloadOptions, Root, RunOptions};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -25,7 +25,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
     static SERVER: RefCell<Option<Server>> = const { RefCell::new(None) };
     static STARTS: Cell<u32> = const { Cell::new(0) };
     static COMPLETES: Cell<u32> = const { Cell::new(0) };
@@ -36,28 +36,28 @@ async fn start() -> Server {
     let server = SERVER.with(|s| s.borrow_mut().get_or_insert_with(Server::new).clone());
     if APP.with(|a| a.borrow().is_none()) {
         let entries = vec![
-            rmx::entry::<EntryWithFrame>(),
-            rmx::entry::<EntryWithBlockingFrame>(),
-            rmx::entry::<EntryWithSrc>(),
-            rmx::entry::<EntryWithLateFrame>(),
-            rmx::entry::<RowAction>(),
-            rmx::entry::<CartItems>(),
-            rmx::entry::<ReloadButton>(),
-            rmx::entry::<KeyedIsland>(),
-            rmx::entry::<EntryWithSharedFrame>(),
-            rmx::entry::<OuterEntry>(),
-            rmx::entry::<MiddleEntry>(),
-            rmx::entry::<ClientOnlyEntry>(),
-            rmx::entry::<BlockingOuterEntry>(),
-            rmx::entry::<MountedFrame>(),
-            rmx::entry::<FragmentFrame>(),
-            rmx::entry::<Card>(),
-            rmx::entry::<ContextProvider>(),
-            rmx::entry::<FrameEntry>(),
-            rmx::entry::<Clicker>(),
-            rmx::entry::<FocusEntry>(),
+            rsmix::entry::<EntryWithFrame>(),
+            rsmix::entry::<EntryWithBlockingFrame>(),
+            rsmix::entry::<EntryWithSrc>(),
+            rsmix::entry::<EntryWithLateFrame>(),
+            rsmix::entry::<RowAction>(),
+            rsmix::entry::<CartItems>(),
+            rsmix::entry::<ReloadButton>(),
+            rsmix::entry::<KeyedIsland>(),
+            rsmix::entry::<EntryWithSharedFrame>(),
+            rsmix::entry::<OuterEntry>(),
+            rsmix::entry::<MiddleEntry>(),
+            rsmix::entry::<ClientOnlyEntry>(),
+            rsmix::entry::<BlockingOuterEntry>(),
+            rsmix::entry::<MountedFrame>(),
+            rsmix::entry::<FragmentFrame>(),
+            rsmix::entry::<Card>(),
+            rsmix::entry::<ContextProvider>(),
+            rsmix::entry::<FrameEntry>(),
+            rsmix::entry::<Clicker>(),
+            rsmix::entry::<FocusEntry>(),
         ];
-        APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions { entries, ..Default::default() })));
+        APP.with(|a| *a.borrow_mut() = Some(rsmix::run(RunOptions { entries, ..Default::default() })));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
     app.ready().await;
@@ -686,7 +686,7 @@ struct EntryWithFrame;
 
 impl Component for EntryWithFrame {
     type Props = EntryProps;
-    rmx::client_entry!("EntryWithFrame");
+    rsmix::client_entry!("EntryWithFrame");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         EntryWithFrame
     }
@@ -782,7 +782,7 @@ struct EntryWithBlockingFrame;
 
 impl Component for EntryWithBlockingFrame {
     type Props = EntryProps;
-    rmx::client_entry!("EntryWithBlockingFrame");
+    rsmix::client_entry!("EntryWithBlockingFrame");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         EntryWithBlockingFrame
     }
@@ -839,7 +839,7 @@ struct EntryWithSrc;
 
 impl Component for EntryWithSrc {
     type Props = EntryProps;
-    rmx::client_entry!("EntryWithSrc");
+    rsmix::client_entry!("EntryWithSrc");
     fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
         let h = h.clone();
         ENTRY_UPDATE.with(|u| *u.borrow_mut() = Some(Rc::new(move || h.update())));
@@ -882,7 +882,7 @@ fn set_entry_src(src: &str) {
 fn update_entry() {
     let update = ENTRY_UPDATE.with(|u| u.borrow().clone()).expect("a mounted EntryWithSrc");
     update();
-    rmx::flush();
+    rsmix::flush();
 }
 
 fn loads(server: &Server, path: &str) -> usize {
@@ -1034,7 +1034,7 @@ struct EntryWithLateFrame;
 
 impl Component for EntryWithLateFrame {
     type Props = EntryProps;
-    rmx::client_entry!("EntryWithLateFrame");
+    rsmix::client_entry!("EntryWithLateFrame");
     fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
         h.queue_task(|_, h| {
             if !LATE_FRAME.with(|l| l.replace(true)) {
@@ -1166,7 +1166,7 @@ struct RowAction;
 
 impl Component for RowAction {
     type Props = EntryProps;
-    rmx::client_entry!("RowAction");
+    rsmix::client_entry!("RowAction");
     fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
         ROW.with(|r| *r.borrow_mut() = Some(h.clone()));
         RowAction
@@ -1264,7 +1264,7 @@ struct CartItems;
 
 impl Component for CartItems {
     type Props = EntryProps;
-    rmx::client_entry!("CartItems");
+    rsmix::client_entry!("CartItems");
     fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
         CART.with(|c| *c.borrow_mut() = Some(h.clone()));
         CartItems
@@ -1305,13 +1305,13 @@ async fn ignores_updates_from_a_client_entry_removed_by_its_frame_reload() {
     let h = CART.with(|c| c.borrow().clone()).expect("a hydrated CartItems");
     CART_PENDING.with(|p| p.set(true));
     h.update();
-    rmx::flush();
+    rsmix::flush();
     assert!(by_id("cart-pending").is_some());
     server.route("/ci-cart", vec![Part::Html(r#"<p id="empty-cart">Your cart is empty.</p>"#.into())]);
     let _ = h.frame().reload_async(ReloadOptions::default()).await;
     CART_PENDING.with(|p| p.set(false));
     h.update();
-    rmx::flush();
+    rsmix::flush();
     for _ in 0..3 {
         tick().await;
     }
@@ -1531,7 +1531,7 @@ async fn a_failed_reload_resolves_to_its_error_and_reports_it() {
 // frame.test.tsx: a reload outlives the component that started it
 
 thread_local! {
-    static CLICK_SIGNAL: RefCell<Option<rmx::Signal>> = const { RefCell::new(None) };
+    static CLICK_SIGNAL: RefCell<Option<rsmix::Signal>> = const { RefCell::new(None) };
     /// Whether the reload's signal was aborted, or its error.
     static CLICK_RELOAD: RefCell<Option<Result<bool, String>>> = const { RefCell::new(None) };
 }
@@ -1541,7 +1541,7 @@ struct ReloadButton;
 
 impl Component for ReloadButton {
     type Props = EntryProps;
-    rmx::client_entry!("ReloadButton");
+    rsmix::client_entry!("ReloadButton");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         ReloadButton
     }
@@ -1596,7 +1596,7 @@ struct KeyedIsland;
 
 impl Component for KeyedIsland {
     type Props = EntryProps;
-    rmx::client_entry!("KeyedIsland");
+    rsmix::client_entry!("KeyedIsland");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         KeyedIsland
     }
@@ -1650,7 +1650,7 @@ struct EntryWithSharedFrame;
 
 impl Component for EntryWithSharedFrame {
     type Props = EntryProps;
-    rmx::client_entry!("EntryWithSharedFrame");
+    rsmix::client_entry!("EntryWithSharedFrame");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         EntryWithSharedFrame
     }
@@ -1728,7 +1728,7 @@ struct OuterEntry;
 
 impl Component for OuterEntry {
     type Props = EntryProps;
-    rmx::client_entry!("OuterEntry");
+    rsmix::client_entry!("OuterEntry");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         OuterEntry
     }
@@ -1743,7 +1743,7 @@ struct MiddleEntry;
 
 impl Component for MiddleEntry {
     type Props = EntryProps;
-    rmx::client_entry!("MiddleEntry");
+    rsmix::client_entry!("MiddleEntry");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         MiddleEntry
     }
@@ -1758,7 +1758,7 @@ struct ClientOnlyEntry;
 
 impl Component for ClientOnlyEntry {
     type Props = EntryProps;
-    rmx::client_entry!("ClientOnlyEntry");
+    rsmix::client_entry!("ClientOnlyEntry");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         ClientOnlyEntry
     }
@@ -1855,7 +1855,7 @@ struct BlockingOuterEntry;
 
 impl Component for BlockingOuterEntry {
     type Props = EntryProps;
-    rmx::client_entry!("BlockingOuterEntry");
+    rsmix::client_entry!("BlockingOuterEntry");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         BlockingOuterEntry
     }
@@ -1915,7 +1915,7 @@ struct MountedFrame;
 
 impl Component for MountedFrame {
     type Props = EntryProps;
-    rmx::client_entry!("MountedFrame");
+    rsmix::client_entry!("MountedFrame");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         MountedFrame
     }
@@ -1970,7 +1970,7 @@ struct FragmentFrame;
 
 impl Component for FragmentFrame {
     type Props = EntryProps;
-    rmx::client_entry!("FragmentFrame");
+    rsmix::client_entry!("FragmentFrame");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         FragmentFrame
     }
@@ -2012,7 +2012,7 @@ async fn adopts_a_fragment_nested_frame_hydration_marker_at_a_client_entry_bound
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct CardProps {
-    children: rmx::Children,
+    children: rsmix::Children,
 }
 
 /// A client entry that renders its children in a section.
@@ -2020,7 +2020,7 @@ struct Card;
 
 impl Component for Card {
     type Props = CardProps;
-    rmx::client_entry!("Card");
+    rsmix::client_entry!("Card");
     fn setup(_: &CardProps, _: &Handle<Self>) -> Self {
         Card
     }
@@ -2073,7 +2073,7 @@ struct ContextProvider;
 
 impl Component for ContextProvider {
     type Props = EntryProps;
-    rmx::client_entry!("ContextProvider");
+    rsmix::client_entry!("ContextProvider");
     fn setup(_: &EntryProps, h: &Handle<Self>) -> Self {
         h.set_context(ActionContext);
         ContextProvider
@@ -2088,7 +2088,7 @@ struct FrameEntry;
 
 impl Component for FrameEntry {
     type Props = EntryProps;
-    rmx::client_entry!("FrameEntry");
+    rsmix::client_entry!("FrameEntry");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         FrameEntry
     }
@@ -2142,7 +2142,7 @@ struct Clicker {
 
 impl Component for Clicker {
     type Props = EntryProps;
-    rmx::client_entry!("Clicker");
+    rsmix::client_entry!("Clicker");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         Clicker { clicked: false }
     }
@@ -2177,7 +2177,7 @@ async fn merges_hydration_data_across_multiple_rmx_data_scripts() {
     assert_eq!(text("mc-b").as_deref(), Some("B"));
     input("mc-a").click();
     input("mc-b").click();
-    rmx::flush();
+    rsmix::flush();
     assert_eq!(text("mc-a").as_deref(), Some("A!"));
     assert_eq!(text("mc-b").as_deref(), Some("B!"));
 }
@@ -2189,7 +2189,7 @@ struct FocusEntry;
 
 impl Component for FocusEntry {
     type Props = EntryProps;
-    rmx::client_entry!("FocusEntry");
+    rsmix::client_entry!("FocusEntry");
     fn setup(_: &EntryProps, _: &Handle<Self>) -> Self {
         FocusEntry
     }
@@ -2236,7 +2236,7 @@ async fn hydrates_components_without_waiting_for_pending_frames() {
     let _m = mount("hwp", "/hwp", "hw-frame").await;
     tick().await;
     input("mc-count").click();
-    rmx::flush();
+    rsmix::flush();
     assert_eq!(text("mc-count").as_deref(), Some("Count!"), "the entry is interactive first");
     assert_eq!(text("hw-frame").as_deref(), Some("Loading..."));
 

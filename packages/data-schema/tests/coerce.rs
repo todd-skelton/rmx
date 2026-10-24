@@ -1,10 +1,10 @@
 //! Port of data-schema's coerce.test.ts, one test per case (16 of 22).
 //!
-//! Not ported: the four `coerceDate` cases (rmx has no date type), "passes through bigint
+//! Not ported: the four `coerceDate` cases (rsmix has no date type), "passes through bigint
 //! values" and "coerces symbols to strings" (JavaScript-only values). `coerce::integer` is
 //! Remix's `coerceBigint` with an `i64` output.
 
-use rmx_data_schema::{self as s, coerce, Schema, Value};
+use rsmix_data_schema::{self as s, coerce, Schema, Value};
 
 fn ok<S: Schema>(schema: &S, value: impl Into<Value>) -> S::Output {
     s::parse(schema, value).unwrap()

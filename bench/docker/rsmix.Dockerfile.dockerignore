@@ -9,5 +9,5 @@ bench/results
 bench/tools
 bench/leptos-spike
 **/public/pkg
-!bench/rmx-app/public/pkg
+!bench/rsmix-app/public/pkg
 demos/*/tmp

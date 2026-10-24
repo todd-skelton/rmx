@@ -5,16 +5,16 @@
 use std::rc::Rc;
 
 use js_sys::{Array, Object, Reflect};
-use rmx::browser::{self, FetchInit};
-use rmx::{css, on, rsx, Component, EventHandler, FrameContent, FrameRequest, FrameResponse, Handle, Mixin, Node, ResolveFuture};
-use rmx::ui::animation::{animate_entrance, spring, Animate, SpringPreset};
+use rsmix::browser::{self, FetchInit};
+use rsmix::{css, on, rsx, Component, EventHandler, FrameContent, FrameRequest, FrameResponse, Handle, Mixin, Node, ResolveFuture};
+use rsmix::ui::animation::{animate_entrance, spring, Animate, SpringPreset};
 use wasm_bindgen::JsCast;
 
 use crate::{CourseFilterInput, DashboardStatGrid};
 
 pub fn start() {
-    let app = rmx::run(rmx::RunOptions {
-        entries: vec![rmx::entry::<DashboardStatGrid>(), rmx::entry::<CourseFilterInput>()],
+    let app = rsmix::run(rsmix::RunOptions {
+        entries: vec![rsmix::entry::<DashboardStatGrid>(), rsmix::entry::<CourseFilterInput>()],
         resolve_frame: Some(Rc::new(resolve_frame)),
         ..Default::default()
     });
@@ -30,7 +30,7 @@ pub fn start() {
                     let _ = w.location().reload();
                 }
             }));
-            rmx::create_root(&body).render(rsx! {
+            rsmix::create_root(&body).render(rsx! {
                 <div id="app-error" mix={page_css()}>
                     <ErrorCard eyebrow="Unexpected Error" title="Something went wrong" message={message} animated={true}
                         action={Some(rsx! { <button mix={[reload_button_css(), reload]}>"Reload the page"</button> })}/>

@@ -1,7 +1,7 @@
-//! `rmx-ui`: UI helpers for rmx, the Rust counterpart of Remix's `@remix-run/ui`.
+//! `rsmix-ui`: UI helpers for rsmix, the Rust counterpart of Remix's `@remix-run/ui`.
 //!
 //! Like `@remix-run/ui`, this crate is versioned apart from the core component model and is
-//! not re-exported by `rmx`. It provides [`accordion`], [`anchor`], [`animation`], [`combobox`],
+//! not re-exported by `rsmix`. It provides [`accordion`], [`anchor`], [`animation`], [`combobox`],
 //! [`listbox`], [`menu`], [`popover`], [`select`], [`tabs`], [`toggle`] and [`typeahead`].
 
 pub mod accordion;
@@ -28,7 +28,7 @@ pub use event::wait_for_css_transition;
 // onOutsideClick helpers are plain `on` listeners here.
 #[cfg(test)]
 mod browser_only_mixins_tests {
-    use rmx::{attrs, on, render_to_string, rsx, AttrValue, EventHandler};
+    use rsmix::{attrs, on, render_to_string, rsx, AttrValue, EventHandler};
 
     use crate::animation::{animate_entrance, animate_exit, animate_layout};
     use crate::popover;

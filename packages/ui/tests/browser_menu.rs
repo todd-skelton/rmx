@@ -1,16 +1,16 @@
 //! Ports of Remix's `ui/src/menu.test.tsx`. Remix advances fake timers through the 60 ms
 //! selection flash and waits out the 300 ms submenu delay in real time; here both are real
 //! waits. Remix's `mock.method(window, 'setTimeout')` spies are a JS wrapper around
-//! `window.setTimeout` (rmx's timers go through it), and `scrollIntoView` is stubbed like Remix's.
-//! Run with `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_menu`.
+//! `window.setTimeout` (rsmix's timers go through it), and `scrollIntoView` is stubbed like Remix's.
+//! Run with `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_menu`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{node_ref, rsx, EventHandler, Mixin, Node};
-use rmx_ui::menu::{self, ItemOptions, ItemType, MenuSelectItem, SubmenuTriggerOptions};
+use rsmix::test::{render, RenderResult};
+use rsmix::{node_ref, rsx, EventHandler, Mixin, Node};
+use rsmix_ui::menu::{self, ItemOptions, ItemType, MenuSelectItem, SubmenuTriggerOptions};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;

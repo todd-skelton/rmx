@@ -1,6 +1,6 @@
 //! `ui/public/design.ts` and `ui/public/button.ts`: design tokens and the button mixin.
 
-use rmx::{css, Mixin};
+use rsmix::{css, Mixin};
 
 pub mod space {
     pub const XS: &str = "4px";

@@ -2,7 +2,7 @@
 //! `@remix-run/ui/select`).
 //!
 //! ```ignore
-//! use rmx_ui::{listbox::ListboxOption, popover, select};
+//! use rsmix_ui::{listbox::ListboxOption, popover, select};
 //!
 //! rsx! {
 //!     <select::Context default_label="Choose framework" default_value="remix" name="framework">
@@ -28,7 +28,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node};
+use rsmix::{mixin, on, Children, Component, Element, Event, EventHandler, Handle, HostMixin, Mixin, MixinHandle, Node};
 
 use crate::listbox::{self, ListboxOption, ListboxState, RegisteredOption};
 use crate::typeahead::hidden_typeahead;
@@ -422,7 +422,7 @@ impl HostMixin for Trigger {
         #[cfg(target_arch = "wasm32")]
         {
             let registered = s.clone();
-            host.mix(rmx::node_ref(move |node, signal| {
+            host.mix(rsmix::node_ref(move |node, signal| {
                 let Ok(el) = wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(node.element().clone()) else { return };
                 *registered.trigger.borrow_mut() = Some(el.clone());
                 registered.sync_popover();
@@ -545,7 +545,7 @@ impl HostMixin for HiddenInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     struct Label;
 

@@ -1,18 +1,18 @@
 [package]
-name = "rmx-render-middleware"
-description = "Server rendering for rmx-fetch-router handlers: ctx.render(node) with streamed <Frame> resolution"
+name = "rsmix-render-middleware"
+description = "Server rendering for rsmix-fetch-router handlers: ctx.render(node) with streamed <Frame> resolution"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
 http.workspace = true
-# Imported as `rmx` so `rsx!` output (`::rmx::...`) resolves without the umbrella crate.
-rmx = { package = "rmx-component", path = "../component" }
-rmx-fetch.workspace = true
-rmx-response.workspace = true
-rmx-fetch-router.workspace = true
-rmx-url.workspace = true
+# Imported as `rsmix` so `rsx!` output (`::rsmix::...`) resolves without the umbrella crate.
+rsmix = { package = "rsmix-component", path = "../component" }
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-url.workspace = true
 
 [dev-dependencies]
-rmx-fetch.workspace = true
+rsmix-fetch.workspace = true

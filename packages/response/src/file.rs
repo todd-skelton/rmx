@@ -7,13 +7,13 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use bytes::Bytes;
 use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use rmx_crypto::DigestAlgorithm;
-use rmx_headers::{format_http_date, parse_http_date, ContentRange, IfMatch, IfNoneMatch, IfRange, Range};
+use rsmix_crypto::DigestAlgorithm;
+use rsmix_headers::{format_http_date, parse_http_date, ContentRange, IfMatch, IfNoneMatch, IfRange, Range};
 
-use rmx_fetch::{Body, BoxError, File, Request, Response};
+use rsmix_fetch::{Body, BoxError, File, Request, Response};
 
 /// What [file] can serve (Remix's `FileLike`): the in-memory [File], or a lazy file that
-/// reads its content only when streamed (`rmx_lazy_file::LazyFile`).
+/// reads its content only when streamed (`rsmix_lazy_file::LazyFile`).
 pub trait FileLike: Send + Sync {
     fn name(&self) -> &str;
 
@@ -217,14 +217,14 @@ fn build(status: StatusCode, body: Body, values: Headers<'_>) -> Response {
 
 async fn respond<F: FileLike>(file: &F, method: &Method, headers: &HeaderMap, options: &FileResponseOptions<F>) -> Result<Response, BoxError> {
     let get = |name: HeaderName| headers.get(name).and_then(|v| v.to_str().ok());
-    let content_type = rmx_mime::mime_type_to_content_type(file.content_type());
+    let content_type = rsmix_mime::mime_type_to_content_type(file.content_type());
     let size = file.size();
     let etag = match options.etag {
         ETag::Off => None,
         ETag::Weak => Some(format!("W/\"{size}-{}\"", file.last_modified())),
         ETag::Strong => {
             let digest = match &options.digest {
-                Digest::Algorithm(algorithm) => rmx_crypto::hex(&algorithm.digest(&file.bytes().await?)),
+                Digest::Algorithm(algorithm) => rsmix_crypto::hex(&algorithm.digest(&file.bytes().await?)),
                 Digest::With(digest) => digest(file).await,
             };
             Some(format!("\"{digest}\""))
@@ -233,7 +233,7 @@ async fn respond<F: FileLike>(file: &F, method: &Method, headers: &HeaderMap, op
     let last_modified = options.last_modified.then(|| file.last_modified());
     // Remix tests these as JavaScript values, where 0 is false.
     let has_last_modified = last_modified.is_some_and(|ms| ms != 0);
-    let accept_ranges = options.accept_ranges.unwrap_or_else(|| !rmx_mime::is_compressible_mime_type(&content_type));
+    let accept_ranges = options.accept_ranges.unwrap_or_else(|| !rsmix_mime::is_compressible_mime_type(&content_type));
     let validators = || Headers { etag: etag.as_deref(), last_modified, accept_ranges, ..Headers::default() };
     let seconds = |ms: u64| ms / 1000;
     let header_seconds = |name: HeaderName| get(name).and_then(parse_http_date).and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());

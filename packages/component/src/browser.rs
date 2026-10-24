@@ -108,7 +108,7 @@ pub async fn next_frame() -> f64 {
 /// or when `signal` aborts. On the server it fails at once.
 ///
 /// ```ignore
-/// let status = rmx::browser::fetch_form("POST", "/api/cart/toggle", &[("bookId".into(), "1".into())], Some(&signal)).await?;
+/// let status = rsmix::browser::fetch_form("POST", "/api/cart/toggle", &[("bookId".into(), "1".into())], Some(&signal)).await?;
 /// ```
 pub async fn fetch_form(method: &str, url: &str, fields: &[(String, String)], signal: Option<&crate::Signal>) -> Result<u16, String> {
     #[cfg(target_arch = "wasm32")]
@@ -177,7 +177,7 @@ impl FetchResponse {
 ///
 /// ```ignore
 /// let init = FetchInit { method: "POST".into(), headers: vec![("Content-Type".into(), "application/json".into())], body: Some(json), ..Default::default() };
-/// let res = rmx::browser::fetch("/schedules", init).await?;
+/// let res = rsmix::browser::fetch("/schedules", init).await?;
 /// ```
 pub async fn fetch(url: &str, init: FetchInit) -> Result<FetchResponse, String> {
     #[cfg(target_arch = "wasm32")]

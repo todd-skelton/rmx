@@ -4,7 +4,7 @@
 //! highlighting and scrolling the active option into view.
 //!
 //! ```ignore
-//! use rmx_ui::listbox::{self, ListboxOption};
+//! use rsmix_ui::listbox::{self, ListboxOption};
 //!
 //! rsx! {
 //!     <listbox::Context value={self.value.clone()} active_value={self.active.clone()} on_select={select} on_highlight={highlight}>
@@ -20,7 +20,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 
-use rmx::{mixin, on, Children, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node, NodeHandle};
+use rsmix::{mixin, on, Children, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node, NodeHandle};
 
 use crate::typeahead::{hidden_typeahead, match_next_by_search_text};
 
@@ -435,7 +435,7 @@ impl HostMixin for OptionMixin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmx::{render_to_string, rsx};
+    use rsmix::{render_to_string, rsx};
 
     #[test]
     fn renders_roles_and_selection_state() {

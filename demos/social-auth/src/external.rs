@@ -1,17 +1,17 @@
 //! External login (utils/external-auth.ts, actions/auth/{google,github,x}/controller.ts and
-//! resolve-external-auth.ts) on rmx-auth.
+//! resolve-external-auth.ts) on rsmix-auth.
 
 use std::sync::Arc;
 
-use rmx::auth::{
+use rsmix::auth::{
     finish_external_auth, github_provider, google_provider, start_external_auth, x_provider, ClientOptions, Fetch, FinishExternalAuthOptions, GitHubProfile,
     GitHubProvider, OAuthProvider, OidcProfile, OidcProvider, StartExternalAuthOptions, XProfile, XProvider,
 };
-use rmx::fetch::{BoxError, BoxFuture, Request, Response};
-use rmx::response;
-use rmx::middleware::auth::complete_auth;
-use rmx::middleware::session::SessionExt;
-use rmx::router::{action, Context, Router};
+use rsmix::fetch::{BoxError, BoxFuture, Request, Response};
+use rsmix::response;
+use rsmix::middleware::auth::complete_auth;
+use rsmix::middleware::session::SessionExt;
+use rsmix::router::{action, Context, Router};
 
 use crate::routes::{External, ExternalActions, ROUTES};
 use serde::Serialize;

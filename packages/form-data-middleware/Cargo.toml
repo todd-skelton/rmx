@@ -1,5 +1,5 @@
 [package]
-name = "rmx-form-data-middleware"
+name = "rsmix-form-data-middleware"
 description = "Middleware for parsing FormData from request bodies (remix form-data-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-fetch-router.workspace = true
+rsmix-fetch.workspace = true
+rsmix-fetch-router.workspace = true
 
 [dev-dependencies]
-rmx-response.workspace = true
+rsmix-response.workspace = true

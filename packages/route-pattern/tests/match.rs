@@ -1,8 +1,8 @@
 //! Remix's `match.test.ts`. Remix matches URL strings with an optional `baseURL`; here URLs
-//! are parsed (and relative references joined) with `rmx_url` before matching.
+//! are parsed (and relative references joined) with `rsmix_url` before matching.
 
-use rmx_route_pattern::{CaptureKind, Match, MatchParamMeta, Matcher, MatcherOptions, Params, RoutePattern};
-use rmx_url::Url;
+use rsmix_route_pattern::{CaptureKind, Match, MatchParamMeta, Matcher, MatcherOptions, Params, RoutePattern};
+use rsmix_url::Url;
 
 fn url(href: &str) -> Url {
     Url::parse(href).unwrap_or_else(|e| panic!("{href}: {e}"))
@@ -34,7 +34,7 @@ fn meta(kind: CaptureKind, name: &str, begin: usize, end: usize, value: &str) ->
 }
 
 /// Remix's `hostnameCodec` with each value's `new URL(\`https://${value}.example.com/users\`).href`
-/// (computed with Node's WHATWG URL, since rmx_url does no IDNA).
+/// (computed with Node's WHATWG URL, since rsmix_url does no IDNA).
 const HOSTNAME_CODEC: [(&str, &str); 4] = [
     ("caf\u{e9}", "https://xn--caf-dma.example.com/users"),
     ("\u{5317}\u{4eac}-\u{3068}\u{3046}\u{304d}\u{3087}\u{3046}-\u{c11c}\u{c6b8}", "https://xn-----l73aa8a2ltij00u2kino1zl5ma.example.com/users"),

@@ -1,12 +1,12 @@
 //! Ports of Remix's `ui/src/animation/animate-mixins.test.tsx`. Where Remix mocks
 //! `HTMLElement.prototype.animate`, the mock here returns an object built on
-//! `Animation.prototype` (rmx checks that what it tracked is an `Animation`) with the same
+//! `Animation.prototype` (rsmix checks that what it tracked is an `Animation`) with the same
 //! `playState`, `reverse`, `commitStyles`, `cancel` and never-settling `finished`. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_animate_mixins`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_animate_mixins`.
 #![cfg(target_arch = "wasm32")]
 
-use rmx::{create_root, rsx, Mixin};
-use rmx_ui::animation::{animate_entrance, animate_exit, Animate};
+use rsmix::{create_root, rsx, Mixin};
+use rsmix_ui::animation::{animate_entrance, animate_exit, Animate};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
@@ -69,7 +69,7 @@ fn fade(ms: f64) -> Animate {
     Animate::new(ms).opacity(0.0)
 }
 
-fn exit_only(id: &'static str) -> rmx::Node {
+fn exit_only(id: &'static str) -> rsmix::Node {
     rsx! { <div key="item" id={id} mix={[animate_exit(fade(150.0))]}></div> }
 }
 

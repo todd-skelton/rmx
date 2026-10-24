@@ -1,6 +1,6 @@
 [package]
-name = "rmx-fetch"
-description = "The Fetch API for rmx: Request, Response, streaming Body, FormData and AbortSignal on the standard http crate"
+name = "rsmix-fetch"
+description = "The Fetch API for rsmix: Request, Response, streaming Body, FormData and AbortSignal on the standard http crate"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -9,8 +9,8 @@ license.workspace = true
 bytes.workspace = true
 http.workspace = true
 http-body.workspace = true
-rmx-multipart-parser.workspace = true
-rmx-url.workspace = true
+rsmix-multipart-parser.workspace = true
+rsmix-url.workspace = true
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 

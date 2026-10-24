@@ -3,10 +3,10 @@
 //! A [`Session`] holds values and flash messages. A [`SessionStorage`] turns the value of
 //! the session cookie into a session and back: [`CookieStorage`] keeps everything in the
 //! cookie, [`MemoryStorage`] and [`FsStorage`] keep data on the server and only the id in
-//! the cookie. The `session` middleware in `rmx-session-middleware` reads and writes the cookie.
+//! the cookie. The `session` middleware in `rsmix-session-middleware` reads and writes the cookie.
 //!
 //! ```
-//! use rmx_session::Session;
+//! use rsmix_session::Session;
 //!
 //! let session = Session::new();
 //! session.set("user_id", 42);
@@ -38,7 +38,7 @@ pub struct SessionData(pub Map<String, Value>, pub Map<String, Value>);
 
 /// A new random session id (a v4 UUID).
 pub fn create_session_id() -> String {
-    rmx_crypto::random_uuid()
+    rsmix_crypto::random_uuid()
 }
 
 /// One user's session. Cloning shares the same session, so middleware and handlers see

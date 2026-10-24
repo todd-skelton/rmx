@@ -1,9 +1,9 @@
-//! `rmx_node_fetch_server::test`, Remix's `node-fetch-server/test` (`createTestServer`).
+//! `rsmix_node_fetch_server::test`, Remix's `node-fetch-server/test` (`createTestServer`).
 
-use rmx_fetch::Body;
-use rmx_fetch_router::{Context, Router};
-use rmx_node_fetch_server::test::{create_test_server, create_test_server_with};
-use rmx_node_fetch_server::{fetch, ClientAddress, ServeOptions};
+use rsmix_fetch::Body;
+use rsmix_fetch_router::{Context, Router};
+use rsmix_node_fetch_server::test::{create_test_server, create_test_server_with};
+use rsmix_node_fetch_server::{fetch, ClientAddress, ServeOptions};
 
 fn router() -> Router {
     let mut router = Router::new();
@@ -14,14 +14,14 @@ fn router() -> Router {
     router
 }
 
-async fn get(url: &str) -> Result<(u16, String), rmx_fetch::BoxError> {
+async fn get(url: &str) -> Result<(u16, String), rsmix_fetch::BoxError> {
     let response = fetch(http::Request::builder().uri(url).body(Body::empty())?).await?;
     let status = response.status().as_u16();
     Ok((status, response.into_body().text().await?))
 }
 
 /// `server.close()`, failing instead of hanging when it does not return.
-async fn close(server: rmx_node_fetch_server::test::TestServer) {
+async fn close(server: rsmix_node_fetch_server::test::TestServer) {
     let closed = tokio::time::timeout(std::time::Duration::from_secs(5), server.close()).await;
     assert!(closed.is_ok(), "close returns once the server stopped accepting");
 }

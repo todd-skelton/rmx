@@ -1,7 +1,7 @@
 //! Ports of Remix's `headers/src/lib/param-values.test.ts`: [`parse_params`] takes the delimiter
 //! Remix defaults to `;`, and a key without a value is `None` where Remix has `undefined`.
 
-use rmx_headers::parse_params;
+use rsmix_headers::parse_params;
 
 fn p(input: &str) -> Vec<(String, Option<String>)> {
     parse_params(input, b';')

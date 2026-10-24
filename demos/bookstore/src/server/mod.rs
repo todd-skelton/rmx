@@ -15,21 +15,21 @@ pub mod ui;
 use std::time::Duration;
 
 use http::StatusCode;
-use rmx::{rsx, Node};
-use rmx::cookie::{Cookie, SameSite};
-use rmx::fetch::{FormValue, Response};
-use rmx::response;
-use rmx::file_storage::FileStorage;
-use rmx::middleware::auth::{auth, require_auth as require_auth_identity, scheme, session_scheme, AuthExt};
-use rmx::middleware::compression::compression;
-use rmx::middleware::form_data::{form_data, FileUpload};
-use rmx::middleware::logger::logger;
-use rmx::middleware::method_override::method_override;
-use rmx::middleware::session::{session, SessionExt};
-use rmx::middleware::static_files::{static_files, ETag, StaticOptions};
-use rmx::middleware::render::{Render, ResponseInit};
-use rmx::router::{Context, Middleware, Next, Router};
-use rmx::session::SessionStorage;
+use rsmix::{rsx, Node};
+use rsmix::cookie::{Cookie, SameSite};
+use rsmix::fetch::{FormValue, Response};
+use rsmix::response;
+use rsmix::file_storage::FileStorage;
+use rsmix::middleware::auth::{auth, require_auth as require_auth_identity, scheme, session_scheme, AuthExt};
+use rsmix::middleware::compression::compression;
+use rsmix::middleware::form_data::{form_data, FileUpload};
+use rsmix::middleware::logger::logger;
+use rsmix::middleware::method_override::method_override;
+use rsmix::middleware::session::{session, SessionExt};
+use rsmix::middleware::static_files::{static_files, ETag, StaticOptions};
+use rsmix::middleware::render::{Render, ResponseInit};
+use rsmix::router::{Context, Middleware, Next, Router};
+use rsmix::session::SessionStorage;
 use serde::{Deserialize, Serialize};
 
 use crate::cart::Cart;
@@ -61,7 +61,7 @@ pub fn session_cookie() -> Cookie {
 pub fn router<S: SessionStorage, U: FileStorage + Clone>(options: BookstoreOptions<S, U>) -> Router {
     let BookstoreOptions { session_cookie, session_storage, uploads, db, public_dir, cart_delay } = options;
     let mut router = Router::new();
-    if std::env::var("RMX_LOG").is_ok() {
+    if std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
     router.use_middleware(compression());
@@ -108,7 +108,7 @@ fn upload_handler<U: FileStorage + Clone>(uploads: U) -> impl Fn(FileUpload) -> 
 fn random_base36(len: usize) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut bytes = vec![0u8; len];
-    rmx::crypto::fill_random(&mut bytes);
+    rsmix::crypto::fill_random(&mut bytes);
     bytes.iter().map(|b| DIGITS[*b as usize % 36] as char).collect()
 }
 
@@ -193,7 +193,7 @@ pub fn post_auth_redirect(ctx: &Context) -> String {
 }
 
 /// `getLoginRedirectURL(url, route)`: `route` carrying the request's safe `returnTo`.
-pub fn login_redirect_url(ctx: &Context, route: &rmx::router::Route) -> String {
+pub fn login_redirect_url(ctx: &Context, route: &rsmix::router::Route) -> String {
     match safe_return_to(ctx.url().search_params().get("returnTo")) {
         Some(r) => route.href_with_search((), &[("returnTo", r)].into_iter().collect()),
         None => route.href(()),
@@ -225,7 +225,7 @@ pub fn not_found_page(ctx: &Context, node: Node) -> Response {
 
 /// `new Response(null, { status: 204 })`
 pub fn no_content() -> Response {
-    let mut res = Response::new(rmx::fetch::Body::empty());
+    let mut res = Response::new(rsmix::fetch::Body::empty());
     *res.status_mut() = StatusCode::NO_CONTENT;
     res
 }

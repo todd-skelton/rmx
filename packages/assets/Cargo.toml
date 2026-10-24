@@ -1,5 +1,5 @@
 [package]
-name = "rmx-assets"
+name = "rsmix-assets"
 description = "Serve browser assets from source directories: access rules, fingerprints, file transforms, CSS url() and module import rewriting (port of remix/assets)"
 edition.workspace = true
 version.workspace = true
@@ -7,14 +7,14 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-file-storage.workspace = true
-rmx-headers.workspace = true
-rmx-mime.workspace = true
-rmx-fetch-router.workspace = true
-rmx-url.workspace = true
+rsmix-crypto.workspace = true
+rsmix-fetch.workspace = true
+rsmix-file-storage.workspace = true
+rsmix-headers.workspace = true
+rsmix-mime.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-url.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-rmx-response.workspace = true
+rsmix-response.workspace = true

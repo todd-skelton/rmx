@@ -3,12 +3,12 @@
 //! Run with `pwsh ./scripts/test-browser.ps1 -Test browser_mixins`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rmx::{
+use rsmix::{
     create_root, mixin, node_ref, on, rsx, unsafe_html, AttrValue, Children, Component, Element, EventHandler, Handle, HostMixin,
     IntoNode, Mixin, MixinHandle, Node,
 };
@@ -617,7 +617,7 @@ struct UpdateLifecycle;
 impl HostMixin for UpdateLifecycle {
     type Args = &'static str;
     fn setup(h: &MixinHandle<Self>, _: &'static str) -> Self {
-        let step = |node: &rmx::NodeHandle| node.element().get_attribute("data-step").unwrap_or_default();
+        let step = |node: &rsmix::NodeHandle| node.element().get_attribute("data-step").unwrap_or_default();
         h.on_before_update(move |_, _, node| log(format!("before:{}", step(node))));
         h.on_commit(move |_, _, node| log(format!("commit:{}", step(node))));
         UpdateLifecycle

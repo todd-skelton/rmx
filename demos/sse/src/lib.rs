@@ -3,7 +3,7 @@
 //! It opens an `EventSource` after hydration, appends each message to plain component
 //! state, and closes the connection when the component is removed.
 
-use rmx::{css, rsx, Component, Handle, IntoNode, Node};
+use rsmix::{css, rsx, Component, Handle, IntoNode, Node};
 use serde::{Deserialize, Serialize};
 
 /// One server-sent event payload.
@@ -35,7 +35,7 @@ pub struct MessageStream {
 
 impl Component for MessageStream {
     type Props = MessageStreamProps;
-    rmx::client_entry!("MessageStream");
+    rsmix::client_entry!("MessageStream");
 
     fn setup(props: &MessageStreamProps, h: &Handle<Self>) -> Self {
         let url = messages_href(props.limit);
@@ -99,7 +99,7 @@ impl Component for MessageStream {
     }
 }
 
-pub fn card_style() -> rmx::Mixin {
+pub fn card_style() -> rsmix::Mixin {
     css("background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); margin-bottom: 1.5rem;")
 }
 
@@ -110,7 +110,7 @@ mod browser {
     use web_sys::{EventSource, MessageEvent};
 
     use super::{Message, MessageStream};
-    use rmx::Handle;
+    use rsmix::Handle;
 
     /// An open `EventSource` and its listeners. Dropping it closes the connection.
     pub(crate) struct Connection {
@@ -173,5 +173,5 @@ mod browser {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
-    rmx::run(rmx::RunOptions { entries: vec![rmx::entry::<MessageStream>()], ..Default::default() });
+    rsmix::run(rsmix::RunOptions { entries: vec![rsmix::entry::<MessageStream>()], ..Default::default() });
 }

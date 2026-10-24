@@ -2,8 +2,8 @@
 //! `HeaderMap`; [`SuperHeaders::get_joined`] reads it like `Headers.get`.
 
 use http::header::{HeaderMap, HeaderValue};
-use rmx_headers::raw::{canonical_header_name, parse, stringify};
-use rmx_headers::SuperHeaders;
+use rsmix_headers::raw::{canonical_header_name, parse, stringify};
+use rsmix_headers::SuperHeaders;
 
 fn headers(pairs: &[(&'static str, &'static str)]) -> HeaderMap {
     let mut map = HeaderMap::new();

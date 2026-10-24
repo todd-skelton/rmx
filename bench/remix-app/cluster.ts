@@ -1,4 +1,4 @@
-// Multi-process variant of server.ts for a like-for-like comparison with rmx's multithreaded
+// Multi-process variant of server.ts for a like-for-like comparison with rsmix's multithreaded
 // server: one Node worker per logical core (override with REMIX_WORKERS), sharing the port.
 import cluster from 'node:cluster'
 import * as os from 'node:os'

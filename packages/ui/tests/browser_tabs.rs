@@ -1,14 +1,14 @@
 //! Ports of Remix's `ui/src/tabs.test.tsx` (the server rendering case is the
 //! `renders_the_first_enabled_tab_active_on_the_server` unit test in `src/tabs.rs`). Run
-//! with `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_tabs`.
+//! with `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_tabs`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{rsx, Component, EventHandler, Handle, Node};
-use rmx_ui::tabs::{self, on_tabs_change, tabs_change, OnActiveTabChange, TabOptions};
+use rsmix::test::{render, RenderResult};
+use rsmix::{rsx, Component, EventHandler, Handle, Node};
+use rsmix_ui::tabs::{self, on_tabs_change, tabs_change, OnActiveTabChange, TabOptions};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 

@@ -1,5 +1,5 @@
 [package]
-name = "rmx-csrf-middleware"
+name = "rsmix-csrf-middleware"
 description = "Session-backed CSRF protection middleware (remix csrf-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,14 +7,14 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-form-data-middleware.workspace = true
-rmx-fetch-router.workspace = true
-rmx-session.workspace = true
-rmx-url.workspace = true
+rsmix-crypto.workspace = true
+rsmix-fetch.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-session.workspace = true
+rsmix-url.workspace = true
 
 [dev-dependencies]
-rmx-cookie.workspace = true
-rmx-method-override-middleware.workspace = true
-rmx-session-middleware.workspace = true
+rsmix-cookie.workspace = true
+rsmix-method-override-middleware.workspace = true
+rsmix-session-middleware.workspace = true

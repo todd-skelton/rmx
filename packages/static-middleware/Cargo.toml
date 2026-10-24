@@ -1,5 +1,5 @@
 [package]
-name = "rmx-static-middleware"
+name = "rsmix-static-middleware"
 description = "Middleware for serving static files from the filesystem (remix static-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,15 +7,15 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-response.workspace = true
-rmx-fs.workspace = true
-rmx-html-template.workspace = true
-rmx-lazy-file.workspace = true
-rmx-mime.workspace = true
-rmx-fetch-router.workspace = true
-rmx-url.workspace = true
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
+rsmix-fs.workspace = true
+rsmix-html-template.workspace = true
+rsmix-lazy-file.workspace = true
+rsmix-mime.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-url.workspace = true
 
 [dev-dependencies]
-rmx-form-data-middleware.workspace = true
-rmx-method-override-middleware.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-method-override-middleware.workspace = true

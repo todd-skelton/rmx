@@ -1,4 +1,4 @@
-use rmx_fetch::block_on;
+use rsmix_fetch::block_on;
 use serde_json::json;
 
 use super::*;
@@ -103,14 +103,14 @@ fn cookie_storage_keeps_data_in_the_cookie() {
 #[cfg(feature = "fs")]
 #[test]
 fn fs_storage_round_trips_and_deletes() {
-    let dir = std::env::temp_dir().join(format!("rmx-session-test-{}", rmx_crypto::random_hex(8)));
+    let dir = std::env::temp_dir().join(format!("rsmix-session-test-{}", rsmix_crypto::random_hex(8)));
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     rt.block_on(async {
         let storage = FsStorage::new(&dir).unwrap();
         let s = storage.read(None).await.unwrap();
         s.set("n", 7);
         let id = storage.save(&s).await.unwrap().unwrap();
-        let hash = rmx_crypto::hex(&rmx_crypto::sha256(id.as_bytes()));
+        let hash = rsmix_crypto::hex(&rsmix_crypto::sha256(id.as_bytes()));
         assert!(dir.join(&hash[..2]).join(&hash[2..]).is_file());
         let loaded = storage.read(Some(&id)).await.unwrap();
         assert_eq!(loaded.get::<i32>("n"), Some(7));

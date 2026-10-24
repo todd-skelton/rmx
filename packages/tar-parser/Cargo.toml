@@ -1,5 +1,5 @@
 [package]
-name = "rmx-tar-parser"
+name = "rsmix-tar-parser"
 description = "A streaming tar parser (remix/tar-parser): ustar, GNU and PAX headers, with size limits and path checks"
 edition.workspace = true
 version.workspace = true
@@ -9,4 +9,4 @@ license.workspace = true
 
 [dev-dependencies]
 flate2 = "1"
-rmx-crypto.workspace = true
+rsmix-crypto.workspace = true

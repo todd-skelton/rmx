@@ -1,6 +1,6 @@
 //! Ports of Remix's `mime/src/lib/is-compressible-mime-type.test.ts`.
 
-use rmx_mime::is_compressible_mime_type;
+use rsmix_mime::is_compressible_mime_type;
 
 #[test]
 fn compressible() {

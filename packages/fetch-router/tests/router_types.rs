@@ -5,8 +5,8 @@
 //! and `ctx.get::<T>()` is always an `Option`, so those checks have no counterpart; the
 //! requests the cases send are ported here.
 
-use rmx::fetch::{block_on, Body, FormData, Request};
-use rmx::router::{Context, Next, Router};
+use rsmix::fetch::{block_on, Body, FormData, Request};
+use rsmix::router::{Context, Next, Router};
 
 #[derive(Clone)]
 struct CurrentUser {

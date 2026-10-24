@@ -1,13 +1,13 @@
 //! Let HTML forms send PUT/PATCH/DELETE via a hidden `_method` field.
 
 use http::Method;
-use rmx_fetch_router::{Context, Middleware, Next};
+use rsmix_fetch_router::{Context, Middleware, Next};
 
-use rmx_form_data_middleware::FormDataExt;
+use rsmix_form_data_middleware::FormDataExt;
 
 /// Overrides the request method with the uppercased value of the `_method` form field.
 ///
-/// Must run after [`rmx_form_data_middleware::form_data()`], which only parses forms for requests other than GET
+/// Must run after [`rsmix_form_data_middleware::form_data()`], which only parses forms for requests other than GET
 /// and HEAD. Like Remix `methodOverride()`, the first value for the field is used when it is
 /// text, and only the router's request methods (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS)
 /// are accepted.
@@ -42,11 +42,11 @@ fn request_method(m: &str) -> Option<Method> {
 
 #[cfg(test)]
 mod tests {
-    use rmx_fetch::{block_on, Body};
-    use rmx_fetch_router::{Context, Router};
+    use rsmix_fetch::{block_on, Body};
+    use rsmix_fetch_router::{Context, Router};
 
-    fn router(mw: impl rmx_fetch_router::Middleware + 'static) -> Router {
-        let mut router = Router::new().with(rmx_form_data_middleware::form_data()).with(mw);
+    fn router(mw: impl rsmix_fetch_router::Middleware + 'static) -> Router {
+        let mut router = Router::new().with(rsmix_form_data_middleware::form_data()).with(mw);
         router.post("/", |_: Context| async { "Created" });
         router.delete("/", |_: Context| async { "Deleted" });
         router.put("/", |_: Context| async { "Updated" });
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn overrides_post_from_form_field() {
-        let mut router = Router::new().with(rmx_form_data_middleware::form_data()).with(super::method_override());
+        let mut router = Router::new().with(rsmix_form_data_middleware::form_data()).with(super::method_override());
         router.delete("/users/:id", |ctx: Context| async move { format!("deleted {}", ctx.param("id").unwrap()) });
         let req = http::Request::builder()
             .method("POST")

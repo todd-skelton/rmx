@@ -4,12 +4,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_frame_resolver`.
 #![cfg(all(target_arch = "wasm32", feature = "frames"))]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, rsx, Frame, FrameContent, FrameHandle, FrameRequest, FrameResponse, Frames, ReloadOptions, Root, RunOptions};
+use rsmix::{create_root, rsx, Frame, FrameContent, FrameHandle, FrameRequest, FrameResponse, Frames, ReloadOptions, Root, RunOptions};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
@@ -17,7 +17,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
     static REQUESTS: RefCell<Vec<FrameRequest>> = const { RefCell::new(Vec::new()) };
     /// What the resolver answers: HTML plus an optional redirected URL, or a node.
     static NEXT: RefCell<Answer> = RefCell::new(Answer::Html("<p id=\"content\">Content</p>".into(), None));
@@ -37,7 +37,7 @@ fn answer(next: Answer) {
     NEXT.with(|n| *n.borrow_mut() = next);
 }
 
-fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
+fn resolve(request: FrameRequest) -> rsmix::ResolveFuture {
     let by_src = request.url.ends_with("/error-node");
     REQUESTS.with(|r| r.borrow_mut().push(request));
     let next = NEXT.with(|n| n.borrow().clone());
@@ -59,7 +59,7 @@ fn resolve(request: FrameRequest) -> rmx::ResolveFuture {
 
 async fn start() {
     if APP.with(|a| a.borrow().is_none()) {
-        let app = rmx::run(RunOptions { resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
+        let app = rsmix::run(RunOptions { resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
         APP.with(|a| *a.borrow_mut() = Some(app));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
@@ -300,7 +300,7 @@ fn held_stream(first: &str) -> (web_sys::ReadableStream, js_sys::Function) {
 
 #[wasm_bindgen_test]
 async fn streams_resolver_templates_and_updates_nested_placeholders_incrementally() {
-    use rmx::ssr::{flush_marker, HydrationData, TEMPLATE_END};
+    use rsmix::ssr::{flush_marker, HydrationData, TEMPLATE_END};
     let m = mount("streamed").await;
     let mut d = HydrationData::default();
     d.frames.push(("sn1".into(), "/nested".into(), None, "pending"));

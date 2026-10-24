@@ -4,27 +4,27 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::{header, HeaderValue, StatusCode};
 use lazy_frames_demo::*;
-use rmx::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
-use rmx::cookie::{Cookie, CookieProperties, SameSite};
-use rmx::response::{self, FileResponseOptions};
-use rmx::fetch::Response;
-use rmx::middleware::form_data::{form_data, FormDataExt};
-use rmx::middleware::logger::logger;
-use rmx::fs::{open_lazy_file, OpenLazyFileOptions};
-use rmx::middleware::static_files::{static_files, StaticOptions};
-use rmx::middleware::render::{Render, ResponseInit};
-use rmx::router::routes::{get, post, prefix, Route, RouteMap};
-use rmx::router::{action, Context, Next, Router};
+use rsmix::{css, rsx, Children, Component, Frame, Handle, Mixin, Node};
+use rsmix::cookie::{Cookie, CookieProperties, SameSite};
+use rsmix::response::{self, FileResponseOptions};
+use rsmix::fetch::Response;
+use rsmix::middleware::form_data::{form_data, FormDataExt};
+use rsmix::middleware::logger::logger;
+use rsmix::fs::{open_lazy_file, OpenLazyFileOptions};
+use rsmix::middleware::static_files::{static_files, StaticOptions};
+use rsmix::middleware::render::{Render, ResponseInit};
+use rsmix::router::routes::{get, post, prefix, Route, RouteMap};
+use rsmix::router::{action, Context, Next, Router};
 
 pub fn main() {
-    rmx::router::routes::routes_command(&*ROUTES);
+    rsmix::router::routes::routes_command(&*ROUTES);
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44100".into());
     let root = std::env::var("DEMO_DIR").unwrap_or_else(|_| "demos/lazy-frames".into());
     let addr = format!("{host}:{port}");
     println!("lazy-frames demo on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(Config::from_env(root)))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(Config::from_env(root)))).expect("serve");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ pub static ROUTES: LazyLock<Routes> = LazyLock::new(|| {
 pub struct Config {
     /// The demo directory: `public/` and `frames-html/` live here.
     pub root: PathBuf,
-    /// `RMX_ENV=production` makes frame responses publicly cacheable.
+    /// `RSMIX_ENV=production` makes frame responses publicly cacheable.
     pub production: bool,
     /// Delay applied to every request while the latency cookie is set.
     pub latency: Duration,
@@ -72,7 +72,7 @@ impl Config {
         let ms = std::env::var("DEMO_LATENCY_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(520);
         Config {
             root: root.into(),
-            production: std::env::var("RMX_ENV").as_deref() == Ok("production"),
+            production: std::env::var("RSMIX_ENV").as_deref() == Ok("production"),
             latency: Duration::from_millis(ms),
         }
     }
@@ -81,7 +81,7 @@ impl Config {
 pub fn router(config: Config) -> Router {
     let config = Arc::new(config);
     let mut router = Router::new();
-    if !config.production && std::env::var("RMX_LOG").is_ok() {
+    if !config.production && std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
     router.use_middleware(load_theme);
@@ -284,7 +284,7 @@ pub static EXHIBITS: LazyLock<Vec<Exhibit>> = LazyLock::new(|| {
         Exhibit {
             id: "field-notes",
             title: "Stream a checked-in fragment",
-            description: "A file response supplies Frame content without invoking the rmx component renderer.",
+            description: "A file response supplies Frame content without invoking the rsmix component renderer.",
             kind: ExhibitKind::Html,
         },
         Exhibit {
@@ -507,7 +507,7 @@ impl Component for Document {
                 <head>
                     <meta charset="utf-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                    <meta name="description" content="A long-page demo that mounts rmx Frames as they approach the viewport."/>
+                    <meta name="description" content="A long-page demo that mounts rsmix Frames as they approach the viewport."/>
                     <title>{props.title.clone()}</title>
                     <script type="module" async src="/boot.js"></script>
                 </head>
@@ -551,7 +551,7 @@ impl Component for HomePage {
                     <div mix={hero_inner_style()}>
                         <h1 mix={hero_heading_style()}>"Load Frames as" <br/> "they approach."</h1>
                         <p mix={hero_copy_style()}>
-                            "This demo\u{2019}s " <code>"LazyFrame"</code> " renders a placeholder with the page, then mounts an rmx "
+                            "This demo\u{2019}s " <code>"LazyFrame"</code> " renders a placeholder with the page, then mounts an rsmix "
                             <code>"Frame"</code> " within 320 pixels of the viewport. Loaded Frames stay mounted."
                         </p>
                         <ol mix={flow_style()} aria-label="Lazy frame lifecycle">

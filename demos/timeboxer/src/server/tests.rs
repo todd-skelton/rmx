@@ -2,8 +2,8 @@
 //! `actions/auth/controller.test.ts` and `actions/schedules/{controller,authorization,
 //! validation}.test.ts`, with their request helpers as [`Client`].
 
-use rmx::fetch::{block_on, Body};
-use rmx::session::MemoryStorage;
+use rsmix::fetch::{block_on, Body};
+use rsmix::session::MemoryStorage;
 use serde_json::{json, Value};
 
 use super::*;
@@ -71,10 +71,10 @@ fn assert_contains(html: &str, needle: &str) {
 fn multipart(fields: &[(&str, &str)]) -> (String, String) {
     let mut body = String::new();
     for (name, value) in fields {
-        body.push_str(&format!("--rmx\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"));
+        body.push_str(&format!("--rsmix\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"));
     }
-    body.push_str("--rmx--\r\n");
-    ("multipart/form-data; boundary=rmx".into(), body)
+    body.push_str("--rsmix--\r\n");
+    ("multipart/form-data; boundary=rsmix".into(), body)
 }
 
 impl App {

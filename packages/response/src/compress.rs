@@ -12,9 +12,9 @@ use std::io::{self, Write};
 use bytes::Bytes;
 use flate2::write::{GzEncoder, ZlibEncoder};
 use http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use rmx_headers::{AcceptEncoding, CacheControl, Vary};
+use rsmix_headers::{AcceptEncoding, CacheControl, Vary};
 
-use rmx_fetch::{Body, Response};
+use rsmix_fetch::{Body, Response};
 
 /// A content coding [compress_response] can produce.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

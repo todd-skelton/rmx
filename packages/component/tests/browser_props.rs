@@ -6,18 +6,18 @@
 //! `Node::element` or `Node::from_json`, since `rsx!` rejects them at compile time.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::borrow::Cow;
 
-use rmx::{create_root, css, rsx, unsafe_html, AttrValue, Node};
+use rsmix::{create_root, css, rsx, unsafe_html, AttrValue, Node};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-const BLOCKED: &str = "javascript:throw new Error('rmx has blocked a javascript: URL as a security precaution.')";
+const BLOCKED: &str = "javascript:throw new Error('rsmix has blocked a javascript: URL as a security precaution.')";
 
 fn document() -> web_sys::Document {
     web_sys::window().unwrap().document().unwrap()
@@ -72,7 +72,7 @@ fn does_not_reflect_inline_event_handler_properties() {
     let div = find(&el, "div");
     let global = js_sys::global();
     js_sys::Reflect::set(&global, &"__rmxInlineCalls".into(), &0.into()).unwrap();
-    root.render(Node::element("div", None, vec![("onclick", str("__rmxInlineCalls++"))], vec![], vec![rmx::IntoNode::into_node("content")]));
+    root.render(Node::element("div", None, vec![("onclick", str("__rmxInlineCalls++"))], vec![], vec![rsmix::IntoNode::into_node("content")]));
     assert!(find(&el, "div").is_same_node(Some(&div)));
     assert!(!div.has_attribute("onclick"));
     div.unchecked_ref::<web_sys::HtmlElement>().click();
@@ -105,20 +105,20 @@ fn does_not_mutate_an_element_prototype_through_a_host_prop() {
 #[wasm_bindgen_test]
 fn reflects_custom_element_properties() {
     js_sys::Function::new_no_args(
-        "if (!customElements.get('x-rmx-host-props-test')) customElements.define('x-rmx-host-props-test', class extends HTMLElement { settings = undefined })",
+        "if (!customElements.get('x-rsmix-host-props-test')) customElements.define('x-rsmix-host-props-test', class extends HTMLElement { settings = undefined })",
     )
     .call0(&JsValue::NULL)
     .unwrap();
     let el = container();
     let root = create_root(&el);
-    root.render(rsx! { <x-rmx-host-props-test settings="compact" title="t"></x-rmx-host-props-test> });
-    let custom = find(&el, "x-rmx-host-props-test");
+    root.render(rsx! { <x-rsmix-host-props-test settings="compact" title="t"></x-rsmix-host-props-test> });
+    let custom = find(&el, "x-rsmix-host-props-test");
     assert_eq!(js_sys::Reflect::get(&custom, &"settings".into()).unwrap().as_string().as_deref(), Some("compact"));
     // A property the element defines is set as a property, not reflected to an attribute.
     assert!(!custom.has_attribute("settings"));
     assert_eq!(custom.get_attribute("title").as_deref(), Some("t"));
 
-    root.render(rsx! { <x-rmx-host-props-test settings="full"></x-rmx-host-props-test> });
+    root.render(rsx! { <x-rsmix-host-props-test settings="full"></x-rsmix-host-props-test> });
     assert_eq!(js_sys::Reflect::get(&custom, &"settings".into()).unwrap().as_string().as_deref(), Some("full"));
 }
 

@@ -3,8 +3,8 @@
 //! context menu are the fixtures from `menu.test.tsx`, so the browser checks can cover
 //! submenus and context menus.
 
-use rmx::{css, rsx, Component, Handle, Mixin, Node};
-use rmx::ui::menu::{self, ItemOptions, SubmenuTriggerOptions};
+use rsmix::{css, rsx, Component, Handle, Mixin, Node};
+use rsmix::ui::menu::{self, ItemOptions, SubmenuTriggerOptions};
 
 pub struct MenuDemo {
     selected: String,
@@ -13,7 +13,7 @@ pub struct MenuDemo {
 
 impl Component for MenuDemo {
     type Props = ();
-    rmx::client_entry!("MenuDemo");
+    rsmix::client_entry!("MenuDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         MenuDemo { selected: "none".into(), word_wrap: false }

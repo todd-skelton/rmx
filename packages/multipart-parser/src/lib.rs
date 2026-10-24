@@ -11,7 +11,7 @@
 //! (1000) and total content (20 parts' worth plus 1 MiB) by default.
 //!
 //! ```
-//! use rmx_multipart_parser::{parse_multipart, MultipartOptions};
+//! use rsmix_multipart_parser::{parse_multipart, MultipartOptions};
 //!
 //! let body = b"--b\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nDune\r\n--b--";
 //! let parts = parse_multipart(body, "b", &MultipartOptions::default()).unwrap();
@@ -25,7 +25,7 @@ use std::future::poll_fn;
 use std::pin::Pin;
 
 use bytes::Bytes;
-use rmx_headers::{ContentDisposition, ContentType};
+use rsmix_headers::{ContentDisposition, ContentType};
 
 /// Why a parse failed. The messages match Remix's error messages.
 #[derive(Clone, Debug, PartialEq, Eq)]

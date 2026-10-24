@@ -1,14 +1,14 @@
 [package]
-name = "rmx-ui"
-description = "Headless, accessible UI primitives and animation utilities for rmx components (remix ui): accordion, anchor, combobox, listbox, menu, popover, select, tabs, toggle, springs and layout animation"
+name = "rsmix-ui"
+description = "Headless, accessible UI primitives and animation utilities for rsmix components (remix ui): accordion, anchor, combobox, listbox, menu, popover, select, tabs, toggle, springs and layout animation"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
-# Imported as `rmx` so `rsx!` output (`::rmx::...`) resolves without the umbrella crate.
-# No frames or navigation: an app that uses neither can compile them out (see rmx's features).
-rmx = { package = "rmx-component", path = "../component", default-features = false }
+# Imported as `rsmix` so `rsx!` output (`::rsmix::...`) resolves without the umbrella crate.
+# No frames or navigation: an app that uses neither can compile them out (see rsmix's features).
+rsmix = { package = "rsmix-component", path = "../component", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
@@ -36,7 +36,7 @@ web-sys = { workspace = true, features = [
     "Window",
 ] }
 
-# Browser tests (`tests/browser_*.rs`): run with ../../scripts/test-browser.ps1 -Crate rmx-ui.
+# Browser tests (`tests/browser_*.rs`): run with ../../scripts/test-browser.ps1 -Crate rsmix-ui.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.79"
 web-sys = { workspace = true, features = ["FocusEvent", "FocusEventInit", "FormData", "HtmlButtonElement", "HtmlFormElement", "HtmlInputElement", "KeyboardEvent", "KeyboardEventInit", "MouseEvent", "MouseEventInit"] }

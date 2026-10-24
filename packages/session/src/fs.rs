@@ -35,7 +35,7 @@ impl FsStorage {
     }
 
     fn file(&self, id: &str) -> PathBuf {
-        let hash = rmx_crypto::hex(&rmx_crypto::sha256(id.as_bytes()));
+        let hash = rsmix_crypto::hex(&rsmix_crypto::sha256(id.as_bytes()));
         self.root.join(&hash[..2]).join(&hash[2..])
     }
 

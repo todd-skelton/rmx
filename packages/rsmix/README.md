@@ -1,14 +1,14 @@
-# rmx
+# rsmix
 
-The `rmx` crate: Remix 3 in idiomatic Rust, in one dependency (the counterpart of Remix's
-`remix` package). Server rendering runs on rmx's own router and hyper server, and interactive
+The `rsmix` crate: Remix 3 in idiomatic Rust, in one dependency (the counterpart of Remix's
+`remix` package). Server rendering runs on rsmix's own router and hyper server, and interactive
 islands compile to WebAssembly. This is a fun side project, not a production framework. The
 repository overview is in the [root README](../../README.md).
 
 ## The Component Model
 
 Remix 3 components keep state in plain variables in a setup closure and re-render only when
-you call `handle.update()`. rmx maps that onto a Rust struct:
+you call `handle.update()`. rsmix maps that onto a Rust struct:
 
 1. `setup(props, h)` runs once and returns the state struct (Remix's setup closure).
 2. `render(&self, props, h)` turns state into a `Node` tree (Remix's returned render function).
@@ -23,7 +23,7 @@ pub struct Counter {
 
 impl Component for Counter {
     type Props = CounterProps;
-    rmx::client_entry!("Counter"); // makes it an island
+    rsmix::client_entry!("Counter"); // makes it an island
 
     fn setup(props: &CounterProps, _: &Handle<Self>) -> Self {
         Counter { count: props.initial }
@@ -86,17 +86,17 @@ A proc macro built on `rstml`. Templates live inside `.rs` files; there is no se
 ## What Is Implemented
 
 Each Remix 3 package is a crate under `packages/`, and, like the `remix` package with its
-subpath exports, the `rmx` crate (`packages/rmx`) puts them behind one dependency: the
-component model at the root (`rmx::rsx`, `rmx::Component`), the rest as modules
-(`rmx::router`, `rmx::middleware::session`, `rmx::auth`, `rmx::ui`, ...), at the same
-paths as Remix's subpath exports (`remix/middleware/session` is `rmx::middleware::session`).
+subpath exports, the `rsmix` crate (`packages/rsmix`) puts them behind one dependency: the
+component model at the root (`rsmix::rsx`, `rsmix::Component`), the rest as modules
+(`rsmix::router`, `rsmix::middleware::session`, `rsmix::auth`, `rsmix::ui`, ...), at the same
+paths as Remix's subpath exports (`remix/middleware/session` is `rsmix::middleware::session`).
 Server modules exist only in native builds; a wasm build of the same crate gets the
 component runtime plus `ui`, `router`, `fetch`, `response`, `spa`, `url`, `headers`, `mime`
-and `route_pattern`. Every demo depends on `rmx` alone (unpkg also uses
-`rmx-html-template` directly, since its `html!` macro expands to that crate's path). The
+and `route_pattern`. Every demo depends on `rsmix` alone (unpkg also uses
+`rsmix-html-template` directly, since its `html!` macro expands to that crate's path). The
 crates:
 
-1. `rmx-component` (`packages/component`): components, `rsx!`, streaming SSR with hydration markers,
+1. `rsmix-component` (`packages/component`): components, `rsx!`, streaming SSR with hydration markers,
    client entries hydrated by adopting server DOM, keyed reconciliation, `css` mixins,
    host mixins with insert/remove/reclaim lifecycles, `<Frame>` (blocking, non-blocking,
    named, client-mounted, custom resolvers), soft navigation through the Navigation API
@@ -109,7 +109,7 @@ crates:
    (`App::on_error`), root-level error events (`Root::on_error`:
    `update()` from `render` or before the first commit, `update()` loops stopped after 50
    cascading renders, `Handle::report_error`, bubbling DOM `error` events), and
-   `rmx::test` (`render`, `query`, `query_all`, `act`, `cleanup`), the counterpart of
+   `rsmix::test` (`render`, `query`, `query_all`, `act`, `cleanup`), the counterpart of
    `remix/component/test`. Keyed `<Fragment key>`, an explicit `<head>` that renders into
    `document.head`, SVG namespaces carried through components (HTML again inside
    `<foreignObject>`, `xlink:`/`xml:` attributes namespaced), form `value`/`checked`/
@@ -190,7 +190,7 @@ crates:
    reported to the app's error listeners. Server streaming is checked by ports of `stream.test.tsx`
    (`packages/component/tests/ssr_*.rs`, and `packages/render-middleware/src/stream_tests.rs` for frames,
    which resolve through the router).
-2. Server: `rmx-fetch-router` (routes, middleware, nested mounts, controllers, and
+2. Server: `rsmix-fetch-router` (routes, middleware, nested mounts, controllers, and
    `async_context` for reading the request context deeper in the call stack; route maps
    derive `RouteMap`, which generates a `<Name>Actions` struct so `router.map(&ROUTES,
    Controller::new(RoutesActions { .. }).with(require_auth()))` checks at compile time
@@ -206,14 +206,14 @@ crates:
    `router.test.ts` ported one per case, 64 tests plus 6 compile-fail doctests for the
    controller shapes Remix checks at runtime, and the request-context, middleware, route-map
    and route helper tests likewise; `options` and `Prefix::head`/`options` build HEAD and
-   OPTIONS routes), `rmx-route-pattern` (Remix's
+   OPTIONS routes), `rsmix-route-pattern` (Remix's
    `route-pattern`: parser with its `ParseError` types, matcher with specificity ranking and
    resource limits, joins, and hrefs with `base_url`-relative output; Remix's tests ported),
-   `rmx-fetch` (Request, Response, FormData with Remix's `parseFormData`: URL-encoded and
+   `rsmix-fetch` (Request, Response, FormData with Remix's `parseFormData`: URL-encoded and
    multipart only, other media types an error before the body is read, upload handlers that
    may return a `Result`, streaming uploads in `form_data::future` (Remix 3.1's
    `form-data-parser/future`: each `FileUpload` reaches the handler when its headers arrive
-   and streams its content from the request; `rmx-form-data-middleware` has a matching
+   and streams its content from the request; `rsmix-form-data-middleware` has a matching
    `future` module), and `File::new` lowercasing the type like the web `File`; the
    `remix/response` constructors, where `html` and `html_with` take strings, `SafeHtml`,
    bytes, files or streams (a doctype prepended unless present; a stream error aborts the
@@ -224,19 +224,19 @@ crates:
    with `html.test.ts`, `redirect.test.ts` and `file.test.ts` ported one per case; and `AbortController` / `AbortSignal` for
    `request.signal`: the router checks it before each middleware step and races it like
    Remix's `raceRequestAbort`, answering an aborted request with a 499 that carries
-   `AbortError`), `rmx-node-fetch-server` (hyper server with
+   `AbortError`), `rsmix-node-fetch-server` (hyper server with
    `node-fetch-server`'s options: `host`, `protocol`, `trust_proxy` for `Forwarded` and
    `X-Forwarded-*`, `on_error` with panics answered as 500, and `ClientAddress`; each
    request's signal aborts when the client leaves before the response finished, request
    bodies are read at most 16 KiB ahead of the handler and fail with `AbortError` once the
    client went away, and a handler failing after the abort is not reported to `on_error`;
    `request-listener.test.ts` and its HTTP/2 file ported one test per case, 64, against real
-   loopback servers; plus an HTTP/1 `fetch` client), `rmx-fetch-proxy` (Remix's `fetch-proxy.test.ts` ported one per case, including real
+   loopback servers; plus an HTTP/1 `fetch` client), `rsmix-fetch-proxy` (Remix's `fetch-proxy.test.ts` ported one per case, including real
    servers for streamed bodies, redirects and a trusted development proxy; a `redirect`
    option, overridable per request, returns redirects by default or follows them with
-   fetch's rules), `rmx-render-middleware`, one crate per Remix middleware package
-   (`rmx-compression-middleware` with
-   br/gzip/deflate negotiation through `rmx_response::compress`, Remix's
+   fetch's rules), `rsmix-render-middleware`, one crate per Remix middleware package
+   (`rsmix-compression-middleware` with
+   br/gzip/deflate negotiation through `rsmix_response::compress`, Remix's
    `remix/response/compress`, which reads a source chunk only after the previous output was
    taken; `compress.test.ts` and the middleware's tests ported one per case), static files served as Remix does (each
    file opened as a `LazyFile` and answered by `response::file`, typed by the requested path,
@@ -244,38 +244,38 @@ crates:
    path component is checked with one `symlink_metadata` call and only links go through
    `canonicalize`, where Remix resolves the root and the path on every request) and
    directory listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
-   override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
+   override, logger with Remix's format tokens and colors), `rsmix-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer, custom providers with their own
    token types and transaction state, OIDC `map_profile`; Remix's 17 auth test files ported one
    test per case, including the full browser flow against a fake OIDC server on a loopback port).
-3. Supporting crates: `rmx-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
+3. Supporting crates: `rsmix-data-schema` (Remix's `data-schema`: schemas, checks, coercion,
    error maps, `unknownKeys` passthrough (`Fields::rest`) and strict modes, and typed
    `FormData` / `URLSearchParams` parsing, with Remix's test files ported one per case, used by the timeboxer,
-   bookstore, social-auth and sse ports wherever the Remix demos use it), `rmx-assets` (Remix's asset server for scripts, stylesheets and file assets: request and global transforms with an optional output cache, `FsFileCache` (Remix's `createFsFileCache` disk LRU), `on_error` with Remix's error codes, fingerprints, CSS import cycles, mixed-root preloads; 111 `asset-server.test.ts` cases plus its routes, paths, fingerprint and all 24 cache tests ported; asset inspection, `assets()` and `asset_details()`, and its
-   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rmx-cookie` (Remix's `Cookie`: `Path=/` and
+   bookstore, social-auth and sse ports wherever the Remix demos use it), `rsmix-assets` (Remix's asset server for scripts, stylesheets and file assets: request and global transforms with an optional output cache, `FsFileCache` (Remix's `createFsFileCache` disk LRU), `on_error` with Remix's error codes, fingerprints, CSS import cycles, mixed-root preloads; 111 `asset-server.test.ts` cases plus its routes, paths, fingerprint and all 24 cache tests ported; asset inspection, `assets()` and `asset_details()`, and its
+   `assets` command: `cargo run -p template-demo -- assets inspect app/actions/public/entry.js`), `rsmix-cookie` (Remix's `Cookie`: `Path=/` and
    `SameSite=Lax` defaults, the base64 value codec or a custom `encode`/`decode`, signing with
-   secret rotation, `Expires` and `Partitioned`, and `serialize_with` overrides), `rmx-crypto` (SHA-1/256/384/512 by Web Crypto name, HMAC, PBKDF2, scrypt; no
-   dependencies), `rmx-session` (Remix's `session` package with its storage tests; the
+   secret rotation, `Expires` and `Partitioned`, and `serialize_with` overrides), `rsmix-crypto` (SHA-1/256/384/512 by Web Crypto name, HMAC, PBKDF2, scrypt; no
+   dependencies), `rsmix-session` (Remix's `session` package with its storage tests; the
    session middleware runs Remix's `session.test.ts` and `session-expiration.test.ts`, and
    seals the session with `Context::set_sealed` so a handler that replaces it panics with
    Remix's "Cannot save session that was initialized by another middleware/handler"),
-   `rmx-file-storage`, `rmx-lazy-file` (Remix's `lazy-file`: `LazyFile` and `LazyBlob` know
+   `rsmix-file-storage`, `rsmix-lazy-file` (Remix's `lazy-file`: `LazyFile` and `LazyBlob` know
    their size and type up front and read content only when streamed; `slice` narrows the byte
-   range without reading; works in the browser too), `rmx-fs` (Remix's `fs`: `open_lazy_file`
+   range without reading; works in the browser too), `rsmix-fs` (Remix's `fs`: `open_lazy_file`
    streams a file from disk on demand, `write_file` and `write_to` stream any file or blob to
-   disk; both packages' tests ported one per case), `rmx-tar-parser` (Remix's `tar.test.ts`, `tar-name.test.ts` and
+   disk; both packages' tests ported one per case), `rsmix-tar-parser` (Remix's `tar.test.ts`, `tar-name.test.ts` and
    `tar-size.test.ts` ported one per case, including the lodash and npm package fixtures;
    `TarParser::parse` reuses one parser across archives like Remix's `parser.parse`, and
-   bodies grow from received bytes rather than the declared size), `rmx-multipart-parser` (Remix's multipart, request,
+   bodies grow from received bytes rather than the declared size), `rsmix-multipart-parser` (Remix's multipart, request,
    Node and buffer-search tests ported one per case; an empty request body is reported
    before a missing boundary, as in Remix; `future` yields each part as soon as its headers
-   arrive, with its content as views of the body chunks), `rmx-html-template`,
-   `rmx-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
+   arrive, with its content as views of the body chunks), `rsmix-html-template`,
+   `rsmix-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
    nested-safe `Styles` and a `Terminal` over injectable streams; the logger uses it),
-   `rmx-headers` (every Remix header type, raw header blocks, and `SuperHeaders` as a
-   typed-access trait on `http::HeaderMap`), `rmx-mime` (Remix's mime-db table and
-   `defineMimeType`), `rmx-spa`, `rmx-url`.
-4. `rmx-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
+   `rsmix-headers` (every Remix header type, raw header blocks, and `SuperHeaders` as a
+   typed-access trait on `http::HeaderMap`), `rsmix-mime` (Remix's mime-db table and
+   `defineMimeType`), `rsmix-spa`, `rsmix-url`.
+4. `rsmix-ui`: all ten `@remix-run/ui` modules: accordion, anchor, animation (spring, tween,
    entrance, exit, FLIP layout), combobox, listbox, menu (submenus with hover aim, context
    menus), popover, select, tabs and toggle. The spring CSS output matches Remix's
    `spring.ts` byte for byte, Remix's spring, anchor and hover-aim tests are ported one per
@@ -289,11 +289,11 @@ Every Remix 3 demo has a port under `demos/`, each with a Playwright e2e script
 (`demos/<name>/e2e.mjs`): assets, bookstore, frame-navigation, frames, i18n,
 lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `template` ports the
 `remix new` starter app (`reference/remix/template`): the home page, the copy-to-clipboard
-`PromptButton` client entry, the asset server and the controller test; `rmx new <dir>` writes
-it out as a standalone crate (`cargo install --path packages/cli` installs the `rmx` command;
-the generated app depends on this checkout's `rmx` by path, or on `RMX_VERSION`). Every demo
-binary lists its route map with `-- routes`, and `rmx routes` / `rmx assets` run those
-commands for the app in the current directory. `bench/rmx-app` is the benchmark app used in
+`PromptButton` client entry, the asset server and the controller test; `rsmix new <dir>` writes
+it out as a standalone crate (`cargo install --path packages/cli` installs the `rsmix` command;
+the generated app depends on this checkout's `rsmix` by path, or on `RSMIX_VERSION`). Every demo
+binary lists its route map with `-- routes`, and `rsmix routes` / `rsmix assets` run those
+commands for the app in the current directory. `bench/rsmix-app` is the benchmark app used in
 `../../bench/README.md`.
 
 ## Build and Run
@@ -310,20 +310,20 @@ cargo test --workspace
 ```
 
 `test-browser.ps1` runs each `tests/browser_*.rs` file of a crate with `wasm-bindgen-test`
-(default crate `rmx-component`; `-Test browser_errors` picks one file; `-Test
+(default crate `rsmix-component`; `-Test browser_errors` picks one file; `-Test
 browser_no_frames -NoDefaultFeatures` checks the runtime with frames and navigation off). It needs a
 ChromeDriver matching the Chromium binary: set `CHROMEDRIVER` and `CHROMIUM_PATH`, or use
 the defaults under `%LOCALAPPDATA%`.
 
 ### Smaller Clients: Cargo Features
 
-`rmx` turns on `frames`, `navigation`, `spa` and `ui` by default. A client crate whose
+`rsmix` turns on `frames`, `navigation`, `spa` and `ui` by default. A client crate whose
 pages only hydrate client entries can leave the browser half of frames and soft navigation
 out:
 
 ```toml
 # app/client/Cargo.toml (the server crate keeps the defaults)
-rmx = { path = "...", default-features = false }
+rsmix = { path = "...", default-features = false }
 ```
 
 The shared app crate should also use `default-features = false`, or Cargo turns the
@@ -344,18 +344,18 @@ entries and nothing else:
 
 Server env vars: `HOST` (default `127.0.0.1`), `PORT` (each demo has its own default).
 The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark server is in
-`../../bench/docker/rmx.Dockerfile`.
+`../../bench/docker/rsmix.Dockerfile`.
 
 ## Differences From Remix 3
 
 1. No import maps or module preloading: each demo ships one wasm bundle that registers its
-   client entries by name (`rmx::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 300 KiB to
+   client entries by name (`rsmix::entry::<C>()` in `RunOptions::entries`). Wasm sizes range from about 300 KiB to
    900 KiB uncompressed (measured 2026-10-22, `wasm-release` plus `wasm-opt`); the largest is the ui
    gallery, which bundles all 17 of its demos.
 2. Rust does not throw, and a panic cannot be caught in wasm32 (it aborts the module), so
    a failing `setup`, `render` or task is not turned into an error event the way a
    thrown exception is in Remix. Code reports failures with `Handle::report_error` (to
-   the component's root) or `rmx::report_error` (to the app). The runtime reports its own
+   the component's root) or `rsmix::report_error` (to the app). The runtime reports its own
    errors the way Remix does: `update()` from `render` or before the first commit, and
    update loops, go to `Root::on_error`; panics and failed frame loads and navigations go
    to `App::on_error`.
@@ -364,12 +364,12 @@ The timeboxer demo needs `SESSION_SECRET`. A Linux image for the benchmark serve
    `xlink:href`), not camelCase (`className`, `htmlFor`). A component that renders nothing
    keeps an empty text node as its place. Props are attributes except form state and the
    props a custom element defines; object-valued properties are set with `node_ref`.
-4. `rmx-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
+4. `rsmix-ui` events are plain `Event`s with the data set as properties (`rmx:select-change`
    carries `value`, `label` and `optionId`; `rmx:menu-select` carries `item`), read with
    helpers such as `select::select_change`, rather than `Event` subclasses.
-5. No HMR or `remix/test` runner: `rmx dev` rebuilds and restarts the app on changes and
-   `rmx::middleware::live_reload` reloads open pages, but state is not kept across the
-   reload. The `rmx` CLI covers `new`, `dev`, `doctor`, `completion`, `routes`, `assets`,
+5. No HMR or `remix/test` runner: `rsmix dev` rebuilds and restarts the app on changes and
+   `rsmix::middleware::live_reload` reloads open pages, but state is not kept across the
+   reload. The `rsmix` CLI covers `new`, `dev`, `doctor`, `completion`, `routes`, `assets`,
    `test`, `version` and `help` but not `db` (`doctor` checks the
    Rust toolchain, the route map and the built client instead of package.json and
    controller files): native tests use `cargo test`, component tests

@@ -7,5 +7,5 @@ license.workspace = true
 [dependencies]
 bench-app.workspace = true
 http.workspace = true
-rmx.workspace = true
+rsmix.workspace = true
 tokio.workspace = true

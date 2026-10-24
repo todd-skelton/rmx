@@ -1,8 +1,8 @@
 //! Bubbling custom events that carry data (Remix's `ToggleChangeEvent`, `TabsChangeEvent`
-//! and so on are `Event` subclasses with extra fields). rmx dispatches a plain `Event` with
+//! and so on are `Event` subclasses with extra fields). rsmix dispatches a plain `Event` with
 //! the fields set as properties, and each widget module has a reader for them.
 
-use rmx::Event;
+use rsmix::Event;
 
 /// A field to set on a dispatched event.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -217,18 +217,18 @@ pub(crate) fn set_current_prop(event: &Event, key: &str, value: bool) {
 }
 
 /// Whether an attribute value turns a boolean state on (`true`, `"true"` or `""`).
-pub(crate) fn attr_is_true(value: Option<&rmx::AttrValue>) -> bool {
+pub(crate) fn attr_is_true(value: Option<&rsmix::AttrValue>) -> bool {
     match value {
-        Some(rmx::AttrValue::Bool(b)) => *b,
-        Some(rmx::AttrValue::Str(s)) => s == "true" || s.is_empty(),
+        Some(rsmix::AttrValue::Bool(b)) => *b,
+        Some(rsmix::AttrValue::Str(s)) => s == "true" || s.is_empty(),
         _ => false,
     }
 }
 
 /// An attribute's boolean value, if it is set to one.
-pub(crate) fn attr_bool(value: Option<&rmx::AttrValue>) -> Option<bool> {
+pub(crate) fn attr_bool(value: Option<&rsmix::AttrValue>) -> Option<bool> {
     match value {
-        Some(rmx::AttrValue::Bool(b)) => Some(*b),
+        Some(rsmix::AttrValue::Bool(b)) => Some(*b),
         _ => None,
     }
 }

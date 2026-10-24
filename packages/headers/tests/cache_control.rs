@@ -1,7 +1,7 @@
 //! Ports of Remix's `headers/src/lib/cache-control.test.ts`. Directives are struct fields;
 //! an object init is a struct literal.
 
-use rmx_headers::CacheControl;
+use rsmix_headers::CacheControl;
 
 fn parse(value: &str) -> CacheControl {
     CacheControl::parse(Some(value))

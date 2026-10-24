@@ -1,6 +1,6 @@
 //! Port of Remix's `utils.test.ts` (`sanitizeReturnTo()`).
 
-use rmx_auth::sanitize_return_to;
+use rsmix_auth::sanitize_return_to;
 
 #[test]
 fn drops_paths_that_normalize_to_an_authority_reference() {

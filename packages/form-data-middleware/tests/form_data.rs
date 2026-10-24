@@ -1,13 +1,13 @@
 //! Remix's `form-data-middleware/src/lib/form-data.test.ts`. Where Remix's middleware throws
-//! (and the request rejects), rmx answers: 413 for limits, 400 for a malformed body and 500
+//! (and the request rejects), rsmix answers: 413 for limits, 400 for a malformed body and 500
 //! for a failed upload handler, without running the handler.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use rmx_fetch::{block_on, Body, FormData, FormLimits, FormValue, Response};
-use rmx_form_data_middleware::{form_data, FileUpload, FormDataExt};
-use rmx_fetch_router::{action, Context, Middleware, Next, Router};
+use rsmix_fetch::{block_on, Body, FormData, FormLimits, FormValue, Response};
+use rsmix_form_data_middleware::{form_data, FileUpload, FormDataExt};
+use rsmix_fetch_router::{action, Context, Middleware, Next, Router};
 
 const BOUNDARY: &str = "----WebKitFormBoundary1234567890";
 

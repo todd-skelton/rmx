@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use http::{Method, StatusCode};
-use rmx_fetch::Response;
-use rmx_fetch_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
+use rsmix_fetch::Response;
+use rsmix_fetch_router::{BoxFuture, Context, IntoResponse, Middleware, Next};
 
 /// Why [`Cop`] rejected a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -134,12 +134,12 @@ fn header<'a>(ctx: &'a Context, name: &str) -> Option<&'a str> {
 }
 
 /// A URL with a host and no credentials.
-fn parse_origin(origin: &str) -> Option<rmx_url::Url> {
+fn parse_origin(origin: &str) -> Option<rsmix_url::Url> {
     let authority = origin.split_once("://")?.1.split(['/', '?', '#']).next()?;
     if authority.contains('@') {
         return None;
     }
-    rmx_url::Url::parse(origin).ok().filter(|u| !u.host().is_empty())
+    rsmix_url::Url::parse(origin).ok().filter(|u| !u.host().is_empty())
 }
 
 fn is_request_method(m: &str) -> Option<Method> {
@@ -217,8 +217,8 @@ fn matches_bypass(p: &BypassPattern, ctx: &Context) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use rmx_fetch::{block_on, Body};
-    use rmx_fetch_router::Router;
+    use rsmix_fetch::{block_on, Body};
+    use rsmix_fetch_router::Router;
 
     use super::*;
 

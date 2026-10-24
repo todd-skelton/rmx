@@ -84,7 +84,7 @@ impl CompiledRoutes {
         let pathname = normalize_pathname(pathname);
         for mount in &self.mounts {
             let Some(relative) = path_within_root(&mount.url_root, &pathname) else { continue };
-            let file_path = resolve_file_path(&mount.file_root, &rmx_url::decode(relative));
+            let file_path = resolve_file_path(&mount.file_root, &rsmix_url::decode(relative));
             path_within_root(&mount.file_root, &file_path)?;
             return Some(AssetRouteMatch { file_path, file_root: mount.file_root_value.clone(), url_pathname: pathname, url_root: mount.url_root.clone() });
         }
@@ -100,7 +100,7 @@ impl CompiledRoutes {
         let file_path = normalize_file_path(file_path);
         self.mounts.iter().find_map(|mount| {
             let relative = path_within_root(&mount.file_root, &file_path)?;
-            let encoded: Vec<String> = relative.split('/').map(rmx_url::encode_component).collect();
+            let encoded: Vec<String> = relative.split('/').map(rsmix_url::encode_component).collect();
             Some(AssetRouteMatch {
                 url_pathname: join_url_path(&mount.url_root, &encoded.join("/")),
                 file_path: file_path.clone(),
@@ -147,7 +147,7 @@ fn normalize_mount_url_root(url_root: &str) -> Result<String, String> {
             "mounts keys must be URL pathnames without query strings, fragments, or encoded dot segments. Received \"{url_root}\"."
         ));
     }
-    let encoded = rmx_url::encode_path(normalized);
+    let encoded = rsmix_url::encode_path(normalized);
     let trimmed = encoded.trim_end_matches('/');
     Ok(if trimmed.is_empty() { "/".into() } else { trimmed.to_string() })
 }
@@ -324,7 +324,7 @@ mod tests {
         assert!(error(&[("app", "app/"), ("routes", "app/routes/")]).starts_with("mounts values must not overlap. Received \"app/\" and \"app/routes/\""));
     }
 
-    // rmx-only
+    // rsmix-only
 
     #[test]
     fn rejects_absolute_mount_directories() {

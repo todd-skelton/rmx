@@ -3,12 +3,12 @@
 use std::time::Duration;
 
 use http::StatusCode;
-use rmx::{rsx, Frame};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::data_schema::{self as s, form_data as f};
-use rmx::middleware::session::SessionExt;
-use rmx::router::{action, Context, Router};
+use rsmix::{rsx, Frame};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::data_schema::{self as s, form_data as f};
+use rsmix::middleware::session::SessionExt;
+use rsmix::router::{action, Context, Router};
 
 use super::schemas::{optional_text, parse_form};
 use super::ui::Layout;

@@ -1,7 +1,7 @@
 //! Port of data-schema's pipe.test.ts.
 
-use rmx_data_schema::checks::{max_length, min_length};
-use rmx_data_schema::{self as s, Schema};
+use rsmix_data_schema::checks::{max_length, min_length};
+use rsmix_data_schema::{self as s, Schema};
 
 #[test]
 fn applies_checks_in_order() {

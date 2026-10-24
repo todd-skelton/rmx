@@ -10,7 +10,7 @@ mod model;
 mod tempo;
 mod voice;
 
-use rmx::{on, rsx, Component, Handle, Mixin, Node, NodeHandle};
+use rsmix::{on, rsx, Component, Handle, Mixin, Node, NodeHandle};
 
 use components::*;
 pub use model::{DrumEvent, Drummer};
@@ -68,7 +68,7 @@ pub struct DrummerApp {
 
 impl Component for DrummerApp {
     type Props = ();
-    rmx::client_entry!("DrummerApp");
+    rsmix::client_entry!("DrummerApp");
 
     fn setup(_: &(), h: &Handle<Self>) -> Self {
         let drummer = Drummer::new(80);

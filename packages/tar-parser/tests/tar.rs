@@ -5,7 +5,7 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::*;
-use rmx_tar_parser::*;
+use rsmix_tar_parser::*;
 
 fn all(name: &str) -> Vec<TarEntry> {
     all_with(name, &TarOptions::default())
@@ -58,7 +58,7 @@ fn gnu_header() -> TarHeader {
 fn parses_express_4_21_1_tgz() {
     let hashes: BTreeMap<String, String> = all("express-4.21.1.tgz")
         .into_iter()
-        .map(|e| (e.header.name, rmx_crypto::hex(&rmx_crypto::sha256(&e.body))[..8].to_string()))
+        .map(|e| (e.header.name, rsmix_crypto::hex(&rsmix_crypto::sha256(&e.body))[..8].to_string()))
         .collect();
     let expected = [
         ("package/LICENSE", "95a57628"),

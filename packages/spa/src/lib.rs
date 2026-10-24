@@ -1,4 +1,4 @@
-//! Client-only rmx apps (Remix's `remix/spa`).
+//! Client-only rsmix apps (Remix's `remix/spa`).
 //!
 //! The same router that would run on a server runs in the page. Route handlers return
 //! `ctx.render(node)` responses; [`run`] sends the current URL and every same-origin link
@@ -9,7 +9,7 @@
 //! ```ignore
 //! let mut router = Router::new();
 //! router.get("/", |ctx: Context| async move { ctx.render(rsx! { <Home/> }) });
-//! rmx_spa::run(router, rmx_spa::RunOptions { fallback: Some(rsx! { <Loading/> }) });
+//! rsmix_spa::run(router, rsmix_spa::RunOptions { fallback: Some(rsx! { <Loading/> }) });
 //! ```
 
 use std::cell::{Cell, RefCell};
@@ -18,12 +18,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use http::header;
-use rmx::Node;
-use rmx_fetch::{Body, Response};
-use rmx_fetch_router::{Context, Middleware, Next};
+use rsmix::Node;
+use rsmix_fetch::{Body, Response};
+use rsmix_fetch_router::{Context, Middleware, Next};
 
-/// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rmx-fetch`).
-pub use rmx_response::ResponseInit;
+/// Status and headers for [`Render::render_with`] (the one `ResponseInit` in `rsmix-fetch`).
+pub use rsmix_response::ResponseInit;
 
 /// `ctx.render(node)` for routes running in the browser.
 pub trait Render {
@@ -123,7 +123,7 @@ fn form_body(fields: &[(String, String)], enc_type: Option<&str>) -> (String, Bo
         }
         Some("text/plain") => ("text/plain".into(), Body::from(fields.map(|(k, v)| format!("{k}={v}\r\n")).collect::<String>())),
         _ => {
-            let mut params = rmx_url::SearchParams::new();
+            let mut params = rsmix_url::SearchParams::new();
             for (k, v) in fields {
                 params.append(&k, &v);
             }
@@ -136,8 +136,8 @@ fn form_body(fields: &[(String, String)], enc_type: Option<&str>) -> (String, Bo
 /// `303` (and a `301`/`302` after a POST) turns into a `GET` without a body or content
 /// type, and `307`/`308` repeat the request. A redirect without a `Location` is the
 /// response.
-pub async fn resolve(router: &rmx_fetch_router::Router, request: rmx::FrameRequest) -> Result<rmx::FrameResponse, String> {
-    let mut url = rmx_url::Url::parse(&request.url).map_err(|e| format!("invalid frame URL {}: {e}", request.url))?;
+pub async fn resolve(router: &rsmix_fetch_router::Router, request: rsmix::FrameRequest) -> Result<rsmix::FrameResponse, String> {
+    let mut url = rsmix_url::Url::parse(&request.url).map_err(|e| format!("invalid frame URL {}: {e}", request.url))?;
     let origin = url.origin();
     let mut method = request.method.to_ascii_uppercase();
     let mut form = request.form;
@@ -160,8 +160,8 @@ pub async fn resolve(router: &rmx_fetch_router::Router, request: rmx::FrameReque
         let status = res.status().as_u16();
         let location = res.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).map(str::to_string);
         let Some(location) = location.filter(|_| matches!(status, 301 | 302 | 303 | 307 | 308)) else {
-            let node = take_node(&res).ok_or_else(|| format!("expected an rmx SPA response from {} ({status})", url.href()))?;
-            return Ok(rmx::FrameResponse { content: rmx::FrameContent::Node(node), url: redirected });
+            let node = take_node(&res).ok_or_else(|| format!("expected an rsmix SPA response from {} ({status})", url.href()))?;
+            return Ok(rsmix::FrameResponse { content: rsmix::FrameContent::Node(node), url: redirected });
         };
         discard(&res);
         let next = url.join(&location).map_err(|e| e.to_string())?;
@@ -188,19 +188,19 @@ pub struct RunOptions {
 /// Start a client-rendered app: render `fallback`, then the route for the current URL,
 /// and route every same-origin navigation through `router`.
 #[cfg(target_arch = "wasm32")]
-pub fn run(router: rmx_fetch_router::Router, options: RunOptions) {
+pub fn run(router: rsmix_fetch_router::Router, options: RunOptions) {
     use std::rc::Rc;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
     let router = Rc::new(router);
-    let resolve_frame: rmx::ResolveFrame = Rc::new(move |request| {
+    let resolve_frame: rsmix::ResolveFrame = Rc::new(move |request| {
         let router = router.clone();
         Box::pin(async move { resolve(&router, request).await })
     });
     let fallback = options.fallback;
     let start = Closure::once_into_js(move || {
-        let top = rmx::Frames.top();
+        let top = rsmix::Frames.top();
         if let Some(fallback) = fallback {
             top.replace(fallback);
         }
@@ -209,28 +209,28 @@ pub fn run(router: rmx_fetch_router::Router, options: RunOptions) {
     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
         let _ = document.add_event_listener_with_callback("rmx:ready", start.unchecked_ref());
     }
-    rmx::run(rmx::RunOptions { resolve_frame: Some(resolve_frame), ..Default::default() });
+    rsmix::run(rsmix::RunOptions { resolve_frame: Some(resolve_frame), ..Default::default() });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use http::StatusCode;
-    use rmx::rsx;
-    use rmx_fetch_router::Router;
+    use rsmix::rsx;
+    use rsmix_fetch_router::Router;
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
         tokio::runtime::Builder::new_current_thread().build().expect("runtime").block_on(f)
     }
 
-    fn request(url: &str, method: &str, form: Option<Vec<(String, String)>>) -> rmx::FrameRequest {
-        rmx::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None, signal: rmx::Signal::never() }
+    fn request(url: &str, method: &str, form: Option<Vec<(String, String)>>) -> rsmix::FrameRequest {
+        rsmix::FrameRequest { url: url.into(), method: method.into(), form, enc_type: None, target: None, signal: rsmix::Signal::never() }
     }
 
-    fn text(response: rmx::FrameResponse) -> String {
+    fn text(response: rsmix::FrameResponse) -> String {
         match response.content {
-            rmx::FrameContent::Node(node) => rmx::render_to_string(&node),
-            rmx::FrameContent::Html(html) => html,
+            rsmix::FrameContent::Node(node) => rsmix::render_to_string(&node),
+            rsmix::FrameContent::Html(html) => html,
         }
     }
 
@@ -245,7 +245,7 @@ mod tests {
         router.post("/greet", |mut ctx: Context| async move {
             let form = ctx.take_body().form().await.expect("form");
             let name = form.get("name").unwrap_or("friend").to_string();
-            rmx_response::redirect_with(&format!("/greet?name={name}"), StatusCode::SEE_OTHER)
+            rsmix_response::redirect_with(&format!("/greet?name={name}"), StatusCode::SEE_OTHER)
         });
         router.get("/plain", |_: Context| async { "not a node" });
 
@@ -262,9 +262,9 @@ mod tests {
         assert!(plain.is_err(), "a response without a node cannot be rendered");
     }
 
-    fn post(url: &str, fields: &[(&str, &str)], enc_type: Option<&str>) -> rmx::FrameRequest {
+    fn post(url: &str, fields: &[(&str, &str)], enc_type: Option<&str>) -> rsmix::FrameRequest {
         let form = fields.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-        rmx::FrameRequest { enc_type: enc_type.map(str::to_string), ..request(url, "POST", Some(form)) }
+        rsmix::FrameRequest { enc_type: enc_type.map(str::to_string), ..request(url, "POST", Some(form)) }
     }
 
     /// A router that records each request's method, content type and body, and answers
@@ -285,7 +285,7 @@ mod tests {
                     let body = ctx.take_body().text().await.unwrap_or_default();
                     log.lock().unwrap().push((method, content_type, body));
                     if ctx.url().pathname() == "/save" {
-                        return rmx_response::redirect_with("/saved", StatusCode::SEE_OTHER);
+                        return rsmix_response::redirect_with("/saved", StatusCode::SEE_OTHER);
                     }
                     ctx.render(rsx! { <p>"Saved"</p> })
                 }
@@ -341,14 +341,14 @@ mod tests {
         router.any("/r/:status", move |ctx: Context| {
             log.lock().unwrap().push(ctx.method().to_string());
             let status: u16 = ctx.param("status").unwrap().parse().unwrap();
-            async move { rmx_response::redirect_with("/done", StatusCode::from_u16(status).unwrap()) }
+            async move { rsmix_response::redirect_with("/done", StatusCode::from_u16(status).unwrap()) }
         });
         let log = methods.clone();
         router.any("/done", move |ctx: Context| {
             log.lock().unwrap().push(ctx.method().to_string());
             async move { ctx.render(rsx! { <h1>"Redirected"</h1> }) }
         });
-        router.get("/away", |_: Context| async move { rmx_response::redirect("https://elsewhere.example/") });
+        router.get("/away", |_: Context| async move { rsmix_response::redirect("https://elsewhere.example/") });
         router.get("/bare", |_: Context| async move {
             let mut res = Response::new(Body::empty());
             *res.status_mut() = StatusCode::FOUND;
@@ -356,7 +356,7 @@ mod tests {
         });
         for (status, method, then) in [(302, "GET", "GET"), (302, "POST", "GET"), (301, "PUT", "PUT"), (303, "PUT", "GET"), (307, "POST", "POST"), (308, "POST", "POST")] {
             methods.lock().unwrap().clear();
-            let req = rmx::FrameRequest { form: Some(vec![("a".into(), "1".into())]), ..request(&format!("http://localhost/r/{status}"), method, None) };
+            let req = rsmix::FrameRequest { form: Some(vec![("a".into(), "1".into())]), ..request(&format!("http://localhost/r/{status}"), method, None) };
             let res = block_on(resolve(&router, req)).unwrap();
             assert_eq!(text(res), "<h1>Redirected</h1>");
             assert_eq!(*methods.lock().unwrap(), [method, then], "{status} after {method}");
@@ -364,13 +364,13 @@ mod tests {
         let away = block_on(resolve(&router, request("http://localhost/away", "GET", None)));
         assert_eq!(away.err().as_deref(), Some("SPA routes cannot redirect to another origin"));
         let bare = block_on(resolve(&router, request("http://localhost/bare", "GET", None)));
-        assert!(bare.err().unwrap().starts_with("expected an rmx SPA response"), "a redirect without Location is the response");
+        assert!(bare.err().unwrap().starts_with("expected an rsmix SPA response"), "a redirect without Location is the response");
     }
 
     #[test]
     fn stops_after_ten_redirects() {
         let mut router = Router::new();
-        router.get("/loop", |_: Context| async move { rmx_response::redirect("/loop") });
+        router.get("/loop", |_: Context| async move { rsmix_response::redirect("/loop") });
         let err = block_on(resolve(&router, request("http://localhost/loop", "GET", None))).err().unwrap();
         assert_eq!(err, "SPA route exceeded 10 redirects");
     }
@@ -385,7 +385,7 @@ mod tests {
         router.not_found(|ctx: Context| async move { ctx.render_with(rsx! { "Not Found" }, ResponseInit::status(StatusCode::NOT_FOUND)) });
         let res = block_on(router.fetch(http::Request::get("http://localhost/hello").body(Body::empty()).unwrap()));
         assert_eq!(res.status(), 201);
-        assert_eq!(take_node(&res).map(|n| rmx::render_to_string(&n)).as_deref(), Some("<h1>/hello: Hello</h1>"));
+        assert_eq!(take_node(&res).map(|n| rsmix::render_to_string(&n)).as_deref(), Some("<h1>/hello: Hello</h1>"));
         // The default handler gets the renderer too.
         let missing = block_on(resolve(&router, request("http://localhost/missing", "GET", None))).unwrap();
         assert_eq!(text(missing), "<h1>/missing: Not Found</h1>");
@@ -407,7 +407,7 @@ mod tests {
         assert_eq!(res.status(), 404);
         assert_eq!(res.headers()[header::CACHE_CONTROL], "no-store");
         assert!(res.body().is_empty_hint(), "an SPA response has no body");
-        assert_eq!(take_node(&res).map(|n| rmx::render_to_string(&n)).as_deref(), Some("<p>Missing</p>"));
+        assert_eq!(take_node(&res).map(|n| rsmix::render_to_string(&n)).as_deref(), Some("<p>Missing</p>"));
         assert!(take_node(&res).is_none(), "a node is taken once");
     }
 }

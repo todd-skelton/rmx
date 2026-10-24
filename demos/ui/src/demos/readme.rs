@@ -5,8 +5,8 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rmx::browser::Interval;
-use rmx::{css, node_ref, on, rsx, Children, Component, Handle, Node, NodeHandle, TypedEventTarget};
+use rsmix::browser::Interval;
+use rsmix::{css, node_ref, on, rsx, Children, Component, Handle, Node, NodeHandle, TypedEventTarget};
 
 // Getting Started - Basic App Example
 pub struct App {
@@ -137,7 +137,7 @@ impl Component for SearchInput {
                     let signal = event.signal();
                     let h = h.clone();
                     h.clone().spawn(async move {
-                        rmx::browser::sleep(300).await;
+                        rsmix::browser::sleep(300).await;
                         if signal.aborted() {
                             return;
                         }
@@ -167,7 +167,7 @@ pub struct SlugForm {
 
 /// `crypto.randomUUID().slice(0, 8)`
 fn random_slug() -> String {
-    (0..8).map(|_| char::from_digit((rmx::browser::random() * 16.0) as u32 % 16, 16).unwrap_or('0')).collect()
+    (0..8).map(|_| char::from_digit((rsmix::browser::random() * 16.0) as u32 % 16, 16).unwrap_or('0')).collect()
 }
 
 impl Component for SlugForm {
@@ -431,7 +431,7 @@ impl Component for Clock {
         Clock { interval: None }
     }
     fn render(&self, _: &(), _: &Handle<Self>) -> Node {
-        let time = self.interval.is_some().then(rmx::browser::local_time_string);
+        let time = self.interval.is_some().then(rsmix::browser::local_time_string);
         rsx! { <span id="clock">{time}</span> }
     }
 }
@@ -609,7 +609,7 @@ pub struct ReadmeExamples;
 
 impl Component for ReadmeExamples {
     type Props = ();
-    rmx::client_entry!("ReadmeExamples");
+    rsmix::client_entry!("ReadmeExamples");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         ReadmeExamples
@@ -644,7 +644,7 @@ impl Component for ReadmeExamples {
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use rmx::{Handle, NodeHandle, Signal};
+    use rsmix::{Handle, NodeHandle, Signal};
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::JsCast;
 

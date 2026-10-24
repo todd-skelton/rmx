@@ -1,5 +1,5 @@
-// Browser benchmark for rmx (Rust/WASM) vs Remix 3 (JS). Both apps must be running:
-//   remix: http://127.0.0.1:44100   rmx: http://127.0.0.1:44101
+// Browser benchmark for rsmix (Rust/WASM) vs Remix 3 (JS). Both apps must be running:
+//   remix: http://127.0.0.1:44100   rsmix: http://127.0.0.1:44101
 // Usage: node browser-bench.mjs [--iterations 15] [--loads 10] [--out results/browser.json]
 //
 // Everything is measured from outside the frameworks with the same code: click a DOM
@@ -25,7 +25,7 @@ const LOADS = Number(args.loads ?? 10)
 const WARMUP = 3
 const TARGETS = [
   { name: 'remix', url: 'http://127.0.0.1:44100' },
-  { name: 'rmx', url: 'http://127.0.0.1:44101' },
+  { name: 'rsmix', url: 'http://127.0.0.1:44101' },
 ]
 
 const OPS = [
@@ -232,14 +232,14 @@ writeFileSync(args.out ?? 'results/browser.json', JSON.stringify(out, null, 2))
 
 const [a, b] = TARGETS.map((t) => out.targets[t.name])
 console.log(`chromium ${out.chromium}; medians; commit = click to DOM updated, frame = to next painted frame`)
-console.log(`counter hydrated+clickable: remix ${a.counter.ok} (${a.counter.before} -> ${a.counter.after}), rmx ${b.counter.ok} (${b.counter.before} -> ${b.counter.after})`)
-console.log(`first label: remix "${a.firstLabel}", rmx "${b.firstLabel}"`)
-console.log(`client assets: remix ${a.load.assets.files} files ${a.load.assets.rawKB} KB raw / ${a.load.assets.gzipKB} KB gzip / ${a.load.assets.brotliKB} KB br; rmx ${b.load.assets.files} files ${b.load.assets.rawKB} KB raw / ${b.load.assets.gzipKB} KB gzip / ${b.load.assets.brotliKB} KB br`)
-console.log(`hydrated at (ms since navigation): remix ${a.load.hydratedMs}, rmx ${b.load.hydratedMs}; DCL remix ${a.load.domContentLoadedMs}, rmx ${b.load.domContentLoadedMs}`)
-console.log('op'.padEnd(20), 'remix commit', 'rmx commit', '| remix frame', 'rmx frame')
+console.log(`counter hydrated+clickable: remix ${a.counter.ok} (${a.counter.before} -> ${a.counter.after}), rsmix ${b.counter.ok} (${b.counter.before} -> ${b.counter.after})`)
+console.log(`first label: remix "${a.firstLabel}", rsmix "${b.firstLabel}"`)
+console.log(`client assets: remix ${a.load.assets.files} files ${a.load.assets.rawKB} KB raw / ${a.load.assets.gzipKB} KB gzip / ${a.load.assets.brotliKB} KB br; rsmix ${b.load.assets.files} files ${b.load.assets.rawKB} KB raw / ${b.load.assets.gzipKB} KB gzip / ${b.load.assets.brotliKB} KB br`)
+console.log(`hydrated at (ms since navigation): remix ${a.load.hydratedMs}, rsmix ${b.load.hydratedMs}; DCL remix ${a.load.domContentLoadedMs}, rsmix ${b.load.domContentLoadedMs}`)
+console.log('op'.padEnd(20), 'remix commit', 'rsmix commit', '| remix frame', 'rsmix frame')
 for (const op of OPS) {
   const r = a.results[op.name]
   const s = b.results[op.name]
   console.log(op.name.padEnd(20), String(r.commitMs).padStart(12), String(s.commitMs).padStart(10), '|', String(r.frameMs).padStart(12), String(s.frameMs).padStart(9))
 }
-console.log(`page errors: remix ${a.errors.length}, rmx ${b.errors.length}; JS heap MB after run: remix ${a.jsHeapMB}, rmx ${b.jsHeapMB} (excludes WASM linear memory)`)
+console.log(`page errors: remix ${a.errors.length}, rsmix ${b.errors.length}; JS heap MB after run: remix ${a.jsHeapMB}, rsmix ${b.jsHeapMB} (excludes WASM linear memory)`)

@@ -4,9 +4,9 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_link_mixin`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
-use rmx::{create_root, link, link_with, rsx, History, NavigateOptions, Node, Reset, Root};
+use rsmix::{create_root, link, link_with, rsx, History, NavigateOptions, Node, Reset, Root};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;

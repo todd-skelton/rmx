@@ -1,5 +1,5 @@
 [package]
-name = "rmx-session-middleware"
+name = "rsmix-session-middleware"
 description = "Middleware for managing sessions with cookie-based storage (remix session-middleware)"
 edition.workspace = true
 version.workspace = true
@@ -7,13 +7,13 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-cookie.workspace = true
-rmx-fetch-router.workspace = true
-rmx-session.workspace = true
+rsmix-cookie.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-session.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-rmx-crypto.workspace = true
-rmx-fetch.workspace = true
-rmx-headers.workspace = true
+rsmix-crypto.workspace = true
+rsmix-fetch.workspace = true
+rsmix-headers.workspace = true
 tokio.workspace = true

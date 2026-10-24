@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use rmx_fetch::File;
+use rsmix_fetch::File;
 
 use crate::{AssetError, AssetErrorCode};
 
@@ -243,7 +243,7 @@ impl Files {
             global,
             max: options.max_request_transforms,
             cache: options.cache,
-            cache_key: options.cache_key.unwrap_or_else(rmx_crypto::random_uuid),
+            cache_key: options.cache_key.unwrap_or_else(rsmix_crypto::random_uuid),
         })
     }
 

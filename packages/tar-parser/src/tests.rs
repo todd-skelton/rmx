@@ -53,7 +53,7 @@ fn pax(pairs: &[(&str, &str)]) -> Option<BTreeMap<String, String>> {
 fn parses_express_npm_package() {
     let hashes: BTreeMap<String, String> = all("express-4.21.1.tgz")
         .into_iter()
-        .map(|e| (e.header.name, rmx_crypto::hex(&rmx_crypto::sha256(&e.body))[..8].to_string()))
+        .map(|e| (e.header.name, rsmix_crypto::hex(&rsmix_crypto::sha256(&e.body))[..8].to_string()))
         .collect();
     let expected = [
         ("package/LICENSE", "95a57628"),

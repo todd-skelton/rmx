@@ -1,6 +1,6 @@
 [package]
-name = "rmx-url"
-description = "Minimal URL, percent-encoding and URLSearchParams utilities for rmx (no dependencies)"
+name = "rsmix-url"
+description = "Minimal URL, percent-encoding and URLSearchParams utilities for rsmix (no dependencies)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

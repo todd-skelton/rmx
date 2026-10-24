@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use rmx_fetch_router::Router;
+use rsmix_fetch_router::Router;
 
 use super::*;
 
@@ -11,7 +11,7 @@ struct Fixture {
 
 impl Fixture {
     fn new(name: &str) -> Fixture {
-        let root = std::env::temp_dir().join(format!("rmx-assets-{name}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("rsmix-assets-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let files = [
             ("app/public/entry.js", "import init from './pkg/app.js';\nawait init();\n"),
@@ -75,7 +75,7 @@ fn router(assets: AssetServer) -> Router {
     let mut router = Router::new();
     router.get("/assets/*path", move |ctx: Context| {
         let assets = assets.clone();
-        async move { assets.fetch(&ctx).unwrap_or_else(rmx_response::not_found) }
+        async move { assets.fetch(&ctx).unwrap_or_else(rsmix_response::not_found) }
     });
     router
 }
@@ -85,9 +85,9 @@ fn get(router: &Router, url: &str, headers: &[(&str, &str)]) -> (StatusCode, htt
     for (k, v) in headers {
         req = req.header(*k, *v);
     }
-    let res = rmx_fetch::block_on(router.fetch(req.body(Body::empty()).unwrap()));
+    let res = rsmix_fetch::block_on(router.fetch(req.body(Body::empty()).unwrap()));
     let (parts, body) = res.into_parts();
-    (parts.status, parts.headers, rmx_fetch::block_on(body.text()).unwrap())
+    (parts.status, parts.headers, rsmix_fetch::block_on(body.text()).unwrap())
 }
 
 #[test]

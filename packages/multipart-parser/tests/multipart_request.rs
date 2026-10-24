@@ -8,8 +8,8 @@
 mod common;
 
 use common::*;
-use rmx_fetch::Body;
-use rmx_multipart_parser::*;
+use rsmix_fetch::Body;
+use rsmix_multipart_parser::*;
 
 const BOUNDARY: &str = "----WebKitFormBoundaryz8Zv2UxQ7f4a0Z3H";
 const LARGE_FILE_SIZE: usize = 128 * 1024;

@@ -6,12 +6,12 @@
 //! `pwsh ./scripts/test-browser.ps1 -Test browser_frame_requests`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, rsx, Frame, FrameHandle, Frames, ReloadOptions, Root, RunOptions};
+use rsmix::{create_root, rsx, Frame, FrameHandle, Frames, ReloadOptions, Root, RunOptions};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -20,13 +20,13 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 thread_local! {
-    static APP: RefCell<Option<rmx::App>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<rsmix::App>> = const { RefCell::new(None) };
 }
 
 /// Start the runtime once for the page.
 async fn start() {
     if APP.with(|a| a.borrow().is_none()) {
-        APP.with(|a| *a.borrow_mut() = Some(rmx::run(RunOptions::default())));
+        APP.with(|a| *a.borrow_mut() = Some(rsmix::run(RunOptions::default())));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");
     app.ready().await;
@@ -182,7 +182,7 @@ fn errors() -> (Rc<RefCell<Vec<String>>>, ErrorGuard) {
     (seen, ErrorGuard(Some(id)))
 }
 
-struct ErrorGuard(Option<rmx::ListenerId>);
+struct ErrorGuard(Option<rsmix::ListenerId>);
 
 impl Drop for ErrorGuard {
     fn drop(&mut self) {

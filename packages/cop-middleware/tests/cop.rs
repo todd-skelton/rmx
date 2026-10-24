@@ -1,11 +1,11 @@
 //! Remix's `cop-middleware/src/lib/cop.test.ts`.
 
 use http::StatusCode;
-use rmx_fetch::{block_on, Body, Response};
-use rmx_cop_middleware::{cop, Cop};
-use rmx_form_data_middleware::form_data;
-use rmx_method_override_middleware::method_override;
-use rmx_fetch_router::{Context, IntoResponse, Router};
+use rsmix_fetch::{block_on, Body, Response};
+use rsmix_cop_middleware::{cop, Cop};
+use rsmix_form_data_middleware::form_data;
+use rsmix_method_override_middleware::method_override;
+use rsmix_fetch_router::{Context, IntoResponse, Router};
 
 async fn ok(_ctx: Context) -> &'static str {
     "ok"

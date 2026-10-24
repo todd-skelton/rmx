@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use rmx_data_schema::checks::min_length;
-use rmx_data_schema::{self as s, Check, File, Issue, ParseOptions, PathSegment, Schema, Value};
+use rsmix_data_schema::checks::min_length;
+use rsmix_data_schema::{self as s, Check, File, Issue, ParseOptions, PathSegment, Schema, Value};
 
 fn ok<S: Schema>(schema: &S, value: impl Into<Value>) -> S::Output {
     s::parse(schema, value).unwrap()

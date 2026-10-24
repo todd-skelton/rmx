@@ -4,7 +4,7 @@
 //! share one buffer, so heap growth is what the parser and handler allocate. The handler
 //! "stores" each file by reading it and dropping the bytes.
 //!
-//! `cargo run --release -p rmx-fetch --example upload_bench`
+//! `cargo run --release -p rsmix-fetch --example upload_bench`
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::VecDeque;
@@ -15,8 +15,8 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use rmx_fetch::form_data::future;
-use rmx_fetch::{block_on, Body, FileUpload, FormData, FormLimits, FormValue};
+use rsmix_fetch::form_data::future;
+use rsmix_fetch::{block_on, Body, FileUpload, FormData, FormLimits, FormValue};
 
 struct Counting;
 
@@ -116,7 +116,7 @@ fn streaming(message: &Bytes) -> Run {
             while let Some(chunk) = upload.chunk().await {
                 stored += chunk?.len();
             }
-            Ok::<_, rmx_fetch::FormDataError>(stored.to_string())
+            Ok::<_, rsmix_fetch::FormDataError>(stored.to_string())
         }
     }))
     .unwrap();

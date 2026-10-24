@@ -1,7 +1,7 @@
 //! The benchmark app. Every page and component here has a line-for-line counterpart in
 //! `bench/remix-app` so the two frameworks render the same HTML and do the same work.
 
-use rmx::{browser, rsx, Children, Component, EventHandler, Handle, Node, Str};
+use rsmix::{browser, rsx, Children, Component, EventHandler, Handle, Node, Str};
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------------------
@@ -117,7 +117,7 @@ pub struct Counter {
 
 impl Component for Counter {
     type Props = CounterProps;
-    rmx::client_entry!("Counter");
+    rsmix::client_entry!("Counter");
 
     fn setup(props: &CounterProps, _: &Handle<Self>) -> Self {
         Counter { count: props.initial }
@@ -238,7 +238,7 @@ impl RowsBench {
 
 impl Component for RowsBench {
     type Props = RowsBenchProps;
-    rmx::client_entry!("RowsBench");
+    rsmix::client_entry!("RowsBench");
 
     fn setup(_: &RowsBenchProps, h: &Handle<Self>) -> Self {
         h.queue_task(|_, _| browser::set_document_data("hydrated", &browser::now().to_string()));

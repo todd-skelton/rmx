@@ -7,12 +7,12 @@ mod tests;
 use std::path::Path;
 
 use http::StatusCode;
-use rmx::assets::{AssetError, AssetOptions, AssetServer};
-use rmx::response;
-use rmx::middleware::live_reload::live_reload;
-use rmx::middleware::static_files::{static_files, StaticOptions};
-use rmx::middleware::render::Render;
-use rmx::router::{action, Context, Router};
+use rsmix::assets::{AssetError, AssetOptions, AssetServer};
+use rsmix::response;
+use rsmix::middleware::live_reload::live_reload;
+use rsmix::middleware::static_files::{static_files, StaticOptions};
+use rsmix::middleware::render::Render;
+use rsmix::router::{action, Context, Router};
 
 use crate::routes::{RoutesActions, ROUTES};
 
@@ -34,7 +34,7 @@ pub fn asset_server(root: &Path, production: bool) -> Result<AssetServer, AssetE
 }
 
 /// `app/router.ts`: root `public/` files served unchanged, then the root controller. Under
-/// `rmx dev`, open pages reload when the server restarts (`live_reload`).
+/// `rsmix dev`, open pages reload when the server restarts (`live_reload`).
 pub fn router(root: &Path, production: bool) -> Result<Router, AssetError> {
     let assets = asset_server(root, production)?;
     let mut router = Router::new();

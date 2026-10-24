@@ -1,12 +1,12 @@
 //! Ports of Remix's `vdom.keys.test.tsx`. Run with `pwsh ./scripts/test-browser.ps1 -Test browser_keys`.
 #![cfg(target_arch = "wasm32")]
 
-extern crate rmx_component as rmx;
+extern crate rsmix_component as rsmix;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::{create_root, rsx, Component, Fragment, Handle, Node};
+use rsmix::{create_root, rsx, Component, Fragment, Handle, Node};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
@@ -168,7 +168,7 @@ fn handles_removing_items_with_keys() {
     assert!(el.query_selector("[data-id=b]").unwrap().is_none());
 }
 
-// rmx: the common start and end of a keyed list are patched in place and only the middle
+// rsmix: the common start and end of a keyed list are patched in place and only the middle
 // is matched by key; every kept node must survive, wherever it sits.
 #[wasm_bindgen_test]
 fn keeps_nodes_when_reordering_between_a_kept_prefix_and_suffix() {

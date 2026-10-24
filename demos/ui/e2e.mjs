@@ -203,7 +203,7 @@ const pos = await page.$eval('#draggable-box', (e) => [e.style.left, e.style.top
 check('the box follows the pointer', eq(pos, ['124px', '104px', 'grab']), pos)
 check('drag start and end events carry the position', eq(await page.evaluate(() => window.__drag), ['rmx:dragstart:24,24', 'rmx:dragend:124,104']), await page.evaluate(() => window.__drag))
 
-// Animation gallery (rmx-ui)
+// Animation gallery (rsmix-ui)
 await open('ui/animation')
 await page.waitForTimeout(50)
 check('entrance animations run on insert', await page.evaluate(() => document.querySelector('#enter .ball').getAnimations().length === 1))

@@ -10,7 +10,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
 /// The type shown in directory listings (Remix's `detectMimeType`, or
 /// `application/octet-stream` when unknown).
 pub fn detect_file_mime_type(filename: &str) -> &'static str {
-    rmx::mime::detect_mime_type(filename).unwrap_or("application/octet-stream")
+    rsmix::mime::detect_mime_type(filename).unwrap_or("application/octet-stream")
 }
 
 /// The type for an inline `<img>` preview, for the formats browsers display.

@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use rmx::router::routes::{any, get, Route, RouteMap};
+use rsmix::router::routes::{any, get, Route, RouteMap};
 
 #[derive(RouteMap)]
 pub struct Routes {

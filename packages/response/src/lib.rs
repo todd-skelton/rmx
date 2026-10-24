@@ -4,7 +4,7 @@ use http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
 
 use bytes::Bytes;
 
-use rmx_fetch::{Body, File, Response};
+use rsmix_fetch::{Body, File, Response};
 
 #[cfg(feature = "compress")]
 pub mod compress;
@@ -99,8 +99,8 @@ impl From<std::borrow::Cow<'_, str>> for HtmlBody {
     }
 }
 
-impl From<rmx_html_template::SafeHtml> for HtmlBody {
-    fn from(html: rmx_html_template::SafeHtml) -> HtmlBody {
+impl From<rsmix_html_template::SafeHtml> for HtmlBody {
+    fn from(html: rsmix_html_template::SafeHtml) -> HtmlBody {
         HtmlBody::Text(html.into_string())
     }
 }

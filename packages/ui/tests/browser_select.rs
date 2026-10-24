@@ -3,18 +3,18 @@
 //! for them in real time, and the custom delay case uses 400 ms so the default 75 ms delay
 //! and the custom one are told apart with wide margins (Remix checks 99 and 100 ms).
 //! `scrollIntoView` is stubbed like Remix's. Run with
-//! `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_select`.
+//! `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_select`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{on, rsx, Component, EventHandler, Handle, Mixin, Node};
-use rmx_ui::anchor::{AnchorOptions, Placement};
-use rmx_ui::listbox::ListboxOption;
-use rmx_ui::popover::{self, SurfaceOptions};
-use rmx_ui::select::{self, on_select_change, select_change, SelectChange, SelectState};
+use rsmix::test::{render, RenderResult};
+use rsmix::{on, rsx, Component, EventHandler, Handle, Mixin, Node};
+use rsmix_ui::anchor::{AnchorOptions, Placement};
+use rsmix_ui::listbox::ListboxOption;
+use rsmix_ui::popover::{self, SurfaceOptions};
+use rsmix_ui::select::{self, on_select_change, select_change, SelectChange, SelectState};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;

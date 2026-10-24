@@ -1,6 +1,6 @@
 //! Remix's `join.test.ts`.
 
-use rmx_route_pattern::RoutePattern;
+use rsmix_route_pattern::RoutePattern;
 
 fn assert_join(a: &str, b: &str, expected: &str) { let joined = RoutePattern::parse(a).unwrap().join(&RoutePattern::parse(b).unwrap());
     assert_eq!(joined.to_string(), RoutePattern::parse(expected).unwrap().to_string(), "{a} + {b}");

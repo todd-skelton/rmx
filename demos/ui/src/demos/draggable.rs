@@ -4,7 +4,7 @@
 //! `render`, and while a drag is active listens on `window` for moves. It dispatches
 //! `rmx:dragstart` and `rmx:dragend` events with the final position.
 
-use rmx::{mixin, on, rsx, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node};
+use rsmix::{mixin, on, rsx, Component, Element, Handle, HostMixin, Mixin, MixinHandle, Node};
 
 pub const DRAG_START_EVENT: &str = "rmx:dragstart";
 pub const DRAG_END_EVENT: &str = "rmx:dragend";
@@ -55,7 +55,7 @@ impl Draggable {
         self.browser.stop();
     }
 
-    fn on_pointer_down(&mut self, event: &rmx::Event, h: &MixinHandle<Self>) {
+    fn on_pointer_down(&mut self, event: &rsmix::Event, h: &MixinHandle<Self>) {
         if !self.enabled {
             return;
         }
@@ -68,7 +68,7 @@ impl Draggable {
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use rmx::MixinHandle;
+    use rsmix::MixinHandle;
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::{JsCast, JsValue};
 
@@ -114,7 +114,7 @@ mod browser {
             Some(self.node.as_ref()?.dyn_ref::<web_sys::HtmlElement>()?.style())
         }
 
-        pub(super) fn start(&mut self, event: &rmx::Event, _h: &MixinHandle<Draggable>) {
+        pub(super) fn start(&mut self, event: &rsmix::Event, _h: &MixinHandle<Draggable>) {
             let Some(e) = event.raw().dyn_ref::<web_sys::PointerEvent>() else { return };
             if e.button() != 0 {
                 return;
@@ -199,7 +199,7 @@ pub struct DraggableDemo;
 
 impl Component for DraggableDemo {
     type Props = ();
-    rmx::client_entry!("DraggableDemo");
+    rsmix::client_entry!("DraggableDemo");
 
     fn setup(_: &(), _: &Handle<Self>) -> Self {
         DraggableDemo

@@ -5,7 +5,7 @@
 
 use std::time::{Duration, UNIX_EPOCH};
 
-use rmx_headers::{SameSite, SetCookie};
+use rsmix_headers::{SameSite, SetCookie};
 
 fn parse(value: &str) -> SetCookie {
     SetCookie::parse(value).expect("a cookie")

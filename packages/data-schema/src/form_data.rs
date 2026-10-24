@@ -1,7 +1,7 @@
 //! Typed values from a [`FormData`] or [`SearchParams`] (`remix/data-schema/form-data`).
 //!
 //! ```
-//! use rmx_data_schema::{self as s, coerce, form_data as f, SearchParams};
+//! use rsmix_data_schema::{self as s, coerce, form_data as f, SearchParams};
 //!
 //! let limit = f::object(|o| o.field("limit", s::optional(coerce::number())));
 //! assert_eq!(s::parse(&limit, SearchParams::parse("limit=5")).unwrap(), Some(5.0));

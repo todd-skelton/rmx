@@ -76,7 +76,7 @@ pub struct RunOptions {
     /// Client entries the page may contain, created with [`entry`].
     pub entries: Vec<Entry>,
     /// Resolve frame content in the browser instead of fetching it from the server (Remix's
-    /// `resolveFrame`). `rmx-spa` uses it to run a router in the page. Needs the `frames`
+    /// `resolveFrame`). `rsmix-spa` uses it to run a router in the page. Needs the `frames`
     /// feature; without it the runtime warns and ignores it.
     pub resolve_frame: Option<crate::frame::ResolveFrame>,
     /// Replace how `data-rmx-prefetch` links and [`crate::prefetch`] load a page (Remix's
@@ -106,11 +106,11 @@ pub fn run(options: RunOptions) -> App {
     frames::set_resolver(options.resolve_frame);
     #[cfg(not(feature = "frames"))]
     if options.resolve_frame.is_some() {
-        warn("rmx: RunOptions::resolve_frame needs the `frames` feature; it is ignored");
+        warn("rsmix: RunOptions::resolve_frame needs the `frames` feature; it is ignored");
     }
     #[cfg(not(feature = "navigation"))]
     if options.prefetch.is_some() {
-        warn("rmx: RunOptions::prefetch needs the `navigation` feature; it is ignored");
+        warn("rsmix: RunOptions::prefetch needs the `navigation` feature; it is ignored");
     }
     #[cfg(feature = "navigation")]
     let prefetch = options.prefetch;
@@ -137,7 +137,7 @@ pub fn run(options: RunOptions) -> App {
 /// The running browser app returned by [`run`] (Remix's `AppRuntime`).
 ///
 /// ```ignore
-/// let app = rmx::run(RunOptions { entries, ..Default::default() });
+/// let app = rsmix::run(RunOptions { entries, ..Default::default() });
 /// app.on_error(move |error| show_error_page(&error.message));
 /// ```
 #[derive(Clone)]
@@ -277,7 +277,7 @@ fn has_flush_marker() -> bool {
 
 thread_local! {
     static DOCUMENT: web_sys::Document =
-        web_sys::window().and_then(|w| w.document()).expect("rmx needs a browser document");
+        web_sys::window().and_then(|w| w.document()).expect("rsmix needs a browser document");
 }
 
 pub(crate) fn document() -> web_sys::Document {

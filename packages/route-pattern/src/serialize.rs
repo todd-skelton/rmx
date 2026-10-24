@@ -1,6 +1,6 @@
 //! Print parsed patterns back to source (Remix's `route-pattern/serialize.ts`).
 
-use rmx_url::SearchParams;
+use rsmix_url::SearchParams;
 
 use crate::{Parts, PartPattern, Protocol, Search, Token};
 

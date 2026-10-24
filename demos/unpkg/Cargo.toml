@@ -1,18 +1,18 @@
 [package]
 name = "unpkg-demo"
-description = "The Remix 3 unpkg demo (an npm package browser: tarball parsing, caching, html templates), in rmx"
+description = "The Remix 3 unpkg demo (an npm package browser: tarball parsing, caching, html templates), in rsmix"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 publish = false
 
 [dependencies]
-rmx.workspace = true
+rsmix.workspace = true
 bytes.workspace = true
 flate2 = "1"
 http.workspace = true
 nodejs-semver = "7"
-rmx-html-template.workspace = true
+rsmix-html-template.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

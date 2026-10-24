@@ -1,18 +1,18 @@
 [package]
-name = "rmx-auth-middleware"
-description = "Pluggable authentication middleware for rmx (remix auth-middleware): resolve who is making the request and require it on routes"
+name = "rsmix-auth-middleware"
+description = "Pluggable authentication middleware for rsmix (remix auth-middleware): resolve who is making the request and require it on routes"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-fetch-router.workspace = true
-rmx-session.workspace = true
+rsmix-fetch.workspace = true
+rsmix-fetch-router.workspace = true
+rsmix-session.workspace = true
 
 [dev-dependencies]
-rmx-response.workspace = true
-rmx-cookie.workspace = true
-rmx-form-data-middleware.workspace = true
-rmx-session-middleware.workspace = true
+rsmix-response.workspace = true
+rsmix-cookie.workspace = true
+rsmix-form-data-middleware.workspace = true
+rsmix-session-middleware.workspace = true

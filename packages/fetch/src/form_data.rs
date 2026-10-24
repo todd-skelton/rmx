@@ -4,7 +4,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use rmx_multipart_parser::{get_multipart_boundary, parse_multipart_stream, MultipartError, MultipartOptions};
+use rsmix_multipart_parser::{get_multipart_boundary, parse_multipart_stream, MultipartError, MultipartOptions};
 
 use crate::{BoxError, Body, SearchParams};
 

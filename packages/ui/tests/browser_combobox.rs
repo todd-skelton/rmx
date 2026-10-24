@@ -2,16 +2,16 @@
 //! the 60 ms flash, the close transition and the 50 ms input commit; here the tests wait in
 //! real time: they poll until the surface closes (the transition wait then gives them two
 //! frames to observe the closing state), and wait past the commit delay. `scrollIntoView`
-//! is stubbed like Remix's. Run with `pwsh ./scripts/test-browser.ps1 -Crate rmx-ui -Test browser_combobox`.
+//! is stubbed like Remix's. Run with `pwsh ./scripts/test-browser.ps1 -Crate rsmix-ui -Test browser_combobox`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rmx::test::{render, RenderResult};
-use rmx::{rsx, EventHandler, Node};
-use rmx_ui::combobox::{self, combobox_change, on_combobox_change, ComboboxState, OnRef};
-use rmx_ui::listbox::ListboxOption;
+use rsmix::test::{render, RenderResult};
+use rsmix::{rsx, EventHandler, Node};
+use rsmix_ui::combobox::{self, combobox_change, on_combobox_change, ComboboxState, OnRef};
+use rsmix_ui::listbox::ListboxOption;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;

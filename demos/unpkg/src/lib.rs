@@ -1,5 +1,5 @@
-//! The Remix unpkg demo, in rmx: browse any npm package's files. Shows tarball parsing
-//! (rmx-tar-parser), a file-storage tarball cache, `html!` templates and the `render_with`
+//! The Remix unpkg demo, in rsmix: browse any npm package's files. Shows tarball parsing
+//! (rsmix-tar-parser), a file-storage tarball cache, `html!` templates and the `render_with`
 //! escape hatch for a custom renderer, all server-side with no client code.
 
 pub mod fetch;

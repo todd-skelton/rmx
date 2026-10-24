@@ -8,7 +8,7 @@
 mod common;
 
 use common::*;
-use rmx_multipart_parser::*;
+use rsmix_multipart_parser::*;
 
 const BOUNDARY: &str = "----WebKitFormBoundaryPMcT9NSv6M3P8D4Q";
 

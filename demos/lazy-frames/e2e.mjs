@@ -17,7 +17,7 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 800 
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(e.message))
-page.on('console', (m) => m.type() === 'warning' && m.text().startsWith('rmx') && errors.push(m.text()))
+page.on('console', (m) => m.type() === 'warning' && m.text().startsWith('rsmix') && errors.push(m.text()))
 const frameRequests = []
 page.on('request', (r) => {
   const url = new URL(r.url())
@@ -125,7 +125,7 @@ check('last section hydrates near the end', requested('/frames/interactive/retai
 const counts = {}
 for (const p of frameRequests) counts[p] = (counts[p] ?? 0) + 1
 check('every frame was requested at most once (plus the explicit reload)', Object.entries(counts).every(([p, n]) => n === 1 || (p.endsWith('idea-counter') && n === 2)), counts)
-check('no page errors or rmx warnings', errors.length === 0, errors)
+check('no page errors or rsmix warnings', errors.length === 0, errors)
 
 await browser.close()
 console.log(failures ? `${failures} failed` : 'all passed')

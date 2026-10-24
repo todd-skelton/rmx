@@ -1,5 +1,5 @@
 [package]
-name = "rmx-fetch-router"
+name = "rsmix-fetch-router"
 description = "A composable router on Request/Response with route maps, middleware and typed request context (port of remix fetch-router)"
 edition.workspace = true
 version.workspace = true
@@ -7,16 +7,16 @@ license.workspace = true
 
 [dependencies]
 http.workspace = true
-rmx-fetch.workspace = true
-rmx-response.workspace = true
-rmx-macros.workspace = true
-rmx-route-pattern.workspace = true
-rmx-url.workspace = true
+rsmix-fetch.workspace = true
+rsmix-response.workspace = true
+rsmix-macros.workspace = true
+rsmix-route-pattern.workspace = true
+rsmix-url.workspace = true
 
 # Bold table headers in `routes_command` on a color terminal.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rmx-terminal.workspace = true
+rsmix-terminal.workspace = true
 
-# Doctests and tests use `#[derive(RouteMap)]`, which expands to `::rmx::router` paths.
+# Doctests and tests use `#[derive(RouteMap)]`, which expands to `::rsmix::router` paths.
 [dev-dependencies]
-rmx = { path = "../rmx", default-features = false }
+rsmix = { path = "../rsmix", default-features = false }

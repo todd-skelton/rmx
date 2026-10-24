@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use rmx_auth::{microsoft_provider, MicrosoftOptions, ClientOptions, OAuthProvider};
+use rsmix_auth::{microsoft_provider, MicrosoftOptions, ClientOptions, OAuthProvider};
 use serde_json::json;
 
 #[test]

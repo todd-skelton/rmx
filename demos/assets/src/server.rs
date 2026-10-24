@@ -2,28 +2,28 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock};
 
 use http::StatusCode;
-use rmx::{rsx, Component, Handle, Node};
-use rmx::assets::{AssetError, AssetOptions, AssetServer, FileTransform, FilesOptions, FsFileCache, FsFileCacheOptions, GlobalTransform, Param, TransformContext, Transformed, DEFAULT_CACHE_DIRECTORY};
-use rmx::fetch::Response;
-use rmx::response;
-use rmx::middleware::logger::logger;
-use rmx::middleware::render::Render;
-use rmx::router::routes::{get, Route, RouteMap};
-use rmx::router::{action, Context, Router};
+use rsmix::{rsx, Component, Handle, Node};
+use rsmix::assets::{AssetError, AssetOptions, AssetServer, FileTransform, FilesOptions, FsFileCache, FsFileCacheOptions, GlobalTransform, Param, TransformContext, Transformed, DEFAULT_CACHE_DIRECTORY};
+use rsmix::fetch::Response;
+use rsmix::response;
+use rsmix::middleware::logger::logger;
+use rsmix::middleware::render::Render;
+use rsmix::router::routes::{get, Route, RouteMap};
+use rsmix::router::{action, Context, Router};
 
 pub fn main() {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "44104".into());
     let root = std::env::var("ASSETS_ROOT").unwrap_or_else(|_| "demos/assets".into());
-    let production = std::env::var("RMX_ENV").is_ok_and(|v| v == "production");
-    rmx::router::routes::routes_command(&*ROUTES);
+    let production = std::env::var("RSMIX_ENV").is_ok_and(|v| v == "production");
+    rsmix::router::routes::routes_command(&*ROUTES);
     let assets = asset_server(Path::new(&root), production).expect("asset server");
-    rmx::assets::assets_command(&assets);
+    rsmix::assets::assets_command(&assets);
     let addr = format!("{host}:{port}");
     println!("assets demo is running on http://{addr}");
     println!("Edit a client file and refresh to verify the client code updates.");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(rmx::node_fetch_server::listen(&addr, router(assets))).expect("serve");
+    rt.block_on(rsmix::node_fetch_server::listen(&addr, router(assets))).expect("serve");
 }
 
 // app/routes.ts
@@ -112,7 +112,7 @@ pub fn minify_svg(svg: &str) -> String {
 
 pub fn router(assets: AssetServer) -> Router {
     let mut router = Router::new();
-    if std::env::var("RMX_LOG").is_ok() {
+    if std::env::var("RSMIX_LOG").is_ok() {
         router.use_middleware(logger());
     }
 
@@ -183,15 +183,15 @@ impl Component for HomePage {
                 <head>
                     <meta charset="utf-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                    <title>"rmx-assets demo"</title>
+                    <title>"rsmix-assets demo"</title>
                     <link rel="stylesheet" href={props.style_href.clone()}/>
                     {preloads}
                 </head>
                 <body>
                     <main class="page-shell">
-                        <h1>"rmx-assets watch mode"</h1>
+                        <h1>"rsmix-assets watch mode"</h1>
                         <p>
-                            "This server stays running while " <code>"rmx-assets"</code> " reads client files on request. "
+                            "This server stays running while " <code>"rsmix-assets"</code> " reads client files on request. "
                             "Edit a client module, refresh the page, and the updated code is served without restarting the server."
                         </p>
                         <p>

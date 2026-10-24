@@ -2,7 +2,7 @@
 //!
 //! A [LazyFile] or [LazyBlob] knows its size and type up front and reads its content only
 //! when streamed. Content is either a list of [BlobPart]s (bytes, strings, other lazy blobs
-//! and files) or a [LazyContent] source such as a file on disk (`rmx_fs::open_lazy_file`).
+//! and files) or a [LazyContent] source such as a file on disk (`rsmix_fs::open_lazy_file`).
 //! [LazyBlob::slice] narrows the byte range without reading anything, so serving part of a
 //! large file streams only that part.
 //!
@@ -12,7 +12,7 @@
 //! lazy file cannot be turned into a string by accident.
 //!
 //! ```
-//! use rmx_lazy_file::{BlobPart, LazyFile, LazyFileOptions};
+//! use rsmix_lazy_file::{BlobPart, LazyFile, LazyFileOptions};
 //!
 //! let file = LazyFile::new(
 //!     [BlobPart::from("hello "), BlobPart::from("world")],
@@ -20,14 +20,14 @@
 //!     LazyFileOptions { content_type: "text/plain".into(), ..Default::default() },
 //! );
 //! assert_eq!(file.size(), 11);
-//! assert_eq!(rmx_fetch::block_on(file.slice(-5, None).text()).unwrap(), "world");
+//! assert_eq!(rsmix_fetch::block_on(file.slice(-5, None).text()).unwrap(), "world");
 //! ```
 
 use std::fmt;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use rmx_fetch::{Body, BodySender, BoxError, File};
+use rsmix_fetch::{Body, BodySender, BoxError, File};
 
 /// A range of bytes: `start` is inclusive and `end` exclusive. Negative values count back from
 /// the end of the content, and [ByteRange::END] (`i64::MAX`) stands for JavaScript's `Infinity`.
@@ -330,7 +330,7 @@ impl LazyBlob {
         self.content.text().await
     }
 
-    /// The whole content in memory as a [File] with no name (rmx has no separate `Blob`
+    /// The whole content in memory as a [File] with no name (rsmix has no separate `Blob`
     /// type). Reads everything; prefer [LazyBlob::stream].
     pub async fn to_blob(&self) -> Result<File, BoxError> {
         Ok(File::new("", self.content_type(), self.bytes().await?))
@@ -423,7 +423,7 @@ impl LazyFile {
         Ok(file)
     }
 
-    /// The whole content in memory as a [File] with no name (rmx has no separate `Blob` type).
+    /// The whole content in memory as a [File] with no name (rsmix has no separate `Blob` type).
     pub async fn to_blob(&self) -> Result<File, BoxError> {
         Ok(File::new("", self.content_type(), self.bytes().await?))
     }
@@ -435,7 +435,7 @@ impl fmt::Debug for LazyFile {
     }
 }
 
-impl rmx_response::FileLike for LazyFile {
+impl rsmix_response::FileLike for LazyFile {
     fn name(&self) -> &str {
         &self.name
     }

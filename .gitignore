@@ -8,7 +8,7 @@ node_modules/
 *.cpuprofile
 /.tools/
 # Built wasm clients and demo scratch data
-/bench/rmx-app/public/pkg
+/bench/rsmix-app/public/pkg
 /demos/*/public/pkg
 /demos/*/app/actions/public/pkg
 /template/app/actions/public/pkg

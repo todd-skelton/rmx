@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(relative_file_path("//server/share/project", r"\\server\share\project\app\entry.ts"), "app/entry.ts");
     }
 
-    // rmx-only
+    // rsmix-only
 
     #[test]
     fn relative_paths_climb_out_and_compare_windows_paths_case_insensitively() {

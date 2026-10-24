@@ -1,7 +1,7 @@
 //! Components for the frame-navigation demo (an LMS with named frames for courses, the
 //! account editor and settings), shared by the server and the browser.
 
-use rmx::{css, link, on, rsx, Children, Component, EventHandler, Handle, Mixin, Node};
+use rsmix::{css, link, on, rsx, Children, Component, EventHandler, Handle, Mixin, Node};
 use serde::{Deserialize, Serialize};
 
 pub mod routes;
@@ -126,7 +126,7 @@ pub struct DashboardStatGrid;
 
 impl Component for DashboardStatGrid {
     type Props = StatGridProps;
-    rmx::client_entry!("DashboardStatGrid");
+    rsmix::client_entry!("DashboardStatGrid");
 
     fn setup(_: &StatGridProps, _: &Handle<Self>) -> Self {
         DashboardStatGrid
@@ -162,7 +162,7 @@ pub struct CourseFilterInput;
 
 impl Component for CourseFilterInput {
     type Props = CourseFilterProps;
-    rmx::client_entry!("CourseFilterInput");
+    rsmix::client_entry!("CourseFilterInput");
 
     fn setup(_: &CourseFilterProps, _: &Handle<Self>) -> Self {
         CourseFilterInput

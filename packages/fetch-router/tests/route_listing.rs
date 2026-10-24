@@ -1,8 +1,8 @@
 //! Route map listing (Remix's `remix routes` command) and route maps in statics.
 
-use rmx::fetch::{block_on, Body, Request, Response};
-use rmx::router::routes::{form, get, post, prefix, Route, RouteMap, RouteTree};
-use rmx::router::{action, Context, Router};
+use rsmix::fetch::{block_on, Body, Request, Response};
+use rsmix::router::routes::{form, get, post, prefix, Route, RouteMap, RouteTree};
+use rsmix::router::{action, Context, Router};
 
 fn req(method: &str, url: &str) -> Request {
     http::Request::builder().method(method).uri(url).body(Body::empty()).unwrap()
@@ -35,7 +35,7 @@ fn site() -> Site {
 
 #[test]
 fn maps_forms_and_resources() {
-    use rmx::router::routes::{resources, FormActions, ResourcesActions};
+    use rsmix::router::routes::{resources, FormActions, ResourcesActions};
     let contact = form("contact");
     let books = resources("books");
     let mut router = Router::new();
@@ -80,21 +80,21 @@ fn route_maps_work_through_lazy_lock() {
 pub struct App {
     pub home: Route,
     pub auth: Auth,
-    pub books: rmx::router::routes::Resources,
+    pub books: rsmix::router::routes::Resources,
 }
 
 #[derive(RouteMap)]
 pub struct Auth {
-    pub login: rmx::router::routes::Form,
+    pub login: rsmix::router::routes::Form,
     pub logout: Route,
 }
 
 fn app() -> App {
     let auth = prefix("auth");
     App {
-        home: rmx::router::routes::any("/"),
+        home: rsmix::router::routes::any("/"),
         auth: Auth { login: form("login"), logout: auth.post("logout") },
-        books: rmx::router::routes::resources_with_param("books", "bookId"),
+        books: rsmix::router::routes::resources_with_param("books", "bookId"),
     }
 }
 
@@ -146,7 +146,7 @@ fn headers_set_the_minimum_column_widths() {
 
 #[test]
 fn routes_command_styles_each_padded_header_cell() {
-    use rmx::router::routes::routes_command_output_with;
+    use rsmix::router::routes::routes_command_output_with;
     let args = ["--table".to_string()];
     let bold = |header: &str| format!("\x1b[1m{header}\x1b[22m");
     let table = routes_command_output_with(&get("/"), &args, &bold).unwrap();
@@ -183,7 +183,7 @@ fn lists_a_single_route_and_an_empty_map() {
 
 #[test]
 fn routes_command_parses_flags_like_remix_routes() {
-    use rmx::router::routes::routes_command_output;
+    use rsmix::router::routes::routes_command_output;
     let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let routes = app();
     assert_eq!(routes_command_output(&routes, &args(&[])).unwrap(), routes.route_tree().format_tree());

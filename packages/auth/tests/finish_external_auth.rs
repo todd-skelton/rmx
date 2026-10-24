@@ -3,10 +3,10 @@
 mod common;
 
 use common::*;
-use rmx_auth::{finish_external_auth, google_provider, AuthError, FinishExternalAuthOptions, OAuthAccount, OAuthProvider, OAuthResult, OAuthTokens, OAuthTransaction};
-use rmx_fetch_router::Context;
-use rmx_session::Session;
-use rmx_url::Url;
+use rsmix_auth::{finish_external_auth, google_provider, AuthError, FinishExternalAuthOptions, OAuthAccount, OAuthProvider, OAuthResult, OAuthTokens, OAuthTransaction};
+use rsmix_fetch_router::Context;
+use rsmix_session::Session;
+use rsmix_url::Url;
 use serde_json::json;
 
 /// `createOAuthProvider('test', ...)` whose callback always succeeds.
@@ -41,14 +41,14 @@ fn drops_authority_references_from_previously_stored_return_targets() {
         let transaction = json!({ "provider": "test", "state": "test-state", "codeVerifier": "test-verifier", "returnTo": "//other.example" });
         ctx.get::<Session>().unwrap().set("__auth", transaction);
         let finished = finish_external_auth(&TestProvider, &ctx, FinishExternalAuthOptions::default()).await.unwrap();
-        rmx_response::redirect_with(finished.return_to.as_deref().unwrap_or("/"), http::StatusCode::FOUND)
+        rsmix_response::redirect_with(finished.return_to.as_deref().unwrap_or("/"), http::StatusCode::FOUND)
     });
 
     let response = get(&router, "/?state=test-state", None);
     assert_eq!(response.headers["location"], "/");
 }
 
-fn google_backend(seen: &Seen) -> rmx_fetch::Response {
+fn google_backend(seen: &Seen) -> rsmix_fetch::Response {
     match seen.url.as_str() {
         "https://oauth2.googleapis.com/token" => {
             assert_eq!(seen.body.get("code"), Some("good-code"));

@@ -3,7 +3,7 @@
 
 mod common;
 
-use rmx_session::CookieStorage;
+use rsmix_session::CookieStorage;
 
 #[test]
 fn persists_session_data_across_requests() {

@@ -1,7 +1,7 @@
 //! Ports of Remix's `headers/src/lib/content-type.test.ts`. `new ContentType(string)` and
 //! `ContentType.from` are [`ContentType::parse`]; an object init is a struct literal.
 
-use rmx_headers::ContentType;
+use rsmix_headers::ContentType;
 
 fn parse(value: &str) -> ContentType {
     ContentType::parse(Some(value))
