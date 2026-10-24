@@ -249,6 +249,53 @@ fn symlinks_stay_inside_the_root() {
     assert_eq!(text(get(&r, "/leak.txt", &[])), "Fallback Handler");
 }
 
+/// A directory junction (Windows) or directory symlink (Unix) at `link` pointing to `target`.
+/// Junctions need no extra privileges.
+#[cfg(windows)]
+fn link_dir(target: &std::path::Path, link: &std::path::Path) -> bool {
+    std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .is_ok_and(|out| out.status.success())
+}
+
+#[cfg(unix)]
+fn link_dir(target: &std::path::Path, link: &std::path::Path) -> bool {
+    std::os::unix::fs::symlink(target, link).is_ok()
+}
+
+#[test]
+fn linked_directories_stay_inside_the_root() {
+    let dir = TempDir::new("linked-dir");
+    dir.file("public/inside/a.txt", "inside").file("public/inside/index.html", "<p>linked index</p>").file("outside/secret.txt", "Secret content");
+    let public = dir.0.join("public");
+    if !link_dir(&public.join("inside"), &public.join("in")) {
+        eprintln!("directory links unavailable; skipping");
+        return;
+    }
+    assert!(link_dir(&dir.0.join("outside"), &public.join("out")));
+    std::fs::create_dir_all(public.join("deep")).unwrap();
+    assert!(link_dir(&dir.0.join("outside"), &public.join("deep").join("out")));
+    let r = router(&public, StaticOptions::default());
+    assert_eq!(text(get(&r, "/in/a.txt", &[])), "inside", "a link inside the root is followed");
+    assert_eq!(text(get(&r, "/in/", &[])), "<p>linked index</p>", "and its index file");
+    assert_eq!(text(get(&r, "/out/secret.txt", &[])), "Fallback Handler", "a link out of the root is not");
+    assert_eq!(text(get(&r, "/deep/out/secret.txt", &[])), "Fallback Handler", "nor one further down");
+    assert_eq!(text(get(&r, "/out/", &[])), "Fallback Handler");
+    assert_eq!(text(get(&r, "/inside/a.txt", &[])), "inside");
+}
+
+#[test]
+fn missing_paths_and_the_root_fall_through() {
+    let (_dir, r) = setup("missing");
+    assert_eq!(text(get(&r, "/nope/deeper/file.txt", &[])), "Fallback Handler");
+    assert_eq!(text(get(&r, "/app.css/inside", &[])), "Fallback Handler", "a file is not a directory");
+    assert_eq!(text(get(&r, "/", &[])), "home", "the root without an index file");
+    assert_eq!(text(get(&r, "/./app.css", &[])), "body{}");
+}
+
 #[test]
 fn listing_helpers() {
     assert_eq!(format_size(0), "0 B");

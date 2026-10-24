@@ -3,6 +3,8 @@
 //! requests and byte ranges behave exactly as for any other file response.
 
 use std::cmp::Ordering;
+use std::ffi::OsStr;
+use std::fs::Metadata;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -92,15 +94,17 @@ pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Mi
             if options.filter.as_ref().is_some_and(|filter| !filter(&rel)) {
                 return next.run(ctx).await;
             }
-            let Some(requested) = join(&root, &rel) else { return next.run(ctx).await };
-            let Some(real) = contained(&root, &requested) else { return next.run(ctx).await };
+            if !lexically_inside(&rel) {
+                return next.run(ctx).await;
+            }
+            let Some((real, meta)) = resolve(&root, root.to_path_buf(), Path::new(&*rel)) else { return next.run(ctx).await };
             let mut found = None;
-            if real.is_file() {
+            if meta.is_file() {
                 found = Some((real, rel.to_string()));
-            } else if real.is_dir() {
+            } else if meta.is_dir() {
                 for index in &options.index {
-                    let Some(index_real) = contained(&root, &requested.join(index)) else { continue };
-                    if index_real.is_file() {
+                    let Some((index_real, index_meta)) = resolve(&root, real.clone(), Path::new(index)) else { continue };
+                    if index_meta.is_file() {
                         let name = if rel.is_empty() { index.clone() } else { format!("{}/{index}", rel.trim_end_matches('/')) };
                         found = Some((index_real, name));
                         break;
@@ -122,15 +126,64 @@ pub fn static_files(root: impl Into<PathBuf>, options: StaticOptions) -> impl Mi
     }
 }
 
-/// Join a URL path onto `root` lexically, refusing `..`, absolute paths and prefixes.
-fn join(root: &Path, rel: &str) -> Option<PathBuf> {
-    let rel = Path::new(rel);
-    rel.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir)).then(|| root.join(rel))
+/// Whether `rel` names something below the root without leaving it lexically: no `..`, no
+/// absolute path or prefix.
+fn lexically_inside(rel: &str) -> bool {
+    Path::new(rel).components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
 }
 
-/// The real path of `path` when it exists and stays inside `root` after resolving symlinks.
-fn contained(root: &Path, path: &Path) -> Option<PathBuf> {
-    path.canonicalize().ok().filter(|real| real.starts_with(root))
+/// `rel` below `base` (`root` itself or a path already resolved inside it), with its
+/// metadata, when it exists and stays inside `root` (canonical) after following symlinks.
+///
+/// Each component is checked with one `symlink_metadata` call, so a missing path costs one
+/// stat at the first missing name rather than resolving the whole path from `/` (what
+/// `canonicalize` does, and what Remix's `realpath` does twice per request). Only a symlink,
+/// or on Windows a name the system may rewrite, is resolved with `canonicalize` and checked
+/// against `root`, as every path used to be.
+fn resolve(root: &Path, base: PathBuf, rel: &Path) -> Option<(PathBuf, Metadata)> {
+    let mut path = base;
+    let mut meta = None;
+    let mut components = rel.components();
+    while let Some(component) = components.next() {
+        let Component::Normal(name) = component else { continue };
+        path.push(name);
+        let slow = needs_resolving(name) || {
+            let m = std::fs::symlink_metadata(&path).ok()?;
+            let link = m.file_type().is_symlink();
+            meta = Some(m);
+            link
+        };
+        if slow {
+            path.extend(components);
+            return resolve_slow(root, &path);
+        }
+    }
+    let meta = match meta {
+        Some(meta) => meta,
+        None => std::fs::metadata(&path).ok()?,
+    };
+    Some((path, meta))
+}
+
+/// `canonicalize` and the containment check, for paths through a symlink (or a junction).
+fn resolve_slow(root: &Path, path: &Path) -> Option<(PathBuf, Metadata)> {
+    let real = path.canonicalize().ok().filter(|real| real.starts_with(root))?;
+    let meta = std::fs::metadata(&real).ok()?;
+    Some((real, meta))
+}
+
+/// Windows rewrites some names before looking them up: trailing dots and spaces are dropped,
+/// `:` opens an alternate data stream and `~` may be a short (8.3) name. Those go through
+/// `canonicalize` so the containment check sees the name the system will open.
+#[cfg(windows)]
+fn needs_resolving(name: &OsStr) -> bool {
+    let name = name.to_string_lossy();
+    name.ends_with(['.', ' ']) || name.contains([':', '~'])
+}
+
+#[cfg(not(windows))]
+fn needs_resolving(_: &OsStr) -> bool {
+    false
 }
 
 /// The file at `real` as a [LazyFile] named and typed by the requested path `name`, with the
