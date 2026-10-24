@@ -1379,6 +1379,7 @@ dependencies = [
  "bytes",
  "http",
  "http-body",
+ "memchr",
  "rmx-fetch",
  "rmx-headers",
 ]

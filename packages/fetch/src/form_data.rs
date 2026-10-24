@@ -138,6 +138,14 @@ impl FormDataError {
     fn cannot_parse(cause: impl fmt::Display) -> FormDataError {
         FormDataError::Parse(format!("Cannot parse form data: {cause}"))
     }
+
+    fn from_multipart(e: MultipartError) -> FormDataError {
+        if e.is_limit() {
+            FormDataError::Limit(e)
+        } else {
+            FormDataError::cannot_parse(e)
+        }
+    }
 }
 
 impl fmt::Display for FormDataError {
@@ -271,17 +279,11 @@ impl FormData {
         Fut: std::future::Future,
         Fut::Output: UploadResult,
     {
-        let ct = content_type.unwrap_or("");
-        let essence = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
-        if essence == "application/x-www-form-urlencoded" {
-            let bytes = read_url_encoded(body, limits).await?;
-            return Ok(SearchParams::parse(&String::from_utf8_lossy(&bytes)).into());
-        }
-        if !essence.starts_with("multipart/") {
-            return Err(FormDataError::Parse("Cannot parse form data".into()));
-        }
-        let boundary = get_multipart_boundary(ct).ok_or_else(|| FormDataError::cannot_parse("Invalid Content-Type header: missing boundary"))?;
-        let multipart_error = |e: MultipartError| if e.is_limit() { FormDataError::Limit(e) } else { FormDataError::cannot_parse(e) };
+        let (body, boundary) = match form_body(content_type, body, limits).await? {
+            FormBody::UrlEncoded(form) => return Ok(form),
+            FormBody::Multipart(body, boundary) => (body, boundary),
+        };
+        let multipart_error = FormDataError::from_multipart;
         let mut parts = parse_multipart_stream(body, &boundary, &limits.multipart()).map_err(multipart_error)?;
         let mut form = FormData::new();
         let mut files = 0;
@@ -311,6 +313,27 @@ impl FormData {
     }
 }
 
+enum FormBody {
+    UrlEncoded(FormData),
+    Multipart(Body, String),
+}
+
+/// A URL-encoded form, or a multipart body and its boundary. Other media types, and a
+/// missing `Content-Type`, are a [`FormDataError::Parse`] before the body is read.
+async fn form_body(content_type: Option<&str>, body: Body, limits: FormLimits) -> Result<FormBody, FormDataError> {
+    let ct = content_type.unwrap_or("");
+    let essence = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    if essence == "application/x-www-form-urlencoded" {
+        let bytes = read_url_encoded(body, limits).await?;
+        return Ok(FormBody::UrlEncoded(SearchParams::parse(&String::from_utf8_lossy(&bytes)).into()));
+    }
+    if !essence.starts_with("multipart/") {
+        return Err(FormDataError::Parse("Cannot parse form data".into()));
+    }
+    let boundary = get_multipart_boundary(ct).ok_or_else(|| FormDataError::cannot_parse("Invalid Content-Type header: missing boundary"))?;
+    Ok(FormBody::Multipart(body, boundary))
+}
+
 impl From<SearchParams> for FormData {
     fn from(p: SearchParams) -> FormData {
         FormData { entries: p.iter().map(|(k, v)| (k.to_string(), FormValue::Text(v.to_string()))).collect() }
@@ -337,6 +360,8 @@ async fn read_url_encoded(body: Body, limits: FormLimits) -> Result<Vec<u8>, For
     }
     Ok(bytes)
 }
+
+pub mod future;
 
 /// A parameter from a header value such as `multipart/form-data; boundary=x`.
 pub fn header_param(value: &str, name: &str) -> Option<String> {

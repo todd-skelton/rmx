@@ -9,6 +9,7 @@ license.workspace = true
 bytes.workspace = true
 http.workspace = true
 http-body.workspace = true
+memchr.workspace = true
 rmx-headers.workspace = true
 
 [dev-dependencies]

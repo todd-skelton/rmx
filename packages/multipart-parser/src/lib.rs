@@ -117,6 +117,14 @@ enum Carry {
     Full(usize),
 }
 
+/// What [MultipartParser::scan] reports, in order: `Start`, zero or more `Data`, `End`.
+pub(crate) enum Event<'a> {
+    /// A part's raw header block.
+    Start(Bytes),
+    Data(&'a [u8]),
+    End,
+}
+
 /// A push-based multipart parser.
 pub struct MultipartParser {
     boundary: String,
@@ -129,8 +137,10 @@ pub struct MultipartParser {
     state: State,
     at_start_of_stream: bool,
     buffer: Option<Vec<u8>>,
-    current_header: Option<Bytes>,
-    current_content: Option<Vec<Bytes>>,
+    /// A part has started and has not ended yet.
+    in_part: bool,
+    /// The part [MultipartParser::write] is collecting.
+    part: Option<MultipartPart>,
     content_length: usize,
     part_count: usize,
     total_content_length: usize,
@@ -151,8 +161,8 @@ impl MultipartParser {
             state: State::Start,
             at_start_of_stream: true,
             buffer: None,
-            current_header: None,
-            current_content: None,
+            in_part: false,
+            part: None,
             content_length: 0,
             part_count: 0,
             total_content_length: 0,
@@ -170,11 +180,24 @@ impl MultipartParser {
     /// Feed the next chunk and return the parts it completed.
     pub fn write(&mut self, input: &[u8]) -> Result<Vec<MultipartPart>, MultipartError> {
         let mut parts = Vec::new();
+        let mut current = self.part.take();
+        self.scan(input, &mut |event| match event {
+            Event::Start(header) => current = Some(MultipartPart { header, content: Vec::new() }),
+            Event::Data(data) => current.as_mut().expect("data follows a part start").content.push(Bytes::copy_from_slice(data)),
+            Event::End => parts.push(current.take().expect("a part end follows its start")),
+        })?;
+        self.part = current;
+        Ok(parts)
+    }
+
+    /// Feed the next chunk, reporting each part as soon as its headers arrive, then its
+    /// content as it is found, then its end. Limits are checked before an event is reported.
+    pub(crate) fn scan(&mut self, input: &[u8], sink: &mut dyn FnMut(Event<'_>)) -> Result<(), MultipartError> {
         if self.state == State::Done {
             return Err(MultipartError::parse("Unexpected data after end of stream"));
         }
         if self.state == State::Epilogue {
-            return Ok(parts);
+            return Ok(());
         }
         let delimiter_len = self.delimiter.len();
         let joined: Vec<u8>;
@@ -184,16 +207,16 @@ impl MultipartParser {
         if let Some(carry) = self.buffer.take() {
             if self.state == State::Body {
                 match self.analyze_carry(&carry, chunk) {
-                    Carry::None => self.append(&carry)?,
+                    Carry::None => self.append(&carry, sink)?,
                     Carry::Partial(start) => {
-                        self.append(&carry[..start])?;
+                        self.append(&carry[..start], sink)?;
                         let mut tail = carry[start..].to_vec();
                         tail.extend_from_slice(chunk);
                         self.buffer = Some(tail);
-                        return Ok(parts);
+                        return Ok(());
                     }
                     Carry::Full(start) => {
-                        self.append(&carry[..start])?;
+                        self.append(&carry[..start], sink)?;
                         self.state = State::AfterBoundary;
                         index = delimiter_len - (carry.len() - start);
                     }
@@ -215,10 +238,10 @@ impl MultipartParser {
                 let Some(found) = find(chunk, &self.delimiter, index) else {
                     // No boundary, but one may start at the end of the chunk.
                     match self.partial_tail(chunk) {
-                        None => self.append(&chunk[index..])?,
+                        None => self.append(&chunk[index..], sink)?,
                         Some(tail) => {
                             if tail > index {
-                                self.append(&chunk[index..tail])?;
+                                self.append(&chunk[index..tail], sink)?;
                             }
                             self.buffer = Some(chunk[tail..].to_vec());
                         }
@@ -226,7 +249,7 @@ impl MultipartParser {
                     break;
                 };
                 if found > index {
-                    self.append(&chunk[index..found])?;
+                    self.append(&chunk[index..found], sink)?;
                 }
                 index = found + delimiter_len;
                 self.state = State::AfterBoundary;
@@ -240,9 +263,7 @@ impl MultipartParser {
                 if chunk[index] == b'-' && chunk[index + 1] == b'-' {
                     index += 2;
                     self.state = State::ClosingBoundary;
-                    if self.current_content.is_some() {
-                        parts.push(self.create_part()?);
-                    }
+                    self.end_part(sink);
                 } else {
                     self.state = State::BoundaryPadding;
                 }
@@ -265,9 +286,7 @@ impl MultipartParser {
                 if closing {
                     break;
                 }
-                if self.current_content.is_some() {
-                    parts.push(self.create_part()?);
-                }
+                self.end_part(sink);
             }
 
             if self.state == State::Header {
@@ -285,9 +304,7 @@ impl MultipartParser {
                 if end - index > self.options.max_header_size {
                     return Err(MultipartError::MaxHeaderSizeExceeded(self.options.max_header_size));
                 }
-                self.current_header = Some(Bytes::copy_from_slice(&chunk[index..end]));
-                self.current_content = Some(Vec::new());
-                self.content_length = 0;
+                self.start_part(Bytes::copy_from_slice(&chunk[index..end]), sink)?;
                 index = end + 4;
                 self.state = State::Body;
                 continue;
@@ -318,7 +335,7 @@ impl MultipartParser {
                 self.state = State::AfterBoundary;
             }
         }
-        Ok(parts)
+        Ok(())
     }
 
     /// Check that the message ended with its closing boundary. Safe to call more than once.
@@ -338,7 +355,7 @@ impl MultipartParser {
         Ok(())
     }
 
-    fn append(&mut self, data: &[u8]) -> Result<(), MultipartError> {
+    fn append(&mut self, data: &[u8], sink: &mut dyn FnMut(Event<'_>)) -> Result<(), MultipartError> {
         if data.is_empty() {
             return Ok(());
         }
@@ -348,20 +365,30 @@ impl MultipartParser {
         if self.total_content_length + data.len() > self.max_total_size {
             return Err(MultipartError::MaxTotalSizeExceeded(self.max_total_size));
         }
-        if let Some(content) = self.current_content.as_mut() {
-            content.push(Bytes::copy_from_slice(data));
-        }
         self.content_length += data.len();
         self.total_content_length += data.len();
+        if self.in_part {
+            sink(Event::Data(data));
+        }
         Ok(())
     }
 
-    fn create_part(&mut self) -> Result<MultipartPart, MultipartError> {
+    /// Parts are counted as they begin, so an extra part fails before its content is read.
+    fn start_part(&mut self, header: Bytes, sink: &mut dyn FnMut(Event<'_>)) -> Result<(), MultipartError> {
         self.part_count += 1;
         if self.part_count > self.options.max_parts {
             return Err(MultipartError::MaxPartsExceeded(self.options.max_parts));
         }
-        Ok(MultipartPart { header: self.current_header.take().unwrap_or_default(), content: self.current_content.take().unwrap_or_default() })
+        self.in_part = true;
+        self.content_length = 0;
+        sink(Event::Start(header));
+        Ok(())
+    }
+
+    fn end_part(&mut self, sink: &mut dyn FnMut(Event<'_>)) {
+        if std::mem::take(&mut self.in_part) {
+            sink(Event::End);
+        }
     }
 
     /// Whether the held-back bytes plus `chunk` start a delimiter, fully or partly.
@@ -393,7 +420,7 @@ fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
     if from >= hay.len() || hay.len() - from < needle.len() {
         return None;
     }
-    hay[from..].windows(needle.len()).position(|w| w == needle).map(|i| i + from)
+    memchr::memmem::find(&hay[from..], needle).map(|i| i + from)
 }
 
 /// One part of a multipart message.
@@ -427,46 +454,27 @@ impl MultipartPart {
 
     /// The parsed headers (decoded as UTF-8, invalid bytes replaced).
     pub fn headers(&self) -> MultipartHeaders {
-        let mut headers: Vec<(String, String)> = Vec::new();
-        for line in String::from_utf8_lossy(&self.header).split("\r\n") {
-            let Some((name, value)) = line.split_once(':') else { continue };
-            if name.is_empty() {
-                continue;
-            }
-            let (name, value) = (name.trim().to_ascii_lowercase(), value.trim());
-            match headers.iter_mut().find(|(k, _)| *k == name) {
-                Some((_, existing)) => {
-                    existing.push_str(", ");
-                    existing.push_str(value);
-                }
-                None => headers.push((name, value.to_string())),
-            }
-        }
-        MultipartHeaders(headers)
-    }
-
-    fn disposition(&self) -> ContentDisposition {
-        ContentDisposition::parse(self.headers().get("content-disposition"))
+        MultipartHeaders::parse(&self.header)
     }
 
     /// The `name` from `Content-Disposition`.
     pub fn name(&self) -> Option<String> {
-        self.disposition().name
+        self.headers().name()
     }
 
     /// The file name, preferring a decoded `filename*` over `filename`.
     pub fn filename(&self) -> Option<String> {
-        self.disposition().preferred_filename()
+        self.headers().filename()
     }
 
     /// The media type from `Content-Type`, without parameters.
     pub fn media_type(&self) -> Option<String> {
-        ContentType::parse(self.headers().get("content-type")).media_type
+        self.headers().media_type()
     }
 
     /// A file part: it has a file name or is `application/octet-stream`.
     pub fn is_file(&self) -> bool {
-        self.filename().is_some() || self.media_type().as_deref() == Some("application/octet-stream")
+        self.headers().is_file()
     }
 
     pub fn is_text(&self) -> bool {
@@ -489,6 +497,52 @@ impl MultipartPart {
     /// The content as UTF-8 (an error for invalid UTF-8, like Remix's fatal decoder).
     pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.bytes().to_vec())
+    }
+}
+
+impl MultipartHeaders {
+    /// Parse a raw header block: lowercase names, trimmed values, repeats joined with `, `.
+    pub(crate) fn parse(raw: &[u8]) -> MultipartHeaders {
+        let mut headers: Vec<(String, String)> = Vec::new();
+        for line in String::from_utf8_lossy(raw).split("\r\n") {
+            let Some((name, value)) = line.split_once(':') else { continue };
+            if name.is_empty() {
+                continue;
+            }
+            let (name, value) = (name.trim().to_ascii_lowercase(), value.trim());
+            match headers.iter_mut().find(|(k, _)| *k == name) {
+                Some((_, existing)) => {
+                    existing.push_str(", ");
+                    existing.push_str(value);
+                }
+                None => headers.push((name, value.to_string())),
+            }
+        }
+        MultipartHeaders(headers)
+    }
+
+    fn disposition(&self) -> ContentDisposition {
+        ContentDisposition::parse(self.get("content-disposition"))
+    }
+
+    /// The `name` from `Content-Disposition`.
+    pub fn name(&self) -> Option<String> {
+        self.disposition().name
+    }
+
+    /// The file name, preferring a decoded `filename*` over `filename`.
+    pub fn filename(&self) -> Option<String> {
+        self.disposition().preferred_filename()
+    }
+
+    /// The media type from `Content-Type`, without parameters.
+    pub fn media_type(&self) -> Option<String> {
+        ContentType::parse(self.get("content-type")).media_type
+    }
+
+    /// A file part: it has a file name or is `application/octet-stream`.
+    pub fn is_file(&self) -> bool {
+        self.filename().is_some() || self.media_type().as_deref() == Some("application/octet-stream")
     }
 }
 
@@ -584,7 +638,13 @@ pub fn is_multipart_request<B>(request: &http::Request<B>) -> bool {
 
 /// Parse a request's multipart body as it streams in.
 pub fn parse_multipart_request<B: http_body::Body>(request: http::Request<B>, options: &MultipartOptions) -> Result<MultipartStream<B>, MultipartError> {
-    if !is_multipart_request(&request) {
+    let boundary = request_boundary(&request)?;
+    parse_multipart_stream(request.into_body(), &boundary, options)
+}
+
+/// The boundary of a multipart request with a body.
+fn request_boundary<B: http_body::Body>(request: &http::Request<B>) -> Result<String, MultipartError> {
+    if !is_multipart_request(request) {
         return Err(MultipartError::parse("Request is not a multipart request"));
     }
     // Like Remix: a missing body is reported before a missing boundary.
@@ -592,9 +652,10 @@ pub fn parse_multipart_request<B: http_body::Body>(request: http::Request<B>, op
         return Err(MultipartError::parse("Request body is empty"));
     }
     let content_type = request.headers().get(http::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default();
-    let boundary = get_multipart_boundary(content_type).ok_or_else(|| MultipartError::parse("Invalid Content-Type header: missing boundary"))?;
-    parse_multipart_stream(request.into_body(), &boundary, options)
+    get_multipart_boundary(content_type).ok_or_else(|| MultipartError::parse("Invalid Content-Type header: missing boundary"))
 }
+
+pub mod future;
 
 #[cfg(test)]
 mod tests;

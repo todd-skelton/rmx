@@ -111,6 +111,7 @@ rmx-fs = { path = "packages/fs" }
 bytes = "1"
 http = "1"
 http-body = "1"
+memchr = { version = "2.7", default-features = false, features = ["std"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "sync", "fs", "io-util"] }
 bench-app = { path = "bench/rmx-app/app" }
 serde = { version = "1", features = ["derive"] }

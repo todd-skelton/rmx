@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use http::{header, StatusCode};
 pub use rmx_fetch::form_data::FileUpload;
-use rmx_fetch::{BoxError, FormData, FormDataError, FormLimits, FormValue, UploadResult};
+use rmx_fetch::{Body, BoxError, FormData, FormDataError, FormLimits, FormValue, UploadResult};
 use rmx_fetch_router::{BoxFuture, Context, Error, IntoResponse, Middleware, Next};
 
 type UploadHandler = Arc<dyn Fn(FileUpload) -> BoxFuture<Result<Option<FormValue>, BoxError>> + Send + Sync>;
@@ -73,34 +73,46 @@ impl FormDataParser {
 }
 
 impl Middleware for FormDataParser {
-    fn call(&self, mut ctx: Context, next: Next) -> BoxFuture<rmx_fetch::Response> {
+    fn call(&self, ctx: Context, next: Next) -> BoxFuture<rmx_fetch::Response> {
         let this = self.clone();
-        Box::pin(async move {
-            if ctx.get::<FormData>().is_some() {
-                return next.run(ctx).await;
-            }
-            let content_type = ctx.header(header::CONTENT_TYPE.as_str()).map(str::to_string);
-            if !is_form_request(ctx.method(), content_type.as_deref()) {
-                ctx.set(FormData::new());
-                return next.run(ctx).await;
-            }
-            let body = ctx.take_body();
-            let parsed = match &this.upload_handler {
+        Box::pin(parse_into_context(ctx, next, this.suppress_errors, move |content_type, body| async move {
+            match &this.upload_handler {
                 Some(handler) => FormData::parse_with(content_type.as_deref(), body, this.limits, |upload| handler(upload)).await,
                 None => FormData::parse(content_type.as_deref(), body, this.limits).await,
-            };
-            let form = match parsed {
-                Ok(form) => form,
-                Err(e) if e.is_limit() => return Error::new(StatusCode::PAYLOAD_TOO_LARGE, e.to_string()).into_response(),
-                Err(_) if this.suppress_errors => FormData::new(),
-                Err(FormDataError::Upload(e)) => return Error::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
-                Err(e) => return Error::bad_request(format!("invalid form data: {e}")).into_response(),
-            };
-            ctx.set(form);
-            next.run(ctx).await
-        })
+            }
+        }))
     }
 }
+
+/// Parse a form request's body with `parse` and put the form in the context, answering
+/// limit errors with a 413, upload handler errors with a 500 and malformed bodies with a 400
+/// (or an empty form, when `suppress_errors` is set).
+async fn parse_into_context<F, Fut>(mut ctx: Context, next: Next, suppress_errors: bool, parse: F) -> rmx_fetch::Response
+where
+    F: FnOnce(Option<String>, Body) -> Fut,
+    Fut: Future<Output = Result<FormData, FormDataError>>,
+{
+    if ctx.get::<FormData>().is_some() {
+        return next.run(ctx).await;
+    }
+    let content_type = ctx.header(header::CONTENT_TYPE.as_str()).map(str::to_string);
+    if !is_form_request(ctx.method(), content_type.as_deref()) {
+        ctx.set(FormData::new());
+        return next.run(ctx).await;
+    }
+    let body = ctx.take_body();
+    let form = match parse(content_type, body).await {
+        Ok(form) => form,
+        Err(e) if e.is_limit() => return Error::new(StatusCode::PAYLOAD_TOO_LARGE, e.to_string()).into_response(),
+        Err(_) if suppress_errors => FormData::new(),
+        Err(FormDataError::Upload(e)) => return Error::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => return Error::bad_request(format!("invalid form data: {e}")).into_response(),
+    };
+    ctx.set(form);
+    next.run(ctx).await
+}
+
+pub mod future;
 
 /// `ctx.form_data()`: the parsed form (empty when the middleware did not run).
 pub trait FormDataExt {
