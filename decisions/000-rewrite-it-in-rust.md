@@ -1007,3 +1007,38 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
    suites: 11 of 12 in rebuild112; the ui suite's "a keyed element rendered mid-exit is
    reclaimed and retargets" check failed once (an animation timing check in the browser,
    which the static change does not touch) and passed on three reruns.
+
+## 18. The name, the versions and the tooling (2026-10-24)
+
+1. The crate name `rmx` on crates.io belongs to an unrelated project, so the port is now
+   `rsmix`: the crates (`rsmix`, `rsmix-*`), the `rsmix` command, the `RSMIX_*` environment
+   variables and the GitHub repository. The rule for every token was the same: where Remix
+   says `remix`, say `rsmix`; where Remix itself says `rmx` (`data-rmx-*`, `rmx-data`, the
+   `rmx:h` markers, `rmxc-` classes, the `rmx` style layer, `RMX_*` error codes), keep `rmx`.
+2. Versions follow Remix as well: `rsmix` is 3.1.0 like `remix`, and each `rsmix-*` crate has
+   the version of the `@remix-run/*` package it ports (`rsmix-component` 1.1.0,
+   `rsmix-lazy-file` 5.0.8, `rsmix-ui` 0.12.1). Crates with no Remix counterpart start at
+   1.0.0. `rsmix version` prints 3.1.0, as `remix version` prints the Remix release.
+3. Tooling now matches `npx remix new` as closely as cargo allows:
+   `cargo install rsmix-cli`, then `rsmix new`, `rsmix dev` and the new `rsmix build`.
+   Remix's starter needs only Node; ours now needs only rustup. On first use the CLI adds
+   the `wasm32-unknown-unknown` target, downloads the pinned `wasm-bindgen` 0.2.129 and
+   binaryen `version_123` releases from GitHub, checks them against their published
+   checksums, and unpacks them with the port's own `rsmix-tar-parser` into a cache
+   (`RSMIX_CACHE_DIR`). Without a release archive it falls back to
+   `cargo install wasm-bindgen-cli` and skips `wasm-opt`. `rsmix doctor` treats a missing tool
+   as advice, since the next build installs it.
+4. Packaging: `scripts/sync-cli-template.ps1` copies `template/` into the CLI crate before
+   publishing, the job Remix's `sync-cli-template.ts` does on `prepack`; `build.rs` reads the
+   repository's template in a checkout and the packaged copy otherwise. Workspace
+   dependencies carry versions, dev-dependencies between workspace crates are path-only (cargo
+   drops them from the published manifest, which breaks the cycles such as `fetch` and
+   `multipart-parser`), every crate has a LICENSE, and the demos, template and bench crates are
+   `publish = false`.
+5. Gate (measured): `cargo package` builds and verifies all 40 library crates from their
+   tarballs. On a fresh `rsmix new` app with an empty cache, `rsmix build` downloaded both
+   tools, checked them and finished in 247 s (client 389.2 KiB before compression); the
+   template's browser checks passed 11 of 11 against the release server, and `rsmix dev`
+   served the page with its live reload script. Workspace tests 2,648 passed, 0 failed
+   (test129), after the CLI status test stopped relying on a fixed sleep; clippy with
+   `-D warnings` clean. Nothing is on crates.io yet.

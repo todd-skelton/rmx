@@ -166,20 +166,25 @@ The fine print, because there is always fine print: the client still ships about
 
 ## Getting Started
 
-You need Rust stable with the `wasm32-unknown-unknown` target, plus `wasm-bindgen` 0.2.129 and `wasm-opt` for browser builds (details in [packages/rsmix](packages/rsmix/README.md#build-and-run)).
+All you need is [rustup](https://rustup.rs). Remix has `npx remix new`; we have:
 
 ```sh
-cargo install --path packages/cli   # the rsmix command
-rsmix new my-rsmix-app                  # Remix's template, now in Rust
+cargo install rsmix-cli        # the rsmix command
+rsmix new my-rsmix-app         # Remix's template, now in Rust
 cd my-rsmix-app
-rsmix dev                             # rebuild, restart and reload on change
+rsmix dev                      # rebuild, restart and reload on change
+rsmix build                    # the optimized client and the release server
 ```
 
-Or depend on it directly:
+The first `rsmix dev` or `rsmix build` fetches what the browser build needs: the `wasm32-unknown-unknown` target through rustup, plus pinned `wasm-bindgen` 0.2.129 and binaryen `wasm-opt` releases, checked against their published checksums and cached (set `RSMIX_CACHE_DIR` to choose where). `rsmix doctor` reports what is installed. The rest of the commands are in [packages/cli](packages/cli/README.md).
+
+The versions follow Remix too: `rsmix` is 3.1.0 because `remix` is 3.1.0, and each `rsmix-*` crate carries the version of the `@remix-run/*` package it ports. Semantic versioning was not consulted. This is not a project anyone should run in production, which has never stopped a version number before.
+
+Working from a clone instead? `cargo install --path packages/cli` builds the command from it, and apps it creates depend on that checkout by path. Or add the crate yourself:
 
 ```toml
 [dependencies]
-rsmix = { git = "https://github.com/todd-skelton/rsmix" }
+rsmix = "3.1.0"
 ```
 
 ## Repository Layout
@@ -189,7 +194,7 @@ rsmix = { git = "https://github.com/todd-skelton/rsmix" }
 | `packages/` | One npm package per directory | One crate per directory, same names |
 | `demos/` | The demo apps | The same demos, each with a browser e2e script |
 | `template/` | The `remix new` starter | The `rsmix new` starter |
-| `scripts/` | Release and repo tooling | `build-client.ps1` (wasm builds), `test-browser.ps1` (browser tests), `build-bench.ps1` |
+| `scripts/` | Release and repo tooling | `build-client.ps1` (wasm builds), `test-browser.ps1` (browser tests), `build-bench.ps1`, `sync-cli-template.ps1` (copies the starter into the CLI crate before publishing, like Remix's `prepack`) |
 | `decisions/` | Architecture decision records | [000: Rewrite it in Rust](decisions/000-rewrite-it-in-rust.md), the plan and the requirement-by-requirement parity audit |
 | `bench/` | (none) | The side-by-side benchmark apps and results |
 | `Cargo.toml` | `package.json`, `pnpm-workspace.yaml` | The workspace |
@@ -204,4 +209,4 @@ cargo test --workspace                     # native tests, including Remix's por
 
 ## License
 
-MIT, as declared in `Cargo.toml`. Remix 3 is MIT licensed by Shopify Inc., and this port leans on its design, tests, demos and docs throughout.
+MIT, see [LICENSE](LICENSE); every crate carries a copy. Remix 3 is MIT licensed by Shopify Inc., and this port leans on its design, tests, demos and docs throughout.

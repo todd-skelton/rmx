@@ -290,15 +290,18 @@ Every Remix 3 demo has a port under `demos/`, each with a Playwright e2e script
 lazy-frames, social-auth, spa, sse, timeboxer, ui and unpkg. `template` ports the
 `remix new` starter app (`reference/remix/template`): the home page, the copy-to-clipboard
 `PromptButton` client entry, the asset server and the controller test; `rsmix new <dir>` writes
-it out as a standalone crate (`cargo install --path packages/cli` installs the `rsmix` command;
-the generated app depends on this checkout's `rsmix` by path, or on `RSMIX_VERSION`). Every demo
+it out as a standalone crate (`cargo install rsmix-cli` installs the `rsmix` command; built
+from a checkout with `cargo install --path packages/cli`, it makes apps that depend on that
+checkout by path, and `RSMIX_VERSION` picks a published version instead). Every demo
 binary lists its route map with `-- routes`, and `rsmix routes` / `rsmix assets` run those
 commands for the app in the current directory. `bench/rsmix-app` is the benchmark app used in
 `../../bench/README.md`.
 
 ## Build and Run
 
-Prereqs: Rust stable with the `wasm32-unknown-unknown` target, plus `wasm-bindgen` 0.2.129
+In an app made by `rsmix new`, `rsmix dev` and `rsmix build` do all of this, and install the
+wasm32 target, `wasm-bindgen` and `wasm-opt` on first use. In this repository the demos are built
+by hand. Prereqs: Rust stable with the `wasm32-unknown-unknown` target, plus `wasm-bindgen` 0.2.129
 and `wasm-opt` (the build script finds the copies cargo-leptos downloaded).
 
 ```powershell
