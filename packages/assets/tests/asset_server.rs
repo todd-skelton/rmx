@@ -185,13 +185,13 @@ fn serves_entry_points_with_no_cache_and_etags() {
 }
 
 #[test]
-fn does_not_match_a_stripped_weak_etag_prefix_in_if_none_match() {
+fn matches_a_stripped_weak_etag_prefix_in_if_none_match() {
     let dir = Dir::new();
     dir.write("app/entry.js", "export const value = 1");
     let s = server(options(&dir));
     let etag = header(&get_ok(&s, "/assets/app/entry.js"), header::ETAG).to_string();
     let strong = etag.strip_prefix("W/").unwrap();
-    assert_eq!(request(&s, Method::GET, "/assets/app/entry.js", &[("if-none-match", strong)]).unwrap().status, 200);
+    assert_eq!(request(&s, Method::GET, "/assets/app/entry.js", &[("if-none-match", strong)]).unwrap().status, 304);
 }
 
 #[test]

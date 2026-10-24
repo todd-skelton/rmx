@@ -269,3 +269,15 @@ fn multiple_set_cookie_values() {
     headers.remove(header::SET_COOKIE);
     assert!(headers.set_cookies().is_empty());
 }
+
+// super-headers.test.ts (remix 3.1): numeric values with no integer prefix read as null.
+#[test]
+fn numeric_headers_without_an_integer_prefix_are_none() {
+    let mut headers = HeaderMap::new();
+    for name in ["access-control-max-age", "age", "content-length", "max-forwards", "upgrade-insecure-requests"] {
+        headers.insert(name.parse::<http::header::HeaderName>().unwrap(), HeaderValue::from_static("invalid"));
+        assert_eq!(headers.number(name), None, "{name}");
+    }
+    headers.insert(header::CONTENT_LENGTH, HeaderValue::from_static("12bytes"));
+    assert_eq!(headers.number(header::CONTENT_LENGTH), Some(12));
+}

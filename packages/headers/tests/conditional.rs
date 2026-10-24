@@ -121,7 +121,9 @@ fn if_range_matches_dates_to_the_second() {
 #[test]
 fn if_range_matches_strong_etags_only() {
     assert!(IfRange::parse(Some("\"67ab43\"")).matches(Some("\"67ab43\""), None));
-    assert!(IfRange::parse(Some("67ab43")).matches(Some("67ab43"), None), "bare tags");
+    // Remix 3.1: a bare tag is not an entity tag, so it never matches.
+    assert!(!IfRange::parse(Some("67ab43")).matches(Some("67ab43"), None), "bare tags");
+    assert!(!IfRange::parse(Some("67ab43")).matches(Some("\"67ab43\""), None));
     assert!(!IfRange::parse(Some("\"67ab43\"")).matches(Some("\"54ed21\""), None));
     assert!(!IfRange::parse(Some("\"67ab43\"")).matches(None, None));
     assert!(!IfRange::parse(Some("W/\"67ab43\"")).matches(Some("W/\"67ab43\""), None));

@@ -21,8 +21,11 @@ impl IfNoneMatch {
         self.tags.contains(&quote_etag(tag))
     }
 
+    /// Weak comparison (RFC 9110 13.1.2): `W/"a"` and `"a"` are the same tag here.
     pub fn matches(&self, tag: &str) -> bool {
-        self.has(tag) || self.tags.iter().any(|t| t == "*")
+        let tag = quote_etag(tag);
+        let opaque = tag.strip_prefix("W/").unwrap_or(&tag);
+        self.tags.iter().any(|t| t == "*" || t.strip_prefix("W/").unwrap_or(t) == opaque)
     }
 }
 
@@ -101,18 +104,31 @@ impl IfRange {
     }
 
     /// Whether a range request may be served for a resource with this ETag and
-    /// modification time (an empty header always matches).
+    /// modification time (RFC 9110 13.1.5). An absent or empty header always matches. The
+    /// value is classified by its syntax: a quoted strong entity tag matches the identical
+    /// strong ETag, an HTTP date matches the same modification second, and anything else
+    /// (weak or bare tags, malformed values) never matches.
     pub fn matches(&self, etag: Option<&str>, last_modified: Option<SystemTime>) -> bool {
         if self.value.is_empty() {
             return true;
         }
-        if let (Some(date), Some(modified)) = (parse_http_date(&self.value), last_modified) {
-            return unix_seconds(date) == unix_seconds(modified);
+        if is_strong_entity_tag(&self.value) {
+            return etag.is_some_and(|etag| is_strong_entity_tag(etag) && etag == self.value);
         }
-        let Some(etag) = etag else { return false };
-        let (mine, theirs) = (quote_etag(&self.value), quote_etag(etag));
-        !mine.starts_with("W/") && !theirs.starts_with("W/") && mine == theirs
+        match parse_http_date(&self.value) {
+            Some(date) => last_modified.is_some_and(|modified| unix_seconds(date) == unix_seconds(modified)),
+            None => false,
+        }
     }
+}
+
+/// A quoted opaque tag without `W/` (RFC 9110 8.8.3): `"` then etagc characters then `"`.
+fn is_strong_entity_tag(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() >= 2
+        && bytes[0] == b'"'
+        && bytes[bytes.len() - 1] == b'"'
+        && bytes[1..bytes.len() - 1].iter().all(|&b| b == 0x21 || (0x23..=0x7e).contains(&b) || b >= 0x80)
 }
 
 #[cfg(test)]
@@ -125,6 +141,10 @@ mod tests {
     fn if_none_match_is_weak() {
         let h = IfNoneMatch::parse(Some(r#"W/"a", "b""#));
         assert!(h.matches(r#"W/"a""#) && h.matches("b") && !h.matches("c"));
+        // if-none-match.test.ts (remix 3.1): strong and weak forms of a tag are equivalent.
+        let h2 = IfNoneMatch::parse(Some(r#"W/"67ab43", "54ed21""#));
+        assert!(h2.matches(r#"W/"67ab43""#) && h2.matches(r#""67ab43""#));
+        assert!(h2.matches(r#""54ed21""#) && h2.matches(r#"W/"54ed21""#) && !h2.matches(r#""7892dd""#));
         assert!(IfNoneMatch::parse(Some("*")).matches("anything"));
         assert_eq!(h.to_string(), r#"W/"a", "b""#);
     }
@@ -142,8 +162,25 @@ mod tests {
         let modified = UNIX_EPOCH + Duration::from_millis(784_111_777_500);
         assert!(IfRange::parse(Some("Sun, 06 Nov 1994 08:49:37 GMT")).matches(None, Some(modified)));
         assert!(!IfRange::parse(Some("Sun, 06 Nov 1994 08:49:38 GMT")).matches(None, Some(modified)));
-        assert!(IfRange::parse(Some(r#""v1""#)).matches(Some("v1"), None));
+        assert!(IfRange::parse(Some(r#""v1""#)).matches(Some(r#""v1""#), None));
         assert!(!IfRange::parse(Some(r#"W/"v1""#)).matches(Some(r#"W/"v1""#), None));
         assert!(IfRange::parse(None).matches(None, None));
+    }
+
+    // if-range.test.ts (remix 3.1): validators are classified by syntax.
+    #[test]
+    fn if_range_classifies_validators_by_syntax() {
+        let date = "Sun, 06 Nov 1994 08:49:37 GMT";
+        assert!(!IfRange::parse(Some(date)).matches(Some(date), None), "a date is not an ETag");
+        assert!(!IfRange::parse(Some(date)).matches(Some(&format!("\"{date}\"")), None));
+        assert!(!IfRange::parse(Some("not-a-date")).matches(Some(r#""not-a-date""#), None));
+        assert!(!IfRange::parse(Some("67ab43")).matches(Some("67ab43"), None), "bare ETags do not match");
+        assert!(!IfRange::parse(Some("67ab43")).matches(Some(r#""67ab43""#), None));
+        assert!(!IfRange::parse(Some(r#""not valid""#)).matches(Some(r#""not valid""#), None), "space is not an etagc");
+        assert!(!IfRange::parse(Some(r#""67ab43""#)).matches(Some(r#""7892dd""#), None));
+        assert!(IfRange::parse(Some("")).matches(None, None), "an empty header matches");
+        let h = IfRange { value: r#""abc""#.into() };
+        assert_eq!(h.to_string(), r#""abc""#);
+        assert!(h.matches(Some(r#""abc""#), None));
     }
 }

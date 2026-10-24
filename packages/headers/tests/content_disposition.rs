@@ -105,3 +105,12 @@ fn preferred_filename_charsets() {
     // Unknown charsets fall back to the percent-decoded code points.
     assert_eq!(preferred("attachment; filename*=unknown-charset''file%FF.txt"), some("file\u{ff}.txt"));
 }
+
+// content-disposition.test.ts (remix 3.1): backslashes in attribute values round-trip.
+#[test]
+fn round_trips_backslashes_in_attribute_values() {
+    let filename = r"one\two.txt";
+    let value = ContentDisposition { disposition: some("attachment"), filename: some(filename), ..Default::default() }.to_string();
+    assert_eq!(value, r#"attachment; filename="one\\two.txt""#);
+    assert_eq!(parse(&value).filename.as_deref(), Some(filename));
+}

@@ -6,19 +6,22 @@ use http::header::{HeaderMap, HeaderName, HeaderValue, SET_COOKIE};
 const CRLF: &str = "\r\n";
 
 /// Read `Name: value` lines separated by CRLF. Names and values are trimmed, repeated names
-/// are appended, and lines without a name before a colon are skipped. A name or value that
-/// a `Headers` object would reject is an error, where Remix throws.
-pub fn parse(raw: &str) -> Result<HeaderMap, http::Error> {
+/// are appended, and lines without a name before a colon are skipped, as are lines whose
+/// name or value a `Headers` object would reject.
+pub fn parse(raw: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     for line in raw.split(CRLF) {
         let Some((name, value)) = line.split_once(':') else { continue };
         if name.is_empty() {
             continue;
         }
-        let name = HeaderName::from_bytes(name.trim().as_bytes())?;
-        headers.append(name, HeaderValue::from_bytes(value.trim().as_bytes())?);
+        // Lines a `Headers` object would reject (a bad name or value) are skipped, as in Remix.
+        let (Ok(name), Ok(value)) = (HeaderName::from_bytes(name.trim().as_bytes()), HeaderValue::from_bytes(value.trim().as_bytes())) else {
+            continue;
+        };
+        headers.append(name, value);
     }
-    Ok(headers)
+    headers
 }
 
 /// Write headers the way iterating a `Headers` object reads them: names sorted, values of a

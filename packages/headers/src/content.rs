@@ -159,14 +159,28 @@ impl ContentRange {
             Some((digits(a)?, digits(b)?))
         };
         let size = if size == "*" { None } else { Some(digits(size)?) };
-        Some(ContentRange { unit: unit.into(), range, size })
+        let header = ContentRange { unit: unit.into(), range, size };
+        header.is_valid().then_some(header)
+    }
+}
+
+impl ContentRange {
+    /// Whether RFC 9110 (14.4) allows the range: `start <= end`, and `end` inside the
+    /// resource when its size is known. An unsatisfied range (`*`) is always valid.
+    pub fn is_valid(&self) -> bool {
+        match (self.range, self.size) {
+            (Some((start, end)), _) if start > end => false,
+            (Some((_, end)), Some(size)) => end < size,
+            _ => true,
+        }
     }
 }
 
 impl fmt::Display for ContentRange {
-    /// Empty when there is no unit, like an unset header.
+    /// Empty when there is no unit, like an unset header, and when the range is not valid
+    /// (the fields are public, so it can be made invalid after parsing).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.unit.is_empty() {
+        if self.unit.is_empty() || !self.is_valid() {
             return Ok(());
         }
         write!(f, "{} ", self.unit)?;
@@ -210,5 +224,23 @@ mod tests {
         assert_eq!(ContentRange::parse(Some("bytes 200-1000/67589")), Some(ContentRange::bytes(200, 1000, 67589)));
         assert_eq!(ContentRange::parse(Some("bytes 0-1/*")).unwrap().size, None);
         assert_eq!(ContentRange::parse(Some("bytes x-1/2")), None);
+    }
+
+    // content-range.test.ts (remix 3.1): ranges RFC 9110 does not allow.
+    #[test]
+    fn content_range_rejects_invalid_relationships() {
+        assert_eq!(ContentRange::parse(Some("bytes 100-50/200")), None, "end precedes start");
+        assert_eq!(ContentRange::parse(Some("bytes 0-100/100")), None, "reaches the complete length");
+        assert_eq!(ContentRange::parse(Some("bytes 100-50/*")), None, "reversed with unknown size");
+        assert_eq!(ContentRange::parse(Some("bytes 0-99/100")), Some(ContentRange::bytes(0, 99, 100)));
+        assert_eq!(ContentRange::parse(Some("bytes 0-0/1")).unwrap().to_string(), "bytes 0-0/1");
+
+        let mut h = ContentRange::bytes(0, 99, 100);
+        h.range = Some((100, 50));
+        assert_eq!(h.to_string(), "", "reversed after construction");
+        h.range = Some((0, 100));
+        assert_eq!(h.to_string(), "", "changed to reach the complete length");
+        h.range = None;
+        assert_eq!(h.to_string(), "bytes */100", "unsatisfied after clearing the range");
     }
 }

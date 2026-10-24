@@ -89,10 +89,11 @@ fn unescape(s: &str) -> String {
     out
 }
 
-/// Quote a parameter value when it contains `"`, `;` or a space.
+/// Quote a parameter value when it contains `"`, a backslash, `;` or a space, escaping
+/// quotes and backslashes so the value round-trips.
 pub fn quote(value: &str) -> String {
-    if value.contains(['"', ';', ' ']) {
-        format!("\"{}\"", value.replace('"', "\\\""))
+    if value.contains(['"', '\\', ';', ' ']) {
+        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
     } else {
         value.to_string()
     }

@@ -15,22 +15,31 @@ fn headers(pairs: &[(&'static str, &'static str)]) -> HeaderMap {
 
 #[test]
 fn parses() {
-    assert_eq!(parse("Content-Type: text/html").unwrap().get_joined("content-type").as_deref(), Some("text/html"));
-    let two = parse("Content-Type: text/html\r\nCache-Control: no-cache").unwrap();
+    assert_eq!(parse("Content-Type: text/html").get_joined("content-type").as_deref(), Some("text/html"));
+    let two = parse("Content-Type: text/html\r\nCache-Control: no-cache");
     assert_eq!(two.get_joined("Content-Type").as_deref(), Some("text/html"));
     assert_eq!(two.get_joined("Cache-Control").as_deref(), Some("no-cache"));
-    let spaced = parse("  Content-Type  :  text/html  ").unwrap();
+    let spaced = parse("  Content-Type  :  text/html  ");
     assert_eq!(spaced.get_joined("Content-Type").as_deref(), Some("text/html"));
-    let cookies = parse("Set-Cookie: a=1\r\nSet-Cookie: b=2").unwrap();
+    let cookies = parse("Set-Cookie: a=1\r\nSet-Cookie: b=2");
     assert_eq!(cookies.get_joined("Set-Cookie").as_deref(), Some("a=1, b=2"));
-    let malformed = parse("Content-Type: text/html\r\nmalformed line\r\nCache-Control: no-cache").unwrap();
+    let malformed = parse("Content-Type: text/html\r\nmalformed line\r\nCache-Control: no-cache");
     assert_eq!(malformed.len(), 2);
-    assert!(parse("").unwrap().is_empty());
-    let colons = parse("Location: https://example.com:8080/path").unwrap();
+    assert!(parse("").is_empty());
+    let colons = parse("Location: https://example.com:8080/path");
     assert_eq!(colons.get_joined("Location").as_deref(), Some("https://example.com:8080/path"));
-    // A name Headers would reject is an error where Remix throws.
-    assert!(parse("Bad Name: x").is_err());
-    assert!(parse(": no name").unwrap().is_empty());
+    assert!(parse(": no name").is_empty());
+}
+
+// raw-headers.test.ts (remix 3.1): lines the Headers API rejects are skipped.
+#[test]
+fn ignores_lines_rejected_by_the_headers_api() {
+    let h = parse("Content-Type: text/html\r\nbad name: ignored\r\nX-Invalid: value\0ignored\r\nCache-Control: no-cache");
+    assert_eq!(h.get_joined("Content-Type").as_deref(), Some("text/html"));
+    assert_eq!(h.get_joined("X-Invalid"), None);
+    assert_eq!(h.get_joined("Cache-Control").as_deref(), Some("no-cache"));
+    assert!(parse("Bad Name: x").is_empty());
+    assert!(parse(": no name").is_empty());
 }
 
 #[test]
@@ -50,7 +59,7 @@ fn stringifies() {
 #[test]
 fn round_trips() {
     let original = headers(&[("content-type", "text/html"), ("cache-control", "no-cache")]);
-    let parsed = parse(&stringify(&original)).unwrap();
+    let parsed = parse(&stringify(&original));
     assert_eq!(parsed, original);
 }
 
