@@ -1,0 +1,4 @@
+handler: 15000 instructions/request
+4 pass-through: 18779 instructions/request
+4 async: 21052 instructions/request
+bench stack: 20690 instructions/request

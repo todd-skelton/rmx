@@ -133,16 +133,16 @@ node demos/frames/e2e.mjs                                                      #
 
 ## Benchmarks
 
-Did rewriting it in Rust make it fast? Of course it did; that is the only reason anyone does it. The [bench](bench) directory has the same app written twice, once with Remix 3.1.0 on Node and once with rmx, serving identical HTML (an SSR table, a task list with a form and an island, and a js-framework-benchmark style client table). Measured 2026-10-24 on one laptop (i9-10885H), with each server alone in a Docker container pinned to the same CPUs:
+Did rewriting it in Rust make it fast? Of course it did; that is the only reason anyone does it. The [bench](bench) directory has the same app written twice, once with Remix 3.1.0 on Node and once with rmx, serving identical HTML (an SSR table, a task list with a form and an island, and a js-framework-benchmark style client table). Measured 2026-10-24 on a fresh DigitalOcean droplet with 16 dedicated vCPUs (`c-16`, Xeon Platinum 8168, destroyed afterwards), with each server alone in a Docker container pinned to the same CPUs and the load generator on the other eight:
 
 | Server, requests per second | `/` | `/ssr/100` | `/ssr/1000` | Memory under load |
 | --- | --- | --- | --- | --- |
-| Remix 3.1, 1 Node process (1 CPU) | 666 | 176 | 24 | 347 MB |
-| rmx, 1 thread (1 CPU) | 7,757 | 2,800 | 375 | 3 MB |
-| Remix 3.1, 8 Node workers (8 CPUs) | 2,490 | 869 | 156 | 2,272 MB |
-| rmx, 8 threads (8 CPUs) | 30,681 | 7,259 | 1,367 | 10 MB |
+| Remix 3.1, 1 Node process (1 CPU) | 2,292 | 693 | 82 | 341 MB |
+| rmx, 1 thread (1 CPU) | 21,454 | 6,075 | 803 | 3 MB |
+| Remix 3.1, 8 Node workers (8 CPUs) | 13,234 | 4,576 | 606 | 2,891 MB |
+| rmx, 8 threads (8 CPUs) | 121,956 | 31,433 | 5,046 | 9 MB |
 
-That is 8x to 16x the throughput in a few megabytes. Remix 3.1 got a lot faster on the cheap page (2.9x its 3.0 figure on one process), so the old 43x headline is retired; the SSR pages moved less. In the browser (Chromium, medians, measured 2026-10-24 with the client built on nightly Rust and frames and navigation compiled out; the stable build is in the bench notes):
+That is 7x to 10x the throughput in a few megabytes. Remix 3.1 got a lot faster on the cheap page (2.9x its 3.0 figure on one process), so the old 43x headline is retired, and a clean machine is kinder to Node than a busy laptop was: its cluster scales 5.8x on eight CPUs here. In the browser (Chromium, medians, measured 2026-10-24 with the client built on nightly Rust and frames and navigation compiled out; the stable build is in the bench notes):
 
 | | Remix 3.1 | rmx |
 | --- | --- | --- |
@@ -160,9 +160,9 @@ Then the download. Remix's `run()` starts frames and soft navigation on every pa
 
 Remix 3.1 then added prefetching and the client grew by 3.9 KB, because `run()` loads it on every page. rmx ported prefetching behind the same `navigation` feature, so the bench client did not grow, and the gap closed by 3.9 KB without rmx doing anything. This is the most honest way to win a size benchmark. Streaming uploads (Remix 3.1's `/future` parsers) are ported too: a 100 MiB upload reaches the handler in 0.04 ms instead of 125 ms and no longer copies the file into memory.
 
-The router then got the treatment every Rust rewrite eventually gets: someone counted the allocations. `next.run(ctx)` used to box itself on every middleware step, so it now returns a plain future instead, and a middleware step costs 945 instructions instead of 1,384 (callgrind, in process). Over HTTP the change disappeared into the noise of a busy laptop. A rerun the same afternoon, with the host 70 to 100% busy, still put rmx at 6x to 18x Remix 3.1, but the table above, from the quieter morning, is the better measure. The profile also found the real cost on `/`: the static files middleware asks the filesystem about every request path. That is next.
+The router then got the treatment every Rust rewrite eventually gets: someone counted the allocations. `next.run(ctx)` used to box itself on every middleware step, so it now returns a plain future instead, and a middleware step costs 945 instructions instead of 1,384 (callgrind, in process). Over HTTP that was worth 0 to 7% on `/` on the droplet, which is what counting allocations is usually worth. The profile also found the real cost: the static files middleware resolved every request path all the way from `/` before falling through to the router. It now checks one name at a time and stops at the first one that does not exist, which made `/` 15 to 22% faster on the droplet in each round. Remix's middleware resolves the root and the path on every request too; we would mention it upstream, but that would require writing JavaScript.
 
-The fine print, because there is always fine print: the client still ships about 1.9x more bytes, since WebAssembly brings its own runtime where Remix borrows the browser's. The nightly build trims 12.5 KB by making panics trap silently (the stable build is 99.7 KB), and with every feature on the client was 133.6 KB on nightly and 150.4 KB on stable (measured 2026-10-23, before prefetching was added). Single runs vary by 30% or more, the Windows host was busy, and this compares a proof of concept with a released framework. The method, the raw results, where the bytes go and every earlier run are in [bench/README.md](bench/README.md).
+The fine print, because there is always fine print: the client still ships about 1.9x more bytes, since WebAssembly brings its own runtime where Remix borrows the browser's. The nightly build trims 12.5 KB by making panics trap silently (the stable build is 99.7 KB), and with every feature on the client was 133.6 KB on nightly and 150.4 KB on stable (measured 2026-10-23, before prefetching was added). The browser numbers come from the busy Windows laptop, where single runs vary by 30% or more, and this compares a proof of concept with a released framework. The method, the raw results, where the bytes go and every earlier run are in [bench/README.md](bench/README.md).
 
 ## Getting Started
 

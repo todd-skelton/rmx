@@ -1,0 +1,5 @@
+router             allocs/req    bytes/req     ns/req
+handler                  31.0         5035       2159
+4 pass-through           35.0         7435       2783
+4 async                  35.0         9867       2945
+bench stack              37.0         9464       6416

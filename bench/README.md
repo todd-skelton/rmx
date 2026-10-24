@@ -39,7 +39,85 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
 
 Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
 
-## Latest Run (2026-10-24, Afternoon): Router Without Per-Step Boxes
+## Latest Run (2026-10-24, Evening): Droplet, Static Files Without canonicalize
+
+The router profile (below) showed `static_files` calling `canonicalize` on every request
+path, which resolves the path from `/` one component at a time, even when the request
+falls through to a route. Since commit `d3e6b69` each component below the root is checked
+with one `symlink_metadata` call, stopping at the first missing name (so `/ssr/100` costs
+one failed stat). Only a symlink or junction, or on Windows a name the system rewrites
+(trailing dots or spaces, `:`, `~`), goes through `canonicalize` and the containment check
+as before. Remix's `staticFiles` calls `realpath` on the root and on the path on every
+request. New tests cover directory links inside and outside the root, and the existing
+symlink test failed with the link check disabled.
+
+This run is on a fresh DigitalOcean droplet instead of the laptop: `c-16` (16 dedicated
+vCPUs, Intel Xeon Platinum 8168, 32 GB, Ubuntu 24.04, Docker 29.9.2, Node v24.22.1) in
+sfo2, created and destroyed by `bench/docker/droplet.ps1`. Same container layout as on
+the laptop: the server on CPU 2 or CPUs 0-7, oha on CPUs 8-15. Results:
+`results/droplet-2026-10-24-droplet/` (`host.txt` has `lscpu`).
+
+### Server, Linux Containers on the Droplet
+
+| Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
+| --- | --- | --- | --- | --- | --- | --- |
+| Remix 3.1, 1 Node process | 1 | 2,292 | 693 | 82 | 76.1 / 341.2 MB | 1.4 s |
+| rmx, 1 thread | 1 | 21,454 | 6,075 | 803 | 0.8 / 2.5 MB | 0.6 s |
+| Remix 3.1, cluster of 8 workers | 8 | 13,234 | 4,576 | 606 | 628.6 / 2890.8 MB | 1.3 s |
+| rmx, 8 threads | 8 | 121,956 | 31,433 | 5,046 | 1.1 / 8.5 MB | 0.6 s |
+
+| rmx / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
+| --- | --- | --- | --- |
+| 1 CPU | 9.4x | 8.8x | 9.8x |
+| 8 CPUs | 9.2x | 6.9x | 8.3x |
+
+p99 latency on 8 CPUs: Remix 14.72, 38.76 and 178.02 ms; rmx 0.75, 2.95 and 18.44 ms.
+The droplet is far kinder to Node than the laptop was: Remix's single process served 3.4x
+the morning's laptop figure on `/` and its cluster scaled 5.8x on eight CPUs (3.7x on the
+laptop that morning), so the ratios are lower than the laptop's. This is the run to quote.
+
+### What Each Change Was Worth Over HTTP
+
+Three rmx builds ran alternately, rmx only, two rounds each: before the router change
+(`bbdaed2`), with it (`b70fd12`), and with the static files change (`78a1168`).
+Requests per second:
+
+| Config | Path | Before both, rounds 1 / 2 | Router change | Plus static files |
+| --- | --- | --- | --- | --- |
+| 1 thread | `/` | 17,629 / 17,686 | 18,134 / 17,734 | 21,480 / 21,225 |
+| 1 thread | `/ssr/100` | 5,641 / 5,557 | 5,491 / 5,757 | 5,760 / 5,324 |
+| 1 thread | `/ssr/1000` | 789 / 777 | 779 / 775 | 802 / 817 |
+| 8 threads | `/` | 98,257 / 100,139 | 104,821 / 102,617 | 120,442 / 124,971 |
+| 8 threads | `/ssr/100` | 30,543 / 33,109 | 30,295 / 30,666 | 34,789 / 31,623 |
+| 8 threads | `/ssr/1000` | 4,959 / 4,944 | 4,981 / 4,981 | 5,012 / 5,058 |
+
+1. Static files: `/` 15 to 22% faster in every pairing. Before, `/` resolved the whole root
+   path and then statted it twice; now it is one stat. The SSR pages render for long enough
+   that the saving is within their spread.
+2. Router change: 0 to 7% on `/`, within noise elsewhere, matching the in-process counts.
+
+### In Process
+
+`router_profile` in a Linux container (callgrind instructions are exact; the times are the
+fastest of 15 runs). Instructions miss what the change saves most, the system calls:
+
+| Router | Instructions before | After | ns/request before (laptop, 3 runs) | After (laptop, 3 runs) | After (droplet) |
+| --- | --- | --- | --- | --- | --- |
+| Handler only | 15,000 | 15,000 | 3,784-4,030 | 2,909-5,830 | 2,159 |
+| The bench server's stack | 24,121 | 20,690 to 20,738 | 14,327-30,446 | 9,054-11,032 | 6,416 |
+
+On Windows, where file system calls cost more, the bench stack went from 293,994 to 89,247
+ns a request in the same comparison (one run each, pinned to one core).
+
+Also found on the way: the Docker builds shared one cargo target cache, and `COPY` keeps the
+sources' timestamps, so an image built from an older commit could reuse newer artifacts.
+The afternoon's A/B images held the code they were meant to (checked this evening by the
+router's symbols in each binary), but the first rebuild of the profile image this evening
+held the router from before the change and was rebuilt before measuring. `rmx.Dockerfile`
+and `profile.Dockerfile` now touch the copied sources before building, which the droplet
+builds used.
+
+## Earlier Run (2026-10-24, Afternoon): Router Without Per-Step Boxes
 
 Corten (Todd's Rust web framework on axum) cut about 4% of instructions per request by not boxing the
 rest of the stack again in every middleware call. rmx's router did the same thing:

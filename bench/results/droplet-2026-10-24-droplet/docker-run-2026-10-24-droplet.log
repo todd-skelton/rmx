@@ -1,0 +1,239 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from oha.Dockerfile
+#1 transferring dockerfile: 253B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#2 DONE 0.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+#4 resolve docker.io/library/debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8 0.0s done
+#4 CACHED
+
+#5 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#5 DONE 0.4s
+
+#5 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#5 DONE 0.4s
+
+#6 [2/2] ADD --chmod=755 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 /usr/local/bin/oha
+#6 DONE 0.1s
+
+#7 exporting to image
+#7 exporting layers
+#7 exporting layers 0.6s done
+#7 exporting manifest sha256:a5d5199f005a1b47805c55b23e3cff548575b7808c1df792be0fc0b5a1daef10 0.0s done
+#7 exporting config sha256:5db0e142bff06e9658466491b03efd1a0c2085d6a7d41fd8e6f6fe3d0859b4d6 0.0s done
+#7 exporting attestation manifest sha256:95ef13705a2df99ee573f826f706e8e0eadb97b6a395bedd1265d0419c89e05a 0.0s done
+#7 exporting manifest list sha256:308690c399ec06363f6f560e4e0ca1439ce54321e5194ac5da05618bc55012a5 0.0s done
+#7 naming to docker.io/library/rmxbench-oha:latest done
+#7 unpacking to docker.io/library/rmxbench-oha:latest 0.1s done
+#7 DONE 0.8s
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from remix.Dockerfile
+#1 transferring dockerfile: 469B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:24-bookworm-slim
+#2 DONE 0.9s
+
+#3 [internal] load build context
+#3 transferring context: 124.72kB done
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/library/node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
+#4 resolve docker.io/library/node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 0.0s done
+#4 sha256:6d793208473aa7d9ccc02b9de99aee40e4d6e73065d5307d076fad3ba554d580 450B / 450B 0.1s done
+#4 sha256:f2b8e65232e105b573ea2f37c4a2ec56bcf0b63687ae2bbe329cf4252f30bc1d 1.71MB / 1.71MB 0.2s done
+#4 sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7 0B / 51.08MB 0.2s
+#4 sha256:47e82ed2c7200e6bb57827745085027ba425376a5ed4ba4a8e295a4e3b5d1b40 0B / 3.31kB 0.2s
+#4 sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7 13.63MB / 51.08MB 0.3s
+#4 sha256:47e82ed2c7200e6bb57827745085027ba425376a5ed4ba4a8e295a4e3b5d1b40 3.31kB / 3.31kB 0.2s done
+#4 extracting sha256:47e82ed2c7200e6bb57827745085027ba425376a5ed4ba4a8e295a4e3b5d1b40 0.0s done
+#4 sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7 39.85MB / 51.08MB 0.5s
+#4 sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7 51.08MB / 51.08MB 0.6s
+#4 sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7 51.08MB / 51.08MB 0.6s done
+#4 extracting sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7
+#4 extracting sha256:c0e48fd1aa256850e18f180365b8fa3e55ae2197e85461fd3392cfb5c4c8e5e7 1.1s done
+#4 DONE 1.8s
+
+#4 [1/5] FROM docker.io/library/node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
+#4 extracting sha256:f2b8e65232e105b573ea2f37c4a2ec56bcf0b63687ae2bbe329cf4252f30bc1d 0.1s done
+#4 extracting sha256:6d793208473aa7d9ccc02b9de99aee40e4d6e73065d5307d076fad3ba554d580 0.0s done
+#4 DONE 1.9s
+
+#5 [2/5] WORKDIR /app
+#5 DONE 0.6s
+
+#6 [3/5] COPY package.json package-lock.json ./
+#6 DONE 0.0s
+
+#7 [4/5] RUN npm ci --omit=dev
+#7 2.305 
+#7 2.305 added 90 packages, and audited 91 packages in 2s
+#7 2.305 
+#7 2.305 13 packages are looking for funding
+#7 2.305   run `npm fund` for details
+#7 2.310 
+#7 2.310 1 low severity vulnerability
+#7 2.310 
+#7 2.310 To address all issues, run:
+#7 2.310   npm audit fix
+#7 2.310 
+#7 2.310 Run `npm audit` for details.
+#7 2.312 npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+#7 2.312 npm warn install-scripts   esbuild@0.27.7 (postinstall: node install.js)
+#7 2.312 npm warn install-scripts
+#7 2.312 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+#7 2.314 npm notice
+#7 2.314 npm notice New major version of npm available! 11.19.1 -> 12.2.1
+#7 2.314 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+#7 2.314 npm notice To update run: npm install -g npm@12.2.1
+#7 2.314 npm notice
+#7 DONE 2.7s
+
+#8 [5/5] COPY . .
+#8 DONE 0.1s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 3.0s done
+#9 exporting manifest sha256:d7d66381b47d85822f8eb3e46e5f49b781e1b07f3cf8e60a924bda7d3c5bbac5 0.0s done
+#9 exporting config sha256:1080f7cce2e9408e4c1d2bc284d6854b75ecdcec334d69f3bb2c5acd8f1b58ac 0.0s done
+#9 exporting attestation manifest sha256:c30205662c1191f17946649c140ee0bf6a131c93f3aba2edc56352d5739f50d5 0.0s done
+#9 exporting manifest list sha256:576a566d793046fdc9c5e070ef17ff31f3ef28097fe7bcbb93dd2252d34b31e0 0.0s done
+#9 naming to docker.io/library/rmxbench-remix:latest done
+#9 unpacking to docker.io/library/rmxbench-remix:latest
+#9 unpacking to docker.io/library/rmxbench-remix:latest 2.2s done
+#9 DONE 5.3s
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from rmx.Dockerfile
+#1 transferring dockerfile: 1.23kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1-bookworm
+#2 DONE 0.2s
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#3 DONE 0.2s
+
+#4 [stage-1 1/3] FROM docker.io/library/debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+#4 resolve docker.io/library/debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8 0.0s done
+#4 DONE 0.0s
+
+#5 [build 1/4] FROM docker.io/library/rust:1-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8
+#5 resolve docker.io/library/rust:1-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8 0.0s done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 7.96MB 0.1s
+#6 transferring context: 9.24MB 0.1s done
+#6 DONE 0.2s
+
+#7 [build 2/4] WORKDIR /src
+#7 CACHED
+
+#8 [build 3/4] COPY . .
+#8 DONE 1.1s
+
+#9 [build 4/4] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     find /src -path /src/target -prune -o -type f -exec touch {} + &&     cargo build --release -p bench-server && cp target/release/bench-server /bench-server
+#9 1.938    Compiling rmx-url v0.1.0 (/src/packages/url)
+#9 1.938    Compiling rmx-crypto v0.1.0 (/src/packages/crypto)
+#9 1.939    Compiling rmx-mime v0.1.0 (/src/packages/mime)
+#9 1.939    Compiling rmx-terminal v0.1.0 (/src/packages/terminal)
+#9 1.943    Compiling rmx-headers v0.1.0 (/src/packages/headers)
+#9 1.946    Compiling rmx-macros v0.1.0 (/src/packages/component/macros)
+#9 1.946    Compiling rmx-tar-parser v0.1.0 (/src/packages/tar-parser)
+#9 2.055    Compiling rmx-cli v0.1.0 (/src/packages/cli)
+#9 2.114    Compiling rmx-route-pattern v0.1.0 (/src/packages/route-pattern)
+#9 2.118    Compiling rmx-session v0.1.0 (/src/packages/session)
+#9 2.552    Compiling rmx-html-template v0.1.0 (/src/packages/html-template)
+#9 2.554    Compiling rmx-component v0.1.0 (/src/packages/component)
+#9 2.662    Compiling rmx-multipart-parser v0.1.0 (/src/packages/multipart-parser)
+#9 2.662    Compiling rmx-cookie v0.1.0 (/src/packages/cookie)
+#9 2.938    Compiling rmx-fetch v0.1.0 (/src/packages/fetch)
+#9 3.494    Compiling rmx-response v0.1.0 (/src/packages/response)
+#9 3.544    Compiling rmx-file-storage v0.1.0 (/src/packages/file-storage)
+#9 3.708    Compiling rmx-ui v0.1.0 (/src/packages/ui)
+#9 3.782    Compiling rmx-fetch-proxy v0.1.0 (/src/packages/fetch-proxy)
+#9 3.813    Compiling rmx-data-schema v0.1.0 (/src/packages/data-schema)
+#9 4.143    Compiling rmx-fetch-router v0.1.0 (/src/packages/fetch-router)
+#9 4.375    Compiling rmx-lazy-file v0.1.0 (/src/packages/lazy-file)
+#9 4.791    Compiling rmx-fs v0.1.0 (/src/packages/fs)
+#9 4.889    Compiling rmx-form-data-middleware v0.1.0 (/src/packages/form-data-middleware)
+#9 4.993    Compiling rmx-static-middleware v0.1.0 (/src/packages/static-middleware)
+#9 5.076    Compiling rmx-logger-middleware v0.1.0 (/src/packages/logger-middleware)
+#9 5.187    Compiling rmx-csrf-middleware v0.1.0 (/src/packages/csrf-middleware)
+#9 5.434    Compiling rmx-method-override-middleware v0.1.0 (/src/packages/method-override-middleware)
+#9 5.502    Compiling rmx-auth-middleware v0.1.0 (/src/packages/auth-middleware)
+#9 5.525    Compiling rmx-live-reload-middleware v0.1.0 (/src/packages/live-reload-middleware)
+#9 5.538    Compiling rmx-assets v0.1.0 (/src/packages/assets)
+#9 5.633    Compiling rmx-cors-middleware v0.1.0 (/src/packages/cors-middleware)
+#9 5.661    Compiling rmx-session-middleware v0.1.0 (/src/packages/session-middleware)
+#9 5.772    Compiling rmx-cop-middleware v0.1.0 (/src/packages/cop-middleware)
+#9 5.932    Compiling rmx-node-fetch-server v0.1.0 (/src/packages/node-fetch-server)
+#9 6.054    Compiling rmx-spa v0.1.0 (/src/packages/spa)
+#9 6.174    Compiling rmx-auth v0.1.0 (/src/packages/auth)
+#9 6.497    Compiling rmx-render-middleware v0.1.0 (/src/packages/render-middleware)
+#9 6.635    Compiling rmx-compression-middleware v0.1.0 (/src/packages/compression-middleware)
+#9 7.429    Compiling rmx v0.1.0 (/src/packages/rmx)
+#9 7.494    Compiling bench-app v0.1.0 (/src/bench/rmx-app/app)
+#9 9.655    Compiling bench-server v0.1.0 (/src/bench/rmx-app/server)
+#9 11.09     Finished `release` profile [optimized] target(s) in 9.26s
+#9 DONE 11.3s
+
+#4 [stage-1 1/3] FROM docker.io/library/debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+#4 CACHED
+
+#10 [stage-1 2/3] COPY --from=build /bench-server /usr/local/bin/bench-server
+#10 DONE 0.0s
+
+#11 [stage-1 3/3] COPY bench/rmx-app/public /app/public
+#11 DONE 0.0s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.3s done
+#12 exporting manifest sha256:1f7dcf27208ec4b8bba1927f30d16fb3634eb289c92b03e450ada4293596e162 0.0s done
+#12 exporting config sha256:26a030efc9265c55c7ae372a0d08b08f322d0c7a4f25feffe5616c7d8e7637e6 0.0s done
+#12 exporting attestation manifest sha256:b9b0229cfe6814956b2ed462a1b699bcf61166c915b64e385fb18f4ce915e257 0.0s done
+#12 exporting manifest list sha256:e0cbae85f381710113066d8202c21c0ab2d3494b9f07b24d39ef1b71203cb238 0.0s done
+#12 naming to docker.io/library/rmxbench-rmx:latest done
+#12 unpacking to docker.io/library/rmxbench-rmx:latest 0.1s done
+#12 DONE 0.4s
+remix (node, 1 process)            /              2292 req/s  p50    19.12 ms  p99    63.09 ms  200=34339
+remix (node, 1 process)            /ssr/100        693 req/s  p50    69.23 ms  p99   134.63 ms  200=10349
+remix (node, 1 process)            /ssr/1000        82 req/s  p50    644.3 ms  p99   707.86 ms  200=1185
+rmx (1 thread)                     /             21454 req/s  p50     2.37 ms  p99     3.56 ms  200=321849
+rmx (1 thread)                     /ssr/100       6075 req/s  p50     8.47 ms  p99     9.42 ms  200=91093
+rmx (1 thread)                     /ssr/1000       803 req/s  p50    63.68 ms  p99    73.62 ms  200=11993
+remix (node cluster, 8 workers)    /             13234 req/s  p50     2.94 ms  p99    14.72 ms  200=198520
+remix (node cluster, 8 workers)    /ssr/100       4576 req/s  p50     8.35 ms  p99    38.76 ms  200=68605
+remix (node cluster, 8 workers)    /ssr/1000       606 req/s  p50    82.49 ms  p99   178.02 ms  200=9036
+rmx (8 threads)                    /            121956 req/s  p50      0.4 ms  p99     0.75 ms  200=1830540
+rmx (8 threads)                    /ssr/100      31433 req/s  p50     1.58 ms  p99     2.95 ms  200=471575
+rmx (8 threads)                    /ssr/1000      5046 req/s  p50     9.86 ms  p99    18.44 ms  200=75656
+
+Config                          Path            Rps  P50Ms  P99Ms  Bytes StartupMs IdleMB LoadedMB
+------                          ----            ---  -----  -----  ----- --------- ------ --------
+remix (node, 1 process)         /           2292.00  19.12  63.09   6059   1402.00  76.10   270.40
+remix (node, 1 process)         /ssr/100     693.00  69.23 134.63  17068   1402.00  76.10   311.60
+remix (node, 1 process)         /ssr/1000     82.00 644.30 707.86 131736   1402.00  76.10   341.20
+rmx (1 thread)                  /          21454.00   2.37   3.56    839    630.00   0.80     2.20
+rmx (1 thread)                  /ssr/100    6075.00   8.47   9.42  12976    630.00   0.80     2.30
+rmx (1 thread)                  /ssr/1000    803.00  63.68  73.62 127644    630.00   0.80     2.50
+remix (node cluster, 8 workers) /          13234.00   2.94  14.72   6059   1328.00 628.60  2167.80
+remix (node cluster, 8 workers) /ssr/100    4576.00   8.35  38.76  17068   1328.00 628.60  2428.90
+remix (node cluster, 8 workers) /ssr/1000    606.00  82.49 178.02 131736   1328.00 628.60  2890.80
+rmx (8 threads)                 /         121956.00   0.40   0.75    841    632.00   1.10     3.90
+rmx (8 threads)                 /ssr/100   31433.00   1.58   2.95  12976    632.00   1.10     4.90
+rmx (8 threads)                 /ssr/1000   5046.00   9.86  18.44 127644    632.00   1.10     8.50
+
+

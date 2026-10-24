@@ -240,7 +240,9 @@ crates:
    `remix/response/compress`, which reads a source chunk only after the previous output was
    taken; `compress.test.ts` and the middleware's tests ported one per case), static files served as Remix does (each
    file opened as a `LazyFile` and answered by `response::file`, typed by the requested path,
-   per-file `accept_ranges`; `static.test.ts` ported one per case, including symlinks) and
+   per-file `accept_ranges`; `static.test.ts` ported one per case, including symlinks; each
+   path component is checked with one `symlink_metadata` call and only links go through
+   `canonicalize`, where Remix resolves the root and the path on every request) and
    directory listings, form data with Remix's upload limits, sessions, auth, CSRF, CORS, COP, method
    override, logger with Remix's format tokens and colors), `rmx-auth` (OAuth 2 and OpenID Connect login with PKCE: GitHub,
    Google, X, Facebook, Microsoft, Okta, Auth0 and any OIDC issuer, custom providers with their own

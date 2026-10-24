@@ -13,11 +13,13 @@ param(
     [string[]]$AbRefs = @(),
     [int]$Rounds = 2,
     [string]$Size = "c-16",
-    [string]$Region = "nyc3",
+    [string]$Region = "sfo2",  # c-16 is offered in nyc1, sfo2, lon1 and blr1
     [string]$SshKeyId = "",
     [string]$Identity = (Join-Path $HOME ".ssh/id_rsa")
 )
 $ErrorActionPreference = "Stop"
+# `pwsh droplet.ps1 -AbRefs a,b` from another shell passes one string.
+$AbRefs = @($AbRefs | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Set-Location $repo
 $work = Join-Path $repo "target/droplet-$Suffix"

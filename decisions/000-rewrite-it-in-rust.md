@@ -980,3 +980,30 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
    clippy for `rmx-fetch-router` and `rmx-spa` with `-D warnings`; all 12 demo e2e suites
    passed (rebuild111). `rmx-fetch-router`'s wasm `--all-targets` clippy fails on an
    `Arc<Mutex<Option<Router>>>` in `tests/router.rs`, at the previous commit as well.
+
+## 17. Static files without canonicalize, and a clean bench machine (2026-10-24)
+
+1. Section 16's profile showed `static_files` resolving every request path with
+   `canonicalize`, which walks the whole path from `/`, before falling through to the router.
+   Remix does the same with `realpath`, on the root and the path, on every request.
+2. Decision: check each component below the root (already canonical) with one
+   `symlink_metadata` call and stop at the first missing name. Only a symlink or junction,
+   or on Windows a name the system rewrites (trailing dots or spaces, `:`, `~`), goes
+   through `canonicalize` and the containment check, so links out of the root are still
+   refused. A deliberate divergence in mechanism, not in behavior; one difference: a root
+   that did not exist at startup (and so could not be canonicalized) now serves files once it
+   exists, as Remix's per-request `realpath` does.
+3. Benchmarks moved to a fresh DigitalOcean droplet (`c-16`, 16 dedicated vCPUs, destroyed
+   after the run) by `bench/docker/droplet.ps1`, since the laptop was too busy for
+   differences of a few percent to show.
+4. Result (measured, `bench/README.md`): on the droplet `/` went from about 17,900 to
+   21,400 requests a second on one thread and from about 103,700 to 122,700 on eight
+   (15 to 22% in each round); the SSR pages did not move beyond their spread. The router
+   change of section 16 was worth 0 to 7% on `/`. Against Remix 3.1 on the droplet, rmx
+   serves 7x to 10x the requests per second in 3 to 9 MB against 341 MB to 2.9 GB.
+5. Gate (measured): workspace tests 2,643 passed, 0 failed (test125), with two new static
+   tests (directory links inside and outside the root, missing paths); the symlink tests
+   failed with the link check disabled. Native clippy with `-D warnings` clean. Demo e2e
+   suites: 11 of 12 in rebuild112; the ui suite's "a keyed element rendered mid-exit is
+   reclaimed and retargets" check failed once (an animation timing check in the browser,
+   which the static change does not touch) and passed on three reruns.
