@@ -1,7 +1,7 @@
 # rmx vs Remix 3 benchmarks
 
 Compares rmx (`rmx-app/`: Rust, rmx's router, middleware and server, WASM islands) with
-Remix 3.0.0 (`remix-app/`, Node). Both apps serve the same routes with the same markup, data
+Remix 3.1.0 (`remix-app/`, Node; 3.0.0 before 2026-10-24). Both apps serve the same routes with the same markup, data
 and islands:
 
 1. `/`: a document shell, five tasks, a POST form, and a `Counter` island.
@@ -39,7 +39,99 @@ pwsh ./docker/run-docker.ps1 -Build       # Linux containers: server load tests 
 
 Results land in `results/`: `browser.json`, `server.json`, `docker-server*.json`, plus logs.
 
-## Latest Run (2026-10-23, Afternoon): Frames and Navigation Compiled Out
+## Latest Run (2026-10-24): Against Remix 3.1
+
+`remix-app` now pins `remix` 3.1.0 (released 2026-10-23), and rmx carries the 3.1 changes
+that apply to it: the header, range and tar fixes, streaming uploads (`/future`), keyed
+Fragments in client entry props and prefetching (decision record section 15). Same laptop;
+Node v24.22.1 on the host and v24.19.0 in the container, Rust 1.99.1, nightly 1.101.0
+(2026-10-22), Chromium 148.0.7778.96, Docker 29.8.0. The host was busy (CPU load 100% in
+one sample after the runs), so compare within a run. Results:
+`results/docker-server-2026-10-24-remix31.json`, `results/server-2026-10-24-remix31.json`,
+`results/browser-2026-10-24-remix31.json`, `results/browser-2026-10-24-remix31-nightly.json`
+and the matching logs. The container was checked to run `remix` 3.1.0.
+
+### Server, Linux Containers (Pinned CPUs)
+
+| Config | CPUs | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory | Startup |
+| --- | --- | --- | --- | --- | --- | --- |
+| Remix 3.1, 1 Node process | 1 | 666 | 176 | 24 | 90.9 / 347.4 MB | 8.2 s |
+| rmx, 1 thread | 1 | 7,757 | 2,800 | 375 | 1 / 3.1 MB | 3.4 s |
+| Remix 3.1, cluster of 8 workers | 8 | 2,490 | 869 | 156 | 503.8 / 2272.3 MB | 5.6 s |
+| rmx, 8 threads | 8 | 30,681 | 7,259 | 1,367 | 3.2 / 9.8 MB | 5.8 s |
+
+| rmx / Remix 3.1 | `/` | `/ssr/100` | `/ssr/1000` |
+| --- | --- | --- | --- |
+| 1 CPU | 12x | 16x | 16x |
+| 8 CPUs | 12x | 8x | 9x |
+
+Loaded memory is the highest of the three paths. Remix 3.1's single process serves `/` at
+2.9x the 2026-10-22 figure for 3.0 (666 against 233 req/s) and its cluster at 2.5x, which
+narrows the gap on the cheap page; the SSR paths moved less (176 against 195 and 869
+against 903 on `/ssr/100`). rmx on 8 threads came in below its 2026-10-22 run (30,681
+against 42,881 req/s on `/`) while rmx on 1 thread came in above it (7,757 against
+3,623), so read the cross-run numbers loosely; the ratios within this run are the result.
+
+### Server, Windows Host
+
+| Config | `/` | `/ssr/100` | `/ssr/1000` | Idle / loaded memory |
+| --- | --- | --- | --- | --- |
+| Remix 3.1, 1 Node process | 1,258 | 398 | 54 | 111.9 / 364.6 MB |
+| rmx, 1 thread | 1,540 | 1,311 | 261 | 17.5 / 18.4 MB |
+| Remix 3.1, cluster of 16 workers | 2,195 | 1,423 | 390 | 1676.2 / 4961.3 MB |
+| rmx, 16 threads | 3,687 | 11,640 | 2,155 | 18 / 22.6 MB |
+
+### Browser (Chromium, Windows Host)
+
+Median commit ms (click to DOM updated), operations interleaved between the apps. The
+stable and nightly rmx clients ran in separate runs, each against Remix 3.1, both with
+frames and navigation compiled out.
+
+| Operation | Remix 3.1 | rmx stable | Remix 3.1 | rmx nightly |
+| --- | --- | --- | --- | --- |
+| create 1k | 20.5 | **15.3** | 28.6 | **20.3** |
+| replace 1k | 31.9 | **18.7** | 40.8 | **29.3** |
+| update every 10th | 11.5 | **7.4** | 9.5 | **7.2** |
+| select row | 10.5 | **6.4** | 10.3 | **5.4** |
+| swap rows | 10.3 | **6.4** | 10.2 | **6.1** |
+| remove row | 10.3 | **6** | 8.7 | **6.1** |
+| create 10k | 1058.4 | **1008.3** | 947.8 | **910.8** |
+| append 1k | 39.4 | **28.2** | 40.4 | **28.7** |
+| clear 1k | 13.9 | **10.3** | 11.4 | **8.5** |
+| Page hydrated (ms after navigation) | 154.1 | **71.9** | 182.45 | **94.3** |
+
+rmx committed first on every operation in both runs. To the next painted frame the two
+were within a few ms on most rows; rmx was later on `create 1k` (88.4 vs 86.7 ms) and
+`select row` (19.6 vs 18.8 and 24.8 vs 18.4 ms). Page errors were 0 for both.
+
+### Client Size
+
+| Build | Files | Raw | Gzip | Brotli | Gzip vs Remix 3.1 |
+| --- | --- | --- | --- | --- | --- |
+| Remix 3.1 | 43 | 122.2 KB | **46.4 KB** | **41.1 KB** | 1x |
+| Remix 3.0 (2026-10-23) | 41 | 112.3 KB | 42.5 KB | 37.7 KB | 0.9x |
+| rmx stable, no frames or navigation | 3 | 244.7 KB | 99.7 KB | 84.9 KB | 2.1x |
+| rmx nightly, no frames or navigation | 3 | 211.8 KB | 87.2 KB | 75.2 KB | 1.9x |
+
+Remix grew by 3.9 KB gzip, partly because `run()` now loads `prefetch.js` on every page.
+rmx's prefetching sits behind the `navigation` feature, so the bench client did not grow;
+the gap is 40.8 KB on nightly, down from 44.7 KB, without rmx shrinking.
+
+### Streaming Uploads
+
+`cargo run --release -p rmx-fetch --example upload_bench`, median of 7 runs, stable
+`FormData::parse` against `form_data::future`, in process (no HTTP):
+
+| Request | Total time | Time to handler | Peak heap growth |
+| --- | --- | --- | --- |
+| 1 x 100 MiB file | 149.28 to 15.43 ms | 125.41 to 0.04 ms | 200.1 to 0 MiB |
+| 5 x 20 MiB files | 152.78 to 16.63 ms | 26.14 to 0.04 ms | 40.1 to 0 MiB |
+| 10 fields and an 8 KiB file | 0.06 to 0.05 ms | 0.05 to 0.05 ms | 0 to 0 MiB |
+
+Remix publishes its own Node figures for the same change (67.7 to 36.6 ms and 396 to 29 MiB
+for a large upload); they were not rerun here, so they are not a like-for-like comparison.
+
+## Earlier Run (2026-10-23, Afternoon): Frames and Navigation Compiled Out
 
 The bench client now depends on rmx with `default-features = false`, which leaves the
 browser half of frames, soft navigation and the server HTML differ out of the wasm

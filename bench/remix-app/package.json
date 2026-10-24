@@ -7,6 +7,6 @@
     "start": "node --import remix/node-tsx server.ts"
   },
   "dependencies": {
-    "remix": "3.0.0"
+    "remix": "3.1.0"
   }
 }

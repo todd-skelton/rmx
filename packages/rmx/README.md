@@ -101,8 +101,12 @@ crates:
    host mixins with insert/remove/reclaim lifecycles, `<Frame>` (blocking, non-blocking,
    named, client-mounted, custom resolvers), soft navigation through the Navigation API
    (`data-rmx-target`, `data-rmx-src`, `data-rmx-history`, `data-rmx-reset-scroll`,
-   `data-rmx-document`), form submissions, redirects, scroll restoration on traversal,
-   app-level error events (`App::on_error`), root-level error events (`Root::on_error`:
+   `data-rmx-document`), prefetching from Remix 3.1 (`data-rmx-prefetch="intent"` after a
+   100 ms hover or focus or on press, `"viewport"` when the link enters view, `prefetch()`
+   on demand, `RunOptions::prefetch` to replace the default of fetching the destination HTML
+   and adding `rel=prefetch` hints for its scripts, stylesheets and preloads), form
+   submissions, redirects, scroll restoration on traversal, app-level error events
+   (`App::on_error`), root-level error events (`Root::on_error`:
    `update()` from `render` or before the first commit, `update()` loops stopped after 50
    cascading renders, `Handle::report_error`, bubbling DOM `error` events), and
    `rmx::test` (`render`, `query`, `query_all`, `act`, `cleanup`), the counterpart of
@@ -204,7 +208,10 @@ crates:
    resource limits, joins, and hrefs with `base_url`-relative output; Remix's tests ported),
    `rmx-fetch` (Request, Response, FormData with Remix's `parseFormData`: URL-encoded and
    multipart only, other media types an error before the body is read, upload handlers that
-   may return a `Result`, and `File::new` lowercasing the type like the web `File`; the
+   may return a `Result`, streaming uploads in `form_data::future` (Remix 3.1's
+   `form-data-parser/future`: each `FileUpload` reaches the handler when its headers arrive
+   and streams its content from the request; `rmx-form-data-middleware` has a matching
+   `future` module), and `File::new` lowercasing the type like the web `File`; the
    `remix/response` constructors, where `html` and `html_with` take strings, `SafeHtml`,
    bytes, files or streams (a doctype prepended unless present; a stream error aborts the
    body), `html_with` and
@@ -256,7 +263,8 @@ crates:
    `TarParser::parse` reuses one parser across archives like Remix's `parser.parse`, and
    bodies grow from received bytes rather than the declared size), `rmx-multipart-parser` (Remix's multipart, request,
    Node and buffer-search tests ported one per case; an empty request body is reported
-   before a missing boundary, as in Remix), `rmx-html-template`,
+   before a missing boundary, as in Remix; `future` yields each part as soon as its headers
+   arrive, with its content as views of the body chunks), `rmx-html-template`,
    `rmx-terminal` (Remix's `remix/terminal`: ANSI sequences, `strip_ansi`, color detection,
    nested-safe `Styles` and a `Terminal` over injectable streams; the logger uses it),
    `rmx-headers` (every Remix header type, raw header blocks, and `SuperHeaders` as a
@@ -317,7 +325,8 @@ The shared app crate should also use `default-features = false`, or Cargo turns 
 defaults back on for the client too. With the features off, `run()` hydrates client
 entries and nothing else:
 
-1. Links and forms are plain browser navigations, and `navigate()` assigns `location`.
+1. Links and forms are plain browser navigations, `navigate()` assigns `location`, and
+   `data-rmx-prefetch` and `prefetch()` do nothing.
 2. The document is the only frame: `FrameHandle::reload` loads the document, `replace`
    renders into the body, frame events never fire and `Frames::get` finds nothing.
 3. A `<Frame>` rendered in the browser shows its fallback (with a console warning), and

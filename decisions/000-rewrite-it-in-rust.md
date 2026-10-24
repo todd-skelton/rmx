@@ -804,7 +804,8 @@ Remaining gaps:
 
 ## 12. Parity audit (2026-10-22)
 
-Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22).
+Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22). Section 15
+updates it for Remix 3.1.
 
 1. Packages: upstream has 50. The 37 in scope each have an rmx crate or module, distributed
    through the `rmx` crate (`packages/rmx/tests/manifest.rs`): since the 2026-10-22
@@ -899,3 +900,54 @@ Checked against upstream `2968b1e` (no newer upstream commits on 2026-10-22).
 6. What is left is mostly the vdom and what wasm brings (`core`, `js-sys`, serde_json,
    `alloc`, `hashbrown`, the allocator). serde_json for entry props (17 KB before
    `wasm-opt`) is the largest single item. Not done.
+
+## 15. Parity with Remix 3.1 (2026-10-24)
+
+Checked against the `v3.1.0` release commit `03c8414` (2026-10-23). Upstream `main` had
+three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
+
+1. Ported, one commit each, with the upstream tests ported case by case:
+   1. Headers (`cc3c7f6`): Range serialization for large decimal bounds (#12025), only
+      satisfiable normalized byte ranges (#12023), invalid Content-Range relationships
+      rejected (#12040), weak comparison for If-None-Match (#12048), If-Range validators
+      classified by syntax (#12049), backslashes kept in serialized parameter values
+      (#12002) and malformed raw header lines ignored (#12027). `raw::parse` now returns a
+      `HeaderMap` of the valid lines.
+   2. Response and tar (`2114645`): unsupported Range units serve the full file (#12045;
+      `lines=x` is now 200, `bytes=x` still 400), zero-length suffix ranges and ranges on
+      empty files handled safely (#12043), and the tar parser stops after the
+      end-of-archive marker while still counting what follows toward `max_total_size`
+      (#12041).
+   3. Streaming uploads (`584ed39`, #12030): `rmx_multipart_parser::future` yields each
+      part when its headers arrive, with content as zero-copy views of the body chunks;
+      `rmx_fetch::form_data::future` hands each `FileUpload` to the handler as it starts and
+      streams it from the request; `rmx-form-data-middleware` has a matching `future`
+      module. Upstream's #12029 works around a Node.js bug (before 24.20.0 and 26.6.0)
+      that kept streamed `FileUpload` contents in memory; rmx does not run on Node, so there
+      is nothing to port.
+   4. Keyed Fragments in client entry props (`e2fe08b`, #12067).
+   5. Prefetching (`fdc6a6a`, #12004): `data-rmx-prefetch="intent"` and `"viewport"`,
+      `prefetch()`, and `RunOptions::prefetch` for a custom strategy. It is part of the
+      `navigation` feature, so a client built without it carries none of it.
+2. Not ported: S3 multipart uploads (#12070), data access, out of scope as in section 12.
+3. Breaking for rmx users: `RunOptions` gained a field (struct literals need
+   `..Default::default()`), `raw::parse` returns `HeaderMap`, and a non-`bytes` Range unit
+   is served in full instead of rejected.
+4. Uploads (measured, `cargo run --release -p rmx-fetch --example upload_bench`, median of
+   7): a 100 MiB file went from 149.28 to 15.43 ms in total, 125.41 to 0.04 ms to the
+   handler, and 200.1 to 0 MiB of peak heap growth.
+5. Benchmarks against Remix 3.1 (measured, `bench/README.md`):
+   1. Docker, pinned CPUs: rmx serves 12x, 16x and 16x Remix's requests per second on
+      `/`, `/ssr/100` and `/ssr/1000` on one CPU, and 12x, 8x and 9x on eight. Remix 3.1's
+      single process is 2.9x its 3.0 figure on `/`.
+   2. Browser: rmx commits first on every list operation in both the stable and the
+      nightly run, and hydrates the page in about half the time.
+   3. Client: Remix 3.1 is 46.4 KB gzip (3.0 was 42.5 KB); the rmx nightly client is still
+      87.2 KB, 1.9x.
+6. Gate (measured): workspace tests 2,637 passed, 0 failed (test122); native clippy and
+   wasm clippy for `rmx-component` (default, no default features, `frames` only, all
+   targets), `rmx-fetch`, `rmx-multipart-parser` and `rmx-form-data-middleware` with
+   `-D warnings`; browser tests `rmx-component` 612, `rmx-ui` 140 and no-frames 1 passed,
+   0 failed (browser-all16), plus `browser_prefetch` 9, `browser_prefetch_assets` 4 and
+   `browser_entry_props` 2; demo e2e suites 11 of 12 in rebuild110, and the twelfth
+   (bookstore, its new viewport-prefetch check) passed after scrolling the links into view.
