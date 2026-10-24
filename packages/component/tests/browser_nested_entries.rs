@@ -211,7 +211,7 @@ async fn start() {
             entry::<HidesEntry>(),
             entry::<HidesPlain>(),
         ];
-        let app = rmx::run(RunOptions { entries, resolve_frame: Some(Rc::new(resolve)) });
+        let app = rmx::run(RunOptions { entries, resolve_frame: Some(Rc::new(resolve)), ..Default::default() });
         APP.with(|a| *a.borrow_mut() = Some(app));
     }
     let app = APP.with(|a| a.borrow_mut().take()).expect("app");

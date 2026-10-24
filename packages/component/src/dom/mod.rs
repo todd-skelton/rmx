@@ -25,6 +25,8 @@ pub(crate) mod frames;
 pub(crate) mod frames;
 #[cfg(feature = "navigation")]
 pub(crate) mod navigation;
+#[cfg(feature = "navigation")]
+pub(crate) mod prefetch;
 mod mixin_host;
 mod ops;
 mod root;
@@ -77,6 +79,13 @@ pub struct RunOptions {
     /// `resolveFrame`). `rmx-spa` uses it to run a router in the page. Needs the `frames`
     /// feature; without it the runtime warns and ignores it.
     pub resolve_frame: Option<crate::frame::ResolveFrame>,
+    /// Replace how `data-rmx-prefetch` links and [`crate::prefetch`] load a page (Remix's
+    /// `prefetch`). The default fetches the destination HTML and adds prefetch hints for the
+    /// scripts, stylesheets and preloads it declares. With [`RunOptions::resolve_frame`] a
+    /// custom strategy can hold a response for the next navigation. Named-frame links pass
+    /// their target, and their `data-rmx-src` as the source when set. Needs the
+    /// `navigation` feature; without it the runtime warns and ignores it.
+    pub prefetch: Option<crate::PrefetchFrame>,
 }
 
 /// Start the browser runtime: hydrate the client entries in the document, start the
@@ -99,6 +108,12 @@ pub fn run(options: RunOptions) -> App {
     if options.resolve_frame.is_some() {
         warn("rmx: RunOptions::resolve_frame needs the `frames` feature; it is ignored");
     }
+    #[cfg(not(feature = "navigation"))]
+    if options.prefetch.is_some() {
+        warn("rmx: RunOptions::prefetch needs the `navigation` feature; it is ignored");
+    }
+    #[cfg(feature = "navigation")]
+    let prefetch = options.prefetch;
     let mut resolve_ready = None;
     let ready = js_sys::Promise::new(&mut |resolve, _| resolve_ready = Some(resolve));
     when_content_parsed(Box::new(move || {
@@ -106,6 +121,8 @@ pub fn run(options: RunOptions) -> App {
         frames::start();
         #[cfg(feature = "navigation")]
         navigation::start();
+        #[cfg(feature = "navigation")]
+        prefetch::start(prefetch);
         flush();
         if let Some(resolve) = resolve_ready {
             let _ = resolve.call0(&wasm_bindgen::JsValue::UNDEFINED);
@@ -162,6 +179,8 @@ impl App {
     pub fn dispose(&self) {
         #[cfg(feature = "navigation")]
         navigation::stop();
+        #[cfg(feature = "navigation")]
+        prefetch::stop();
         if let Some(body) = document().body() {
             #[cfg(feature = "frames")]
             diff::dispose_subtree(&body.into());

@@ -92,6 +92,31 @@ pub async fn navigate_async(href: &str, options: NavigateOptions) {
     let _ = (href, options);
 }
 
+/// Options for [`prefetch`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrefetchOptions {
+    /// The frame the content is for, sent as `X-Remix-Target` by the default strategy.
+    pub target: Option<String>,
+}
+
+/// A prefetch strategy (`RunOptions::prefetch`): called with the absolute URL to load
+/// (without a hash) and the destination frame.
+pub type PrefetchFrame = Rc<dyn Fn(&str, PrefetchOptions)>;
+
+/// Start loading a page so a later navigation to it is faster (Remix's `prefetch`). By
+/// default this fetches its HTML and adds `<link rel="prefetch">` hints for the scripts,
+/// stylesheets and image and font preloads it declares; the browser cache does the rest.
+/// `href` resolves against the document base URL. Cross-origin URLs, the current page
+/// (without a `target`) and browsers where the runtime does not handle navigations are
+/// skipped. Unlike `data-rmx-prefetch` links, Save-Data and slow connections are not
+/// checked. A no-op on the server and without the `navigation` feature.
+pub fn prefetch(href: &str, options: PrefetchOptions) {
+    #[cfg(all(target_arch = "wasm32", feature = "navigation"))]
+    crate::dom::prefetch::prefetch(href, options);
+    #[cfg(not(all(target_arch = "wasm32", feature = "navigation")))]
+    let _ = (href, options);
+}
+
 /// Without the navigation runtime a navigation is a document load.
 #[cfg(all(target_arch = "wasm32", not(feature = "navigation")))]
 fn load_document(href: &str, options: &NavigateOptions) {

@@ -88,8 +88,8 @@ impl Component for Layout {
         let nav_user = match &self.user {
             Some(user) => rsx! {
                 <>
-                    <a href={r.account.index.href(())}>"Account"</a>
-                    {(user.role == super::data::Role::Admin).then(|| rsx! { <a href={r.admin.index.href(())}>"Admin"</a> })}
+                    <a data-rmx-prefetch="intent" href={r.account.index.href(())}>"Account"</a>
+                    {(user.role == super::data::Role::Admin).then(|| rsx! { <a data-rmx-prefetch="intent" href={r.admin.index.href(())}>"Admin"</a> })}
                     <form method="POST" action={r.auth.logout.href(())} mix={css("display: inline;")}>
                         <button type="submit" class="btn btn-secondary" mix={css("margin-left: 1rem;")}>"Logout"</button>
                     </form>
@@ -98,7 +98,7 @@ impl Component for Layout {
             None => rsx! {
                 <>
                     <a href={r.auth.login.index.href(())}>"Login"</a>
-                    <a href={r.auth.register.index.href(())}>"Register"</a>
+                    <a data-rmx-prefetch="intent" href={r.auth.register.index.href(())}>"Register"</a>
                 </>
             },
         };
@@ -106,13 +106,13 @@ impl Component for Layout {
             <Document title={props.title.clone()}>
                 <header>
                     <div class="container">
-                        <h1><a href={r.home.href(())}>"📚 Bookstore"</a></h1>
+                        <h1><a data-rmx-prefetch="intent" href={r.home.href(())}>"📚 Bookstore"</a></h1>
                         <nav>
-                            <a href={r.home.href(())}>"Home"</a>
-                            <a href={r.books.index.href(())}>"Books"</a>
-                            <a href={r.about.href(())}>"About"</a>
-                            <a href={r.contact.index.href(())}>"Contact"</a>
-                            <a href={r.cart.index.href(())}>"Cart"</a>
+                            <a data-rmx-prefetch="intent" href={r.home.href(())}>"Home"</a>
+                            <a data-rmx-prefetch="intent" href={r.books.index.href(())}>"Books"</a>
+                            <a data-rmx-prefetch="intent" href={r.about.href(())}>"About"</a>
+                            <a data-rmx-prefetch="intent" href={r.contact.index.href(())}>"Contact"</a>
+                            <a data-rmx-prefetch="intent" href={r.cart.index.href(())}>"Cart"</a>
                             {nav_user}
                         </nav>
                     </div>
@@ -145,7 +145,7 @@ pub fn book_card(book: &Book) -> Node {
                 <p class="author">{format!("by {}", book.author)}</p>
                 <p class="price">{money(book.price)}</p>
                 <div mix={css("display: flex; gap: 0.5rem; align-items: center;")}>
-                    <a href={ROUTES.books.show.href([("slug", book.slug.as_str())])} class="btn">"View Details"</a>
+                    <a href={ROUTES.books.show.href([("slug", book.slug.as_str())])} data-rmx-prefetch="viewport" class="btn">"View Details"</a>
                     <Frame src={ROUTES.fragments.cart_button.href([("bookId", book.id.to_string())])}/>
                 </div>
             </div>

@@ -382,9 +382,14 @@ pub(crate) fn diff_attributes(current: &web_sys::Element, next: &web_sys::Elemen
     }
 }
 
-/// Head nodes the runtime manages itself: scripts (never re-run) and `css()` styles.
+/// Head nodes the runtime manages itself: scripts (never re-run), `css()` styles and
+/// prefetch hints that are still loading (a navigation must not cancel them).
 fn managed_head_node(node: &web_sys::Node) -> bool {
     let Some(el) = node.dyn_ref::<web_sys::Element>() else { return false };
+    #[cfg(feature = "navigation")]
+    if el.tag_name() == "LINK" && super::prefetch::is_pending_hint(node) {
+        return true;
+    }
     el.tag_name() == "SCRIPT" || el.has_attribute("data-rmx-style")
 }
 

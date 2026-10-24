@@ -186,6 +186,31 @@ const ready = (page) => page.waitForFunction(() => document.documentElement.data
   await context.close()
 }
 
+// --- Prefetching: intent on header links, viewport on "View Details" (Remix 3.1) ---------
+{
+  const context = await browser.newContext({ baseURL: BASE })
+  const page = await context.newPage()
+  const frameGets = []
+  page.on('request', (r) => r.headers()['x-remix-frame'] === 'true' && r.method() === 'GET' && frameGets.push(new URL(r.url()).pathname))
+  await page.goto('/books')
+  await ready(page)
+  await attempt('View Details links prefetch their book page once they scroll into view', async () => {
+    await page.waitForTimeout(300)
+    if (frameGets.some((p) => p.startsWith('/books/'))) throw new Error(`prefetched below the fold: ${JSON.stringify(frameGets)}`)
+    await page.locator('a[data-rmx-prefetch="viewport"]').first().scrollIntoViewIfNeeded()
+    for (let i = 0; i < 40 && !frameGets.some((p) => p.startsWith('/books/')); i++) await page.waitForTimeout(50)
+    if (!frameGets.some((p) => p.startsWith('/books/'))) throw new Error(`frame GETs: ${JSON.stringify(frameGets)}`)
+  })
+  await attempt('hovering a header link prefetches it before the click', async () => {
+    await page.getByRole('link', { name: 'About', exact: true }).hover()
+    for (let i = 0; i < 40 && !frameGets.includes('/about'); i++) await page.waitForTimeout(50)
+    if (!frameGets.includes('/about')) throw new Error(`frame GETs: ${JSON.stringify(frameGets)}`)
+    await page.getByRole('link', { name: 'About', exact: true }).click()
+    await page.waitForURL('**/about', { timeout: 5000 })
+  })
+  await context.close()
+}
+
 await browser.close()
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed')
 process.exit(failures ? 1 : 0)

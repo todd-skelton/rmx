@@ -36,7 +36,7 @@ fn opt_str(v: Option<&str>) -> JsValue {
 
 /// The `navigation` object, when the browser supports intercepting form and link
 /// navigations (`NavigateEvent.sourceElement`).
-fn navigation() -> Option<JsValue> {
+pub(crate) fn navigation() -> Option<JsValue> {
     let w: JsValue = window().into();
     let nav = get(&w, "navigation");
     if nav.is_undefined() || nav.is_null() {

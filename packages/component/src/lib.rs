@@ -38,7 +38,7 @@ pub use frame::{
 };
 pub use host_mixin::{mixin, mixin_with, BeforeRemoveEvent, HostMixin, InsertEvent, MixinHandle, MixinOptions};
 pub use mixin::{attrs, css, node_ref, on, on_capture, IntoMixins, Mixin, NodeHandle, NodeRef};
-pub use navigation::{link, link_with, navigate, navigate_async, History, NavigateOptions, Reset};
+pub use navigation::{link, link_with, navigate, navigate_async, prefetch, History, NavigateOptions, PrefetchFrame, PrefetchOptions, Reset};
 pub use node::{
     unsafe_html, AttrValue, Children, Element, Event, EventHandler, FrameNode, IntoAttr, IntoHtmlAttr, IntoNode, IntoProp, Key, Node,
     Str, StyleRule, UnsafeHtml,

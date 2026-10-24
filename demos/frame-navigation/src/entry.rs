@@ -16,6 +16,7 @@ pub fn start() {
     let app = rmx::run(rmx::RunOptions {
         entries: vec![rmx::entry::<DashboardStatGrid>(), rmx::entry::<CourseFilterInput>()],
         resolve_frame: Some(Rc::new(resolve_frame)),
+        ..Default::default()
     });
     let handle = app.clone();
     app.on_error(move |error| {
