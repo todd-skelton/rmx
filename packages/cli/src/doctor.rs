@@ -23,8 +23,7 @@ use std::time::SystemTime;
 
 use rsmix_terminal::Styles;
 
-/// The `wasm-bindgen` version rsmix builds against (the `=0.2.129` pin).
-pub const WASM_BINDGEN_VERSION: &str = "0.2.129";
+pub use super::toolchain::WASM_BINDGEN_VERSION;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
@@ -255,24 +254,27 @@ fn json_string(s: &str) -> String {
 pub trait Toolchain {
     /// `rustup target list --installed`; `None` when rustup is unavailable.
     fn installed_targets(&self) -> Option<Vec<String>>;
-    /// The version `wasm-bindgen --version` reports; `None` when it is not on `PATH`.
+    /// The version of the `wasm-bindgen` rsmix would run (`RSMIX_WASM_BINDGEN`, the cached
+    /// copy, or the one on `PATH`); `None` when there is none.
     fn wasm_bindgen_version(&self) -> Option<String>;
 }
 
-/// [`Toolchain`] backed by `rustup` and `wasm-bindgen` on `PATH`.
+/// [`Toolchain`] backed by `rustup` and the `wasm-bindgen` [`super::toolchain`] finds.
 pub struct SystemToolchain;
 
 impl Toolchain for SystemToolchain {
     fn installed_targets(&self) -> Option<Vec<String>> {
-        let out = std::process::Command::new("rustup").args(["target", "list", "--installed"]).output().ok()?;
-        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).lines().map(|l| l.trim().to_string()).collect())
+        super::toolchain::installed_targets()
     }
 
     fn wasm_bindgen_version(&self) -> Option<String> {
-        let out = std::process::Command::new("wasm-bindgen").arg("--version").output().ok()?;
-        let text = String::from_utf8_lossy(&out.stdout);
+        let program = std::env::var_os("RSMIX_WASM_BINDGEN")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(super::toolchain::cached_wasm_bindgen)
+            .unwrap_or_else(|| PathBuf::from("wasm-bindgen"));
         // "wasm-bindgen 0.2.129"
-        text.split_whitespace().nth(1).map(str::to_string)
+        super::toolchain::tool_version(&program)
     }
 }
 
@@ -552,21 +554,21 @@ fn environment(root: Option<&Path>, manifest: &str, toolchain: &dyn Toolchain) -
     }
     match toolchain.installed_targets() {
         None => findings.push(advice("rustup-unavailable", "Could not run rustup to check for the wasm32-unknown-unknown target.")),
-        Some(targets) if !targets.iter().any(|t| t == "wasm32-unknown-unknown") => findings.push(warn(
+        Some(targets) if !targets.iter().any(|t| t == "wasm32-unknown-unknown") => findings.push(advice(
             "wasm-target-missing",
-            "The wasm32-unknown-unknown target is not installed. Run `rustup target add wasm32-unknown-unknown`.",
+            "The wasm32-unknown-unknown target is not installed yet; `rsmix dev` and `rsmix build` add it with rustup.",
         )),
         Some(_) => {}
     }
     match toolchain.wasm_bindgen_version() {
         None => findings.push(advice(
             "wasm-bindgen-missing",
-            format!("wasm-bindgen is not on PATH. Run `cargo install wasm-bindgen-cli --version {WASM_BINDGEN_VERSION}` to build the client."),
+            format!("wasm-bindgen {WASM_BINDGEN_VERSION} is not installed yet; `rsmix dev` and `rsmix build` download it."),
         )),
-        Some(version) if version != WASM_BINDGEN_VERSION => findings.push(warn(
+        Some(version) if version != WASM_BINDGEN_VERSION => findings.push(advice(
             "wasm-bindgen-version-mismatch",
             format!(
-                "wasm-bindgen {version} is on PATH, but rsmix uses {WASM_BINDGEN_VERSION}. Run `cargo install wasm-bindgen-cli --version {WASM_BINDGEN_VERSION}`."
+                "wasm-bindgen {version} is installed, but rsmix uses {WASM_BINDGEN_VERSION}; `rsmix dev` and `rsmix build` download {WASM_BINDGEN_VERSION} unless RSMIX_WASM_BINDGEN names another."
             ),
         )),
         Some(_) => {}

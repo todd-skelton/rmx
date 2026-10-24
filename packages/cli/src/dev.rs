@@ -5,8 +5,8 @@
 //!
 //! Changes are found by polling modification times under `src/` and `app/` (except the
 //! client output) and `Cargo.toml`. A failed build leaves the running server alone. The client
-//! is built with the dev profile for speed; `wasm-bindgen` comes from `RSMIX_WASM_BINDGEN` or
-//! `PATH`.
+//! is built with the dev profile for speed. The wasm32 target and `wasm-bindgen` are installed
+//! on first use ([`super::toolchain`]).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use std::process::{Child, Command};
 use std::time::{Duration, SystemTime};
 
 use super::doctor::{find_file, package_name, read, rust_sources};
-use super::CliError;
+use super::{toolchain, CliError};
 
 /// What `rsmix dev` builds and runs for an app.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -145,7 +145,14 @@ fn stop(server: &mut Option<Child>) {
 /// Run the dev loop for the app containing `cwd` until interrupted. `args` go to the app.
 pub fn run_dev(cwd: &Path, args: &[String]) -> Result<(), CliError> {
     let plan = DevPlan::for_app(cwd)?;
-    let wasm_bindgen = std::env::var("RSMIX_WASM_BINDGEN").unwrap_or_else(|_| "wasm-bindgen".into());
+    let mut say = |line: &str| eprintln!("rsmix dev: {line}");
+    let wasm_bindgen = match plan.client_out {
+        Some(_) => {
+            toolchain::ensure_wasm_target(&mut say)?;
+            toolchain::wasm_bindgen(&mut say)?.display().to_string()
+        }
+        None => String::new(),
+    };
     let mut server = None;
     let mut built = plan.snapshot();
     if run_build(&plan, &wasm_bindgen) {

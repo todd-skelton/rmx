@@ -1,5 +1,5 @@
-//! The `rsmix` command (Remix's `remix` CLI): `new`, `dev`, `doctor`, `completion`, `routes`, `assets`, `test`,
-//! `version` and `help`. Install it with `cargo install --path packages/cli`.
+//! The `rsmix` command (Remix's `remix` CLI): `new`, `dev`, `build`, `doctor`, `completion`, `routes`, `assets`,
+//! `test`, `version` and `help`. Install it with `cargo install --path packages/cli`.
 //!
 //! `new` writes the starter app (`template/`, like Remix's `template`) as a standalone
 //! crate. `routes` and `assets` need the app's own route map and asset server, so they run
@@ -14,10 +14,12 @@ use std::sync::{Arc, Mutex};
 
 use rsmix_terminal::Styles;
 
+pub mod build;
 pub mod completion;
 pub mod dev;
 pub mod doctor;
 mod status;
+pub mod toolchain;
 
 /// What a command line asks for.
 #[derive(Debug, PartialEq, Eq)]
@@ -34,6 +36,8 @@ pub enum Invocation {
     Doctor { json: bool, strict: bool, fix: bool },
     /// Build, run and rebuild the app on changes; the arguments go to the app.
     Dev(Vec<String>),
+    /// The release build: the optimized client, then the server.
+    Build,
 }
 
 /// Options for `rsmix new`.
@@ -115,6 +119,7 @@ Usage:
 
 Commands:
   assets [command]  List or inspect browser-reachable assets
+  build             Build the client and the server for production
   completion        Print shell completion scripts for rsmix
   dev [-- args]     Build and run the app, rebuilding and reloading on changes
   doctor            Check project health for the current project
@@ -131,6 +136,7 @@ Options:
 
 Examples:
   rsmix assets
+  rsmix build
   rsmix completion bash
   rsmix dev
   rsmix doctor
@@ -205,11 +211,24 @@ Usage:
 
 Build the client and the server, run the app, and rebuild and restart it when src/, app/,
 public/ or Cargo.toml change. Pages reload when the app installs
-rsmix::middleware::live_reload. Set RSMIX_WASM_BINDGEN to use a wasm-bindgen that is not on PATH.
+rsmix::middleware::live_reload. The wasm32 target and wasm-bindgen are installed on first use;
+set RSMIX_WASM_BINDGEN to use another wasm-bindgen.
 
 Examples:
   rsmix dev
   rsmix dev -- --port 4000
+";
+
+const BUILD_HELP: &str = "\
+Usage:
+  rsmix build
+
+Build the app for production: the client with the size-optimized wasm-release profile,
+wasm-bindgen and wasm-opt, then the server with cargo build --release. Start it with
+cargo run --release. The wasm32 target, wasm-bindgen and wasm-opt are installed on first use.
+
+Examples:
+  rsmix build
 ";
 
 const COMPLETION_HELP: &str = "\
@@ -247,15 +266,20 @@ pub fn help_for(command: Option<&str>) -> Result<&'static str, CliError> {
         Some("test") => TEST_HELP,
         Some("doctor") => DOCTOR_HELP,
         Some("dev") => DEV_HELP,
+        Some("build") => BUILD_HELP,
         Some("completion") => COMPLETION_HELP,
         Some("help") => HELP,
         Some(other) => return Err(CliError::unknown_command(other)),
     })
 }
 
-/// The rsmix version this CLI belongs to.
+/// The rsmix release this CLI belongs to. Like `remix version`, it reports the framework
+/// (the `rsmix` crate), not this crate's own version.
+pub const RSMIX_VERSION: &str = "3.1.0";
+
+/// The rsmix version this CLI belongs to ([`RSMIX_VERSION`]).
 pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    RSMIX_VERSION
 }
 
 /// Options that apply to every command, taken out of the command line before it is
@@ -355,6 +379,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             }
             Ok(Invocation::Dev(after.iter().map(|a| a.to_string()).collect()))
         }
+        "build" => match args.first() {
+            _ if wants_help => Ok(Invocation::Help(BUILD_HELP)),
+            Some(arg) if arg.starts_with('-') => Err(CliError::unknown_argument(arg)),
+            Some(arg) => Err(CliError::unexpected_extra_argument(arg)),
+            None => Ok(Invocation::Build),
+        },
         "doctor" => {
             if wants_help {
                 return Ok(Invocation::Help(DOCTOR_HELP));
@@ -532,6 +562,17 @@ fn run_command(args: &[String], cwd: &Path) -> i32 {
                 }
             }
         }
+        Ok(Invocation::Build) => {
+            let is_tty = std::io::stderr().is_terminal();
+            eprint!("{}", preamble("build", &Styles::new(colors(is_tty)), is_tty));
+            match build::run_build(cwd) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprint!("{}", e.render(&error_help(BUILD_HELP)));
+                    1
+                }
+            }
+        }
         Ok(Invocation::Dev(app_args)) => match dev::run_dev(cwd, &app_args) {
             Ok(()) => 0,
             Err(e) => {
@@ -695,17 +736,18 @@ pub struct NewApp {
     pub target_dir: PathBuf,
 }
 
-/// The starter app's files, from the repository's `template/`.
+/// The starter app's files: the repository's `template/`, or the copy published with this
+/// crate (see `build.rs`).
 const TEMPLATE: &[(&str, &str)] = &[
-    ("src/lib.rs", include_str!("../../../template/src/lib.rs")),
-    ("src/main.rs", include_str!("../../../template/src/main.rs")),
-    ("src/prompt_button.rs", include_str!("../../../template/src/prompt_button.rs")),
-    ("src/routes.rs", include_str!("../../../template/src/routes.rs")),
-    ("src/server/mod.rs", include_str!("../../../template/src/server/mod.rs")),
-    ("src/server/home_page.rs", include_str!("../../../template/src/server/home_page.rs")),
-    ("src/server/tests.rs", include_str!("../../../template/src/server/tests.rs")),
-    ("app/actions/public/entry.js", include_str!("../../../template/app/actions/public/entry.js")),
-    ("public/favicon.svg", include_str!("../../../template/public/favicon.svg")),
+    ("src/lib.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/lib.rs"))),
+    ("src/main.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/main.rs"))),
+    ("src/prompt_button.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/prompt_button.rs"))),
+    ("src/routes.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/routes.rs"))),
+    ("src/server/mod.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/server/mod.rs"))),
+    ("src/server/home_page.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/server/home_page.rs"))),
+    ("src/server/tests.rs", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/src/server/tests.rs"))),
+    ("app/actions/public/entry.js", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/app/actions/public/entry.js"))),
+    ("public/favicon.svg", include_str!(concat!(env!("RSMIX_TEMPLATE_DIR"), "/public/favicon.svg"))),
 ];
 
 /// The default document title in the template, replaced by the app's display name.
@@ -713,8 +755,7 @@ const TEMPLATE_TITLE: &str = "unwrap_or(\"rsmix App\")";
 
 /// Create an app in `options.target_dir` (relative to `cwd`): Remix's `bootstrapProject`.
 /// `progress` receives `• Step...` when a step starts and `✓ Step` or `✗ Step` when it ends.
-/// The app depends on `rsmix` by path (this crate's directory) unless `RSMIX_VERSION` names a
-/// version.
+/// The app depends on [`rsmix_dependency`]'s `rsmix`.
 pub fn new_project(options: &NewOptions, cwd: &Path, progress: &mut dyn FnMut(&str)) -> Result<NewApp, CliError> {
     let target_dir = normalize(&cwd.join(&options.target_dir));
     let raw_name = match &options.app_name {
@@ -792,15 +833,18 @@ fn prepare_target_directory(dir: &Path, force: bool) -> Result<(), CliError> {
     std::fs::create_dir_all(dir).map_err(|e| io_error(dir, e))
 }
 
-/// The `rsmix = ...` dependency line for new apps and `doctor --fix`: the version in
-/// `RSMIX_VERSION`, or this checkout's `packages/rsmix` by path.
+/// The `rsmix = ...` dependency line for new apps and `doctor --fix` (Remix's
+/// `readDefaultRemixVersion`): the version in the `RSMIX_VERSION` environment variable, else
+/// the checkout this CLI was built from by path, else the published [`RSMIX_VERSION`].
 pub(crate) fn rsmix_dependency() -> String {
-    match std::env::var("RSMIX_VERSION").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
-        Some(version) => format!("rsmix = {}", toml_string(&version)),
-        None => {
-            let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("packages/").join("rsmix");
-            format!("rsmix = {{ path = {} }}", toml_string(&checkout.display().to_string().replace('\\', "/")))
-        }
+    dependency_line(std::env::var("RSMIX_VERSION").ok().as_deref(), option_env!("RSMIX_CHECKOUT"))
+}
+
+fn dependency_line(version: Option<&str>, checkout: Option<&str>) -> String {
+    match (version.map(str::trim).filter(|v| !v.is_empty()), checkout) {
+        (Some(version), _) => format!("rsmix = {}", toml_string(version)),
+        (None, Some(checkout)) => format!("rsmix = {{ path = {} }}", toml_string(checkout)),
+        (None, None) => format!("rsmix = {}", toml_string(RSMIX_VERSION)),
     }
 }
 
@@ -894,22 +938,18 @@ A minimal rsmix application starter with a home page.
 
 ## Commands
 
-Build the client once (and after client changes), then run the server:
-
 ```sh
-rustup target add wasm32-unknown-unknown
-cargo install wasm-bindgen-cli --version 0.2.129
-cargo build --lib --target wasm32-unknown-unknown --profile wasm-release
-wasm-bindgen --target web --no-typescript --out-dir app/actions/public/pkg target/wasm32-unknown-unknown/wasm-release/{ident}.wasm
-cargo run
+rsmix dev            # build the client and the server, run, rebuild and reload on change
+rsmix test           # cargo test
+rsmix routes         # the route tree
+rsmix assets         # browser-reachable files
+rsmix build          # production build: the optimized client and the release server
+cargo run --release  # start the production build
 ```
 
-```sh
-cargo test
-cargo run -- routes
-cargo run -- assets
-NODE_ENV=production cargo run --release
-```
+The first `rsmix dev` or `rsmix build` installs what the browser build needs when it is
+missing: the `wasm32-unknown-unknown` target, wasm-bindgen 0.2.129 and wasm-opt. The client
+lands in `app/actions/public/pkg/{ident}_bg.wasm`.
 "
     )
 }

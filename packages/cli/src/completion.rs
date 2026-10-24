@@ -4,7 +4,7 @@
 /// The shells `rsmix completion` writes scripts for.
 pub const SHELLS: [&str; 2] = ["bash", "zsh"];
 
-const ROOT_COMMANDS: [&str; 9] = ["assets", "completion", "dev", "doctor", "help", "new", "routes", "test", "version"];
+const ROOT_COMMANDS: [&str; 10] = ["assets", "build", "completion", "dev", "doctor", "help", "new", "routes", "test", "version"];
 
 /// What the shell should offer.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -107,7 +107,7 @@ pub fn complete(words: &[String], index: usize) -> Completion {
             flags(&offered)
         }
         "dev" if !rest.contains(&"--") => flags(&["--"]),
-        "version" => flags(&[]),
+        "version" | "build" => flags(&[]),
         _ => Completion::Values(Vec::new()),
     }
 }

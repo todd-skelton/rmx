@@ -1,11 +1,20 @@
 [package]
 name = "rsmix-cli"
-description = "Command-line interface for rsmix (remix cli): new, dev, doctor, completion, routes, assets, test"
+description = "The rsmix command (remix cli): new, dev, build, doctor, completion, routes, assets, test"
 edition.workspace = true
-version.workspace = true
+version = "1.0.1"
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["remix", "rsmix", "cli", "scaffold", "wasm"]
+categories = ["command-line-utilities", "development-tools", "web-programming"]
+# template/ is the starter app, copied in by scripts/sync-cli-template.ps1 before publishing
+# (Remix's prepack) and git-ignored, so it has to be listed.
+include = ["/src/**/*.rs", "/build.rs", "/template/**", "/README.md", "/LICENSE"]
 
-# `cargo install --path packages/cli` installs the `rsmix` command.
+# `cargo install rsmix-cli` installs the `rsmix` command (`npm i -g remix`).
 [[bin]]
 name = "rsmix"
 path = "src/main.rs"
@@ -13,3 +22,7 @@ doc = false
 
 [dependencies]
 rsmix-terminal.workspace = true
+# Tool downloads (toolchain.rs): checksums and the release archives.
+rsmix-crypto.workspace = true
+rsmix-tar-parser.workspace = true
+flate2 = "1"

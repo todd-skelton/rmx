@@ -44,7 +44,7 @@ fn prints_help_and_the_version() {
     assert_eq!(parse(&args(&["new"])), Ok(Invocation::Help(NEW_HELP)), "new without arguments prints its help");
     assert_eq!(parse(&args(&["new", "--help"])), Ok(Invocation::Help(NEW_HELP)));
     assert!(NEW_HELP.contains("Create a new rsmix project in the target directory."));
-    let version = format!("{}\n", env!("CARGO_PKG_VERSION"));
+    let version = format!("{}\n", RSMIX_VERSION);
     assert_eq!(parse(&args(&["version"])), Ok(Invocation::Print(version.clone())));
     assert_eq!(parse(&args(&["-v"])), Ok(Invocation::Print(version.clone())));
     assert_eq!(parse(&args(&["--", "--version"])), Ok(Invocation::Print(version)));
@@ -52,7 +52,7 @@ fn prints_help_and_the_version() {
 
 #[test]
 fn accepts_the_global_no_color_flag_before_a_separator() {
-    let version = Ok(Invocation::Print(format!("{}\n", env!("CARGO_PKG_VERSION"))));
+    let version = Ok(Invocation::Print(format!("{}\n", RSMIX_VERSION)));
     assert_eq!(parse(&args(&["--no-color", "version"])), version);
     assert_eq!(parse(&args(&["--no-color", "--", "--version"])), version, "a separator after global options");
     assert_eq!(parse(&args(&["--", "--help"])), Ok(Invocation::Help(HELP)), "a leading separator");
@@ -155,7 +155,7 @@ fn creates_the_expected_scaffold() {
     assert!(read(dir, "src/routes.rs").contains("#[derive(RouteMap)]"));
     assert!(read(dir, "public/favicon.svg").contains("<svg"));
     assert!(read(dir, "README.md").starts_with("# My App\n"));
-    assert!(read(dir, "README.md").contains("target/wasm32-unknown-unknown/wasm-release/my_app.wasm"));
+    assert!(read(dir, "README.md").contains("rsmix dev ") && read(dir, "README.md").contains("rsmix build "), "{}", read(dir, "README.md"));
     assert!(read(dir, "AGENTS.md").starts_with("# My App Agent Guide\n"));
     assert!(read(dir, "AGENTS.md").contains("This starter intentionally begins small"));
     assert_eq!(read(dir, ".gitignore"), "/target\n/app/actions/public/pkg\n");
@@ -316,8 +316,11 @@ fn doctor_skips_later_suites_when_the_environment_warns() {
     let app = scaffold(&scratch);
     let no_wasm = FakeToolchain { targets: Some(vec!["x86_64-pc-windows-msvc"]), wasm_bindgen: Some("0.2.100") };
     let text = doctor::run_doctor(&app, &no_wasm).render();
-    assert!(text.contains("[WARN] The wasm32-unknown-unknown target is not installed. Run `rustup target add wasm32-unknown-unknown`."), "{text}");
-    assert!(text.contains("[WARN] wasm-bindgen 0.2.100 is on PATH, but rsmix uses 0.2.129."), "{text}");
+    // `rsmix dev` and `rsmix build` install the target and the pinned wasm-bindgen, so neither blocks.
+    let report = doctor::run_doctor(&app, &no_wasm);
+    assert_eq!(report.warnings(), 0, "{text}");
+    assert!(text.contains("[ADVICE] The wasm32-unknown-unknown target is not installed yet; `rsmix dev` and `rsmix build` add it with rustup."), "{text}");
+    assert!(text.contains("[ADVICE] wasm-bindgen 0.2.100 is installed, but rsmix uses 0.2.129;"), "{text}");
     let unknown = FakeToolchain { targets: None, wasm_bindgen: None };
     let report = doctor::run_doctor(&app, &unknown);
     assert_eq!(report.warnings(), 0, "missing tools are advice: {}", report.render());
@@ -523,12 +526,16 @@ fn status_redraws_a_running_step_on_a_terminal() {
     // reporter.test.ts: live frames on an ANSI terminal, stable lines elsewhere.
     let (status, buffer) = status_buffer(Styles::new(true), true);
     let mut status = status.with_interval(std::time::Duration::from_millis(5));
+    let frame = |dots: &str| format!("\r\x1b[2K\x1b[90m\u{2022} Checking environment{dots}\x1b[39m");
     status.line("\u{2022} Checking environment...");
-    std::thread::sleep(std::time::Duration::from_millis(40));
+    // Wait for the redraw thread rather than a fixed sleep, which a loaded machine can outlast.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while !text_of(&buffer).contains(&frame("..")) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     status.line("\u{2713} Checking environment");
     drop(status);
     let out = text_of(&buffer);
-    let frame = |dots: &str| format!("\r\x1b[2K\x1b[90m\u{2022} Checking environment{dots}\x1b[39m");
     assert!(out.starts_with(&frame(".")), "{out:?}");
     assert!(out.contains(&frame("..")) || out.contains(&frame("...")), "{out:?}");
     assert!(out.ends_with("\r\x1b[2K\x1b[92m\u{2713}\x1b[39m \x1b[90mChecking environment\x1b[39m\n"), "{out:?}");
@@ -616,6 +623,52 @@ fn dev_parses_app_arguments_after_a_separator() {
 }
 
 #[test]
+fn new_apps_depend_on_the_checkout_or_the_published_rsmix() {
+    assert_eq!(dependency_line(None, None), format!("rsmix = \"{RSMIX_VERSION}\""), "an installed CLI uses the release");
+    assert_eq!(dependency_line(None, Some("D:/src/rsmix/packages/rsmix")), "rsmix = { path = \"D:/src/rsmix/packages/rsmix\" }");
+    assert_eq!(dependency_line(Some(" 3.2.0 "), Some("D:/x")), "rsmix = \"3.2.0\"", "RSMIX_VERSION wins (Remix's REMIX_VERSION)");
+    assert_eq!(dependency_line(Some(""), None), format!("rsmix = \"{RSMIX_VERSION}\""));
+}
+
+#[test]
+fn reports_the_rsmix_release_like_remix_version() {
+    // `remix version` prints the remix package's version, not @remix-run/cli's.
+    let manifest = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../rsmix/Cargo.toml"));
+    let workspace = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml"));
+    if let (Ok(manifest), Ok(workspace)) = (manifest, workspace) {
+        assert!(manifest.contains("version.workspace = true"), "{manifest}");
+        assert!(workspace.contains(&format!("version = \"{RSMIX_VERSION}\"")), "RSMIX_VERSION matches the rsmix crate");
+    }
+    assert_eq!(parse(&args(&["version"])), Ok(Invocation::Print(format!("{RSMIX_VERSION}\n"))));
+}
+
+#[test]
+fn build_plans_the_optimized_client_and_the_release_server() {
+    let scratch = Scratch::new("build-plan");
+    let app = scaffold(&scratch);
+    let plan = dev::DevPlan::for_app(&app).unwrap();
+    let manifest = read(&app, "Cargo.toml");
+    let commands: Vec<String> = build::build_commands(&plan, &manifest, "wb", Some("wo")).iter().map(|c| c.join(" ")).collect();
+    assert_eq!(commands[0], "cargo build --lib --target wasm32-unknown-unknown --profile wasm-release");
+    assert!(commands[1].starts_with("wb --target web --no-typescript --out-dir "), "{}", commands[1]);
+    assert!(commands[1].replace('\\', "/").ends_with("target/wasm32-unknown-unknown/wasm-release/doc_app.wasm"), "{}", commands[1]);
+    assert!(commands[2].starts_with("wo -Oz --enable-bulk-memory"), "{}", commands[2]);
+    assert!(commands[2].ends_with("doc_app_bg.wasm"), "wasm-opt rewrites the bindgen output in place: {}", commands[2]);
+    assert_eq!(commands[3], "cargo build --release --bins");
+
+    // No wasm-opt: the client ships unoptimized. No wasm-release profile: --release.
+    let plain = manifest.replace("[profile.wasm-release]", "[profile.other]");
+    let commands: Vec<String> = build::build_commands(&plan, &plain, "wb", None).iter().map(|c| c.join(" ")).collect();
+    assert_eq!(commands.len(), 3, "{commands:?}");
+    assert_eq!(commands[0], "cargo build --lib --target wasm32-unknown-unknown --release");
+    assert!(commands[1].replace('\\', "/").contains("target/wasm32-unknown-unknown/release/doc_app.wasm"), "{}", commands[1]);
+
+    assert_eq!(parse(&args(&["build"])), Ok(Invocation::Build));
+    assert_eq!(parse(&args(&["build", "--help"])), Ok(Invocation::Help(BUILD_HELP)));
+    assert_eq!(parse(&args(&["build", "--fast"])).unwrap_err().message, "Unknown argument: --fast");
+}
+
+#[test]
 fn dev_plans_the_client_and_server_builds() {
     let scratch = Scratch::new("dev-plan");
     let app = scaffold(&scratch);
@@ -693,7 +746,7 @@ fn completion_prints_the_script_for_bash_and_zsh() {
 
 #[test]
 fn completion_offers_commands_subcommands_flags_and_files() {
-    let commands = "assets\ncompletion\ndev\ndoctor\nhelp\nnew\nroutes\ntest\nversion\n";
+    let commands = "assets\nbuild\ncompletion\ndev\ndoctor\nhelp\nnew\nroutes\ntest\nversion\n";
     assert_eq!(complete(&["rsmix", ""]), format!("mode:values\n{commands}-h\n--help\n--no-color\n-v\n--version\n"));
     assert_eq!(complete(&["rsmix", "-"]), "mode:values\n-h\n--help\n--no-color\n-v\n--version\n");
     assert_eq!(complete(&["rsmix", "d"]), "mode:values\ndev\ndoctor\n");
