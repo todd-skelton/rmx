@@ -482,10 +482,53 @@ fn counts_split_headers_once_and_excludes_bodies_padding_and_end_markers() {
 
 #[test]
 fn does_not_reset_the_entry_count_at_zero_blocks_between_entries() {
-    let chunks = vec![sized(0u64, '0'), zeros(1024), sized(0u64, '0')];
+    let chunks = vec![sized(0u64, '0'), zeros(512), sized(0u64, '0')];
     let (entries, error) = parse_all(&chunks, &TarOptions { max_entries: Some(1), ..opts() });
     assert_eq!(error, Some(TarError::MaxEntriesExceeded(1)));
     assert_eq!(entries.len(), 1);
+}
+
+#[test]
+fn continues_parsing_after_nonconsecutive_zero_blocks() {
+    let chunks = vec![sized(0u64, '0'), zeros(512), sized(0u64, '0'), zeros(512), sized(0u64, '0')];
+    let (entries, error) = parse_all(&chunks, &opts());
+    assert_eq!(error, None);
+    assert_eq!(entries.len(), 3);
+}
+
+#[test]
+fn stops_parsing_entries_after_two_zero_blocks() {
+    let mut archive = zeros(2048);
+    archive[..512].copy_from_slice(&sized(0u64, '0'));
+    archive[1536..].copy_from_slice(&sized(0u64, '0'));
+    let (entries, error) = parse_all(&[archive], &opts());
+    assert_eq!(error, None);
+    assert_eq!(entries.len(), 1);
+}
+
+#[test]
+fn stops_parsing_entries_after_a_chunk_split_end_marker() {
+    let chunks = vec![sized(0u64, '0'), zeros(700), zeros(324), sized(0u64, '0')];
+    let (entries, error) = parse_all(&chunks, &opts());
+    assert_eq!(error, None);
+    assert_eq!(entries.len(), 1);
+}
+
+#[test]
+fn counts_trailing_input_after_the_end_marker_toward_the_total_size_limit() {
+    let chunks = vec![sized(0u64, '0'), zeros(1024), zeros(1)];
+    let (entries, error) = parse_all(&chunks, &TarOptions { max_total_size: Some(1536), ..opts() });
+    assert_eq!(error, Some(TarError::MaxTotalSizeExceeded(1536)));
+    assert_eq!(entries.len(), 1);
+}
+
+#[test]
+fn resets_end_marker_state_between_parses() {
+    let mut parser = TarParser::new(opts());
+    let mut entries = 0;
+    assert_eq!(parser.parse([sized(0u64, '0'), zeros(1024)], |_| entries += 1), Ok(()));
+    assert_eq!(parser.parse([sized(0u64, '0')], |_| entries += 1), Ok(()));
+    assert_eq!(entries, 2);
 }
 
 #[test]

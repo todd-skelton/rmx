@@ -275,13 +275,17 @@ async fn respond<F: FileLike>(file: &F, method: &Method, headers: &HeaderMap, op
         };
         build(status, body, values)
     };
-    if accept_ranges && method == Method::GET && headers.contains_key(header::RANGE) {
-        let range = Range::parse(get(header::RANGE));
+    // RFC 9110 14.2: a server ignores range units it does not understand.
+    let range_value = get(header::RANGE).filter(|v| !has_unknown_range_unit(v));
+    if accept_ranges && method == Method::GET && range_value.is_some() {
+        let range = Range::parse(range_value);
         if range.ranges.is_empty() {
             return Ok(build(StatusCode::BAD_REQUEST, Body::from("Bad Request"), Headers::default()));
         }
         let modified = last_modified.filter(|_| has_last_modified).map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
-        if IfRange::parse(get(header::IF_RANGE)).matches(etag.as_deref(), modified) {
+        // Range requests may be ignored for empty representations (RFC 9110 14.2).
+        if size > 0 && IfRange::parse(get(header::IF_RANGE)).matches(etag.as_deref(), modified) {
+            // Exactly one satisfiable range; a zero-length suffix normalizes to none (14.1.2).
             let [(start, end)] = range.normalize(size)[..] else {
                 let unsatisfied = Headers { content_range: Some(ContentRange::unsatisfied(size).to_string()), ..Headers::default() };
                 return Ok(build(StatusCode::RANGE_NOT_SATISFIABLE, Body::from("Range Not Satisfiable"), unsatisfied));
@@ -292,4 +296,11 @@ async fn respond<F: FileLike>(file: &F, method: &Method, headers: &HeaderMap, op
     }
     let body = if method == Method::HEAD { Body::empty() } else { file.stream() };
     Ok(full(StatusCode::OK, body, size, None))
+}
+
+/// A Range header whose unit is a valid token other than `bytes` (case-insensitive).
+fn has_unknown_range_unit(value: &str) -> bool {
+    const TCHAR: &[u8] = b"!#$%&'*+-.^_`|~";
+    let unit = value.split_once('=').map_or("", |(unit, _)| unit);
+    !unit.is_empty() && unit.bytes().all(|b| b.is_ascii_alphanumeric() || TCHAR.contains(&b)) && !unit.eq_ignore_ascii_case("bytes")
 }

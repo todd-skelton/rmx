@@ -105,7 +105,8 @@ fn conditional_requests_and_ranges() {
     assert_eq!(get(&router, "/logo.png", &[("range", "bytes=0-1,4-5")]).status(), 416, "no multipart ranges");
     let past_end = get(&router, "/logo.png", &[("range", "bytes=20-")]);
     assert_eq!((past_end.status().as_u16(), past_end.headers()["content-range"].to_str().unwrap()), (416, "bytes */10"));
-    assert_eq!(get(&router, "/logo.png", &[("range", "lines=x")]).status(), 400);
+    assert_eq!(get(&router, "/logo.png", &[("range", "lines=x")]).status(), 200, "unknown range units are ignored");
+    assert_eq!(get(&router, "/logo.png", &[("range", "bytes=x")]).status(), 400);
     assert_eq!(get(&router, "/logo.png", &[("range", "bytes=5-2")]).status(), 400);
     assert_eq!(get(&router, "/logo.png", &[("range", "bytes=2-4"), ("if-range", "\"other\"")]).status(), 200, "stale If-Range sends everything");
     assert_eq!(get(&router, "/logo.png", &[("range", "bytes=2-4"), ("if-range", &modified)]).status(), 206);

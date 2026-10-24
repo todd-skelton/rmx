@@ -148,6 +148,8 @@ pub struct TarParser {
     pending: Vec<u8>,
     total_size: u64,
     entry_count: u64,
+    /// Consecutive zero blocks; two mark the end of the archive and later input is ignored.
+    zero_blocks: u8,
     /// Bytes still to come for the current body, metadata entry or padding.
     missing: u64,
     header: Option<TarHeader>,
@@ -174,6 +176,7 @@ impl TarParser {
             pending: Vec::new(),
             total_size: 0,
             entry_count: 0,
+            zero_blocks: 0,
             missing: 0,
             header: None,
             in_body: false,
@@ -216,6 +219,10 @@ impl TarParser {
             }
         }
         self.total_size += chunk.len() as u64;
+        // Trailing input after the end marker still counts toward `max_total_size`.
+        if self.zero_blocks == 2 {
+            return Ok(());
+        }
 
         let joined;
         let mut data = if self.pending.is_empty() {
@@ -256,6 +263,9 @@ impl TarParser {
             let (block, rest) = data.split_at(BLOCK);
             data = rest;
             self.parse_header(block, on_event)?;
+            if self.zero_blocks == 2 {
+                break;
+            }
         }
         Ok(())
     }
@@ -275,8 +285,10 @@ impl TarParser {
     fn parse_header(&mut self, block: &[u8], on_event: &mut dyn FnMut(TarEvent<'_>)) -> Result<(), TarError> {
         if block.iter().all(|b| *b == 0) {
             self.header = None;
+            self.zero_blocks += 1;
             return Ok(());
         }
+        self.zero_blocks = 0;
         self.entry_count += 1;
         if let Some(max) = self.options.max_entries {
             if self.entry_count > max {

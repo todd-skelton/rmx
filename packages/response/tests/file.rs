@@ -679,6 +679,62 @@ fn returns_400_for_bytes_with_no_range() {
 }
 
 #[test]
+fn recognizes_byte_range_units_case_insensitively() {
+    let response = respond(&video(), get(&[("Range", "ByTeS=0-9")]));
+
+    assert_eq!(response.status(), 206);
+    assert_eq!(header(&response, "Content-Range").as_deref(), Some("bytes 0-9/10"));
+    assert_eq!(header(&response, "Content-Length").as_deref(), Some("10"));
+    assert_eq!(text(response), "0123456789");
+}
+
+#[test]
+fn ignores_unknown_range_units_with_byte_like_ranges() {
+    let response = respond(&video(), get(&[("Range", "items=0-4")]));
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(header(&response, "Content-Range"), None);
+    assert_eq!(header(&response, "Content-Length").as_deref(), Some("10"));
+    assert_eq!(text(response), "0123456789");
+}
+
+#[test]
+fn ignores_unknown_token_range_units() {
+    let response = respond(&video(), get(&[("Range", "custom-unit=0-4")]));
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(header(&response, "Content-Range"), None);
+    assert_eq!(text(response), "0123456789");
+}
+
+#[test]
+fn ignores_unknown_range_units_with_an_empty_range_set() {
+    let response = respond(&video(), get(&[("Range", "items=")]));
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(header(&response, "Content-Range"), None);
+    assert_eq!(text(response), "0123456789");
+}
+
+#[test]
+fn returns_416_for_a_zero_length_suffix_range() {
+    let response = respond(&video(), get(&[("Range", "bytes=-0")]));
+
+    assert_eq!(response.status(), 416);
+    assert_eq!(header(&response, "Content-Range").as_deref(), Some("bytes */10"));
+}
+
+#[test]
+fn ignores_a_suffix_range_on_an_empty_file() {
+    let empty = file("", "video.mp4", "video/mp4");
+    let response = respond(&empty, get(&[("Range", "bytes=-1")]));
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(header(&response, "Content-Range"), None);
+    assert_eq!(text(response), "");
+}
+
+#[test]
 fn returns_full_file_when_accept_ranges_is_false() {
     let file = file("0123456789", "test.txt", "text/plain");
     let options = FileResponseOptions { accept_ranges: Some(false), ..FileResponseOptions::default() };
@@ -810,6 +866,15 @@ fn returns_full_file_when_if_range_has_invalid_date_format() {
     assert_eq!(response.status(), 200);
     assert_eq!(header(&response, "Content-Range"), None);
     assert_eq!(text(response), "0123456789");
+}
+
+#[test]
+fn returns_partial_content_when_if_range_is_empty() {
+    let response = respond(&video(), get(&[("Range", "bytes=0-4"), ("If-Range", "")]));
+
+    assert_eq!(response.status(), 206);
+    assert_eq!(header(&response, "Content-Range").as_deref(), Some("bytes 0-4/10"));
+    assert_eq!(text(response), "01234");
 }
 
 #[test]
