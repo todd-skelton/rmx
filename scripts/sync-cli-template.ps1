@@ -11,8 +11,8 @@ $target = Join-Path $root "packages\cli\template"
 
 # Build output and local files that never belong in a new app. Cargo.toml is left out too:
 # `rsmix new` writes the app manifest itself, and cargo package drops any directory that holds a
-# Cargo.toml as a nested package.
-$excluded = @("target", "pkg", "node_modules", ".git", ".gitignore", ".tmp", "tmp", "Cargo.lock", "Cargo.toml")
+# Cargo.toml as a nested package. e2e.mjs is the repository's browser check for the template.
+$excluded = @("target", "pkg", "node_modules", ".git", ".gitignore", ".tmp", "tmp", "Cargo.lock", "Cargo.toml", "e2e.mjs")
 
 function Test-Copyable([string]$name) {
     -not ($excluded -contains $name) -and -not $name.EndsWith(".log") -and

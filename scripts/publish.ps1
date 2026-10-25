@@ -28,6 +28,10 @@ function Test-Published([string]$name, [string]$version) {
     return $code -eq "200"
 }
 
+# cargo treats the generated packages/cli/template copy as uncommitted changes, so check the
+# tree here and let only rsmix-cli, whose package includes that copy, skip cargo's check.
+git diff --quiet HEAD -- packages Cargo.toml Cargo.lock
+if ($LASTEXITCODE -ne 0 -or (git ls-files --others --exclude-standard -- packages)) { throw "commit the changes under packages/ first" }
 & (Join-Path $PSScriptRoot "sync-cli-template.ps1")
 try {
     $i = 0
@@ -39,6 +43,7 @@ try {
             Write-Host "[$i/$($order.Count)] $(Get-Date -Format s) publishing $name $version"
             $args = @("publish", "-p", $name)
             if ($DryRun) { $args += "--dry-run" }
+            if ($name -eq "rsmix-cli") { $args += "--allow-dirty" }
             $out = & cargo @args 2>&1 | ForEach-Object { "$_" }
             $out | Write-Host
             if ($LASTEXITCODE -eq 0) { break }
