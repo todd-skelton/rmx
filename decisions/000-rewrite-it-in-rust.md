@@ -1041,4 +1041,12 @@ three commits after it on 2026-10-24, all docs or formatting (#12075, #12076).
    template's browser checks passed 11 of 11 against the release server, and `rsmix dev`
    served the page with its live reload script. Workspace tests 2,648 passed, 0 failed
    (test129), after the CLI status test stopped relying on a fixed sleep; clippy with
-   `-D warnings` clean. Nothing is on crates.io yet.
+   `-D warnings` clean.
+6. Published (measured, 2026-10-24 and 25): all 40 library crates are on crates.io, put there
+   by `scripts/publish.ps1` in dependency order. crates.io allowed a burst of five new crates,
+   then one every ten minutes, so the run took about six hours. In a clean `rust:1-bookworm`
+   container (`bench/docker/install-check/check.sh`), `cargo install rsmix-cli --locked` took
+   49 s, `rsmix new` wrote an app depending on `rsmix = "3.1.0"`, and `rsmix build` installed
+   the wasm32 target, `wasm-bindgen` and `wasm-opt` itself and finished in 277 s (client
+   392.6 KiB before compression). The server served the page, its entry script and its wasm,
+   and the template's browser checks passed 11 of 11 from the host against the container.

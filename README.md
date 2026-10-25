@@ -166,7 +166,7 @@ The fine print, because there is always fine print: the client still ships about
 
 ## Getting Started
 
-All you need is [rustup](https://rustup.rs). Remix has `npx remix new`; we have:
+All you need is [rustup](https://rustup.rs). Remix has `npx remix new`; we have [crates.io](https://crates.io/crates/rsmix):
 
 ```sh
 cargo install rsmix-cli        # the rsmix command
